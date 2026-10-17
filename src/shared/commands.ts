@@ -123,6 +123,20 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('timeline.pause'),
   /** External timecode position (MTC/LTC decoded in the renderer, or OSC): the timeline chases it. */
   z.object({ type: z.literal('timeline.timecode'), seconds: z.number().min(0).max(86400), timelineId: idSchema.optional() }),
+  // Camera localisation
+  z.object({
+    type: z.literal('locate.begin'),
+    confirmed: z.literal(true),
+    mode: z.enum(['binary', 'sequential']),
+    /** Intensity of lit fixtures: capped at 60 % (people may be on stage, cameras saturate anyway). */
+    level: z.number().min(0.05).max(0.6),
+    fixtureIds: z.array(idSchema).max(2048).optional(),
+    /** Photos come from a smartphone through the remote page instead of a local webcam. */
+    photo: z.boolean().default(false),
+  }),
+  z.object({ type: z.literal('locate.frame'), index: z.number().int().min(0).max(5000) }),
+  empty('locate.end'),
+  z.object({ type: z.literal('locate.apply'), updates: z.array(z.object({ fixtureId: idSchema, x: z.number().min(-100).max(100), y: z.number().min(-100).max(100), height: z.number().min(0).max(50).optional() })).min(1).max(2048) }),
   // Music (Song-to-Show)
   z.object({ type: z.literal('music.addTrack'), name: z.string().trim().min(1).max(200), hash: z.string().regex(/^[0-9a-f]{64}$/), analysis: songAnalysisSchema }),
   z.object({ type: z.literal('music.removeTrack'), id: idSchema }),
@@ -206,6 +220,8 @@ export interface RuntimeState {
   ai: { provider: 'local' | 'openrouter'; hasKey: boolean; busy: boolean; lastError: string | null; model: string };
   audio: AudioStatus;
   alerts: Alert[];
+  /** Camera localisation in progress (frame shown, photo awaited from the smartphone). */
+  locate: { active: boolean; frame: number; total: number; label: string; awaitingPhoto: boolean } | null;
   /** Photosensitive flash guard state (estimate from the computed state). */
   safety: { flashGuard: 'off' | 'warn' | 'limit'; flashesPerSecond: number; redFlashesPerSecond: number; violation: boolean; reason: string | null };
   programmer: Record<string, Record<string, number>>;
@@ -277,6 +293,10 @@ export interface CommandResults {
   'timeline.play': Void;
   'timeline.pause': Void;
   'timeline.timecode': { chasing: boolean };
+  'locate.begin': { fixtureIds: string[]; frames: { label: string; lit: string[] }[]; codes: Record<string, number>; mode: 'binary' | 'sequential'; bits: number; settleMs: number; captureMs: number };
+  'locate.frame': Void;
+  'locate.end': Void;
+  'locate.apply': { updated: number };
   'music.addTrack': { id: string; cached: boolean };
   'music.removeTrack': Void;
   'music.setSection': Void;
@@ -316,9 +336,16 @@ export interface CommandResults {
 
 export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string };
 
+/** Photo of one localisation frame uploaded from the smartphone (JPEG, base64). */
+export interface LocatePhoto {
+  frame: number;
+  jpeg: string;
+}
+
 export interface AppEvents {
   project: ProjectState;
   runtime: RuntimeState;
   values: ValuesFrame;
   log: LogEntry;
+  locatePhoto: LocatePhoto;
 }

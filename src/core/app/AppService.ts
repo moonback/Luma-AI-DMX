@@ -32,9 +32,11 @@ import { ArtNetRdm } from '../protocols/rdm';
 import { adjustSection, compileShow, planLocally, rigInfo } from '../music/songToShow';
 import { KEY_NAMES, SECTION_NAMES } from '../music/analyze';
 import type { MusicTrack, ShowPlan } from '../model/schemas';
+import { buildSequence, FRAME_CAPTURE_MS, FRAME_SETTLE_MS, type Sequence } from '../vision/locate';
+import { coarseChannel, rangeValue } from '../fixtures/profiles';
 import { interpretLocally } from '../ai/local/interpreter';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, planShowWithOpenRouter, proposeWithOpenRouter, type OpenRouterModel } from '../ai/providers/openrouter';
-import type { Alert, Command, CommandOf, CommandResults, CommandType, ProjectState, RuntimeState, UniverseView, ValuesFrame } from '../../shared/commands';
+import type { Alert, Command, CommandOf, CommandResults, CommandType, LocatePhoto, ProjectState, RuntimeState, UniverseView, ValuesFrame } from '../../shared/commands';
 
 export interface Dialogs {
   openProject(): Promise<string | null>;
@@ -66,7 +68,7 @@ const OPENROUTER_KEY = 'openrouter-api-key';
  * Application service: owns the project document, the engine, the outputs, AI and audio.
  * Independent from Electron (dialogs and secrets are injected), so the whole workflow is testable headless.
  */
-export class AppService extends EventEmitter<{ project: [ProjectState]; runtime: [RuntimeState]; values: [ValuesFrame]; log: [LogEntry] }> {
+export class AppService extends EventEmitter<{ project: [ProjectState]; runtime: [RuntimeState]; values: [ValuesFrame]; log: [LogEntry]; locatePhoto: [LocatePhoto] }> {
   readonly logger = new Logger();
   readonly outputs: OutputManager;
   readonly engine: Engine;
@@ -97,7 +99,9 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     state: () => this.remoteState(),
     execute: (cmd) => this.handle(cmd),
     listId: (i) => this.project.cueLists[i - 1]?.id,
+    locatePhoto: (frame, jpeg) => this.onLocatePhoto(frame, jpeg),
   });
+  private locate: { seq: Sequence; level: number; frame: number; photo: boolean; awaitingPhoto: boolean } | null = null;
   private remoteConfig = '';
   private timecodeAt = 0;
 
@@ -159,6 +163,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   async dispose(): Promise<void> {
     for (const t of this.timers) clearInterval(t);
     this.engine.stop();
+    this.endLocate();
     await this.osc.stop();
     await this.remote.stop();
     await this.outputs.closeAll();
@@ -199,6 +204,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       audio: this.audio.status(),
       alerts: [...this.alerts],
       safety: { flashGuard: this.settings.engine.flashGuard, ...this.flash },
+      locate: this.locate ? { active: true, frame: this.locate.frame, total: this.locate.seq.frames.length, label: this.locate.seq.frames[this.locate.frame]?.label ?? '', awaitingPhoto: this.locate.awaitingPhoto } : null,
       programmer: this.engine.getProgrammer(),
     };
   }
@@ -681,6 +687,42 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         return { chasing };
       }
 
+      /* ---------- camera localisation ---------- */
+      case 'locate.begin': {
+        if (e.blackout) throw new UserError('Désactivez le blackout : la caméra doit voir les projecteurs');
+        const ids = (cmd.fixtureIds ?? [...this.index.fixtures.keys()]).filter((id) => this.index.fixtures.has(id));
+        if (!ids.length) throw new UserError('Aucun projecteur à localiser');
+        // Manual control would win over the localisation pattern: release it (stated in the confirmation dialog).
+        e.releaseProgrammer();
+        const seq = buildSequence(ids, cmd.mode);
+        this.locate = { seq, level: cmd.level, frame: 0, photo: cmd.photo, awaitingPhoto: false };
+        this.showLocateFrame(0);
+        this.logger.warn('Localisation', `Séquence caméra démarrée : ${ids.length} projecteurs, ${seq.frames.length} images (${cmd.mode === 'binary' ? 'codage binaire' : 'un par un'}), intensité ${Math.round(cmd.level * 100)} %, sans strobe${cmd.photo ? ', photos smartphone' : ''}`);
+        return { fixtureIds: ids, frames: seq.frames, codes: seq.codes, mode: seq.mode, bits: seq.bits, settleMs: FRAME_SETTLE_MS, captureMs: FRAME_CAPTURE_MS };
+      }
+      case 'locate.frame':
+        if (!this.locate) throw new UserError('Aucune séquence de localisation en cours');
+        if (cmd.index >= this.locate.seq.frames.length) throw new UserError('Image hors séquence');
+        this.showLocateFrame(cmd.index);
+        return ok;
+      case 'locate.end':
+        if (this.locate) this.logger.info('Localisation', 'Séquence caméra terminée — projecteurs rendus aux autres sources');
+        this.endLocate();
+        return ok;
+      case 'locate.apply': {
+        const ids = new Set(this.project.patch.map((f) => f.id));
+        const updates = cmd.updates.filter((u) => ids.has(u.fixtureId));
+        this.mutate((d) => {
+          for (const u of updates) {
+            const f = d.patch.find((x) => x.id === u.fixtureId)!;
+            f.position = { x: Math.round(u.x * 100) / 100, y: Math.round(u.y * 100) / 100 };
+            if (u.height !== undefined) f.height = Math.round(u.height * 100) / 100;
+          }
+        });
+        this.logger.info('Localisation', `${updates.length} position(s) de projecteur mise(s) à jour depuis la caméra`);
+        return { updated: updates.length };
+      }
+
       /* ---------- music (Song-to-Show) ---------- */
       case 'music.addTrack': {
         const existing = this.project.music.tracks.find((t) => t.hash === cmd.hash);
@@ -989,6 +1031,43 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     }
   }
 
+  /**
+   * Localisation pattern: a top-priority layer that darkens every fixture except the lit ones, which get white light at
+   * the capped level with shutter/strobe forced open (never strobing). Pan/tilt are left untouched.
+   */
+  private showLocateFrame(index: number): void {
+    const s = this.locate!;
+    s.frame = index;
+    const lit = new Set(s.seq.frames[index]!.lit);
+    const values: FixtureValues = {};
+    for (const [id, rf] of this.index.fixtures) {
+      const on = lit.has(id);
+      const v: Record<string, number> = { dimmer: on ? s.level : 0 };
+      if (on) Object.assign(v, colorToAttributes(rf, { r: 1, g: 1, b: 1 }));
+      for (const a of ['shutter', 'strobe']) {
+        const ch = coarseChannel(rf.mode, a);
+        if (ch) v[a] = rangeValue(ch, 'open') ?? ch.default / 255;
+      }
+      values[id] = v;
+    }
+    this.engine.setExternal('locate', { layer: { id: 'locate', label: 'Localisation caméra', kind: 'locate', priority: 1000, order: 0, values } });
+    s.awaitingPhoto = s.photo;
+    this.emit('runtime', this.runtimeState());
+  }
+
+  private endLocate(): void {
+    this.engine.setExternal('locate', null);
+    this.locate = null;
+  }
+
+  private onLocatePhoto(frame: number, jpeg: Buffer): boolean {
+    const s = this.locate;
+    if (!s?.photo || !s.awaitingPhoto || frame !== s.frame) return false;
+    s.awaitingPhoto = false;
+    this.emit('locatePhoto', { frame, jpeg: jpeg.toString('base64') });
+    return true;
+  }
+
   private async applyRemote(): Promise<void> {
     const r = this.settings.control.remote;
     const conf = r.enabled ? `${r.port}|${r.token}` : '';
@@ -1014,6 +1093,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       blackout: this.engine.blackout,
       transmitting: this.outputs.transmitting,
       bpm: this.engine.bpm,
+      locate: this.locate?.photo && this.locate.awaitingPhoto ? { frame: this.locate.frame, total: this.locate.seq.frames.length, label: this.locate.seq.frames[this.locate.frame]!.label } : null,
       lists: this.project.cueLists.map((l, i) => {
         const pb = snap.playbacks.find((p) => p.cueListId === l.id);
         return { index: i + 1, name: l.name, state: pb?.state ?? 'idle', cue: pb?.cueName ?? null };

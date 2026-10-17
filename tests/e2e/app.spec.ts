@@ -15,7 +15,8 @@ let page: Page;
 test.beforeAll(async () => {
   app = await electron.launch({
     executablePath: electronPath,
-    args: [path.resolve('out/main/index.js')],
+    // Chromium's fake camera (test pattern) and auto-accepted media prompts, for the camera localisation flow.
+    args: [path.resolve('out/main/index.js'), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
     env: { ...process.env, LUMA_USER_DATA: mkdtempSync(path.join(tmpdir(), 'luma-e2e-')), LUMA_E2E: '1' },
   });
   page = await app.firstWindow();
@@ -253,4 +254,23 @@ test('intelligence musicale : import, analyse, Song-to-Show, lecture synchronis�
   await nav('music');
   await page.getByTestId('music-stop').click();
   await expect(page.getByTestId('music-play')).toBeVisible();
+});
+
+test('localisation par caméra : séquence sûre, calibration, résultats (caméra factice)', async () => {
+  await nav('fixtures');
+  await page.getByTestId('locate-open').click();
+  await page.getByTestId('locate-preview').click();
+  await page.getByTestId('locate-run').click();
+  await page.getByRole('button', { name: 'Lancer', exact: true }).click();
+  // Sequence runs through the engine, then asks for the 4 stage corners.
+  await expect(page.getByTestId('locate-frame')).toBeVisible({ timeout: 30_000 });
+  const frame = page.getByTestId('locate-frame');
+  const box = (await frame.boundingBox())!;
+  for (const [fx, fy] of [[0.15, 0.85], [0.85, 0.85], [0.75, 0.45], [0.25, 0.45]] as [number, number][]) await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+  await page.getByTestId('locate-solve').click();
+  await expect(page.getByTestId('locate-summary')).toContainText('projecteurs localisés');
+  // The test pattern contains no fixture: every fixture is reported as not answering.
+  await expect(page.getByTestId('locate-issues')).toContainText('ne répond pas');
+  await page.screenshot({ path: `${shots}/22-localisation-camera.png` });
+  await page.keyboard.press('Escape');
 });

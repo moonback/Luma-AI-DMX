@@ -13,7 +13,7 @@ import { attributeClass } from '../fixtures/attributes';
  * 4. Attributes nobody controls fall back to the profile default.
  */
 
-export type SourceKind = 'manual' | 'playback' | 'ai' | 'timeline' | 'audio' | 'effect';
+export type SourceKind = 'manual' | 'playback' | 'ai' | 'timeline' | 'audio' | 'effect' | 'locate';
 
 export interface LayerInput {
   id: string;

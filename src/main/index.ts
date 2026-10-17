@@ -148,6 +148,7 @@ app.whenReady().then(async () => {
   service.on('runtime', forward('runtime'));
   service.on('values', forward('values'));
   service.on('log', forward('log'));
+  service.on('locatePhoto', forward('locatePhoto'));
 
   win = createWindow();
 });

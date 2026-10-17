@@ -246,6 +246,8 @@ Objectif : un **assistant de régie** qui fait gagner des secondes précieuses e
 Objectif : supprimer les heures de patch et de focus à la main grâce à une simple webcam ou un smartphone.
 
 ### 3.1 IA — Auto-localisation des projecteurs par caméra
+
+> **État au 17/10/2026** : implémenté, avec webcam et smartphone (une photo par image via la télécommande, car les navigateurs n'ouvrent la caméra qu'en HTTPS). Codage binaire avec images inverses (2 + 2⌈log₂(n+1)⌉ images, la lecture de chaque bit résiste à la lumière ambiante), plus un mode un par un. Calibration par les 4 coins du plateau (homographie, focale, pose, puis Levenberg–Marquardt). Calcul à 1 vue + hauteur connue, ou triangulation à 2 vues. Diagnostic du patch et croisement RDM. Sur scène synthétique de 10 m (40 projecteurs, bruit, lumière ambiante, clics à ±1,5 px) : erreur maximale de 9 cm à 1 vue et 10 cm en 3D à 2 vues ; séquence de 14 images en ≈ 9 s, décodage en 0,3 s. Écarts : rotations non mesurées (reportées à 3.2) ; projecteurs dont la lentille n'est pas visible de la caméra non détectés. **Reste à valider sur un vrai plateau.**
 - L'utilisateur pose une caméra (webcam USB, ou smartphone via le contrôle à distance 0.7) face au plateau.
 - L'application allume **chaque projecteur à tour de rôle** (ou par codage binaire spatio-temporel pour aller vite : *n* projecteurs identifiés en log₂(*n*) images) et détecte sa position dans l'image.
 - Avec 2 points de vue (ou 1 vue + la hauteur de truss connue), triangulation des positions 3D et mise à jour des positions/hauteurs/rotations du patch.

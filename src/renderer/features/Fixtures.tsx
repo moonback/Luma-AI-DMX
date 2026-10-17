@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, Lightbulb, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { Camera, Copy, Lightbulb, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { Empty, Field, Modal, NumberInput, PageHead, Panel, useResolved } from '../components/ui';
 import { channelCount, channelKey } from '../../core/fixtures/profiles';
 import { findFreeAddress } from '../../core/fixtures/patch';
 import { attributeLabel } from '../../core/fixtures/attributes';
+import { CameraLocate } from './CameraLocate';
 
 function AddDialog({ onClose }: { onClose: () => void }) {
   const { lib } = useResolved();
@@ -189,6 +190,7 @@ export function Fixtures() {
   const setSelection = useStore((s) => s.setSelection);
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [ofl, setOfl] = useState(false);
   const [universe, setUniverse] = useState<number | 'all'>('all');
   const issueIds = useMemo(() => new Set(ps.issues.flatMap((i) => i.fixtureIds)), [ps.issues]);
@@ -221,8 +223,10 @@ export function Fixtures() {
       <PageHead title="Fixtures" subtitle="Patch DMX : profils, univers, adresses et positions">
         <button className="btn" onClick={() => void importProfiles()} title="Importer des profils au format JSON documenté (docs/PROFILE_FORMAT.md)"><Upload size={15} />Importer des profils</button>
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
+        <button className="btn" data-testid="locate-open" disabled={!ps.project.patch.length} onClick={() => setLocating(true)} title="Mesurer les positions réelles avec une caméra et détecter les erreurs de patch"><Camera size={15} />Localiser par caméra</button>
         <button className="btn primary" data-testid="add-fixture" onClick={() => setAdding(true)}><Plus size={15} />Ajouter</button>
       </PageHead>
+      {locating && <CameraLocate onClose={() => setLocating(false)} />}
       {ps.issues.length > 0 && (
         <div className="panel" style={{ padding: 10, marginBottom: 12, borderColor: 'rgba(239,68,68,.5)' }}>
           {ps.issues.map((i, k) => <div key={k} className="small" style={{ color: '#fca5a5' }}>⚠ {i.message}</div>)}

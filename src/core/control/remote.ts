@@ -13,6 +13,8 @@ export interface RemoteState {
   transmitting: boolean;
   bpm: number;
   lists: { index: number; name: string; state: string; cue: string | null }[];
+  /** Camera localisation waiting for a smartphone photo of `frame`. */
+  locate: { frame: number; total: number; label: string } | null;
 }
 
 export interface RemoteDeps {
@@ -20,6 +22,8 @@ export interface RemoteDeps {
   execute(cmd: Command): Promise<unknown>;
   /** Cue list id from a 1-based index. */
   listId(index: number): string | undefined;
+  /** Smartphone photo (JPEG) for a localisation frame; false when no photo is expected for that frame. */
+  locatePhoto?(frame: number, jpeg: Buffer): boolean;
 }
 
 const ALLOWED = new Set<Command['type']>(['cue.go', 'cue.back', 'cue.goto', 'cue.pause', 'cue.resume', 'engine.blackout', 'engine.master', 'output.transmit', 'programmer.release']);
@@ -71,6 +75,21 @@ export class RemoteServer {
         res.write(`data: ${JSON.stringify(this.deps.state())}\n\n`);
         this.clients.add(res);
         req.on('close', () => this.clients.delete(res));
+      } else if (req.method === 'POST' && url.pathname === '/locate/photo') {
+        const frame = Number(url.searchParams.get('frame'));
+        const chunks: Buffer[] = [];
+        let size = 0;
+        req.on('data', (c: Buffer) => {
+          size += c.length;
+          if (size > 4 * 1024 * 1024) req.destroy(); // photos are downscaled on the phone (≈ 100 kB)
+          else chunks.push(c);
+        });
+        req.on('end', () => {
+          const jpeg = Buffer.concat(chunks);
+          const isJpeg = jpeg.length > 3 && jpeg[0] === 0xff && jpeg[1] === 0xd8;
+          const ok = Number.isInteger(frame) && isJpeg && !!this.deps.locatePhoto?.(frame, jpeg);
+          res.writeHead(ok ? 200 : 400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok, error: ok ? undefined : 'photo inattendue ou invalide' }));
+        });
       } else if (req.method === 'POST' && url.pathname === '/cmd') {
         let body = '';
         req.setEncoding('utf8');
@@ -138,6 +157,7 @@ button:active{transform:scale(.98)}.go{background:var(--accent);border-color:var
 <div class="row"><button id="back">BACK</button><button id="pause">Pause</button><button id="release">Relâcher</button></div>
 <div class="row"><button id="bo">Blackout</button><button class="stop" id="stop">STOP OUTPUT</button></div>
 <label for="master">Grand master <span id="mv"></span></label><input id="master" type="range" min="0" max="100">
+<div id="loc" style="display:none;margin-top:16px;padding:12px;border:1px solid var(--accent);border-radius:10px"><b>Localisation des projecteurs</b><div class="st" id="locst"></div><label class="go" style="display:block;text-align:center;padding:18px;border-radius:10px;margin-top:8px">Prendre la photo<input id="cam" type="file" accept="image/*" capture="environment" style="display:none"></label><div class="st">Gardez le téléphone immobile, au même endroit, pour toutes les photos.</div></div>
 <div class="st" id="msg"></div><script>
 const t=new URLSearchParams(location.search).get('t');const $=(i)=>document.getElementById(i);let st=null;
 async function send(c){const r=await fetch('cmd?t='+encodeURIComponent(t),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});const j=await r.json();$('msg').textContent=j.ok?'':j.error;$('msg').className='st'+(j.ok?'':' err');}
@@ -147,7 +167,8 @@ $('pause').onclick=()=>{const l=st&&st.lists[list()-1];send({type:l&&l.state==='
 $('release').onclick=()=>send({type:'programmer.release'});$('bo').onclick=()=>send({type:'engine.blackout',on:!(st&&st.blackout)});
 $('stop').onclick=()=>send({type:'output.transmit',on:false});$('master').oninput=(e)=>send({type:'engine.master',value:e.target.value/100});
 const es=new EventSource('events?t='+encodeURIComponent(t));es.onerror=()=>{$('cue').textContent='Connexion perdue — reconnexion…';};
-es.onmessage=(e)=>{st=JSON.parse(e.data);const sel=$('list'),cur=sel.value;if(sel.options.length!==st.lists.length){sel.innerHTML='';for(const l of st.lists){const o=document.createElement('option');o.value=l.index;o.textContent=l.name;sel.appendChild(o);}if(cur)sel.value=cur;}
+$('cam').onchange=async(e)=>{const f=e.target.files[0];e.target.value='';if(!f||!st||!st.locate)return;const fr=st.locate.frame;$('locst').textContent='Envoi…';const bmp=await createImageBitmap(f);const k=Math.min(1,960/bmp.width);const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const blob=await new Promise((r)=>c.toBlob(r,'image/jpeg',0.85));const r=await fetch('locate/photo?t='+encodeURIComponent(t)+'&frame='+fr,{method:'POST',body:blob});const j=await r.json();$('locst').textContent=j.ok?'Photo reçue':j.error;};
+es.onmessage=(e)=>{st=JSON.parse(e.data);$('loc').style.display=st.locate?'block':'none';if(st.locate)$('locst').textContent='Image '+(st.locate.frame+1)+'/'+st.locate.total+' : '+st.locate.label;const sel=$('list'),cur=sel.value;if(sel.options.length!==st.lists.length){sel.innerHTML='';for(const l of st.lists){const o=document.createElement('option');o.value=l.index;o.textContent=l.name;sel.appendChild(o);}if(cur)sel.value=cur;}
 const l=st.lists[list()-1];$('cue').textContent=(l?(l.cue?'Cue : '+l.cue:'Aucun cue actif')+' · '+l.state:'Aucune liste')+(st.transmitting?'':' · ÉMISSIONS ARRÊTÉES');
 $('bo').classList.toggle('on',st.blackout);if(document.activeElement!==$('master'))$('master').value=Math.round(st.master*100);$('mv').textContent=Math.round(st.master*100)+' %';};
 </script></body></html>`;
