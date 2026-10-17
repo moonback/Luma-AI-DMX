@@ -5,7 +5,7 @@ JSON UTF-8, indenté. Il est validé à l'ouverture par `projectSchema` ([src/co
 ```json
 {
   "format": "luma-ai-dmx-project",
-  "version": 2,
+  "version": 3,
   "id": "uuid",
   "meta": { "name": "Concert", "show": "", "createdAt": "2026-10-17T10:00:00.000Z", "modifiedAt": "…", "notes": "" },
   "show": { "bpm": 120, "universes": 1 },
@@ -31,7 +31,8 @@ JSON UTF-8, indenté. Il est validé à l'ouverture par `projectSchema` ([src/co
 | Version | Contenu |
 |---|---|
 | 1 | Format interne initial : patch sous la clé `fixtures`, sans sections `audio` ni `visualizer`. |
-| 2 | Format actuel. |
+| 2 | Clé `patch`, sections `audio` et `visualizer`. |
+| 3 | Format actuel : section `music` (morceaux analysés, plans Song-to-Show, objets générés). Le son n'est jamais stocké, seulement l'analyse et l'empreinte SHA-256 du fichier. Les événements de timeline acceptent `fadeOut`. |
 
 Les migrations sont appliquées en chaîne (`MIGRATIONS` dans [src/core/project/format.ts](../src/core/project/format.ts)), puis le résultat est validé. Un fichier d'une version **plus récente** que le logiciel est refusé avec un message explicite.
 

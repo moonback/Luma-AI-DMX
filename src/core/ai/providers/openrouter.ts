@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EFFECT_TYPES, FIXTURE_TYPES } from '../../model/schemas';
+import { EFFECT_TYPES, FIXTURE_TYPES, SHOW_EFFECTS, SHOW_MOVEMENTS, showSectionPlanSchema, type ShowSectionPlan } from '../../model/schemas';
 import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
 import { BRAND } from '../../../shared/brand';
@@ -213,19 +213,20 @@ export function extractJson(content: string): unknown {
   }
 }
 
-export async function proposeWithOpenRouter(prompt: string, rig: string, opts: OpenRouterOptions): Promise<ProviderResult> {
+/** One chat completion constrained to a JSON object (as far as the model supports it); returns the parsed object. */
+async function completeJson(system: string, user: string, schemaName: string, jsonSchema: unknown, opts: OpenRouterOptions): Promise<{ json: unknown; model: string; notices: string[] }> {
   const caps = opts.capabilities;
   const body: Record<string, unknown> = {
     model: opts.model,
     max_tokens: 8000,
     temperature: 0.3,
     messages: [
-      { role: 'system', content: `${SYSTEM_PROMPT}\n\nRig description:\n${rig}` },
-      { role: 'user', content: prompt },
+      { role: 'system', content: system },
+      { role: 'user', content: user },
     ],
   };
   // Constrain the output format only as far as the chosen model supports it; the prompt always carries the schema.
-  if (caps?.structuredOutputs) body.response_format = { type: 'json_schema', json_schema: { name: 'lighting_plan', strict: false, schema: PLAN_JSON_SCHEMA } };
+  if (caps?.structuredOutputs) body.response_format = { type: 'json_schema', json_schema: { name: schemaName, strict: false, schema: jsonSchema } };
   else if (caps?.jsonMode) body.response_format = { type: 'json_object' };
   if (caps?.reasoning) body.reasoning = { effort: opts.effort };
 
@@ -245,12 +246,64 @@ export async function proposeWithOpenRouter(prompt: string, rig: string, opts: O
   const choice = parsed.data.choices[0]!;
   if (choice.finish_reason === 'length') throw new OpenRouterError('Réponse IA tronquée (limite de longueur)', null);
   if (!choice.message.content) throw new OpenRouterError('Réponse IA vide (refus ou filtre du modèle)', null);
-  // Many models emit null for optional fields: drop them before validating.
-  const plan = llmPlanSchema.safeParse(clean(extractJson(choice.message.content)));
-  if (!plan.success) throw new OpenRouterError(`Réponse IA non conforme au schéma : ${plan.error.issues[0]?.path.join('.')} ${plan.error.issues[0]?.message}`, null);
   const model = parsed.data.model ?? opts.model;
   const notices: string[] = [];
   if (opts.model === DEFAULT_OPENROUTER_MODEL || model !== opts.model) notices.push(`Réponse servie par ${model}`);
   if (!caps) notices.push('Capacités du modèle inconnues : format JSON demandé par consigne uniquement.');
-  return { understanding: plan.data.understanding, actions: plan.data.actions, model, notices };
+  // Many models emit null for optional fields: drop them before validating.
+  return { json: clean(extractJson(choice.message.content)), model, notices };
+}
+
+export async function proposeWithOpenRouter(prompt: string, rig: string, opts: OpenRouterOptions): Promise<ProviderResult> {
+  const r = await completeJson(`${SYSTEM_PROMPT}\n\nRig description:\n${rig}`, prompt, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
+  const plan = llmPlanSchema.safeParse(r.json);
+  if (!plan.success) throw new OpenRouterError(`Réponse IA non conforme au schéma : ${plan.error.issues[0]?.path.join('.')} ${plan.error.issues[0]?.message}`, null);
+  return { understanding: plan.data.understanding, actions: plan.data.actions, model: r.model, notices: r.notices };
+}
+
+/* ------------------------------------------------------------------ */
+/* Song-to-Show planning                                               */
+/* ------------------------------------------------------------------ */
+
+const llmShowSchema = z.object({
+  summary: z.string(),
+  sections: z.array(z.object({
+    index: z.number(),
+    energy: z.number(),
+    palette: z.array(z.string()),
+    layers: z.object({ wash: z.boolean(), moving: z.boolean(), bars: z.boolean() }),
+    movement: z.enum(SHOW_MOVEMENTS),
+    effect: z.enum(SHOW_EFFECTS),
+    effectBeats: z.number(),
+    accents: z.boolean(),
+  })),
+});
+const SHOW_JSON_SCHEMA = z.toJSONSchema(llmShowSchema);
+
+const SHOW_SYSTEM = `You are the lighting designer assistant of a DMX console. You plan a light show for one song, section by section.
+You only see the song's symbolic structure (sections, durations, measured energy, tempo, key), never the audio.
+Answer with ONE JSON object only (no prose, no code fence) matching this JSON Schema:
+${JSON.stringify(SHOW_JSON_SCHEMA)}
+Rules:
+- Exactly one entry per section, same index as given, in order.
+- energy: integer 0 (almost dark) to 5 (maximum). Follow the operator's intent first, then the song's dynamics.
+- palette: 1 to 4 colours "#RRGGBB". Sections that are repeats of the same music should share a palette.
+- layers: which fixture families are lit (only families present in the rig).
+- movement: none | slow | sweep | fast (moving heads only). effect: none | wave | pulse | chase | rainbow | strobe.
+- effectBeats: effect cycle in beats (0.5 to 16). Use strobe ONLY if strobeAllowed is true AND the operator asked for it.
+- accents: flash on detected impacts (true only for high-energy sections).
+- "summary": one or two sentences in French describing the show.`;
+
+/** Plans a show with an LLM. The result is re-validated section by section; invalid output throws. */
+export async function planShowWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions, sectionCount: number): Promise<{ summary: string; sections: ShowSectionPlan[]; model: string; notices: string[] }> {
+  const r = await completeJson(SHOW_SYSTEM, `Operator intent: ${intent || '(none)'}\n\n${structure}`, 'show_plan', SHOW_JSON_SCHEMA, opts);
+  const loose = llmShowSchema.safeParse(r.json);
+  if (!loose.success) throw new OpenRouterError(`Plan IA non conforme : ${loose.error.issues[0]?.path.join('.')} ${loose.error.issues[0]?.message}`, null);
+  if (loose.data.sections.length !== sectionCount) throw new OpenRouterError(`Plan IA incomplet : ${loose.data.sections.length} sections pour ${sectionCount}`, null);
+  const sections = loose.data.sections.map((s, i) => {
+    const strict = showSectionPlanSchema.safeParse({ ...s, index: i, energy: Math.round(s.energy), palette: s.palette.slice(0, 4), locked: false, note: '' });
+    if (!strict.success) throw new OpenRouterError(`Section ${i + 1} invalide : ${strict.error.issues[0]?.path.join('.')} ${strict.error.issues[0]?.message}`, null);
+    return strict.data;
+  });
+  return { summary: loose.data.summary.slice(0, 1000), sections, model: r.model, notices: r.notices };
 }

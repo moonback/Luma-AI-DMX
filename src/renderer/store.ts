@@ -19,6 +19,7 @@ export const PAGES = [
   { id: 'visualizer', label: 'Stage Visualizer' },
   { id: 'stage3d', label: 'Stage 3D' },
   { id: 'audio', label: 'Audio Reactive' },
+  { id: 'music', label: 'Musique' },
   { id: 'output', label: 'DMX Output' },
   { id: 'settings', label: 'Settings' },
 ] as const;

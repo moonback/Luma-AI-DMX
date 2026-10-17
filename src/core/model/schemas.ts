@@ -217,6 +217,8 @@ export const effectParamsSchema = z.object({
   width: z.number().int().min(1).max(64).default(1),
   duty: z.number().min(0.05).max(0.95).default(0.5),
   seed: z.number().int().min(0).max(2 ** 31).default(1),
+  /** BPM-synced effects restart their cycle on bar/phrase boundaries (downbeats) instead of drifting freely. */
+  barSync: z.boolean().default(false),
 });
 export type EffectParams = z.infer<typeof effectParamsSchema>;
 export const effectSchema = z.object({
@@ -246,6 +248,8 @@ export const timelineEventSchema = z
     /** For `cue` events: cue index in the list. */
     cueIndex: z.number().int().min(0).default(0),
     fade: z.number().min(0).max(60).default(0),
+    /** Fade-out at the end of the event; defaults to `fade` (symmetric). 0 = hold until the end. */
+    fadeOut: z.number().min(0).max(60).optional(),
     label: z.string().max(80).default(''),
     lane: z.number().int().min(0).max(31).default(0),
   })
@@ -271,6 +275,22 @@ export const audioReactionsSchema = z.object({
   beatFlash: z.object({ enabled: z.boolean(), decay: z.number().min(0.02).max(2), targets: targetSchema }),
   energyToColor: z.object({ enabled: z.boolean(), lowColor: hexColorSchema, highColor: hexColorSchema, targets: targetSchema }),
   energyRiseGo: z.object({ enabled: z.boolean(), cueListId: idSchema.nullable(), ratio: z.number().min(1.1).max(5) }),
+  /** Band followers: intensity from the bass band, colour from brightness, movement from onset density. */
+  followers: z
+    .object({
+      intensityFromBass: z.object({ enabled: z.boolean(), amount: unitSchema, targets: targetSchema }),
+      colorFromBrightness: z.object({ enabled: z.boolean(), darkColor: hexColorSchema, brightColor: hexColorSchema, targets: targetSchema }),
+      moveFromOnsets: z.object({ enabled: z.boolean(), amount: unitSchema, targets: targetSchema }),
+    })
+    .default({
+      intensityFromBass: { enabled: false, amount: 0.7, targets: { fixtureIds: [], groupIds: [] } },
+      colorFromBrightness: { enabled: false, darkColor: '#FF3000', brightColor: '#00C8FF', targets: { fixtureIds: [], groupIds: [] } },
+      moveFromOnsets: { enabled: false, amount: 0.5, targets: { fixtureIds: [], groupIds: [] } },
+    }),
+  /** Predicted drop/chorus -> GO on a cue list. Fires only while armed at runtime (never armed on load). */
+  dropGo: z
+    .object({ enabled: z.boolean(), cueListId: idSchema.nullable(), minConfidence: unitSchema, kinds: z.array(z.enum(['drop', 'chorus'])).min(1) })
+    .default({ enabled: false, cueListId: null, minConfidence: 0.8, kinds: ['drop'] }),
 });
 export type AudioReactions = z.infer<typeof audioReactionsSchema>;
 export const DEFAULT_AUDIO_REACTIONS: AudioReactions = {
@@ -279,21 +299,105 @@ export const DEFAULT_AUDIO_REACTIONS: AudioReactions = {
   beatFlash: { enabled: false, decay: 0.25, targets: emptyTarget },
   energyToColor: { enabled: false, lowColor: '#2244FF', highColor: '#FF2266', targets: emptyTarget },
   energyRiseGo: { enabled: false, cueListId: null, ratio: 1.8 },
+  followers: {
+    intensityFromBass: { enabled: false, amount: 0.7, targets: emptyTarget },
+    colorFromBrightness: { enabled: false, darkColor: '#FF3000', brightColor: '#00C8FF', targets: emptyTarget },
+    moveFromOnsets: { enabled: false, amount: 0.5, targets: emptyTarget },
+  },
+  dropGo: { enabled: false, cueListId: null, minConfidence: 0.8, kinds: ['drop'] },
 };
 export const audioConfigSchema = z.object({
   sensitivity: z.number().min(0.1).max(10).default(1),
   smoothing: unitSchema.default(0.6),
   /** Onset strength relative to the adaptive threshold needed to count as a beat. */
   onsetThreshold: z.number().min(1).max(5).default(1.5),
+  /** Expected tempo range (genre): the live tracker never reports a tempo outside it (octave errors). */
+  bpmRange: z.object({ min: z.number().min(40).max(250), max: z.number().min(50).max(300) }).refine((r) => r.max >= r.min * 1.2, 'Plage de tempo trop étroite').default({ min: 70, max: 180 }),
   reactions: audioReactionsSchema.default(DEFAULT_AUDIO_REACTIONS),
 });
 export type AudioConfig = z.infer<typeof audioConfigSchema>;
 
 /* ------------------------------------------------------------------ */
+/* Music: song analysis and Song-to-Show plans                         */
+/* ------------------------------------------------------------------ */
+
+export const SECTION_LABELS = ['intro', 'verse', 'prechorus', 'build', 'chorus', 'drop', 'break', 'bridge', 'outro'] as const;
+export type SectionLabel = (typeof SECTION_LABELS)[number];
+const seconds = z.number().min(0).max(86400);
+export const songSectionSchema = z.object({
+  start: seconds,
+  end: seconds,
+  label: z.enum(SECTION_LABELS),
+  /** Repetition group: sections with the same cluster sound alike. */
+  cluster: z.number().int().min(0).max(300),
+  /** Mean loudness relative to the loudest section. */
+  energy: unitSchema,
+  /** Spectral centroid, normalized to the song range. */
+  brightness: unitSchema,
+  /** Onsets per second. */
+  density: z.number().min(0).max(50),
+  /** Share of low-frequency energy. */
+  bassShare: unitSchema,
+});
+export type SongSection = z.infer<typeof songSectionSchema>;
+export const songAnalysisSchema = z.object({
+  version: z.literal(1),
+  duration: seconds,
+  bpm: z.number().min(20).max(300),
+  tempoStable: z.boolean(),
+  beats: z.array(seconds).max(40000),
+  downbeats: z.array(seconds).max(10000),
+  sections: z.array(songSectionSchema).max(300),
+  key: z.object({ tonic: z.number().int().min(0).max(11), mode: z.enum(['major', 'minor']), confidence: unitSchema }),
+  events: z.array(z.object({ t: seconds, kind: z.enum(['impact', 'riser', 'silence']), duration: z.number().min(0).max(600) })).max(2000),
+});
+export type SongAnalysis = z.infer<typeof songAnalysisSchema>;
+
+export const SHOW_MOVEMENTS = ['none', 'slow', 'sweep', 'fast'] as const;
+export const SHOW_EFFECTS = ['none', 'wave', 'pulse', 'chase', 'rainbow', 'strobe'] as const;
+export const showSectionPlanSchema = z.object({
+  index: z.number().int().min(0).max(300),
+  /** 0 = almost dark, 5 = maximum. */
+  energy: z.number().int().min(0).max(5),
+  palette: z.array(hexColorSchema).min(1).max(4),
+  layers: z.object({ wash: z.boolean(), moving: z.boolean(), bars: z.boolean() }),
+  movement: z.enum(SHOW_MOVEMENTS),
+  effect: z.enum(SHOW_EFFECTS),
+  /** Effect cycle in beats. */
+  effectBeats: z.number().min(0.5).max(16),
+  /** Flash on detected impacts inside the section. */
+  accents: z.boolean(),
+  /** Locked sections are kept when the show is regenerated. */
+  locked: z.boolean().default(false),
+  note: z.string().max(200).default(''),
+});
+export type ShowSectionPlan = z.infer<typeof showSectionPlanSchema>;
+export const showPlanSchema = z.object({
+  intent: z.string().max(500),
+  provider: z.enum(['local', 'openrouter']),
+  model: z.string().max(150).nullable(),
+  variant: z.number().int().min(0).max(1000),
+  summary: z.string().max(1000),
+  sections: z.array(showSectionPlanSchema).max(300),
+});
+export type ShowPlan = z.infer<typeof showPlanSchema>;
+export const musicTrackSchema = z.object({
+  id: idSchema,
+  name: z.string().trim().min(1).max(200),
+  /** SHA-256 of the audio file: the analysis cache key (the audio itself is never stored in the project). */
+  hash: z.string().regex(/^[0-9a-f]{64}$/),
+  analysis: songAnalysisSchema,
+  plan: showPlanSchema.nullable().default(null),
+  /** Objects generated by Song-to-Show for this track (replaced on regeneration). */
+  created: z.object({ sceneIds: z.array(idSchema), effectIds: z.array(idSchema), timelineId: idSchema.nullable() }).default({ sceneIds: [], effectIds: [], timelineId: null }),
+});
+export type MusicTrack = z.infer<typeof musicTrackSchema>;
+
+/* ------------------------------------------------------------------ */
 /* Project                                                             */
 /* ------------------------------------------------------------------ */
 
-export const PROJECT_FORMAT_VERSION = 2;
+export const PROJECT_FORMAT_VERSION = 3;
 
 export const projectSchema = z.object({
   format: z.literal('luma-ai-dmx-project'),
@@ -316,7 +420,8 @@ export const projectSchema = z.object({
   cueLists: z.array(cueListSchema).default([]),
   effects: z.array(effectSchema).default([]),
   timelines: z.array(timelineSchema).default([]),
-  audio: audioConfigSchema.default({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, reactions: DEFAULT_AUDIO_REACTIONS }),
+  audio: audioConfigSchema.default({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, bpmRange: { min: 70, max: 180 }, reactions: DEFAULT_AUDIO_REACTIONS }),
+  music: z.object({ tracks: z.array(musicTrackSchema).max(100).default([]) }).default({ tracks: [] }),
   visualizer: z
     .object({ stageWidth: z.number().min(2).max(200).default(12), stageDepth: z.number().min(2).max(200).default(8) })
     .default({ stageWidth: 12, stageDepth: 8 }),

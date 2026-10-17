@@ -11,8 +11,7 @@ import {
   type AiAction, type AiEffectSpec, type AiExecutionReport, type AiProposal, type AiTarget, type LookPart, type ValidatedAction,
 } from './actions';
 import { interpretLocally, normalize, type InterpreterContext } from './local/interpreter';
-import { computeEffect, effectRate } from '../engine/effects';
-import { analyzeFrames } from '../safety/flashGuard';
+import { effectFlashViolation } from '../safety/flashGuard';
 
 /* ------------------------------------------------------------------ */
 /* Target resolution & validation                                      */
@@ -339,20 +338,10 @@ function effectFromSpec(index: ProjectIndex, spec: AiEffectSpec, trigger: Effect
  */
 export function guardProposalFlashes(proposal: AiProposal, index: ProjectIndex, engine: Engine, maxStrobeHz: number): number {
   const base = engine.compute(proposal.preview).values;
-  const fixtures = [...index.fixtures.values()];
-  const dt = 1 / 40;
   let rejected = 0;
   for (const v of proposal.actions) {
     if (v.status === 'rejected' || v.action?.type !== 'startEffect') continue;
-    const def = effectFromSpec(index, v.action.effect, 'manual', maxStrobeHz);
-    const targets = index.resolveTargets(def.targets);
-    const rate = effectRate(def, engine.bpm, maxStrobeHz);
-    const frames = Array.from({ length: 120 }, (_, i) => {
-      const out = structuredClone(base);
-      for (const [fid, attrs] of Object.entries(computeEffect(def, i * dt * rate, targets))) out[fid] = { ...out[fid], ...attrs };
-      return out;
-    });
-    const r = analyzeFrames(fixtures, frames, dt);
+    const r = effectFlashViolation(index, base, effectFromSpec(index, v.action.effect, 'manual', maxStrobeHz), engine.bpm, maxStrobeHz);
     if (!r.violation) continue;
     v.status = 'rejected';
     v.messages.push(`Garde-fou photosensible : ${r.reason} — effet refusé`);

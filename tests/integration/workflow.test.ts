@@ -68,7 +68,7 @@ describe('parcours complet (AppService sans Electron)', () => {
     expect((await svc.execute({ type: 'project.save' })).path).toBe(file);
     expect(svc.dirty).toBe(false);
     const saved = JSON.parse(await fs.readFile(file, 'utf8')) as { version: number };
-    expect(saved.version).toBe(2);
+    expect(saved.version).toBe(3);
     await svc.dispose();
 
     // 12–13. Fermer et rouvrir : état restauré

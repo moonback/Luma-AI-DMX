@@ -149,6 +149,13 @@ Mettre en place avant les phases IA : sans mesure, impossible de savoir si une a
 
 Objectif : que l'application **comprenne un morceau** aussi bien qu'un opérateur qui l'a écouté trois fois.
 
+> **État au 17/10/2026** : 1.1 à 1.5 implémentés et testés. Écarts assumés par rapport au plan :
+> - pas de modèle ONNX (ni corpus annoté ni modèle entraîné). L'étiquetage des sections et la prédiction de drop reposent sur du traitement du signal et des règles à poids fixés à la main, vérifiés sur des morceaux synthétiques à vérité terrain connue (tempo à ±1 BPM, premiers temps > 90 %, frontières à ±1 temps, 4 min analysées en ≈ 2 s ; suivi live sans erreur d'octave de 80 à 170 BPM ; drop annoncé à ±1 temps sans fausse alerte sur un groove stable) ;
+> - analyse dans le thread du renderer, en tranches asynchrones, plutôt que dans un worker ;
+> - pas de détection de voix, ni d'empreinte acoustique au-delà de l'empreinte SHA-256 du fichier.
+>
+> Reste à faire : constituer le corpus réel de 50 titres annotés et y mesurer les critères, puis valider le rendu par des éclairagistes (critère « 8 titres sur 10 utilisables »).
+
 ### 1.1 Analyse de fichier audio hors ligne
 - Import d'un fichier (WAV, MP3, FLAC, via décodage Web Audio dans le renderer, analyse dans un worker).
 - Extraction :

@@ -25,6 +25,7 @@ export const SHORTCUT_ACTIONS = [
   { id: 'page:visualizer', label: 'Espace Stage Visualizer', default: 'Ctrl+9' },
   { id: 'page:stage3d', label: 'Espace Stage 3D', default: '' },
   { id: 'page:audio', label: 'Espace Audio Reactive', default: 'Ctrl+0' },
+  { id: 'page:music', label: 'Espace Musique (Song-to-Show)', default: '' },
   { id: 'page:output', label: 'Espace DMX Output', default: '' },
   { id: 'page:settings', label: 'Espace Settings', default: 'Ctrl+,' },
 ] as const;

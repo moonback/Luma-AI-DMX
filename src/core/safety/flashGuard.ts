@@ -1,4 +1,6 @@
-import type { FixtureValues } from '../model/schemas';
+import type { Effect, FixtureValues } from '../model/schemas';
+import type { ProjectIndex } from '../engine/resolve';
+import { computeEffect, effectRate } from '../engine/effects';
 import { attributeClass, baseAttribute } from '../fixtures/attributes';
 import { coarseChannel, rangeValue, type ResolvedFixture } from '../fixtures/profiles';
 import { buildVisualModel, strobeFrequency, type VisualFixture } from '../visualizer/model';
@@ -108,6 +110,25 @@ export function analyzeFrames(fixtures: readonly ResolvedFixture[], frames: Iter
     t += dt;
   }
   return { ...worst, at: null };
+}
+
+/**
+ * Simulates `def` for 3 s on top of `base` (40 Hz) and returns the flash-guard verdict. `scale` effects multiply the
+ * underlying values, `override` effects replace them.
+ */
+export function effectFlashViolation(index: ProjectIndex, base: FixtureValues, def: Effect, bpm: number, maxStrobeHz: number): FlashStatus & { at: number | null } {
+  const dt = 1 / 40;
+  const targets = index.resolveTargets(def.targets);
+  const rate = effectRate(def, bpm, maxStrobeHz);
+  const frames = Array.from({ length: 120 }, (_, i) => {
+    const out = structuredClone(base);
+    for (const [fid, attrs] of Object.entries(computeEffect(def, i * dt * rate, targets))) {
+      const o = (out[fid] ??= {});
+      for (const [a, v] of Object.entries(attrs)) o[a] = def.blend === 'scale' ? (o[a] ?? 0) * v : v;
+    }
+    return out;
+  });
+  return analyzeFrames([...index.fixtures.values()], frames, dt);
 }
 
 /**

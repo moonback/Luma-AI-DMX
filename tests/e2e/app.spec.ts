@@ -1,8 +1,9 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { demoSong } from '../music-synth';
 
 const require = createRequire(import.meta.url);
 const electronPath = require('electron') as unknown as string;
@@ -217,4 +218,39 @@ test('fiabilisation : garde-fou, contrôle externe, télécommande et RDM', asyn
   await nav('output');
   await page.getByRole('tab', { name: 'RDM' }).click();
   await expect(page.getByText('Ajoutez une sortie Art-Net')).toBeVisible();
+});
+
+/** 16-bit PCM mono WAV. */
+function wav(samples: Float32Array, sr: number): Buffer {
+  const b = Buffer.alloc(44 + samples.length * 2);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + samples.length * 2, 4); b.write('WAVE', 8); b.write('fmt ', 12);
+  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28);
+  b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(samples.length * 2, 40);
+  samples.forEach((v, i) => b.writeInt16LE(Math.round(Math.max(-1, Math.min(1, v)) * 32767), 44 + i * 2));
+  return b;
+}
+
+test('intelligence musicale : import, analyse, Song-to-Show, lecture synchronisée', async () => {
+  const song = demoSong(124);
+  const file = path.join(mkdtempSync(path.join(tmpdir(), 'luma-song-')), 'Demo pop.wav');
+  writeFileSync(file, wav(song.samples, song.sr));
+  await nav('music');
+  await page.getByTestId('music-file').setInputFiles(file);
+  await expect(page.getByTestId('music-summary')).toContainText('124', { timeout: 30_000 });
+  await expect(page.getByTestId('section-strip')).toContainText('Refrain');
+  await page.getByTestId('music-intent').fill('concert pop, sobre sur les couplets, explosion sur les refrains, pas de strobe');
+  await page.getByTestId('music-generate').click();
+  await expect(page.getByTestId('music-plan-summary')).toContainText('sections');
+  await expect(page.getByTestId('music-sections')).toContainText('Chase');
+  await page.screenshot({ path: `${shots}/20-musique-song-to-show.png` });
+  // Synchronised playback (the timeline chase itself is covered by the timecode unit tests).
+  await page.getByTestId('music-play').click();
+  await expect(page.getByTestId('music-stop')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.querySelector('[data-testid="music-stop"]')?.textContent ?? ''), { timeout: 5000 }).toMatch(/0:0[1-9]/);
+  await nav('audio');
+  await expect(page.getByTestId('audio-bpm')).not.toHaveText('—', { timeout: 10_000 });
+  await page.screenshot({ path: `${shots}/21-audio-tempo-prediction.png` });
+  await nav('music');
+  await page.getByTestId('music-stop').click();
+  await expect(page.getByTestId('music-play')).toBeVisible();
 });

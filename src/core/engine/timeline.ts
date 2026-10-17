@@ -83,7 +83,8 @@ export class TimelineTransport {
       if (e.kind === 'scene') {
         const scene = index.scenes.get(e.refId!);
         if (!scene) continue;
-        const w = e.fade > 0 ? Math.min(1, (t - e.start) / e.fade, (e.start + e.duration - t) / e.fade) : 1;
+        const out = e.fadeOut ?? e.fade;
+        const w = Math.min(1, e.fade > 0 ? (t - e.start) / e.fade : 1, out > 0 ? (e.start + e.duration - t) / out : 1);
         for (const [fid, attrs] of Object.entries(scene.values)) {
           const o = (values[fid] ??= {});
           for (const [attr, v] of Object.entries(attrs)) {
