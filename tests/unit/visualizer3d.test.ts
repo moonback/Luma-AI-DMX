@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { audienceGlare, beamDirection, beamHit, flickerOn, mountSign, onStage, poolShape, rigAngles, rotateY, beamLength } from '../../src/core/visualizer/beam';
 import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, trussSegments, trussSupports } from '../../src/core/visualizer/truss';
-import type { Truss } from '../../src/core/model/schemas';
+import type { Performer, StageMarker, Truss } from '../../src/core/model/schemas';
 import { buildVisualModel, goboIndex, mountOf, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
 import { createProject, parseProject } from '../../src/core/project/format';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../src/core/visualizer/templates';
+import { cloneElement, equipTrusses, newElement, parseElement, serializeElement, withElement, withoutElement } from '../../src/core/visualizer/sceneEdit';
 import { projectSchema } from '../../src/core/model/schemas';
 import { DARK_LEVEL, FACE_HEIGHT, lightAt, performerLight, performerSpot, toHex } from '../../src/core/visualizer/lighting';
 import { commandSchema } from '../../src/shared/commands';
@@ -312,5 +313,57 @@ describe('modèles de scène', () => {
       expect(hasSceneContent(parsed.visualizer)).toBe(true);
     }
     expect(hasSceneContent(createProject('Vide').visualizer)).toBe(false);
+  });
+});
+
+describe('édition de scène : ajout, copie, presse-papiers, équipement', () => {
+  const vis = () => createProject('Édition').visualizer;
+  let n = 0;
+  const id = () => `e${n++}`;
+  const line = (o: Partial<Truss>): Truss => ({ id: 'x', name: 'T', shape: 'line', x: 0, y: 4, height: 6, length: 8, rotation: 0, support: 'hung', ...o });
+
+  it('les ajouts successifs ne s’empilent pas ; un clic pose à l’endroit demandé', () => {
+    let v = vis();
+    for (let i = 0; i < 3; i++) v = { ...v, ...withElement(v, 'marker', newElement(v, 'marker', id)) };
+    expect(v.markers.map((m) => m.x)).toEqual([0, 1, -1]);
+    expect(newElement(v, 'screen', id, { x: 2.345, y: -3 })).toMatchObject({ x: 2.35, y: -3 });
+  });
+
+  it('copie décalée, suppression d’un point (l’interprète reste en place), presse-papiers validé', () => {
+    const m = newElement(vis(), 'marker', id) as StageMarker;
+    const pf = { ...newElement(vis(), 'performer', id), markerId: m.id, x: m.x, y: m.y } as Performer;
+    const v = { ...vis(), markers: [m], performers: [pf] };
+    const copy = cloneElement(v, 'performer', pf, id);
+    expect(copy).toMatchObject({ x: m.x + 1, markerId: null, name: `${pf.name} (copie)` });
+    expect(withoutElement(v, { kind: 'marker', id: m.id }).performers![0]).toMatchObject({ markerId: null, x: m.x, y: m.y });
+    expect(parseElement(serializeElement('marker', m))).toEqual({ kind: 'marker', el: m });
+    expect(parseElement('luma-scene:{"kind":"marker","el":{"id":"a","name":"x","x":500,"y":0,"height":1}}')).toBeNull();
+    expect(parseElement('luma-scene:{"kind":"__proto__","el":{}}')).toBeNull();
+    expect(parseElement('autre chose')).toBeNull();
+  });
+
+  it('équiper : lyres en contre, fixes en face, répartis régulièrement', () => {
+    const front = line({ id: 'face', y: 1 }), back = line({ id: 'contre', y: 6, height: 7 });
+    const out = equipTrusses([{ id: 'l1', movable: true }, { id: 'l2', movable: true }, { id: 'p1', movable: false }], [back, front]);
+    expect(out.find((p) => p.id === 'l1')).toMatchObject({ trussId: 'contre', position: { x: -2, y: 6 }, height: 6.8 });
+    expect(out.find((p) => p.id === 'l2')).toMatchObject({ trussId: 'contre', position: { x: 2, y: 6 } });
+    expect(out.find((p) => p.id === 'p1')).toMatchObject({ trussId: 'face', position: { x: 0, y: 1 } });
+    expect(equipTrusses([{ id: 'a', movable: false }], [])).toEqual([]);
+  });
+
+  it('service : fixture.place pose tout en une seule étape annulable', async () => {
+    const { svc } = makeService();
+    await svc.init();
+    await svc.execute({ type: 'project.new', name: 'Équiper' });
+    const { ids } = await svc.execute({ type: 'fixture.add', profileId: 'demo-spot', mode: '13ch étendu', universe: 1, address: null, count: 2, namePrefix: 'Lyre', tags: [] });
+    const run = (cmd: unknown) => svc.execute(commandSchema.parse(cmd) as never);
+    await run({ type: 'project.update', visualizer: { trusses: [line({ id: 't1' })] } });
+    const h = svc.projectState().sceneHistory.undo;
+    await run({ type: 'fixture.place', placements: (ids as string[]).map((fid, i) => ({ id: fid, position: { x: i, y: 4 }, height: 5.8, trussId: 't1', mount: 'hanging' })) });
+    expect(svc.projectState().sceneHistory.undo).toBe(h + 1);
+    expect(svc.projectState().project.patch.every((f) => f.trussId === 't1' && f.height === 5.8)).toBe(true);
+    await expect(run({ type: 'fixture.place', placements: [{ id: ids[0], position: { x: 0, y: 0 }, height: 1, trussId: 'absente' }] })).rejects.toThrow('Structure introuvable');
+    await run({ type: 'scene.undo' });
+    expect(svc.projectState().project.patch.every((f) => !f.trussId)).toBe(true);
   });
 });

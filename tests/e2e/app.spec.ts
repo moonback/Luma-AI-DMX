@@ -373,6 +373,48 @@ test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol'
   await inv({ type: 'programmer.release', fixtureIds: ids });
 });
 
+test('création rapide : équiper les structures, poser au clic, dupliquer, supprimer', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  type Fx = { name: string; trussId?: string | null; mount?: string };
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const patch = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch;
+  await nav('visualizer');
+  await page.getByTestId('stage-settings-toggle').click();
+
+  // Equip without a selection (a click on an empty corner clears it): the hung fixtures spread over the trusses,
+  // floor-standing ones stay put; one undoable step.
+  const box = (await page.getByTestId('stage-canvas').boundingBox())!;
+  await page.mouse.click(box.x + 6, box.y + 6);
+  await expect(page.getByTestId('equip')).toHaveText('Équiper les structures');
+  const hungBefore = (await patch()).filter((f) => f.trussId).length;
+  await page.getByTestId('equip').click();
+  await expect.poll(async () => (await patch()).filter((f) => f.trussId).length).toBeGreaterThan(hungBefore);
+  await page.screenshot({ path: `${shots}/20-equiper-structures.png` });
+  await page.getByTestId('scene-undo').click();
+  await expect.poll(async () => (await patch()).filter((f) => f.trussId).length).toBe(hungBefore);
+
+  // Click placement on the 2D plan; the new point is selected, Ctrl+D duplicates it, Suppr deletes the copy.
+  const rows = page.getByTestId('marker-row');
+  const before = await rows.count();
+  await page.getByTestId('marker-add-place').click();
+  await expect(page.getByTestId('placing')).toBeVisible();
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.5);
+  await expect(rows).toHaveCount(before + 1);
+  await expect(page.getByTestId('placing')).toHaveCount(0);
+  await expect(rows.last()).toHaveClass(/on/);
+  await page.keyboard.press('Control+d');
+  await expect(rows).toHaveCount(before + 2);
+  await expect(rows.last().locator('input').first()).toHaveValue(/\(copie\)$/);
+  await page.screenshot({ path: `${shots}/20b-poser-dupliquer.png` });
+  await page.keyboard.press('Delete');
+  await expect(rows).toHaveCount(before + 1);
+
+  // Échap cancels a placement without releasing anything else.
+  await page.getByTestId('truss-add-place').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('placing')).toHaveCount(0);
+});
+
 test('raccourci reconfiguré : Blackout sur K', async () => {
   await nav('settings');
   await page.getByRole('tab', { name: 'Raccourcis' }).click();

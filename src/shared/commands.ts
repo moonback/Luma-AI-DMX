@@ -104,6 +104,17 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('fixture.update'), id: idSchema, patch: fixturePatchSchema }),
   z.object({ type: z.literal('fixture.remove'), ids: z.array(idSchema).min(1) }),
   z.object({ type: z.literal('fixture.duplicate'), ids: z.array(idSchema).min(1) }),
+  /** Places several fixtures in one scene-history step (e.g. hanging the rig on its trusses). */
+  z.object({
+    type: z.literal('fixture.place'),
+    placements: z.array(z.object({
+      id: idSchema,
+      position: z.object({ x: z.number().min(-100).max(100), y: z.number().min(-100).max(100) }),
+      height: z.number().min(0).max(50),
+      trussId: idSchema.nullable(),
+      mount: fixtureMountSchema.optional(),
+    })).min(1).max(4096),
+  }),
   // Groups / palettes
   z.object({ type: z.literal('group.upsert'), group: groupSchema }),
   z.object({ type: z.literal('group.remove'), id: idSchema }),
@@ -287,6 +298,7 @@ export interface CommandResults {
   'fixture.update': Void;
   'fixture.remove': Void;
   'fixture.duplicate': { ids: string[] };
+  'fixture.place': Void;
   'group.upsert': Void;
   'group.remove': Void;
   'group.reorder': Void;

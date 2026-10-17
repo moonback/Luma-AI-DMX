@@ -590,6 +590,16 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         });
         return ok;
       }
+      case 'fixture.place':
+        this.sceneMutate((d) => {
+          for (const p of cmd.placements) {
+            const f = d.patch.find((x) => x.id === p.id);
+            if (!f) throw new UserError('Projecteur introuvable');
+            if (p.trussId && !d.visualizer.trusses.some((t) => t.id === p.trussId)) throw new UserError('Structure introuvable');
+            Object.assign(f, { position: p.position, height: p.height, trussId: p.trussId }, p.mount ? { mount: p.mount } : {});
+          }
+        });
+        return ok;
       case 'fixture.duplicate': {
         const out: string[] = [];
         this.mutate((d) => {

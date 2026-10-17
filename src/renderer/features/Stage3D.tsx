@@ -21,6 +21,7 @@ import { buildPerformer, buildScreen, disposeScreen, screenKey, updatePerformer,
 import { AMBIENCES, FLOORS, LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeReflector, type AmbienceId, type FloorId } from './stage3d/quality';
 import { DARK_LEVEL, performerLight } from '../../core/visualizer/lighting';
 import { screenMediaVersion } from '../screenMedia';
+import { addSceneElement } from '../sceneActions';
 
 /**
  * 3D stage preview (three.js) fed by the renderer-agnostic VisualFixture model.
@@ -182,7 +183,11 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const [recording, setRecording] = useState(false);
   const [edit, setEdit] = useState(false);
   const [tool, setTool] = useState<'translate' | 'rotate'>('translate');
-  const [selTruss, setSelTruss] = useState<string | null>(null);
+  // The selected truss is the shared stage selection (scene panel, 2D plan, Ctrl+D / Suppr).
+  const sceneSel = useStore((s) => s.sceneSel);
+  const placing = useStore((s) => s.placing);
+  const selTruss = sceneSel?.kind === 'truss' ? sceneSel.id : null;
+  const setSelTruss = (id: string | null) => useStore.getState().setSceneSel(id ? { kind: 'truss', id } : null);
   const [dims, setDims] = useState<string | null>(null);
   const [lights, setLights] = useState(0);
   const [shadows, setShadows] = useState(0);
@@ -379,6 +384,15 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     const onUp = (e: PointerEvent) => {
       if (e.button !== 0 || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 4) return;
       if (tc.axis !== null || dragging) return; // click on the gizmo
+      const placingKind = useStore.getState().placing;
+      if (placingKind) {
+        // Click placement: the element lands where the ray meets the stage floor.
+        const r = renderer.domElement.getBoundingClientRect();
+        ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+        const at = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+        if (at) addSceneElement(placingKind, { x: at.x, y: -at.z });
+        return;
+      }
       const id = pick(e.clientX, e.clientY);
       const st = useStore.getState();
       const trussId = !id && latest.current.edit ? pickTruss(e.clientX, e.clientY) : undefined;
@@ -614,7 +628,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   if (error) return <div className="empty">{error}. Utilisez la vue 2D.</div>;
   return (
     <div ref={wrap} className="canvas-wrap stage3d" style={{ height: '100%' }}>
-      <div ref={host} style={{ position: 'absolute', inset: 0 }} onPointerDown={() => setMenu(false)} data-testid="stage-3d" />
+      <div ref={host} style={{ position: 'absolute', inset: 0, cursor: placing ? 'crosshair' : undefined }} onPointerDown={() => setMenu(false)} data-testid="stage-3d" />
       <div className="stage3d-toolbar">
         <div className="chips" role="group" aria-label="Caméras">
           <Camera size={14} className="dim" />

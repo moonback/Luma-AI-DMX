@@ -280,6 +280,8 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .scene-section-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 12px 12px; }
 .scene-card { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border); }
 .scene-card:focus-within { border-color: var(--border-strong); }
+.scene-card.on { border-color: var(--violet); box-shadow: 0 0 0 1px var(--violet-soft); }
+.stage-placing { border-color: var(--violet); }
 .scene-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 8px; }
 .scene-num { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 10.5px; color: var(--text-3); }
 .scene-num .input, .scene-num .select { height: 26px; padding: 0 6px; }
@@ -287,7 +289,6 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .scene-num.span3 { grid-column: span 3; }
 .scene-check { align-self: end; height: 26px; }
 .scene-color { width: 100%; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: none; cursor: pointer; }
-.scene-add { align-self: flex-start; }
 .scene-hint { margin: 0; font-size: 11px; color: var(--text-3); }
 .scene-templates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .scene-template { display: flex; flex-direction: column; gap: 2px; padding: 8px 9px; text-align: left; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; transition: border-color var(--dur), background var(--dur); }

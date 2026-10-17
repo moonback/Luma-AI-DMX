@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Boxes, ExternalLink, LayoutTemplate, MapPin, Monitor, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, X } from 'lucide-react';
+import { Boxes, Crosshair, ExternalLink, LayoutTemplate, MapPin, Monitor, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { NumberInput, PageHead, useResolved } from '../components/ui';
@@ -8,7 +8,9 @@ import { Stage3D } from './Stage3D';
 import type { FixtureValues, Performer, Project, StageMarker, StageScreen, Truss } from '../../core/model/schemas';
 import { DARK_LEVEL, performerLight, toHex } from '../../core/visualizer/lighting';
 import { setScreenVideo, screenVideo } from '../screenMedia';
-import { snapToTrusses, trussSegments, trussSupports } from '../../core/visualizer/truss';
+import { nearestOnTruss, snapToTrusses, trussSegments, trussSupports } from '../../core/visualizer/truss';
+import { SCENE_LABEL, canAdd, findElement, type SceneKind, type SceneRef } from '../../core/visualizer/sceneEdit';
+import { addSceneElement, equipRig, removeSceneElement, useSceneShortcuts } from '../sceneActions';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../core/visualizer/templates';
 
 interface View { scale: number; ox: number; oy: number }
@@ -26,7 +28,10 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ scale: 0, ox: 0, oy: 0 });
-  const drag = useRef<{ kind: 'pan' | 'fixture' | 'marker' | 'performer'; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const drag = useRef<{ kind: 'pan' | 'fixture' | 'marker' | 'performer'; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean; keep?: boolean } | null>(null);
+  const placing = useStore((s) => s.placing);
+  const sceneSel = useStore((s) => s.sceneSel);
+  const setSceneSel = useStore((s) => s.setSceneSel);
   const local = useRef(new Map<string, { x: number; y: number }>());
   const fitKey = useRef('');
   const model = useMemo(() => buildVisualModel(fixtures, values ?? live), [fixtures, values, live]);
@@ -174,6 +179,26 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       g.font = '10px sans-serif';
       g.fillText(`${pf.name} · ${Math.round(l.level * 100)} %`, q.x + 11, q.y + 3);
     }
+    // Selected stage element: violet outline (bar for trusses, ring otherwise).
+    const selEl = sceneSel && findElement(vis, sceneSel);
+    if (selEl) {
+      g.strokeStyle = '#8b5cf6';
+      g.lineWidth = 2;
+      g.setLineDash([4, 3]);
+      if (sceneSel.kind === 'truss') {
+        g.beginPath();
+        for (const [a0, b0] of trussSegments(selEl as Truss)) { const pa = toScreen(a0.x, a0.y), pb = toScreen(b0.x, b0.y); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); }
+        g.stroke();
+      } else {
+        const at = sceneSel.kind === 'performer' ? performerPos(selEl as Performer) : sceneSel.kind === 'marker' ? markerPos(selEl as StageMarker) : selEl;
+        const q = toScreen(at.x, at.y);
+        g.beginPath();
+        g.arc(q.x, q.y, 14, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.setLineDash([]);
+      g.lineWidth = 1;
+    }
     // Beams first (additive look), then bodies
     g.globalCompositeOperation = 'lighter';
     for (const f of model) {
@@ -244,22 +269,42 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     const r = wrap.current!.getBoundingClientRect();
     return vis.performers.find((pf) => { const q = toScreen(performerPos(pf).x, performerPos(pf).y); return Math.hypot(q.x - (cx - r.left), q.y - (cy - r.top)) < 10; });
   };
+  /** Truss or screen under the pointer (within 8 px of its outline seen from above). */
+  const hitStructure = (cx: number, cy: number): SceneRef | undefined => {
+    const r = wrap.current!.getBoundingClientRect();
+    const x = (cx - r.left - view.ox) / view.scale, y = (view.oy - (cy - r.top)) / view.scale;
+    const near = (t: Truss) => nearestOnTruss(t, x, y).dist * view.scale < 8;
+    const t = vis.trusses.find(near);
+    if (t) return { kind: 'truss', id: t.id };
+    // A screen seen from above is a straight bar: test it as a straight truss of the same width.
+    const sc = vis.screens.find((s) => near({ ...s, shape: 'line', length: s.width, height: 1, support: 'towers' }));
+    return sc ? { kind: 'screen', id: sc.id } : undefined;
+  };
   const down = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    if (placing && e.button === 0) {
+      const r = wrap.current!.getBoundingClientRect();
+      addSceneElement(placing, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale });
+      return;
+    }
     const f = hit(e.clientX, e.clientY);
-    const pf = editable && !f && e.button === 0 ? hitPerformer(e.clientX, e.clientY) : undefined;
-    const mk = editable && !f && !pf && e.button === 0 ? hitMarker(e.clientX, e.clientY) : undefined;
-    if (pf) {
+    const pf = !f && e.button === 0 ? hitPerformer(e.clientX, e.clientY) : undefined;
+    const mk = !f && !pf && e.button === 0 ? hitMarker(e.clientX, e.clientY) : undefined;
+    const ref: SceneRef | undefined = pf ? { kind: 'performer', id: pf.id } : mk ? { kind: 'marker', id: mk.id } : !f && e.button === 0 ? hitStructure(e.clientX, e.clientY) : undefined;
+    if (ref) setSceneSel(ref);
+    if (pf && editable) {
       const at = performerPos(pf);
       drag.current = { kind: 'performer', id: pf.id, x: e.clientX, y: e.clientY, ox: at.x, oy: at.y, moved: false };
-    } else if (mk) {
+    } else if (mk && editable) {
       drag.current = { kind: 'marker', id: mk.id, x: e.clientX, y: e.clientY, ox: mk.x, oy: mk.y, moved: false };
     } else if (f && e.button === 0) {
+      setSceneSel(null);
       if (e.ctrlKey || e.shiftKey) setSelection(selection.includes(f.id) ? selection.filter((x) => x !== f.id) : [...selection, f.id]);
       else if (!selection.includes(f.id)) setSelection([f.id]);
       drag.current = editable ? { kind: 'fixture', id: f.id, x: e.clientX, y: e.clientY, ox: pos(f).x, oy: pos(f).y, moved: false } : null;
     } else {
-      drag.current = { kind: 'pan', x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy, moved: false };
+      // A click on an element (not editable) selects it but still pans the view when dragged.
+      drag.current = { kind: 'pan', x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy, moved: false, keep: !!ref };
     }
   };
   const move = (e: React.PointerEvent) => {
@@ -276,7 +321,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const up = () => {
     const d = drag.current;
     drag.current = null;
-    if (d?.kind === 'pan' && !d.moved) setSelection([]);
+    if (d?.kind === 'pan' && !d.moved && !d.keep) { setSelection([]); setSceneSel(null); }
     if (d?.kind === 'performer' && d.id && d.moved) {
       const p = local.current.get(d.id)!;
       const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
@@ -312,7 +357,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     setView({ scale, ox: mx - ((mx - view.ox) * scale) / view.scale, oy: my - ((my - view.oy) * scale) / view.scale });
   };
   return (
-    <div ref={wrap} className="canvas-wrap" style={{ height: '100%' }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onWheel={wheel} data-testid="stage-canvas">
+    <div ref={wrap} className="canvas-wrap" style={{ height: '100%', cursor: placing ? 'crosshair' : undefined }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onWheel={wheel} data-testid="stage-canvas">
       <canvas ref={canvas} />
     </div>
   );
@@ -368,22 +413,38 @@ function NameInput({ value, label, onChange }: { value: string; label: string; o
   );
 }
 
-function Card({ testId, head, children }: { testId: string; head: ReactNode; children?: ReactNode }) {
+/** Element card; clicking or focusing it selects the element (Ctrl+D, Suppr, Ctrl+C apply to it). */
+function Card({ testId, sel, head, children }: { testId: string; sel: SceneRef; head: ReactNode; children?: ReactNode }) {
+  const selected = useStore((s) => s.sceneSel?.id === sel.id);
+  const el = useRef<HTMLDivElement>(null);
+  // Selected from the 2D / 3D view: bring the card into sight.
+  useEffect(() => { if (selected && !el.current?.contains(document.activeElement)) el.current?.scrollIntoView({ block: 'nearest' }); }, [selected]);
+  const select = () => { if (!selected) useStore.getState().setSceneSel(sel); };
   return (
-    <div className="scene-card" data-testid={testId}>
+    <div ref={el} className={`scene-card ${selected ? 'on' : ''}`} data-testid={testId} onPointerDown={select} onFocus={select}>
       <div className="row" style={{ gap: 6 }}>{head}</div>
       {children && <div className="scene-card-grid">{children}</div>}
     </div>
   );
 }
 
-const DeleteBtn = ({ name, title, onClick }: { name: string; title?: string; onClick: () => void }) => (
-  <button className="btn ghost sm icon" title={title ?? `Supprimer « ${name} »`} aria-label={`Supprimer ${name}`} onClick={onClick}><Trash2 size={12} /></button>
+const DeleteBtn = ({ name, title, sel }: { name: string; title?: string; sel: SceneRef }) => (
+  <button className="btn ghost sm icon" title={title ?? `Supprimer « ${name} » (Suppr)`} aria-label={`Supprimer ${name}`} onClick={() => removeSceneElement(sel)}><Trash2 size={12} /></button>
 );
 
-const AddBtn = ({ label, disabled, onClick, testId }: { label: string; disabled: boolean; onClick: () => void; testId: string }) => (
-  <button className="btn sm scene-add" onClick={onClick} disabled={disabled} data-testid={testId}><Plus size={12} />{label}</button>
-);
+/** "+ Add" (next free spot) and "place with a click on the stage" for one kind of element. */
+function AddBtn({ kind, label, testId }: { kind: SceneKind; label: string; testId: string }) {
+  const vis = useStore((s) => s.project!.project.visualizer);
+  const placing = useStore((s) => s.placing === kind);
+  const full = !canAdd(vis, kind);
+  return (
+    <div className="row" style={{ gap: 6 }}>
+      <button className="btn sm" onClick={() => addSceneElement(kind)} disabled={full} data-testid={testId}><Plus size={12} />{label}</button>
+      <button className={`btn sm ${placing ? 'on' : ''}`} onClick={() => useStore.getState().setPlacing(placing ? null : kind)} disabled={full} aria-pressed={placing}
+        title="Poser au clic sur le plateau (2D ou 3D) — Échap pour annuler" data-testid={`${testId}-place`}><Crosshair size={12} />Poser au clic</button>
+    </div>
+  );
+}
 
 /** One-click starting layouts; replacing a non-empty scene asks first (and stays undoable). */
 function TemplatePicker({ vis }: { vis: Vis }) {
@@ -411,7 +472,6 @@ function TemplatePicker({ vis }: { vis: Vis }) {
 function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
   const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
   const setMarker = (id: string, patch: Partial<StageMarker>) => update({ markers: vis.markers.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
-  const addMarker = () => update({ markers: [...vis.markers, { id: newId(), name: `Point ${vis.markers.length + 1}`, x: 0, y: Math.round(vis.stageDepth * 5) / 10, height: 1.7 }] });
   return (
     <aside className="scene-panel" data-testid="stage-settings" aria-label="Construction de la scène">
       <div className="scene-panel-head">
@@ -442,13 +502,13 @@ function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
         </Section>
         <Section icon={<MapPin size={13} />} title="Points de scène" count={vis.markers.length}>
           {vis.markers.map((m) => (
-            <Card key={m.id} testId="marker-row" head={<><NameInput value={m.name} label="Nom du point" onChange={(name) => setMarker(m.id, { name })} /><DeleteBtn name={m.name} onClick={() => update({ markers: vis.markers.filter((x) => x.id !== m.id) })} /></>}>
+            <Card key={m.id} testId="marker-row" sel={{ kind: 'marker', id: m.id }} head={<><NameInput value={m.name} label="Nom du point" onChange={(name) => setMarker(m.id, { name })} /><DeleteBtn name={m.name} sel={{ kind: 'marker', id: m.id }} /></>}>
               <Num label="X" title="Jardin ↔ cour (m)" value={m.x} min={-100} max={100} step={0.1} onChange={(v) => setMarker(m.id, { x: v })} />
               <Num label="Y" title="Profondeur (m)" value={m.y} min={-100} max={100} step={0.1} onChange={(v) => setMarker(m.id, { y: v })} />
               <Num label="H visée" title="Hauteur de visée (m)" value={m.height} min={0} max={10} step={0.1} onChange={(v) => setMarker(m.id, { height: v })} />
             </Card>
           ))}
-          <AddBtn label="Point de scène" onClick={addMarker} disabled={vis.markers.length >= 64} testId="marker-add" />
+          <AddBtn kind="marker" label="Point de scène" testId="marker-add" />
           <p className="scene-hint">Repères « chanteur », « batteur »… déplaçables en 2D (Positionner).</p>
         </Section>
         <TrussSettings vis={vis} />
@@ -465,19 +525,23 @@ const TRUSS_SHAPES: { id: Truss['shape']; label: string }[] = [{ id: 'line', lab
 function TrussSettings({ vis }: { vis: Vis }) {
   const save = (trusses: Truss[]) => void act({ type: 'project.update', visualizer: { trusses } });
   const set = (id: string, patch: Partial<Truss>) => save(vis.trusses.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  const add = () => save([...vis.trusses, {
-    id: newId(), name: `Structure ${vis.trusses.length + 1}`, shape: 'line', x: 0, y: Math.round(vis.stageDepth * 5) / 10,
-    height: 6, length: Math.max(2, vis.stageWidth - 2), rotation: 0, support: 'towers',
-  }]);
+  const { fixtures } = useResolved();
+  const selection = useStore((s) => s.selection);
   return (
     <Section icon={<Boxes size={13} />} title="Structures (truss)" count={vis.trusses.length}>
+      {vis.trusses.length > 0 && fixtures.length > 0 && (
+        <button className="btn sm primary" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
+          title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
+          <Wand2 size={12} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
+        </button>
+      )}
       {vis.trusses.map((t) => (
-        <Card key={t.id} testId="truss-row" head={<>
+        <Card key={t.id} testId="truss-row" sel={{ kind: 'truss', id: t.id }} head={<>
           <NameInput value={t.name} label="Nom de la structure" onChange={(name) => set(t.id, { name })} />
           <select className="select" style={{ width: 84 }} value={t.shape} aria-label="Forme" onChange={(e) => set(t.id, { shape: e.target.value as Truss['shape'] })}>
             {TRUSS_SHAPES.map((sh) => <option key={sh.id} value={sh.id}>{sh.label}</option>)}
           </select>
-          <DeleteBtn name={t.name} title={`Supprimer « ${t.name} » (les projecteurs restent en place, décrochés)`} onClick={() => save(vis.trusses.filter((x) => x.id !== t.id))} />
+          <DeleteBtn name={t.name} title={`Supprimer « ${t.name} » (les projecteurs restent en place, décrochés)`} sel={{ kind: 'truss', id: t.id }} />
         </>}>
           {/* Field order L, X, Y, H, ° is relied upon by the end-to-end tests. */}
           <Num label={t.shape === 'circle' ? 'Diamètre' : t.shape === 'square' ? 'Côté' : 'Longueur'} title="Taille (m)" value={t.length} min={0.5} max={60} step={0.5} onChange={(v) => set(t.id, { length: v })} />
@@ -493,7 +557,7 @@ function TrussSettings({ vis }: { vis: Vis }) {
           </label>
         </Card>
       ))}
-      <AddBtn label="Structure" onClick={add} disabled={vis.trusses.length >= 64} testId="truss-add" />
+      <AddBtn kind="truss" label="Structure" testId="truss-add" />
       <p className="scene-hint">Les projecteurs accrochés suivent la structure ; aimantation au dépôt.</p>
     </Section>
   );
@@ -507,17 +571,16 @@ const PERFORMER_KINDS: { id: Performer['kind']; label: string }[] = [
 function PerformerSettings({ vis }: { vis: Vis }) {
   const save = (performers: Performer[]) => void act({ type: 'project.update', visualizer: { performers } });
   const set = (id: string, patch: Partial<Performer>) => save(vis.performers.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const add = () => save([...vis.performers, { id: newId(), name: `Artiste ${vis.performers.length + 1}`, kind: 'standing', x: 0, y: Math.round(vis.stageDepth * 4) / 10, rotation: 0, markerId: null }]);
   return (
     <Section icon={<UserRound size={13} />} title="Interprètes et instruments" count={vis.performers.length}>
       {vis.performers.map((pf) => (
-        <Card key={pf.id} testId="performer-row" head={<>
+        <Card key={pf.id} testId="performer-row" sel={{ kind: 'performer', id: pf.id }} head={<>
           <NameInput value={pf.name} label="Nom de l’interprète" onChange={(name) => set(pf.id, { name })} />
           {/* The silhouette must stay the first select of the card (end-to-end tests). */}
           <select className="select" style={{ width: 92 }} value={pf.kind} aria-label="Silhouette" onChange={(e) => set(pf.id, { kind: e.target.value as Performer['kind'] })}>
             {PERFORMER_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
           </select>
-          <DeleteBtn name={pf.name} onClick={() => save(vis.performers.filter((x) => x.id !== pf.id))} />
+          <DeleteBtn name={pf.name} sel={{ kind: 'performer', id: pf.id }} />
         </>}>
           <label className="scene-num span2"><span>Position</span>
             <select className="select" value={pf.markerId ?? ''} aria-label="Point de scène" data-testid="performer-marker" onChange={(e) => {
@@ -537,7 +600,7 @@ function PerformerSettings({ vis }: { vis: Vis }) {
           )}
         </Card>
       ))}
-      <AddBtn label="Interprète" onClick={add} disabled={vis.performers.length >= 64} testId="performer-add" />
+      <AddBtn kind="performer" label="Interprète" testId="performer-add" />
       <p className="scene-hint">Lâché sur un point de scène en 2D, l’interprète s’y pose et le suit.</p>
     </Section>
   );
@@ -571,16 +634,12 @@ function ScreenSettings({ vis }: { vis: Vis }) {
   const toast = useStore((s) => s.toast);
   const save = (screens: StageScreen[]) => void act({ type: 'project.update', visualizer: { screens } });
   const set = (id: string, patch: Partial<StageScreen>) => save(vis.screens.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const add = () => save([...vis.screens, {
-    id: newId(), name: `Écran ${vis.screens.length + 1}`, x: 0, y: Math.round(vis.stageDepth * 9) / 10, elevation: 1.5,
-    width: Math.min(6, vis.stageWidth / 2), height: 3, rotation: 0, source: 'color', color: '#3b82f6', image: null, glow: 0.5,
-  }]);
   return (
     <Section icon={<Monitor size={13} />} title="Écrans LED" count={vis.screens.length}>
       {vis.screens.map((sc) => (
-        <Card key={sc.id} testId="screen-row" head={<>
+        <Card key={sc.id} testId="screen-row" sel={{ kind: 'screen', id: sc.id }} head={<>
           <NameInput value={sc.name} label="Nom de l’écran" onChange={(name) => set(sc.id, { name })} />
-          <DeleteBtn name={sc.name} onClick={() => { setScreenVideo(sc.id, null); save(vis.screens.filter((x) => x.id !== sc.id)); }} />
+          <DeleteBtn name={sc.name} sel={{ kind: 'screen', id: sc.id }} />
         </>}>
           <label className="scene-num span2"><span>Contenu</span>
             <select className="select" value={sc.source} aria-label="Contenu" data-testid="screen-source" onChange={(e) => set(sc.id, { source: e.target.value as StageScreen['source'] })}>
@@ -615,7 +674,7 @@ function ScreenSettings({ vis }: { vis: Vis }) {
           </label>
         </Card>
       ))}
-      <AddBtn label="Écran" onClick={add} disabled={vis.screens.length >= 16} testId="screen-add" />
+      <AddBtn kind="screen" label="Écran" testId="screen-add" />
       <p className="scene-hint">Couleur, image, vidéo (non enregistrée) ou pixel mapping des barres LED.</p>
     </Section>
   );
@@ -650,6 +709,8 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
   const [edit, setEdit] = useState(false);
   const [settings, setSettings] = useState(false);
   const [group, setGroup] = useState<string | null>(null);
+  const placing = useStore((s) => s.placing);
+  useSceneShortcuts();
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
       <PageHead title={mode === '3d' ? 'Stage 3D' : 'Stage Visualizer'} subtitle={mode === '3d' ? 'Aperçu 3D approximatif de la scène et des faisceaux' : 'Plan de dessus synchronisé avec le moteur'}>
@@ -673,7 +734,14 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
         {settings && <ScenePanel vis={project.visualizer} onClose={() => setSettings(false)} />}
         <div className="stage-view">
           {mode === '3d' ? <Stage3D values={preview?.values} groupFilter={group} /> : <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />}
-          {fixtures.length === 0 && (
+          {placing && (
+            <div className="stage-empty stage-placing" data-testid="placing">
+              <Crosshair size={16} />
+              <span className="grow">Cliquez sur le plateau pour poser : <b>{SCENE_LABEL[placing].toLowerCase()}</b></span>
+              <button className="btn sm" onClick={() => useStore.getState().setPlacing(null)}>Annuler (Échap)</button>
+            </div>
+          )}
+          {fixtures.length === 0 && !placing && (
             <div className="stage-empty">
               <Theater size={18} className="dim" />
               <span className="grow">Aucun projecteur : ajoutez-en dans le Patch. Vous pouvez déjà construire le décor.</span>

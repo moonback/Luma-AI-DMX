@@ -44,14 +44,17 @@ Effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaines et plus
 ### Étape 1 — Créer plus vite (priorité haute)
 
 #### 1.1 Équiper un modèle · S
+> **Livré (17/10/2026)** : bouton « Équiper les structures » (section Structures). Il traite la sélection si elle existe, sinon tous les projecteurs suspendus ; ceux posés au sol ou muraux restent en place. Lyres sur la moitié lointaine des structures, projecteurs fixes sur la moitié proche ; avec une seule structure, tous la partagent. Répartition régulière sur le contour (droites, cercles, carrés), accroche `trussId`. Nouvelle commande `fixture.place` : une seule étape d'annulation. Modèle + Équiper = 2 clics.
 - Bouton « Équiper » sur un modèle appliqué : répartit régulièrement les projecteurs du patch (ou d'un groupe) sur les structures du modèle, lyres en contre et PAR en face, avec accroche `trussId`.
 - **Critère** : une scène « Concert » éclairée et accrochée en moins de 30 s et 3 clics depuis un projet vide patché.
 
 #### 1.2 Poser au clic · S
+> **Livré (17/10/2026)** : bouton « Poser au clic » à côté de chaque « + Ajouter », bandeau d'aide et curseur en croix ; en 3D, l'élément est posé là où le rayon touche le sol. Échap annule la pose sans relâcher le programmeur. Sans clic, chaque ajout se décale de 1 m (0, +1, −1, +2…) au lieu de s'empiler. L'élément créé est sélectionné.
 - Choisir un type (point, interprète, structure, écran) puis cliquer sur le plateau, en 2D ou en 3D (raycast sur le sol), pour le poser à cet endroit.
 - Sans clic, un nouvel élément est décalé par rapport au précédent au lieu d'être posé au même point.
 
 #### 1.3 Dupliquer et supprimer au clavier · S
+> **Livré (17/10/2026)** : sélection de scène partagée : carte du panneau, clic sur un élément en 2D, ou structure en 3D. La carte sélectionnée est surlignée et ramenée à l'écran, et l'élément est entouré en violet sur le plan. Ctrl+D duplique l'élément (copie décalée de 1 m, interprète libéré de son point) ; sans élément sélectionné, Ctrl+D duplique les projecteurs sélectionnés à la prochaine adresse libre (`fixture.duplicate`). Suppr supprime l'élément ; un interprète posé sur un point supprimé reste à sa place. Ctrl+C / Ctrl+V passent par le presse-papiers système (texte `luma-scene:`, validé par les schémas du projet), donc fonctionnent d'un projet à l'autre. **Écart** : Suppr ne supprime pas les projecteurs, car leur retrait du patch n'est pas annulable par l'historique de scène.
 - Ctrl+D duplique la sélection avec un décalage de 1 m ; Suppr supprime (avec annulation).
 - Copier / coller d'éléments de scène entre projets.
 

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { LogEntry } from '../core/log/logger';
 import type { FixtureValues } from '../core/model/schemas';
 import type { ProjectState, RuntimeState } from '../shared/commands';
+import type { SceneKind, SceneRef } from '../core/visualizer/sceneEdit';
 
 /** Stable empty defaults: selectors must not return fresh objects (would re-render forever). */
 export const EMPTY_OBJ: Readonly<Record<string, never>> = Object.freeze({});
@@ -75,6 +76,11 @@ interface State {
   confirm: ConfirmRequest | null;
   /** Values shown by the visualizer instead of live values (AI or scene preview). */
   preview: { label: string; values: FixtureValues } | null;
+  /** Selected stage element (point, truss, performer, screen) and the kind being placed by a click on the stage. */
+  sceneSel: SceneRef | null;
+  placing: SceneKind | null;
+  setSceneSel(r: SceneRef | null): void;
+  setPlacing(k: SceneKind | null): void;
   /** Onboarding state from the settings (null until loaded) and the open help surface. */
   onboarding: { completed: boolean; checklistHidden: boolean } | null;
   help: 'welcome' | 'tour' | 'demos' | null;
@@ -108,6 +114,10 @@ export const useStore = create<State>((set, get) => ({
   toasts: [],
   confirm: null,
   preview: null,
+  sceneSel: null,
+  placing: null,
+  setSceneSel: (sceneSel) => set({ sceneSel }),
+  setPlacing: (placing) => set({ placing }),
   onboarding: null,
   help: null,
   setHelp: (help) => set({ help }),
