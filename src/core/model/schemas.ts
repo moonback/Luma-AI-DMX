@@ -22,6 +22,7 @@ export const BUILTIN_ATTRIBUTES = [
   'warmWhite', 'coldWhite', 'lime', 'indigo', 'colorTemperature', 'colorMacro', 'colorMacroFade',
   'pan', 'tilt', 'panTiltSpeed', 'panTiltMode',
   'shutter', 'strobe', 'gobo', 'goboRotation', 'prism', 'focus', 'zoom', 'iris', 'frost', 'effectWheel', 'zoomMode',
+  'gobo2', 'gobo2Rotation', 'prismIndex', 'prismRotation',
   'speed', 'macro', 'control', 'macroSpeed', 'fog', 'fan',
 ] as const;
 export type BuiltinAttribute = (typeof BUILTIN_ATTRIBUTES)[number];
@@ -128,7 +129,7 @@ export const profileSchema = z.object({
       panRange: z.number().min(0).max(720).default(540),
       tiltRange: z.number().min(0).max(360).default(270),
       beamAngle: z.number().min(1).max(90).default(25),
-      /** Asymmetric tilt travel in degrees (tilt 0 → tiltMin, 1 → tiltMax); absent = ±tiltRange/2. */
+      /** Asymmetric tilt travel in degrees (tilt 0 → tiltMin, 1 → tiltMax, tiltMin > tiltMax = inverted); absent = ±tiltRange/2. */
       tiltMin: z.number().min(-360).max(360).optional(),
       tiltMax: z.number().min(-360).max(360).optional(),
       /** Beam angle in degrees at zoom 0 and zoom 1. */

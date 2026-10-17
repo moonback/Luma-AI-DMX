@@ -74,7 +74,7 @@ export interface OflConversion {
   errors: string[];
 }
 
-const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'ch';
+export const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'ch';
 const hex = (c: string | undefined) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c.toUpperCase() : undefined);
 const caps = (c: OflChan): OflCap[] => (c.capabilities ?? (c.capability ? [c.capability] : []));
 
@@ -339,7 +339,7 @@ export function convertOflFixture(json: unknown, opts: { manufacturer: string; k
 }
 
 /** OFL ranges never overlap in valid files; if they do, keep the first to stay valid. */
-function dedupeRanges(r: ChannelRange[]): ChannelRange[] {
+export function dedupeRanges(r: ChannelRange[]): ChannelRange[] {
   const out: ChannelRange[] = [];
   for (const x of [...r].sort((a, b) => a.from - b.from)) if (!out.length || x.from > out[out.length - 1]!.to) out.push(x);
   return out;

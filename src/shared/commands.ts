@@ -290,7 +290,7 @@ export interface CommandResults {
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
   'project.openDemo': Void;
   'onboarding.update': Void;
-  'profile.import': { imported: string[]; errors: string[] };
+  'profile.import': { imported: string[]; errors: string[]; warnings: string[] };
   'profile.remove': Void;
   'ofl.manufacturers': { key: string; name: string }[];
   'ofl.fixtures': string[];

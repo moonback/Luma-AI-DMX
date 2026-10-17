@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { projectSchema, type Fixture, type FixtureValues, type Project } from '../model/schemas';
+import { projectSchema, type Fixture, type FixtureProfile, type FixtureValues, type Project } from '../model/schemas';
 import { ProjectIndex } from '../engine/resolve';
 import { Engine, type EngineSettings } from '../engine/Engine';
 import { OutputManager, createAdapter, type AdapterFactory } from '../protocols/OutputManager';
@@ -13,6 +13,7 @@ import type { OutputState } from '../protocols/types';
 import { attributeClass } from '../fixtures/attributes';
 import { colorToAttributes } from '../fixtures/color';
 import { findModule } from '../fixtures/modules';
+import { convertMa2Fixture, mergeProfileModes } from '../fixtures/ma2';
 import { channelCount, parseProfileFile } from '../fixtures/profiles';
 import { BUILTIN_PROFILES } from '../fixtures/builtinProfiles';
 import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../fixtures/ofl';
@@ -466,14 +467,39 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       /* ---------- profiles ---------- */
       case 'profile.import': {
         const file = cmd.path ?? (await this.opts.dialogs.openProfile());
-        if (!file) return { imported: [], errors: [] };
-        let json: unknown;
+        if (!file) return { imported: [], errors: [], warnings: [] };
+        const ext = path.extname(file).toLowerCase();
+        if (ext === '.gdtf') throw new UserError('Format GDTF pas encore pris en charge : importez l’export grandMA2 (.xml), un profil Luma (.json) ou passez par Open Fixture Library.');
+        if (ext === '.qxf') throw new UserError('Format QLC+ (.qxf) pas encore pris en charge : importez l’export grandMA2 (.xml), un profil Luma (.json) ou passez par Open Fixture Library.');
+        let text: string;
         try {
-          json = JSON.parse(await fs.readFile(file, 'utf8'));
+          text = await fs.readFile(file, 'utf8');
         } catch (err) {
           throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`);
         }
-        const { profiles, errors } = parseProfileFile(json);
+        let warnings: string[] = [];
+        let parsed: { profiles: FixtureProfile[]; errors: string[] };
+        if (ext === '.xml' || text.trimStart().startsWith('<')) {
+          // grandMA2 export: one file = one mode, merged into the existing profile of the same fixture.
+          const r = convertMa2Fixture(text);
+          warnings = r.warnings;
+          const existing = r.profile ? this.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
+          parsed = { profiles: r.profile ? [existing ? mergeProfileModes(existing, r.profile) : r.profile] : [], errors: r.errors };
+          for (const w of warnings) this.logger.warn('grandMA2', `${path.basename(file)} : ${w}`);
+        } else {
+          let json: unknown;
+          try {
+            json = JSON.parse(text);
+          } catch (err) {
+            throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`);
+          }
+          const j = json as Record<string, unknown> | null;
+          if (j && typeof j === 'object' && 'availableChannels' in j && !('profiles' in j)) {
+            throw new UserError('Fichier Open Fixture Library : utilisez « Open Fixture Library › Importer un fichier » pour préciser le fabricant.');
+          }
+          parsed = parseProfileFile(json);
+        }
+        const { profiles, errors } = parsed;
         const accepted = profiles.filter((p) => {
           if (BUILTIN_PROFILES.some((b) => b.id === p.id)) {
             errors.push(`Profil « ${p.id} » : identifiant réservé à un profil intégré`);
@@ -486,7 +512,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         });
         for (const er of errors) this.logger.warn('Profils', er);
         if (accepted.length) this.logger.info('Profils', `${accepted.length} profil(s) importé(s)`);
-        return { imported: accepted.map((p) => p.name), errors };
+        return { imported: accepted.map((p) => p.name), errors, warnings };
       }
       case 'ofl.manufacturers':
         return oflManufacturers().catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`); });

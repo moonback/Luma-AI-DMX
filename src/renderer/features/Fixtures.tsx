@@ -214,14 +214,14 @@ export function Fixtures() {
   const importProfiles = async () => {
     const r = await act({ type: 'profile.import' });
     if (r && (r.imported.length || r.errors.length)) {
-      useStore.getState().toast({ kind: r.errors.length ? 'warn' : 'success', title: `${r.imported.length} profil(s) importé(s)`, detail: r.errors.slice(0, 3).join('\n') || undefined });
+      useStore.getState().toast({ kind: r.errors.length || r.warnings.length ? 'warn' : 'success', title: `${r.imported.length} profil(s) importé(s)`, detail: [...r.errors, ...r.warnings].slice(0, 3).join('\n') || undefined });
     }
   };
 
   return (
     <div className="page">
       <PageHead title="Fixtures" subtitle="Patch DMX : profils, univers, adresses et positions">
-        <button className="btn" onClick={() => void importProfiles()} title="Importer des profils au format JSON documenté (docs/PROFILE_FORMAT.md)"><Upload size={15} />Importer des profils</button>
+        <button className="btn" onClick={() => void importProfiles()} title="Importer des profils : JSON Luma (docs/PROFILE_FORMAT.md) ou export grandMA2 (.xml, un fichier par mode)"><Upload size={15} />Importer des profils</button>
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
         <button className="btn" data-testid="locate-open" disabled={!ps.project.patch.length} onClick={() => setLocating(true)} title="Mesurer les positions réelles avec une caméra et détecter les erreurs de patch"><Camera size={15} />Localiser par caméra</button>
         <button className="btn primary" data-testid="add-fixture" onClick={() => setAdding(true)}><Plus size={15} />Ajouter</button>
