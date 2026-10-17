@@ -6,7 +6,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { Camera, CircleStop, Cloud, Lightbulb, Moon, Crosshair, Expand, Eye, ImageDown, Move3d, Plus, Rotate3d, Sparkles, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
+import { Camera, CircleStop, Cloud, Lightbulb, Moon, Crosshair, Expand, Eye, ImageDown, Move3d, Plus, Rotate3d, SlidersHorizontal, Sparkles, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
 import { useStore } from '../store';
 import { act, call, newId } from '../api';
 import { NumberInput, useResolved } from '../components/ui';
@@ -186,6 +186,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const [dims, setDims] = useState<string | null>(null);
   const [lights, setLights] = useState(0);
   const [shadows, setShadows] = useState(0);
+  const [menu, setMenu] = useState(false);
   const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selTruss });
   latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selTruss };
   const api = useRef<{
@@ -583,6 +584,12 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   }, []);
 
   useEffect(() => api.current?.setBloom(prefs.glow), [prefs.glow]);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menu]);
 
   const selected = selection.length === 1 ? model.find((f) => f.id === selection[0]) : undefined;
   const selectedTruss = edit && selTruss ? vis.trusses.find((t) => t.id === selTruss) : undefined;
@@ -607,7 +614,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   if (error) return <div className="empty">{error}. Utilisez la vue 2D.</div>;
   return (
     <div ref={wrap} className="canvas-wrap stage3d" style={{ height: '100%' }}>
-      <div ref={host} style={{ position: 'absolute', inset: 0 }} data-testid="stage-3d" />
+      <div ref={host} style={{ position: 'absolute', inset: 0 }} onPointerDown={() => setMenu(false)} data-testid="stage-3d" />
       <div className="stage3d-toolbar">
         <div className="chips" role="group" aria-label="Caméras">
           <Camera size={14} className="dim" />
@@ -620,34 +627,9 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
               <button className="chip-link" onClick={() => deleteView(v.id)} title={`Supprimer « ${v.name} »`} aria-label={`Supprimer la vue ${v.name}`}><X size={10} /></button>
             </span>
           ))}
-          {vis.views.length < 20 && <button className="chip" onClick={saveView} title="Enregistrer le point de vue actuel dans le projet" data-testid="cam-save"><Plus size={12} /></button>}
+          {vis.views.length < 20 && <button className="chip" onClick={saveView} title="Enregistrer le point de vue actuel dans le projet" aria-label="Enregistrer la vue" data-testid="cam-save"><Plus size={12} /></button>}
         </div>
-        {dark.length > 0 && (
-          <span className="badge warn" data-testid="dark" title={`Visage peu ou pas éclairé : ${dark.map((x) => x.name).join(', ')}. Estimation sans occultation.`}>
-            <Moon size={12} /> Dans le noir : {dark.length}
-          </span>
-        )}
-        {glare.length > 0 && (
-          <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
-            <TriangleAlert size={12} /> Éblouissement public : {glare.length}
-          </span>
-        )}
         <div className="grow" />
-        <label className="row small" title="Densité de brume : visibilité des faisceaux dans l’air">
-          <Sun size={13} className="dim" />Brume
-          <input type="range" min={0} max={100} value={Math.round(prefs.haze * 100)} style={{ width: 90 }} onChange={(e) => setPrefs({ haze: Number(e.target.value) / 100 })} data-testid="haze" />
-        </label>
-        <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title="Halo lumineux (bloom)"><Sparkles size={12} /> Glow</button>
-        <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title="Taches de lumière et gobos au sol et sur le cyclorama"><Eye size={12} /> Taches</button>
-        <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title="Fumée lourde au sol" data-testid="smoke"><Cloud size={12} /> Fumée</button>
-        <button className={`chip ${prefs.real ? 'on' : ''}`} onClick={() => setPrefs({ real: !prefs.real })} title={`Éclairage réel avec ombres : les projecteurs les plus intenses (budget adaptatif ${LIGHT_BUDGET.min}–${LIGHT_BUDGET.max} sources, dont ${shadows || 'jusqu’à'} ombrées selon la carte graphique)`} data-testid="real-lights"><Lightbulb size={12} /> Ombres{prefs.real && lights ? ` · ${lights}` : ''}</button>
-        <select className="select" style={{ width: 150, height: 26 }} value={prefs.ambience} onChange={(e) => setPrefs({ ambience: e.target.value as AmbienceId })} title="Ambiance de la salle" data-testid="ambience">
-          {(Object.keys(AMBIENCES) as AmbienceId[]).map((id) => <option key={id} value={id}>{AMBIENCES[id].label}</option>)}
-        </select>
-        <select className="select" style={{ width: 96, height: 26 }} value={prefs.floor} onChange={(e) => setPrefs({ floor: e.target.value as FloorId })} title="Sol du plateau (laqué / mouillé : reflets)" data-testid="floor">
-          {(Object.keys(FLOORS) as FloorId[]).map((id) => <option key={id} value={id}>Sol {FLOORS[id].toLowerCase()}</option>)}
-        </select>
-        <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title="Noms des projecteurs"><Tag size={12} /> Noms</button>
         <button className={`chip ${edit ? 'on' : ''}`} onClick={() => { setEdit(!edit); setSelTruss(null); }} title="Édition directe : déplacer et pivoter projecteurs et structures" data-testid="edit3d"><Move3d size={12} /> Éditer</button>
         {edit && (
           <>
@@ -662,10 +644,37 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
             </label>
           </>
         )}
-        <button className="chip" onClick={() => api.current?.capture()} title="Capture d’image (PNG)" data-testid="capture"><ImageDown size={12} /></button>
-        <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
-        <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)"><Expand size={12} /></button>
+        <span className="stage3d-sep" />
+        <button className={`chip ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)} aria-expanded={menu} title="Brume, halo, taches, fumée, ombres, ambiance, sol, noms" data-testid="render-menu"><SlidersHorizontal size={12} /> Rendu</button>
+        <button className="chip" onClick={() => api.current?.capture()} title="Capture d’image (PNG)" aria-label="Capture d’image" data-testid="capture"><ImageDown size={12} /></button>
+        <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} aria-label={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
+        <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)" aria-label="Plein écran"><Expand size={12} /></button>
         <span className="mono small dim" data-testid="fps">{fps} i/s</span>
+        {menu && (
+          <div className="stage3d-pop" role="dialog" aria-label="Réglages de rendu" data-testid="render-pop">
+            <label className="row small" title="Densité de brume : visibilité des faisceaux dans l’air">
+              <Sun size={13} className="dim" /><span className="grow">Brume</span>
+              <input type="range" min={0} max={100} value={Math.round(prefs.haze * 100)} style={{ width: 130 }} onChange={(e) => setPrefs({ haze: Number(e.target.value) / 100 })} data-testid="haze" />
+            </label>
+            <div className="chips">
+              <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title="Halo lumineux (bloom)"><Sparkles size={12} /> Glow</button>
+              <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title="Taches de lumière et gobos au sol et sur le cyclorama"><Eye size={12} /> Taches</button>
+              <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title="Fumée lourde au sol" data-testid="smoke"><Cloud size={12} /> Fumée</button>
+              <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title="Noms des projecteurs"><Tag size={12} /> Noms</button>
+              <button className={`chip ${prefs.real ? 'on' : ''}`} onClick={() => setPrefs({ real: !prefs.real })} title={`Éclairage réel avec ombres : les projecteurs les plus intenses (budget adaptatif ${LIGHT_BUDGET.min}–${LIGHT_BUDGET.max} sources, dont ${shadows || 'jusqu’à'} ombrées selon la carte graphique)`} data-testid="real-lights"><Lightbulb size={12} /> Ombres{prefs.real && lights ? ` · ${lights}` : ''}</button>
+            </div>
+            <label className="row small"><span className="grow">Ambiance</span>
+              <select className="select" style={{ width: 160, height: 26 }} value={prefs.ambience} onChange={(e) => setPrefs({ ambience: e.target.value as AmbienceId })} data-testid="ambience">
+                {(Object.keys(AMBIENCES) as AmbienceId[]).map((id) => <option key={id} value={id}>{AMBIENCES[id].label}</option>)}
+              </select>
+            </label>
+            <label className="row small" title="Laqué / mouillé : reflets (un rendu de plus)"><span className="grow">Sol</span>
+              <select className="select" style={{ width: 160, height: 26 }} value={prefs.floor} onChange={(e) => setPrefs({ floor: e.target.value as FloorId })} data-testid="floor">
+                {(Object.keys(FLOORS) as FloorId[]).map((id) => <option key={id} value={id}>{FLOORS[id]}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
       </div>
       {hover && (
         <div className="stage3d-tip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
@@ -678,7 +687,23 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       {selected && !selectedTruss && (
         <InfoPanel f={selected} fixture={project.patch.find((x) => x.id === selected.id)} trusses={vis.trusses} following={follow === selected.id} onFollow={() => setFollow(follow === selected.id ? null : selected.id)} />
       )}
-      <div className="stage3d-hint small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}</div>
+      <div className="stage3d-status">
+        {(dark.length > 0 || glare.length > 0) && (
+          <div className="row" style={{ gap: 6 }}>
+            {dark.length > 0 && (
+              <span className="badge warn" data-testid="dark" title={`Visage peu ou pas éclairé : ${dark.map((x) => x.name).join(', ')}. Estimation sans occultation.`}>
+                <Moon size={12} /> Dans le noir : {dark.length}
+              </span>
+            )}
+            {glare.length > 0 && (
+              <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
+                <TriangleAlert size={12} /> Éblouissement public : {glare.length}
+              </span>
+            )}
+          </div>
+        )}
+        <div className="small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}</div>
+      </div>
     </div>
   );
 }

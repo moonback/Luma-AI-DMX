@@ -204,6 +204,7 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
   }
   await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
   await expect(page.getByTestId('glare')).toContainText('Éblouissement public');
+  await page.getByTestId('render-menu').click(); // display settings live in the Rendu menu
   await page.getByTestId('smoke').click();
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${shots}/17b-scene-avancee-fumee.png` });
@@ -344,6 +345,7 @@ test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol'
   await page.screenshot({ path: `${shots}/19b-interpretes-ecrans-3d.png` });
 
   // Real lighting: shadow-casting spot lights, budget shown on the chip, switch without reloading.
+  await page.getByTestId('render-menu').click();
   await page.getByTestId('real-lights').click();
   await expect(page.getByTestId('real-lights')).toContainText(/Ombres · \d+/, { timeout: 5000 });
   await page.waitForTimeout(5000); // first frames compile the shadow shaders

@@ -4,6 +4,7 @@ import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, trussSegments, 
 import type { Truss } from '../../src/core/model/schemas';
 import { buildVisualModel, goboIndex, mountOf, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
 import { createProject, parseProject } from '../../src/core/project/format';
+import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../src/core/visualizer/templates';
 import { projectSchema } from '../../src/core/model/schemas';
 import { DARK_LEVEL, FACE_HEIGHT, lightAt, performerLight, performerSpot, toHex } from '../../src/core/visualizer/lighting';
 import { commandSchema } from '../../src/shared/commands';
@@ -295,5 +296,21 @@ describe('interprètes, éclairement estimé et écrans', () => {
     expect(ok({ screens: [{ ...screen, image: 'file:///C:/secret.png' }] })).toBe(false);
     expect(ok({ screens: [{ ...screen, color: 'red' }] })).toBe(false);
     expect(ok({ performers: [{ ...singer, kind: 'danseur' }] })).toBe(false);
+  });
+});
+
+describe('modèles de scène', () => {
+  it('chaque modèle est un projet valide, interprètes posés sur des points existants', () => {
+    let n = 0;
+    const id = () => `t${n++}`;
+    for (const t of SCENE_TEMPLATES) {
+      const layout = sceneTemplate(t.id, id);
+      const p = createProject('Modèle');
+      const parsed = projectSchema.parse({ ...p, visualizer: { ...p.visualizer, ...layout } });
+      expect(parsed.visualizer.trusses.length).toBeGreaterThan(0);
+      for (const pf of parsed.visualizer.performers) expect(parsed.visualizer.markers.some((m) => m.id === pf.markerId)).toBe(true);
+      expect(hasSceneContent(parsed.visualizer)).toBe(true);
+    }
+    expect(hasSceneContent(createProject('Vide').visualizer)).toBe(false);
   });
 });

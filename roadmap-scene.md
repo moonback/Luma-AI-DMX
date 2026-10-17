@@ -1,6 +1,6 @@
 # Roadmap — La scène (visualiseur 2D / 3D)
 
-> Complément de [ROADMAP.md](ROADMAP.md), centré sur la **scène** : son modèle, son rendu, son édition et ce qu'elle apprend à l'opérateur. Rédigé le 17/10/2026 à partir du code actuel.
+> Complément de [ROADMAP.md](ROADMAP.md) (ergonomie de la page 3D : [roadmap-stage3d.md](roadmap-stage3d.md)), centré sur la **scène** : son modèle, son rendu, son édition et ce qu'elle apprend à l'opérateur. Rédigé le 17/10/2026 à partir du code actuel.
 
 ## 1. État actuel
 
