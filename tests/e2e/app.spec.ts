@@ -22,6 +22,11 @@ test.beforeAll(async () => {
   page = await app.firstWindow();
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByTestId('mode')).toHaveText('SIMULATION');
+  // First run on a fresh profile: the welcome screen is shown once; the other scenarios start without it.
+  await expect(page.getByTestId('welcome')).toBeVisible();
+  await page.screenshot({ path: `${shots}/00-accueil.png` });
+  await page.getByTestId('welcome-skip').click();
+  await expect(page.getByTestId('welcome')).toHaveCount(0);
 });
 
 test.afterAll(async () => {
@@ -273,4 +278,41 @@ test('localisation par caméra : séquence sûre, calibration, résultats (camé
   await expect(page.getByTestId('locate-issues')).toContainText('ne répond pas');
   await page.screenshot({ path: `${shots}/22-localisation-camera.png` });
   await page.keyboard.press('Escape');
+});
+
+test('onboarding : visite guidée complète, premiers pas, projet de démonstration', async () => {
+  await nav('dashboard');
+  await expect(page.getByTestId('first-steps')).toBeVisible();
+  await page.getByTestId('help').click();
+  await page.getByTestId('help-tour').click();
+  await expect(page.getByTestId('tour-title')).toHaveText('Bienvenue à bord');
+  const titles: string[] = [];
+  for (let i = 0; i < 17; i++) {
+    await page.getByTestId('tour-next').click();
+    titles.push((await page.getByTestId('tour-title').textContent()) ?? '');
+    if (titles.at(-1) === 'Visualiseur 3D') {
+      await page.waitForTimeout(400); // let the spotlight transition settle
+      await page.screenshot({ path: `${shots}/23-visite-guidee.png` });
+    }
+  }
+  expect(titles).toContain('STOP OUTPUT');
+  expect(titles).toContain('Musique (Song-to-Show)');
+  await expect(page.getByTestId('nav-settings')).toHaveClass(/active/); // the tour opened the pages it describes
+  await page.getByTestId('tour-finish').click();
+  await expect(page.getByTestId('tour')).toHaveCount(0);
+
+  await page.getByTestId('help').click();
+  await page.getByTestId('help-demos').click();
+  await expect(page.getByTestId('demo-gallery').locator('[data-testid^="demo-"]')).toHaveCount(10);
+  await page.screenshot({ path: `${shots}/24-projets-demo.png` });
+  await page.getByTestId('demo-gala-danse').getByRole('button', { name: 'Ouvrir' }).click();
+  const confirm = page.getByRole('button', { name: 'Ouvrir la démo' });
+  if (await confirm.isVisible().catch(() => false)) await confirm.click();
+  await expect(page.locator('.top-project')).toContainText('Gala');
+  await expect(page.getByTestId('first-steps')).toContainText('Premiers pas');
+  await page.screenshot({ path: `${shots}/25-premiers-pas.png` });
+  // The demo is playable: GO on its first cue list.
+  await page.keyboard.press('Space');
+  await nav('stage3d');
+  await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
 });

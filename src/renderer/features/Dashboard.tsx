@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { newProjectFlow } from '../App';
 import { PageHead, Panel } from '../components/ui';
+import { FirstSteps } from './Onboarding';
 
 const SRC: Record<string, string> = { persisted: 'persisté', measured: 'mesuré', computed: 'calculé', simulated: 'simulé', config: 'configuré', estimate: 'estimé' };
 
@@ -32,6 +33,7 @@ export function Dashboard() {
   return (
     <div className="page">
       <PageHead title="Dashboard" subtitle={`${p.meta.name}${p.meta.show ? ` — ${p.meta.show}` : ''}`} />
+      <FirstSteps />
       <div className="grid g4" style={{ marginBottom: 12 }}>
         <Kpi label="Projecteurs" src="persisted" value={p.patch.length} sub={`${p.groups.length} groupe(s) · ${ps.issues.length ? `${ps.issues.length} problème(s) de patch` : 'patch valide'}`} icon={<Lightbulb size={13} />} />
         <Kpi label="Univers" src="persisted" value={p.show.universes} sub={`${universesUsed} utilisé(s) par le patch`} />

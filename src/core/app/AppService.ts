@@ -17,6 +17,7 @@ import { BUILTIN_PROFILES } from '../fixtures/builtinProfiles';
 import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../fixtures/ofl';
 import { findFreeAddress, validatePatch } from '../fixtures/patch';
 import { createProject, ProjectLoadError, serializeProject } from '../project/format';
+import { buildDemo } from '../demo/projects';
 import { listRecovery, loadProjectFile, saveProjectFile, writeFileAtomic } from '../project/store';
 import { defaultSettings, settingsSchema, type Settings } from '../settings/settings';
 import { Logger, type LogEntry } from '../log/logger';
@@ -366,6 +367,24 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
           if (cmd.visualizer) Object.assign(d.visualizer, Object.fromEntries(Object.entries(cmd.visualizer).filter(([, v]) => v !== undefined)));
         });
         if (cmd.show?.bpm) e.bpm = cmd.show.bpm;
+        return ok;
+      case 'project.openDemo': {
+        let demo: Project;
+        try {
+          demo = buildDemo(cmd.id);
+        } catch (err) {
+          throw new UserError((err as Error).message);
+        }
+        this.setProject(demo, true);
+        this.projectPath = null;
+        this.revision++; // an unsaved copy: « Enregistrer » asks for a file name
+        this.logger.info('Projet', `Projet de démonstration ouvert : « ${demo.meta.name} » (fictif)`);
+        this.emitProject();
+        return ok;
+      }
+      case 'onboarding.update':
+        this.settings.onboarding = { ...this.settings.onboarding, ...Object.fromEntries(Object.entries({ completed: cmd.completed, checklistHidden: cmd.checklistHidden }).filter(([, v]) => v !== undefined)) };
+        await this.persistSettings();
         return ok;
       case 'project.listRecovery':
         return listRecovery(this.autosaveDir, this.projectPath);

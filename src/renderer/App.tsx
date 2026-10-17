@@ -23,6 +23,7 @@ import { MusicPage } from './features/Music';
 import { OutputPage } from './features/Output';
 import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
+import { HelpButton, OnboardingHost } from './features/Onboarding';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
@@ -121,6 +122,7 @@ function TopBar() {
         <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />{rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? 'OpenRouter' : 'Local'}</span>
       </div>
       <div className="grow" />
+      <HelpButton />
       <button className="btn ghost icon" title={`${alerts} alerte(s) — ouvrir la console de diagnostic`} onClick={toggleDiag} style={{ position: 'relative' }}>
         <Bell size={16} />
         {alerts > 0 && <span className="badge err" style={{ position: 'absolute', top: -4, right: -8, height: 16, padding: '0 4px' }}>{alerts}</span>}
@@ -297,6 +299,7 @@ export function App() {
       <StatusBar />
       <DiagnosticsDrawer />
       <Toasts />
+      <OnboardingHost />
       <ConfirmHost />
     </div>
   );
@@ -306,7 +309,7 @@ export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
   document.documentElement.style.zoom = String(settings.appearance.uiScale);
-  useStore.setState({ shortcuts: settings.shortcuts });
+  useStore.setState({ shortcuts: settings.shortcuts, onboarding: settings.onboarding, help: settings.onboarding.completed ? null : 'welcome' });
   void externalControl.configure(settings.control);
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

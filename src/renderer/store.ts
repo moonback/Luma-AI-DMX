@@ -75,6 +75,10 @@ interface State {
   confirm: ConfirmRequest | null;
   /** Values shown by the visualizer instead of live values (AI or scene preview). */
   preview: { label: string; values: FixtureValues } | null;
+  /** Onboarding state from the settings (null until loaded) and the open help surface. */
+  onboarding: { completed: boolean; checklistHidden: boolean } | null;
+  help: 'welcome' | 'tour' | 'demos' | null;
+  setHelp(h: State['help']): void;
   setPage(p: PageId): void;
   toggleCollapsed(): void;
   setSelection(ids: string[]): void;
@@ -104,6 +108,9 @@ export const useStore = create<State>((set, get) => ({
   toasts: [],
   confirm: null,
   preview: null,
+  onboarding: null,
+  help: null,
+  setHelp: (help) => set({ help }),
   setPage: (page) => {
     set({ page });
     savePrefs({ page, collapsed: get().collapsed });

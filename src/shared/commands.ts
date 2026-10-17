@@ -55,6 +55,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   empty('project.listRecovery'),
   z.object({ type: z.literal('project.openRecovery'), file: z.string().min(1).max(1000) }),
+  /** Opens one of the built-in fictional demonstration projects (unsaved copy). */
+  z.object({ type: z.literal('project.openDemo'), id: z.string().min(1).max(40) }),
+  z.object({ type: z.literal('onboarding.update'), completed: z.boolean().optional(), checklistHidden: z.boolean().optional() }),
   // Profiles
   z.object({ type: z.literal('profile.import'), path: optPath }),
   z.object({ type: z.literal('profile.remove'), id: idSchema }),
@@ -249,6 +252,8 @@ export interface CommandResults {
   'project.update': Void;
   'project.listRecovery': RecoveryEntry[];
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
+  'project.openDemo': Void;
+  'onboarding.update': Void;
   'profile.import': { imported: string[]; errors: string[] };
   'profile.remove': Void;
   'ofl.manufacturers': { key: string; name: string }[];

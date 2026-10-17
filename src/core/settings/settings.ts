@@ -52,6 +52,10 @@ export const settingsSchema = z.object({
       confirmDangerous: z.boolean().default(true),
     })
     .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true }),
+  /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
+  onboarding: z
+    .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })
+    .default({ completed: false, checklistHidden: false }),
   appearance: z
     .object({ reducedMotion: z.boolean().default(false), uiScale: z.number().min(0.8).max(1.4).default(1) })
     .default({ reducedMotion: false, uiScale: 1 }),

@@ -17,6 +17,7 @@ src/
     control/     midi (messages, MTC), timecode (décodeur LTC), osc (UDP), remote (télécommande HTTP + SSE)
     vision/      geometry (caméra sténopé, calibration homographie + Levenberg–Marquardt, triangulation),
                  image (taches lumineuses), locate (séquences codées, décodage, positions, erreurs de patch, RDM)
+    demo/        catalog (10 projets fictifs décrits en données), projects (génération validée par projectSchema)
     music/       dsp (FFT, bandes, chroma), analyze (tempo, battements, premiers temps, structure, tonalité, événements),
                  tempoTracker (tempo live), dropPredictor (drop / refrain), songToShow (plan + compilateur)
     project/     format (création, versions, migrations), store (écriture atomique, .bak, récupération)
