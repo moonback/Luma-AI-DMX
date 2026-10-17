@@ -239,25 +239,3 @@ describe('timeline', () => {
     expect(engine.snapshot().timeline.state).toBe('stopped');
   });
 });
-
-describe('charge', () => {
-  it('1000 projecteurs, 12 univers et 3 effets : un tick reste sous la période de 25 ms', () => {
-    const p = demoProject();
-    p.patch = [];
-    for (let i = 0; i < 1000; i++) {
-      p.patch.push({ id: `f${i}`, name: `F${i}`, profileId: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', universe: 1 + Math.floor(i / 85), address: 1 + (i % 85) * 6, tags: [], position: { x: 0, y: 0 }, rotation: 0, height: 4, notes: '' });
-    }
-    p.show.universes = 12;
-    p.groups = [{ id: 'all', name: 'All', color: '#ffffff', fixtureIds: p.patch.map((f) => f.id) }];
-    const all = { fixtureIds: [], groupIds: ['all'] };
-    p.effects = [fx({ id: 'a', type: 'rainbow', targets: all }), fx({ id: 'b', type: 'dimmerWave', targets: all }), fx({ id: 'c', type: 'chase', targets: all, blend: 'scale' })];
-    const { engine } = makeEngine(p);
-    ['a', 'b', 'c'].forEach((id) => engine.startEffect(id));
-    const t0 = performance.now();
-    run(engine, 5000); // 200 ticks
-    const avg = (performance.now() - t0) / 200;
-    console.info(`[charge] tick moyen = ${avg.toFixed(2)} ms pour 1000 projecteurs`);
-    expect(avg).toBeLessThan(25);
-    expect(engine.universes.size).toBe(12);
-  });
-});

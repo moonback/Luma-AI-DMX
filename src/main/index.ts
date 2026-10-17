@@ -121,9 +121,10 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
-  // Only the microphone (audio-reactive input) may be requested by the renderer.
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'));
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media');
+  // Only the microphone (audio-reactive input, LTC) and MIDI (controllers, MTC) may be requested by the renderer.
+  const allowed = new Set(['media', 'midi', 'midiSysex']);
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
 
   service = await createService();
 

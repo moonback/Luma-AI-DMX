@@ -8,11 +8,13 @@ src/
     fixtures/    attributs (+ cellules « red#3 »), profils, profils fictifs, patch, couleur, ofl (import Open Fixture Library)
     engine/      Engine (tick), merge (priorités), render (DMX 8/16 bits, fonctions spéciales, blackout),
                  playback (cue lists), effects, timeline, resolve (index du projet)
-    protocols/   config (schémas), types (OutputAdapter : état, stats, reconnexion), artnet, sacn, enttec, opendmx,
+    protocols/   config (schémas), types (OutputAdapter : état, stats, reconnexion), artnet, sacn, enttec, opendmx, rdm (E1.20 via Art-Net),
                  virtual, OutputManager (armement, STOP, cadence, état transmis)
     ai/          actions (schéma strict), director (validation, aperçu, exécution, vérification),
                  local/interpreter (mode déterministe), providers/openrouter (API compatible OpenAI, fetch)
     audio/       analyzer (niveau, énergie, attaques, BPM, montées d'énergie), reactive (réactions → moteur)
+    safety/      flashGuard (estimation des flashs photosensibles, limiteur du moteur, refus des effets IA dangereux)
+    control/     midi (messages, MTC), timecode (décodeur LTC), osc (UDP), remote (télécommande HTTP + SSE)
     project/     format (création, versions, migrations), store (écriture atomique, .bak, récupération)
     settings/    paramètres applicatifs ; log/ journal en mémoire ; visualizer/ modèle visuel 2D/3D
     app/         AppService : orchestration + bus de commandes (injection des dialogues et secrets)
@@ -26,7 +28,7 @@ tests/         unit, integration (parcours complet), components (Testing Library
 1. Le renderer envoie une commande typée `window.luma.invoke({ type, ... })`.
 2. Le processus principal vérifie l'origine, valide la commande avec `commandSchema` (Zod), puis appelle `AppService.execute`.
 3. Les mutations de projet sont appliquées à une copie, **revalidées entièrement** avec `projectSchema`, puis remplacent le document. Les mutations invalides sont refusées sans effet de bord. L'index du projet est reconstruit et transmis au moteur.
-4. Le moteur tourne dans le processus principal (`setTimeout` avec compensation de dérive, sans rattrapage après un dépassement). À chaque tick :
+4. Le moteur tourne dans le processus principal. Ordonnanceur à échéances : `setTimeout` jusqu'à l'échéance moins le retard maximal des timers observé sur les 64 derniers réveils, puis `setImmediate` (les E/S et l'IPC passent entre deux itérations) jusqu'à l'échéance. Un retard inférieur à une période est absorbé ; au-delà, resynchronisation sans rafale de rattrapage. À chaque tick :
    - avancement des playbacks, des effets et de la timeline ;
    - fusion des sources ;
    - complément par les valeurs par défaut, puis virtual dimmer, master et blackout ;
@@ -78,7 +80,7 @@ Un canal de profil peut porter `cell: n`. Sa valeur est alors stockée sous la c
 
 ## Choix techniques
 - **Protocoles implémentés en interne** (dgram) plutôt qu'avec des bibliothèques tierces : Art-Net (ArtDmx) et E1.31 (paquet de données) tiennent en environ 100 lignes chacun, dont les octets sont testés contre les offsets des spécifications. Cela évite des dépendances peu maintenues.
-- **Moteur dans le processus principal**, sans worker : la charge mesurée est d'environ 0,25 ms par tick pour quelques projecteurs. Le test de charge (1 000 projecteurs, 12 univers, 3 effets) a mesuré ≈ 7,4 ms par tick sur la machine de développement, soit ≈ 30 % de la période de 25 ms. Au-delà de quelques milliers de projecteurs, un worker ou une optimisation de la fusion deviendrait nécessaire. Un worker ajouterait de la sérialisation sans gain démontré.
+- **Moteur dans le processus principal**, sans worker (décision réexaminée en Phase 0 : tout `AppService` lit l'état du moteur de façon synchrone ; le problème mesuré était la cadence, corrigé par l'ordonnanceur) : la charge mesurée est d'environ 0,25 ms par tick pour quelques projecteurs. Le test de charge (1 000 projecteurs, 12 univers, 3 effets) a mesuré ≈ 7,4 ms par tick sur la machine de développement, soit ≈ 30 % de la période de 25 ms. Au-delà de quelques milliers de projecteurs, un worker ou une optimisation de la fusion deviendrait nécessaire. Un worker ajouterait de la sérialisation sans gain démontré.
 - **Pas de base de données** : un projet est un fichier JSON versionné, lisible et exportable.
 
 ## Dépendances

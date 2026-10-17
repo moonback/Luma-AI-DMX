@@ -7,6 +7,7 @@ import { outputConfigSchema, type OutputConfig, type OutputKind } from '../../co
 import type { UniverseView } from '../../shared/commands';
 import type { ChannelChange } from '../../core/protocols/virtual';
 import type { SerialPortInfo } from '../../core/protocols/enttec';
+import type { RdmDevice } from '../../core/protocols/rdm';
 
 const KIND_LABEL: Record<OutputKind, string> = { virtual: 'Virtuelle', artnet: 'Art-Net', sacn: 'sACN / E1.31', 'enttec-pro': 'USB-DMX (Enttec Pro)', 'open-dmx': 'USB-DMX (Open DMX / FTDI)' };
 
@@ -149,13 +150,71 @@ function History() {
   );
 }
 
+function Rdm({ outputs }: { outputs: OutputConfig[] }) {
+  const artnet = outputs.filter((o): o is Extract<OutputConfig, { kind: 'artnet' }> => o.kind === 'artnet');
+  const [target, setTarget] = useState(artnet[0] ? `${artnet[0].id}|${artnet[0].universeMap[0]?.local ?? 1}` : '');
+  const [devices, setDevices] = useState<RdmDevice[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [identified, setIdentified] = useState<string | null>(null);
+  const [outputId = '', u = '1'] = target.split('|');
+  const universe = Number(u);
+  const discover = async () => {
+    setBusy(true);
+    const r = await act({ type: 'rdm.discover', outputId, universe });
+    setBusy(false);
+    if (r) setDevices(r.devices);
+  };
+  const identify = async (uid: string) => {
+    const on = identified !== uid;
+    if (identified && on) await act({ type: 'rdm.identify', outputId, universe, uid: identified, on: false });
+    if (await act({ type: 'rdm.identify', outputId, universe, uid, on })) setIdentified(on ? uid : null);
+  };
+  const readdress = async (d: RdmDevice) => {
+    const v = window.prompt(`Nouvelle adresse DMX pour ${d.model ?? d.uid} (1–512)`, String(d.startAddress ?? 1));
+    const address = Number(v);
+    if (!v || !Number.isInteger(address) || address < 1 || address > 512) return;
+    if (!(await confirmAction({ title: 'Changer l’adresse DMX', message: `L’appareil ${d.uid} passera à l’adresse ${address}. Le patch du projet n’est pas modifié : mettez-le à jour pour qu’il corresponde.`, confirmLabel: 'Changer l’adresse' }))) return;
+    if (await act({ type: 'rdm.setAddress', outputId, universe, uid: d.uid, address, confirmed: true })) await discover();
+  };
+  if (!artnet.length) return <Panel title="RDM"><p className="muted" style={{ margin: 0 }}>Ajoutez une sortie Art-Net : le RDM passe par le nœud (découverte et requêtes ArtRdm). Le RDM via Enttec n’est pas encore pris en charge.</p></Panel>;
+  return (
+    <Panel title="RDM — découverte et état des appareils" actions={
+      <div className="row">
+        <select className="select" value={target} onChange={(e) => { setTarget(e.target.value); setDevices(null); }}>
+          {artnet.flatMap((o) => o.universeMap.map((m) => <option key={`${o.id}|${m.local}`} value={`${o.id}|${m.local}`}>{o.name} · univers {m.local} → Port-Address {m.remote}</option>))}
+        </select>
+        <button className="btn primary" disabled={busy} onClick={() => void discover()} data-testid="rdm-discover"><RefreshCw size={13} />{busy ? 'Découverte…' : 'Découvrir'}</button>
+      </div>
+    } flush>
+      {devices === null ? <p className="small dim" style={{ padding: 12, margin: 0 }}>La découverte interroge le nœud Art-Net (table des appareils) puis lit chaque appareil. Le port UDP 6454 doit être libre sur cette machine pour recevoir les réponses.</p>
+        : devices.length === 0 ? <p className="small muted" style={{ padding: 12, margin: 0 }}>Aucun appareil RDM signalé par le nœud.</p> : (
+        <table className="table small"><thead><tr><th>UID</th><th>Appareil</th><th>Adresse</th><th>Canaux</th><th>Mode</th><th>Heures</th><th>Capteurs</th><th /></tr></thead><tbody>
+          {devices.map((d) => (
+            <tr key={d.uid} title={d.errors.join('\n')}>
+              <td className="mono">{d.uid}</td>
+              <td>{[d.manufacturer, d.model].filter(Boolean).join(' ') || <span className="dim">inconnu</span>}{d.label ? <div className="dim">{d.label}</div> : null}</td>
+              <td className="mono">{d.startAddress ?? '—'}</td><td className="mono">{d.footprint ?? '—'}</td><td className="mono">{d.personality ?? '—'}</td>
+              <td className="mono">{d.deviceHours ?? '—'}{d.lampHours !== null ? ` · lampe ${d.lampHours}` : ''}</td>
+              <td>{d.sensors.map((s) => `${s.name} ${s.value} ${s.unit}`).join(' · ') || '—'}{d.errors.length ? <span className="badge warn" style={{ marginLeft: 6 }}>{d.errors.length} lecture(s) en échec</span> : null}</td>
+              <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                <button className={`btn sm ${identified === d.uid ? 'on' : ''}`} onClick={() => void identify(d.uid)}>Identify</button>
+                <button className="btn sm" onClick={() => void readdress(d)}>Adresse…</button>
+              </td>
+            </tr>
+          ))}
+        </tbody></table>
+      )}
+    </Panel>
+  );
+}
+
 export function OutputPage() {
   const rt = useStore((s) => s.runtime);
   const [settingsOutputs, setOutputs] = useState<OutputConfig[]>([]);
   const [editing, setEditing] = useState<OutputConfig | null>(null);
   const [interfaces, setInterfaces] = useState<string[]>([]);
   const [ports, setPorts] = useState<{ ports: SerialPortInfo[]; error: string | null }>({ ports: [], error: null });
-  const [tab, setTab] = useState<'outputs' | 'monitor' | 'history' | 'diag'>('outputs');
+  const [tab, setTab] = useState<'outputs' | 'monitor' | 'history' | 'rdm' | 'diag'>('outputs');
   const load = async () => {
     const s = await act({ type: 'settings.get' });
     if (s) setOutputs(s.outputs);
@@ -180,7 +239,7 @@ export function OutputPage() {
       <PageHead title="DMX Output" subtitle="Sorties Art-Net, sACN, USB-DMX et virtuelle. Les sorties réelles démarrent toujours désarmées.">
         {rt?.transmitting ? <span className="badge ok">Émission active</span> : <><span className="badge err">STOP — émissions réelles arrêtées</span><button className="btn accent" onClick={() => void act({ type: 'output.transmit', on: true })}>Reprendre</button></>}
       </PageHead>
-      <Tabs tabs={[{ id: 'outputs', label: 'Sorties' }, { id: 'monitor', label: 'Moniteur 512 canaux' }, { id: 'history', label: 'Historique virtuel' }, { id: 'diag', label: 'Diagnostics' }] as const} value={tab} onChange={setTab} />
+      <Tabs tabs={[{ id: 'outputs', label: 'Sorties' }, { id: 'monitor', label: 'Moniteur 512 canaux' }, { id: 'history', label: 'Historique virtuel' }, { id: 'rdm', label: 'RDM' }, { id: 'diag', label: 'Diagnostics' }] as const} value={tab} onChange={setTab} />
       {tab === 'outputs' && (
         <div className="col gap-lg">
           <Panel title="Sorties configurées" flush actions={<div className="row">{(['virtual', 'artnet', 'sacn', 'enttec-pro', 'open-dmx'] as const).map((k) => <button key={k} className="btn sm" onClick={() => setEditing(defaults(k))}><Plus size={12} />{KIND_LABEL[k]}</button>)}</div>}>
@@ -225,6 +284,7 @@ export function OutputPage() {
       )}
       {tab === 'monitor' && <Monitor />}
       {tab === 'history' && <History />}
+      {tab === 'rdm' && <Rdm outputs={settingsOutputs} />}
       {tab === 'diag' && (
         <div className="grid g2">
           <Panel title="Moteur (mesuré)">

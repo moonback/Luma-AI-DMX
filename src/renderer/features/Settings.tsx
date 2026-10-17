@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { FolderOpen, KeyRound } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
@@ -7,11 +7,13 @@ import { resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, type Settings } 
 import { comboFromEvent } from '../shortcuts';
 import type { RecoveryEntry } from '../../core/project/store';
 import type { OpenRouterModel } from '../../core/ai/providers/openrouter';
+import { externalControl } from '../control';
+import { audioEngine } from '../audioEngine';
 
 const TABS = [
   { id: 'general', label: 'Général' }, { id: 'appearance', label: 'Apparence' }, { id: 'engine', label: 'Moteur & sécurité' },
   { id: 'network', label: 'Réseau / DMX' }, { id: 'ai', label: 'IA et fournisseurs' }, { id: 'audio', label: 'Audio' },
-  { id: 'shortcuts', label: 'Raccourcis' }, { id: 'logs', label: 'Logs & diagnostics' }, { id: 'backups', label: 'Sauvegardes' },
+  { id: 'shortcuts', label: 'Raccourcis' }, { id: 'control', label: 'Contrôle externe' }, { id: 'logs', label: 'Logs & diagnostics' }, { id: 'backups', label: 'Sauvegardes' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -119,6 +121,99 @@ function ModelPicker({ value, onChange }: { value: string; onChange: (id: string
   );
 }
 
+const OSC_ADDRESSES: [string, string][] = [
+  ['/luma/go [liste]', 'GO (liste de cues, 1 = première)'], ['/luma/back [liste]', 'BACK'], ['/luma/goto <cue> [liste]', 'Aller au cue n'],
+  ['/luma/pause [liste] · /luma/resume [liste]', 'Pause / reprise'], ['/luma/blackout [0|1]', 'Blackout (bascule sans argument)'],
+  ['/luma/master <0..1>', 'Grand master'], ['/luma/bpm <bpm>', 'Tempo'], ['/luma/release', 'Relâcher le programmeur'],
+  ['/luma/stop', 'STOP OUTPUT'], ['/luma/timecode <secondes>', 'Position de timecode (la timeline suit)'],
+];
+
+function ControlTab({ value, onChange }: { value: Settings['control']; onChange: (v: Settings['control']) => void }) {
+  const status = useSyncExternalStore((l) => externalControl.subscribe(l), () => externalControl.status);
+  const [learnFor, setLearnFor] = useState<string | null>(null);
+  const [newAction, setNewAction] = useState('go');
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [ips, setIps] = useState<string[]>([]);
+  useEffect(() => { void audioEngine.devices().then(setDevices); void act({ type: 'output.interfaces' }).then((x) => setIps(x ?? [])); }, []);
+  const r = value.remote;
+  useEffect(() => () => { externalControl.learn = null; }, []);
+  const learn = async () => {
+    setLearnFor(newAction);
+    externalControl.learn = (key) => {
+      setLearnFor(null);
+      onChange({ ...value, midi: { ...value.midi, mappings: [...value.midi.mappings.filter((m) => m.key !== key), { key, action: newAction }] } });
+    };
+    await externalControl.ensureMidi();
+  };
+  const actionLabel = (id: string) => (id === 'master' ? 'Grand master (fader)' : SHORTCUT_ACTIONS.find((a) => a.id === id)?.label ?? id);
+  return (
+    <>
+      <Panel title="MIDI">
+        <label className="check"><input type="checkbox" checked={value.midi.enabled} onChange={(e) => onChange({ ...value, midi: { ...value.midi, enabled: e.target.checked } })} />Activer les contrôleurs MIDI</label>
+        <p className="small dim">Entrées détectées : {status.midiInputs.length ? status.midiInputs.join(', ') : 'aucune'}{status.error ? <span className="badge err" style={{ marginLeft: 6 }}>{status.error}</span> : null}</p>
+        <table className="table small" data-testid="midi-mappings"><tbody>
+          {value.midi.mappings.map((m) => (
+            <tr key={m.key}><td className="mono">{m.key}</td><td>{actionLabel(m.action)}</td>
+              <td style={{ textAlign: 'right' }}><button className="btn ghost sm" onClick={() => onChange({ ...value, midi: { ...value.midi, mappings: value.midi.mappings.filter((x) => x.key !== m.key) } })}>Retirer</button></td></tr>
+          ))}
+        </tbody></table>
+        <div className="row">
+          <select className="select" style={{ width: 320 }} value={newAction} onChange={(e) => setNewAction(e.target.value)}>
+            <option value="master">Grand master (fader)</option>
+            {SHORTCUT_ACTIONS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+          {learnFor ? <span className="badge violet">Actionnez une touche ou un fader…</span> : <button className="btn" onClick={() => void learn()} data-testid="midi-learn">Apprendre</button>}
+        </div>
+      </Panel>
+      <Panel title="OSC (UDP)">
+        <div className="grid g2">
+          <label className="check"><input type="checkbox" checked={value.osc.enabled} onChange={(e) => onChange({ ...value, osc: { ...value.osc, enabled: e.target.checked } })} />Recevoir des commandes OSC</label>
+          <Field label="Port UDP"><NumberInput value={value.osc.port} min={1024} max={65535} onChange={(port) => onChange({ ...value, osc: { ...value.osc, port } })} /></Field>
+          <Field label="Écoute" hint="Réseau local : sans authentification, à réserver à un réseau de régie de confiance. Aucune commande OSC ne peut armer une sortie.">
+            <select className="select" value={value.osc.bind} onChange={(e) => onChange({ ...value, osc: { ...value.osc, bind: e.target.value as Settings['control']['osc']['bind'] } })}>
+              <option value="127.0.0.1">Cette machine uniquement (127.0.0.1)</option>
+              <option value="0.0.0.0">Réseau local (0.0.0.0)</option>
+            </select>
+          </Field>
+        </div>
+        <table className="table small"><tbody>{OSC_ADDRESSES.map(([a, d]) => <tr key={a}><td className="mono">{a}</td><td>{d}</td></tr>)}</tbody></table>
+        <p className="small dim" style={{ marginBottom: 0 }}>Chaque message reçoit une réponse <span className="mono">/luma/ack &lt;adresse&gt; &lt;ok&gt;</span> vers l’expéditeur.</p>
+      </Panel>
+      <Panel title="Télécommande (tablette / téléphone)">
+        <div className="grid g2">
+          <label className="check"><input type="checkbox" data-testid="remote-enabled" checked={r.enabled} onChange={(e) => onChange({ ...value, remote: { ...r, enabled: e.target.checked } })} />Activer la télécommande sur le réseau local</label>
+          <Field label="Port HTTP"><NumberInput value={r.port} min={1024} max={65535} onChange={(port) => onChange({ ...value, remote: { ...r, port } })} /></Field>
+        </div>
+        <p className="small dim">GO, BACK, pause, blackout, grand master, relâcher et STOP OUTPUT. L’armement des sorties et la reprise des émissions restent réservés à la régie. Toute personne qui a l’adresse complète (jeton inclus) peut piloter le show : régénérez le jeton pour révoquer les accès.</p>
+        {r.enabled && r.token && (
+          <table className="table small" data-testid="remote-urls"><tbody>
+            {(ips.length ? ips : ['<adresse-ip>']).map((ip) => <tr key={ip}><td className="mono">{`http://${ip}:${r.port}/?t=${r.token}`}</td></tr>)}
+          </tbody></table>
+        )}
+        <button className="btn" onClick={() => onChange({ ...value, remote: { ...r, token: crypto.randomUUID() } })}>Régénérer le jeton</button>
+      </Panel>
+      <Panel title="Timecode">
+        <div className="grid g2">
+          <Field label="Source" hint="La timeline chargée (ou la première du projet) suit la position reçue ; elle se met en pause 0,5 s après la perte du signal.">
+            <select className="select" value={value.timecode.source} onChange={(e) => onChange({ ...value, timecode: { ...value.timecode, source: e.target.value as Settings['control']['timecode']['source'] } })}>
+              <option value="off">Désactivé</option><option value="mtc">MTC (MIDI Time Code)</option><option value="ltc">LTC (entrée audio)</option>
+            </select>
+          </Field>
+          {value.timecode.source === 'ltc' && (
+            <Field label="Entrée audio LTC">
+              <select className="select" value={value.timecode.ltcDeviceId ?? ''} onChange={(e) => onChange({ ...value, timecode: { ...value.timecode, ltcDeviceId: e.target.value || null } })}>
+                <option value="">Entrée par défaut</option>
+                {devices.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || d.deviceId}</option>)}
+              </select>
+            </Field>
+          )}
+        </div>
+        <p className="small">Dernier timecode reçu : <span className="mono">{status.timecode ?? '—'}</span></p>
+      </Panel>
+    </>
+  );
+}
+
 export function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [saved, setSaved] = useState<Settings | null>(null);
@@ -135,7 +230,7 @@ export function SettingsPage() {
   if (!s) return <div className="page">Chargement…</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
-  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts }); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
+  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
 
   return (
     <div className="page">
@@ -176,7 +271,13 @@ export function SettingsPage() {
                 </select>
               </Field>
               <Field label="Fréquence strobe maximale (Hz)" hint="Plafond appliqué à tous les effets strobe (sécurité photosensible)."><NumberInput value={s.engine.maxStrobeHz} min={1} max={25} onChange={(v) => set('engine', { maxStrobeHz: v })} /></Field>
-              <div />
+              <Field label="Garde-fou photosensible" hint="Estimation des flashs vus par le public (> 3 flashs/s ou strobe rapide sur une large part du kit). Les propositions IA dangereuses sont refusées sauf en mode Désactivé. Estimation, pas une certification.">
+                <select className="select" data-testid="flash-guard" value={s.engine.flashGuard} onChange={(e) => set('engine', { flashGuard: e.target.value as Settings['engine']['flashGuard'] })}>
+                  <option value="off">Désactivé</option>
+                  <option value="warn">Avertir (alerte uniquement)</option>
+                  <option value="limit">Limiter (atténue les flashs, hors programmeur)</option>
+                </select>
+              </Field>
               <Field label="Priorité couche IA"><NumberInput value={s.engine.priorities.ai} min={1} max={99} onChange={(v) => set('engine', { priorities: { ...s.engine.priorities, ai: v } })} /></Field>
               <Field label="Priorité timeline"><NumberInput value={s.engine.priorities.timeline} min={1} max={99} onChange={(v) => set('engine', { priorities: { ...s.engine.priorities, timeline: v } })} /></Field>
               <Field label="Priorité audio réactif"><NumberInput value={s.engine.priorities.audio} min={1} max={99} onChange={(v) => set('engine', { priorities: { ...s.engine.priorities, audio: v } })} /></Field>
@@ -238,6 +339,7 @@ export function SettingsPage() {
             <ShortcutEditor value={s.shortcuts} onChange={(shortcuts) => setS({ ...s, shortcuts })} />
           </Panel>
         )}
+        {tab === 'control' && <ControlTab value={s.control} onChange={(control) => setS({ ...s, control })} />}
         {tab === 'logs' && (
           <Panel title="Logs et diagnostics">
             <div className="grid g2">

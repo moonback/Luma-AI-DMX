@@ -11,6 +11,8 @@ import {
   type AiAction, type AiEffectSpec, type AiExecutionReport, type AiProposal, type AiTarget, type LookPart, type ValidatedAction,
 } from './actions';
 import { interpretLocally, normalize, type InterpreterContext } from './local/interpreter';
+import { computeEffect, effectRate } from '../engine/effects';
+import { analyzeFrames } from '../safety/flashGuard';
 
 /* ------------------------------------------------------------------ */
 /* Target resolution & validation                                      */
@@ -329,6 +331,34 @@ function effectFromSpec(index: ProjectIndex, spec: AiEffectSpec, trigger: Effect
     id: randomUUID(), name: spec.name, type: spec.effectType, targets: { fixtureIds: ids, groupIds: [] }, params,
     priority: 50, blend: 'override', duration: spec.duration ?? null, trigger, origin: 'ai',
   };
+}
+
+/**
+ * Flash guard for AI proposals: every effect the proposal starts immediately is simulated for 3 s on top of the
+ * previewed state; effects that would exceed the photosensitive flash limit are rejected (mutates the proposal).
+ */
+export function guardProposalFlashes(proposal: AiProposal, index: ProjectIndex, engine: Engine, maxStrobeHz: number): number {
+  const base = engine.compute(proposal.preview).values;
+  const fixtures = [...index.fixtures.values()];
+  const dt = 1 / 40;
+  let rejected = 0;
+  for (const v of proposal.actions) {
+    if (v.status === 'rejected' || v.action?.type !== 'startEffect') continue;
+    const def = effectFromSpec(index, v.action.effect, 'manual', maxStrobeHz);
+    const targets = index.resolveTargets(def.targets);
+    const rate = effectRate(def, engine.bpm, maxStrobeHz);
+    const frames = Array.from({ length: 120 }, (_, i) => {
+      const out = structuredClone(base);
+      for (const [fid, attrs] of Object.entries(computeEffect(def, i * dt * rate, targets))) out[fid] = { ...out[fid], ...attrs };
+      return out;
+    });
+    const r = analyzeFrames(fixtures, frames, dt);
+    if (!r.violation) continue;
+    v.status = 'rejected';
+    v.messages.push(`Garde-fou photosensible : ${r.reason} — effet refusé`);
+    rejected++;
+  }
+  return rejected;
 }
 
 export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): AiExecutionReport {

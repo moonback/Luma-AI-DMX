@@ -59,11 +59,13 @@ export const settingsSchema = z.object({
       rateHz: z.number().int().min(10).max(44).default(40),
       blackoutPolicy: z.enum(['intensity', 'intensity-shutter', 'all-zero']).default('intensity-shutter'),
       maxStrobeHz: z.number().min(1).max(25).default(10),
+      /** Photosensitive flash guard: off, warn (alert only) or limit (rate-limit flashes in the engine). */
+      flashGuard: z.enum(['off', 'warn', 'limit']).default('warn'),
       priorities: z
         .object({ ai: z.number().int().min(1).max(99).default(60), timeline: z.number().int().min(1).max(99).default(40), audio: z.number().int().min(1).max(99).default(55) })
         .default({ ai: 60, timeline: 40, audio: 55 }),
     })
-    .default({ rateHz: 40, blackoutPolicy: 'intensity-shutter', maxStrobeHz: 10, priorities: { ai: 60, timeline: 40, audio: 55 } }),
+    .default({ rateHz: 40, blackoutPolicy: 'intensity-shutter', maxStrobeHz: 10, flashGuard: 'warn', priorities: { ai: 60, timeline: 40, audio: 55 } }),
   outputs: z.array(outputConfigSchema).max(16).default([{ id: 'virtual-1', name: 'Sortie virtuelle', kind: 'virtual', enabled: true, maxFps: 40, universes: [1, 2, 3, 4] }]),
   sacn: z.object({ cid: z.uuid() }).optional(),
   ai: z
@@ -80,6 +82,33 @@ export const settingsSchema = z.object({
     })
     .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, fallbackToLocal: true }),
   audio: z.object({ deviceId: z.string().max(300).nullable().default(null) }).default({ deviceId: null }),
+  /** External control: MIDI mappings (renderer, Web MIDI), OSC over UDP (main) and timecode chase of the timeline. */
+  control: z
+    .object({
+      midi: z
+        .object({
+          enabled: z.boolean().default(false),
+          /** key "note:<ch>:<n>" or "cc:<ch>:<n>" → shortcut action id, or "master" for a fader. */
+          mappings: z.array(z.object({ key: z.string().regex(/^(note|cc):\d{1,2}:\d{1,3}$/), action: z.string().min(1).max(40) })).max(128).default([]),
+        })
+        .default({ enabled: false, mappings: [] }),
+      osc: z
+        .object({
+          enabled: z.boolean().default(false),
+          port: z.number().int().min(1024).max(65535).default(8000),
+          /** 127.0.0.1 = this machine only; 0.0.0.0 = local network (no authentication: trusted networks only). */
+          bind: z.enum(['127.0.0.1', '0.0.0.0']).default('127.0.0.1'),
+        })
+        .default({ enabled: false, port: 8000, bind: '127.0.0.1' }),
+      timecode: z
+        .object({ source: z.enum(['off', 'mtc', 'ltc']).default('off'), ltcDeviceId: z.string().max(300).nullable().default(null) })
+        .default({ source: 'off', ltcDeviceId: null }),
+      /** Tablet/phone remote (HTTP on the local network, token in the URL). */
+      remote: z
+        .object({ enabled: z.boolean().default(false), port: z.number().int().min(1024).max(65535).default(8080), token: z.string().min(16).max(100).optional() })
+        .default({ enabled: false, port: 8080 }),
+    })
+    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080 } }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
   /** Overrides of the default shortcuts, by action id. */
   shortcuts: z.record(z.string().max(40), z.string().max(40)).default({}),

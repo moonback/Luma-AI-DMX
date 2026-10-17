@@ -94,6 +94,10 @@ Dépendances clés : **Phase 0 bloque tout le reste** (pas d'IA live sur un mote
 
 Objectif : rendre l'application **utilisable sur un vrai plateau**. Peu d'IA, beaucoup de fondations.
 
+> **État au 17/10/2026** — implémenté et testé sans matériel : 0.2 (variante, voir ci-dessous), 0.3, 0.4 (Art-Net), 0.5, 0.6, 0.7. Reste : 0.1 (campagne matérielle), RDM via Enttec, QR code d'appairage, sortie OSC au-delà de l'accusé de réception, banc d'évaluation pour le LLM distant et extension du jeu de cas (32 aujourd'hui, objectif 300).
+>
+> 0.2 : le moteur n'a **pas** été déplacé dans un worker. Tout `AppService` lit le moteur de façon synchrone et le gain n'était pas démontré ; le problème mesuré (37–40 Hz pour 40) venait de l'ordonnanceur, réécrit à échéances auto-calibrées : 40 et 44 Hz à ± 0,5 Hz, gigue p95 < 2 ms en test. Le passage en worker reste à faire si la charge (plusieurs milliers de projecteurs) l'exige.
+
 ### 0.1 Campagne de validation matérielle
 - Exécuter intégralement [docs/HARDWARE.md](docs/HARDWARE.md) sur au moins : 1 nœud Art-Net, 1 récepteur sACN, 1 Enttec DMX USB Pro, 1 interface Open DMX, 3 projecteurs de types différents (PAR RGBW, lyre spot 16 bits, barre LED multi-cellules).
 - Mesurer et publier : cadence réelle par sortie, gigue, latence bout en bout (photodiode + oscilloscope ou caméra haute vitesse).

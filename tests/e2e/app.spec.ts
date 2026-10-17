@@ -195,3 +195,26 @@ test('fournisseur OpenRouter sélectionnable avec choix du modèle', async () =>
   await page.getByTestId('ai-model').fill('mistralai/mistral-small');
   await page.screenshot({ path: `${shots}/18-openrouter.png` });
 });
+
+test('fiabilisation : garde-fou, contrôle externe, télécommande et RDM', async () => {
+  await nav('settings');
+  await page.getByRole('tab', { name: 'Moteur & sécurité' }).click();
+  await page.getByTestId('flash-guard').selectOption('limit');
+  await page.getByRole('tab', { name: 'Contrôle externe' }).click();
+  await page.getByTestId('remote-enabled').check();
+  await page.getByTestId('settings-save').click();
+  const url = (await page.getByTestId('remote-urls').locator('td').first().textContent())!.replace(/^http:\/\/[^:]+/, 'http://127.0.0.1');
+  await page.screenshot({ path: `${shots}/19-controle-externe.png` });
+  const remote = await (await fetch(url)).text();
+  expect(remote).toContain('Télécommande');
+  expect((await fetch(url.replace(/t=[^&]+/, 't=mauvais'))).status).toBe(403);
+  const r = await fetch(url.replace('/?', '/cmd?'), { method: 'POST', body: JSON.stringify({ type: 'engine.blackout', on: true }) });
+  expect(((await r.json()) as { ok: boolean }).ok).toBe(true);
+  await expect(page.getByTestId('blackout')).toHaveClass(/solid/);
+  await page.getByTestId('blackout').click();
+  await page.getByTestId('remote-enabled').uncheck();
+  await page.getByTestId('settings-save').click();
+  await nav('output');
+  await page.getByRole('tab', { name: 'RDM' }).click();
+  await expect(page.getByText('Ajoutez une sortie Art-Net')).toBeVisible();
+});

@@ -14,8 +14,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval": "vitest run tests/eval",
+    "test:perf": "vitest run --config vitest.perf.config.ts",
     "test:e2e": "electron-vite build && playwright test",
-    "check": "npm run typecheck && npm run lint && npm run test",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run test:perf",
     "package": "electron-vite build && electron-builder --win --x64",
     "package:dir": "electron-vite build && electron-builder --win --x64 --dir"
   },

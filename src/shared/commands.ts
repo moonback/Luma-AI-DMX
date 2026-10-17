@@ -13,6 +13,7 @@ import type { OutputStatus } from '../core/protocols/config';
 import type { AudioStatus } from '../core/audio/reactive';
 import type { ChannelChange } from '../core/protocols/virtual';
 import type { SerialPortInfo } from '../core/protocols/enttec';
+import type { RdmDevice } from '../core/protocols/rdm';
 import type { RecoveryEntry } from '../core/project/store';
 import type { LogEntry } from '../core/log/logger';
 import type { Settings } from '../core/settings/settings';
@@ -120,6 +121,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('timeline.remove'), id: idSchema }),
   z.object({ type: z.literal('timeline.play'), id: idSchema }),
   empty('timeline.pause'),
+  /** External timecode position (MTC/LTC decoded in the renderer, or OSC): the timeline chases it. */
+  z.object({ type: z.literal('timeline.timecode'), seconds: z.number().min(0).max(86400) }),
   empty('timeline.stop'),
   z.object({ type: z.literal('timeline.seek'), seconds: z.number().min(0).max(86400) }),
   // Engine
@@ -136,6 +139,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('output.virtualHistory'), limit: z.number().int().min(1).max(2000).default(200) }),
   z.object({ type: z.literal('output.inject'), injection: z.discriminatedUnion('type', [z.object({ type: z.literal('fail-next'), count: z.number().int().min(1).max(1000) }), z.object({ type: z.literal('disconnect') }), z.object({ type: z.literal('reconnect') })]) }),
   empty('output.listSerial'),
+  // RDM (Art-Net outputs): universe = local universe of the output's universe map.
+  z.object({ type: z.literal('rdm.discover'), outputId: z.string().min(1).max(64), universe: universeSchema }),
+  z.object({ type: z.literal('rdm.identify'), outputId: z.string().min(1).max(64), universe: universeSchema, uid: z.string().regex(/^[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}$/), on: z.boolean() }),
+  z.object({ type: z.literal('rdm.setAddress'), outputId: z.string().min(1).max(64), universe: universeSchema, uid: z.string().regex(/^[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}$/), address: addressSchema, confirmed: z.literal(true) }),
   empty('output.interfaces'),
   // AI
   z.object({ type: z.literal('ai.propose'), prompt: z.string().trim().min(1).max(2000) }),
@@ -188,6 +195,8 @@ export interface RuntimeState {
   ai: { provider: 'local' | 'openrouter'; hasKey: boolean; busy: boolean; lastError: string | null; model: string };
   audio: AudioStatus;
   alerts: Alert[];
+  /** Photosensitive flash guard state (estimate from the computed state). */
+  safety: { flashGuard: 'off' | 'warn' | 'limit'; flashesPerSecond: number; redFlashesPerSecond: number; violation: boolean; reason: string | null };
   programmer: Record<string, Record<string, number>>;
 }
 
@@ -256,6 +265,7 @@ export interface CommandResults {
   'timeline.remove': Void;
   'timeline.play': Void;
   'timeline.pause': Void;
+  'timeline.timecode': { chasing: boolean };
   'timeline.stop': Void;
   'timeline.seek': Void;
   'engine.master': Void;
@@ -270,6 +280,9 @@ export interface CommandResults {
   'output.virtualHistory': ChannelChange[];
   'output.inject': Void;
   'output.listSerial': { ports: SerialPortInfo[]; error: string | null };
+  'rdm.discover': { devices: RdmDevice[] };
+  'rdm.identify': Void;
+  'rdm.setAddress': Void;
   'output.interfaces': string[];
   'ai.propose': AiProposal;
   'ai.revise': AiProposal;

@@ -8,12 +8,15 @@ import { CueListPlayback, type PlaybackStatus } from './playback';
 import { finalizeFixture, renderFixture, type BlackoutPolicy } from './render';
 import type { ProjectIndex } from './resolve';
 import { TimelineTransport, type TimelineStatus } from './timeline';
+import { limitFlashes, type FlashGuardMode } from '../safety/flashGuard';
 
 export interface EngineSettings {
   rateHz: number;
   blackoutPolicy: BlackoutPolicy;
   maxStrobeHz: number;
   priorities: { ai: number; timeline: number; audio: number };
+  /** Photosensitive guard; "limit" rate-limits intensity/colour and opens fast strobes (programmer excluded). */
+  flashGuard?: FlashGuardMode;
 }
 
 export interface FrameSink {
@@ -128,7 +131,7 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
   private seq = 1;
   private instanceSeq = 1;
   private timeMs = 0;
-  private timer: NodeJS.Timeout | null = null;
+  private timer: NodeJS.Timeout | NodeJS.Immediate | null = null;
   master = 1;
   blackout = false;
   bpm = 120;
@@ -295,6 +298,13 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
   timelinePause(): void { this.timeline.pause(); }
   timelineStop(): void { this.timeline.stop(); }
   timelineSeek(s: number): void { this.timeline.seek(s); }
+  /** Timecode chase: plays `id` and re-seeks when the playhead drifts more than 2 frames (80 ms) from `seconds`. */
+  timelineChase(id: string, seconds: number): boolean {
+    if (!this.index.timelines.has(id)) return false;
+    if (this.timeline.timelineId !== id || this.timeline.state !== 'playing') this.timeline.play(id);
+    if (Math.abs(this.timeline.timeMs / 1000 - seconds) > 0.08) this.timeline.seek(seconds);
+    return true;
+  }
 
   /* ---------------- Tick ---------------- */
 
@@ -370,6 +380,7 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
       });
       this.ai.tick(dtMs);
       const { values, sources } = this.compute();
+      if (this.settings.flashGuard === 'limit' && !this.blackout) limitFlashes(this.index.fixtures.values(), this.values, values, dtMs, this.programmer);
       this.values = values;
       this.sources = sources;
       this.renderUniverses(values, this.universes);
@@ -402,25 +413,55 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
     }
   }
 
+  /**
+   * Deadline scheduler: sleeps with setTimeout, waking early by the timer overshoot measured on this machine
+   * (≈1 ms in Electron, up to ≈16 ms with coarse Windows timers), then yields with setImmediate (I/O and IPC still
+   * run between iterations) until the deadline. Small lateness is absorbed by keeping the deadline grid; only a delay
+   * longer than one period resynchronises (no burst of catch-up ticks after a stall).
+   */
   start(): void {
     if (this.timer) return;
     let last = performance.now();
     let next = last;
+    // Timer overshoot = max lateness of the last 64 wakes (starts pessimistic: coarse Windows timers ≈ 16 ms).
+    const lates = new Array<number>(64).fill(16);
+    let lateIdx = 0;
+    let overshoot = 16;
+    let sleptUntil = 0;
     const loop = () => {
+      if (!this.timer) return; // stopped (possibly from inside a tick)
       const now = performance.now();
+      if (sleptUntil) {
+        lates[lateIdx] = Math.min(20, now - sleptUntil);
+        lateIdx = (lateIdx + 1) % lates.length;
+        overshoot = Math.max(...lates);
+        sleptUntil = 0;
+      }
+      const wait = next - now;
+      if (wait > 0.05) {
+        const sleep = wait - overshoot - 0.5;
+        if (sleep >= 1) {
+          sleptUntil = now + sleep;
+          this.timer = setTimeout(loop, sleep);
+        } else this.timer = setImmediate(loop);
+        return;
+      }
       const dt = Math.min(250, now - last); // clamp after sleep/suspend to avoid jumps
       last = now;
       this.tick(dt);
       const period = 1000 / this.settings.rateHz;
       next += period;
-      if (next < now) next = now + period; // overrun: do not try to catch up
-      this.timer = setTimeout(loop, Math.max(0, next - performance.now()));
+      if (now - next > period) next = now + period;
+      loop();
     };
     this.timer = setTimeout(loop, 0);
   }
 
   stop(): void {
-    if (this.timer) clearTimeout(this.timer);
+    if (this.timer) {
+      clearTimeout(this.timer as NodeJS.Timeout);
+      clearImmediate(this.timer as NodeJS.Immediate);
+    }
     this.timer = null;
   }
 

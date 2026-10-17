@@ -23,7 +23,12 @@ import { Logger, type LogEntry } from '../log/logger';
 import { AudioReactive } from '../audio/reactive';
 import { hexToRgb } from '../util/math';
 import type { AiProposal } from '../ai/actions';
-import { buildProposal, executeProposal, interpreterContext, proposeLocally } from '../ai/director';
+import { buildProposal, executeProposal, guardProposalFlashes, interpreterContext, proposeLocally } from '../ai/director';
+import { FlashDetector, stageLight, type FlashStatus } from '../safety/flashGuard';
+import { buildVisualModel } from '../visualizer/model';
+import { OscServer, type OscMessage } from '../control/osc';
+import { RemoteServer, type RemoteState } from '../control/remote';
+import { ArtNetRdm } from '../protocols/rdm';
 import { interpretLocally } from '../ai/local/interpreter';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel } from '../ai/providers/openrouter';
 import type { Alert, Command, CommandOf, CommandResults, CommandType, ProjectState, RuntimeState, UniverseView, ValuesFrame } from '../../shared/commands';
@@ -46,6 +51,8 @@ export interface AppServiceOptions {
   adapterFactory?: AdapterFactory;
   /** Start the real-time scheduler. Tests drive `engine.tick()` manually instead. */
   autoStart?: boolean;
+  /** RDM over Art-Net ports (tests use a simulated node on other ports). */
+  rdm?: { listenPort: number; nodePort: number; timeoutMs?: number };
 }
 
 export class UserError extends Error {}
@@ -78,6 +85,18 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   private lastSourcesEmit = 0;
   private lastRuntimeEmit = 0;
   private readonly outputStates = new Map<string, OutputState>();
+  private flashDetector = new FlashDetector();
+  private flash: FlashStatus = { flashesPerSecond: 0, redFlashesPerSecond: 0, violation: false, reason: null };
+  private lastFlashLog = 0;
+  readonly osc = new OscServer();
+  private oscConfig = '';
+  readonly remote = new RemoteServer({
+    state: () => this.remoteState(),
+    execute: (cmd) => this.handle(cmd),
+    listId: (i) => this.project.cueLists[i - 1]?.id,
+  });
+  private remoteConfig = '';
+  private timecodeAt = 0;
 
   constructor(private readonly opts: AppServiceOptions) {
     super();
@@ -96,6 +115,8 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.engine.on('error', (err) => this.logger.error('Moteur', err.message));
     this.engine.on('frame', () => this.onFrame());
     this.outputs.on('status', () => this.onOutputStatus());
+    this.osc.on('message', (m, ack) => void this.onOsc(m).then(ack, (err: Error) => { this.logger.warn('OSC', `${m.address} : ${err.message}`); ack(false); }));
+    this.osc.on('error', (err) => this.logger.warn('OSC', err.message));
   }
 
   /* ------------------------------------------------------------------ */
@@ -119,10 +140,12 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') this.logger.warn('Paramètres', `Lecture impossible : ${(err as Error).message}`);
     }
     if (!this.settings.sacn) this.settings.sacn = { cid: randomUUID() };
+    this.settings.control.remote.token ??= randomUUID();
     await this.persistSettings();
     this.logger.level = this.settings.logs.level;
     this.engine.updateSettings(this.engineSettings());
     await this.outputs.configure(this.settings.outputs);
+    await this.applyControl();
     if (this.opts.autoStart !== false) this.engine.start();
     this.timers.push(setInterval(() => void this.autosave(), 15000));
     this.logger.info('Application', 'Démarrage terminé — sorties réelles désarmées par défaut');
@@ -132,6 +155,8 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   async dispose(): Promise<void> {
     for (const t of this.timers) clearInterval(t);
     this.engine.stop();
+    await this.osc.stop();
+    await this.remote.stop();
     await this.outputs.closeAll();
   }
 
@@ -141,7 +166,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   private engineSettings(): EngineSettings {
     const e = this.settings.engine;
-    return { rateHz: e.rateHz, blackoutPolicy: e.blackoutPolicy, maxStrobeHz: e.maxStrobeHz, priorities: e.priorities };
+    return { rateHz: e.rateHz, blackoutPolicy: e.blackoutPolicy, maxStrobeHz: e.maxStrobeHz, flashGuard: e.flashGuard, priorities: e.priorities };
   }
 
   private async persistSettings(): Promise<void> {
@@ -169,6 +194,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       ai: { provider: this.settings.ai.provider, hasKey: !!this.opts.secrets.get(OPENROUTER_KEY), busy: this.aiBusy, lastError: this.aiLastError, model: this.settings.ai.model },
       audio: this.audio.status(),
       alerts: [...this.alerts],
+      safety: { flashGuard: this.settings.engine.flashGuard, ...this.flash },
       programmer: this.engine.getProgrammer(),
     };
   }
@@ -179,6 +205,12 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   private onFrame(): void {
     const now = Date.now();
+    this.watchFlashes(now);
+    // Timecode lost for 0.5 s: freewheel stops, the timeline pauses where it is.
+    if (this.timecodeAt && now - this.timecodeAt > 500) {
+      this.timecodeAt = 0;
+      this.engine.timelinePause();
+    }
     if (now - this.lastValuesEmit >= 40) {
       this.lastValuesEmit = now;
       const frame: ValuesFrame = { values: this.engine.values };
@@ -191,6 +223,17 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     if (now - this.lastRuntimeEmit >= 100) {
       this.lastRuntimeEmit = now;
       this.emit('runtime', this.runtimeState());
+    }
+  }
+
+  /** Live photosensitive monitoring of the computed state (every engine frame). */
+  private watchFlashes(now: number): void {
+    if (this.settings.engine.flashGuard === 'off') return;
+    const was = this.flash.violation;
+    this.flash = this.flashDetector.push(this.engine.time / 1000, stageLight(buildVisualModel([...this.index.fixtures.values()], this.engine.values)));
+    if (this.flash.violation && !was && now - this.lastFlashLog > 5000) {
+      this.lastFlashLog = now;
+      this.logger.warn('Sécurité', `Garde-fou photosensible : ${this.flash.reason}${this.settings.engine.flashGuard === 'limit' ? ' — limitation active' : ' — passez le garde-fou en mode « Limiter » pour l’atténuer automatiquement'}`);
     }
   }
 
@@ -627,6 +670,12 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       case 'timeline.pause': e.timelinePause(); return ok;
       case 'timeline.stop': e.timelineStop(); return ok;
       case 'timeline.seek': e.timelineSeek(cmd.seconds); return ok;
+      case 'timeline.timecode': {
+        const id = e.snapshot().timeline.timelineId ?? this.project.timelines[0]?.id;
+        const chasing = !!id && e.timelineChase(id, cmd.seconds);
+        if (chasing) this.timecodeAt = Date.now();
+        return { chasing };
+      }
 
       /* ---------- engine ---------- */
       case 'engine.master': e.master = cmd.value; return ok;
@@ -688,6 +737,22 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         return ok;
       }
       case 'output.listSerial': return listSerialPorts();
+      case 'rdm.discover':
+        return this.withRdm(cmd.outputId, cmd.universe, async (rdm) => {
+          const uids = await rdm.discover();
+          const devices = [];
+          for (const uid of uids) devices.push(await rdm.readDevice(uid));
+          this.logger.info('RDM', `${devices.length} appareil(s) découvert(s) sur l’univers ${cmd.universe}`);
+          return { devices };
+        });
+      case 'rdm.identify':
+        return this.withRdm(cmd.outputId, cmd.universe, async (rdm) => { await rdm.identify(cmd.uid, cmd.on); return ok; });
+      case 'rdm.setAddress':
+        return this.withRdm(cmd.outputId, cmd.universe, async (rdm) => {
+          await rdm.setStartAddress(cmd.uid, cmd.address);
+          this.logger.warn('RDM', `Adresse DMX de ${cmd.uid} changée à ${cmd.address} (univers ${cmd.universe})`);
+          return ok;
+        });
       case 'output.interfaces': return localIpv4Addresses();
 
       /* ---------- AI ---------- */
@@ -696,6 +761,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         const prev = this.proposals.get(cmd.proposalId);
         if (!prev) throw new UserError('Proposition expirée');
         const p = buildProposal({ prompt: prev.prompt, provider: prev.provider, model: prev.model, understanding: `${prev.understanding} (modifiée par l’utilisateur)`, notices: [], rawActions: cmd.actions, ctx: this.validationCtx() });
+        this.guardFlashes(p);
         this.storeProposal(p);
         return p;
       }
@@ -735,14 +801,123 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       case 'settings.update': {
         const outputsChanged = JSON.stringify(cmd.settings.outputs) !== JSON.stringify(this.settings.outputs);
         this.settings = { ...cmd.settings, sacn: this.settings.sacn };
+        this.settings.control.remote.token ??= randomUUID();
         await this.persistSettings();
         this.logger.level = this.settings.logs.level;
         this.engine.updateSettings(this.engineSettings());
         if (outputsChanged) await this.outputs.configure(this.settings.outputs);
+        await this.applyControl();
         this.logger.info('Paramètres', 'Paramètres enregistrés');
         return ok;
       }
       case 'logs.recent': return this.logger.recent();
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* External control (OSC)                                              */
+  /* ------------------------------------------------------------------ */
+
+  private async applyControl(): Promise<void> {
+    await this.applyRemote();
+    const o = this.settings.control.osc;
+    const conf = o.enabled ? `${o.bind}:${o.port}` : '';
+    if (conf === this.oscConfig) return;
+    this.oscConfig = conf;
+    if (!o.enabled) {
+      await this.osc.stop();
+      return;
+    }
+    try {
+      await this.osc.start(o.port, o.bind);
+      this.logger.info('OSC', `Écoute UDP ${o.bind}:${o.port}${o.bind === '0.0.0.0' ? ' (réseau local, sans authentification)' : ''}`);
+    } catch (err) {
+      this.oscConfig = '';
+      this.logger.error('OSC', `Impossible d’écouter sur ${o.bind}:${o.port} : ${(err as Error).message}`);
+    }
+  }
+
+  /** Opens an RDM session on an Art-Net output for one local universe, runs `fn`, always closes the socket. */
+  private async withRdm<T>(outputId: string, universe: number, fn: (rdm: ArtNetRdm) => Promise<T>): Promise<T> {
+    const o = this.settings.outputs.find((x) => x.id === outputId);
+    if (!o) throw new UserError('Sortie introuvable');
+    if (o.kind !== 'artnet') throw new UserError('RDM disponible uniquement via Art-Net pour l’instant (RDM Enttec non implémenté)');
+    const map = o.universeMap.find((m) => m.local === universe);
+    if (!map) throw new UserError(`L’univers ${universe} n’est pas routé vers cette sortie`);
+    const rdm = new ArtNetRdm({ host: o.host, portAddress: map.remote, bindAddress: o.bindAddress, listenPort: this.opts.rdm?.listenPort, nodePort: this.opts.rdm?.nodePort, timeoutMs: this.opts.rdm?.timeoutMs });
+    try {
+      await rdm.open();
+    } catch (err) {
+      throw new UserError(`Port Art-Net 6454 indisponible pour les réponses RDM : ${(err as Error).message}`);
+    }
+    try {
+      return await fn(rdm);
+    } catch (err) {
+      throw new UserError(`RDM : ${(err as Error).message}`);
+    } finally {
+      await rdm.close();
+    }
+  }
+
+  private async applyRemote(): Promise<void> {
+    const r = this.settings.control.remote;
+    const conf = r.enabled ? `${r.port}|${r.token}` : '';
+    if (conf === this.remoteConfig) return;
+    this.remoteConfig = conf;
+    if (!r.enabled || !r.token) {
+      await this.remote.stop();
+      return;
+    }
+    try {
+      await this.remote.start(r.port, '0.0.0.0', r.token);
+      this.logger.info('Télécommande', `Serveur actif sur le port ${r.port} (réseau local, accès par jeton)`);
+    } catch (err) {
+      this.remoteConfig = '';
+      this.logger.error('Télécommande', `Impossible d’écouter sur le port ${r.port} : ${(err as Error).message}`);
+    }
+  }
+
+  private remoteState(): RemoteState {
+    const snap = this.engine.snapshot();
+    return {
+      master: this.engine.master,
+      blackout: this.engine.blackout,
+      transmitting: this.outputs.transmitting,
+      bpm: this.engine.bpm,
+      lists: this.project.cueLists.map((l, i) => {
+        const pb = snap.playbacks.find((p) => p.cueListId === l.id);
+        return { index: i + 1, name: l.name, state: pb?.state ?? 'idle', cue: pb?.cueName ?? null };
+      }),
+    };
+  }
+
+  /**
+   * OSC address map. Deliberately limited to show control: nothing can arm an output or resume transmission remotely.
+   * Lists and cues are 1-based; the cue list defaults to the first one.
+   */
+  private async onOsc(m: OscMessage): Promise<boolean> {
+    const num = (i: number) => (typeof m.args[i] === 'number' ? (m.args[i] as number) : typeof m.args[i] === 'boolean' ? Number(m.args[i]) : undefined);
+    const list = (i: number) => {
+      const l = this.project.cueLists[(num(i) ?? 1) - 1];
+      if (!l) throw new UserError('Liste de cues introuvable');
+      return l.id;
+    };
+    const run = async (c: Command) => (await this.handle(c) as { ok?: boolean } | undefined)?.ok !== false;
+    switch (m.address) {
+      case '/luma/go': return run({ type: 'cue.go', listId: list(0) });
+      case '/luma/back': return run({ type: 'cue.back', listId: list(0) });
+      case '/luma/pause': return run({ type: 'cue.pause', listId: list(0) });
+      case '/luma/resume': return run({ type: 'cue.resume', listId: list(0) });
+      case '/luma/goto': return run({ type: 'cue.goto', listId: list(1), index: Math.max(0, (num(0) ?? 1) - 1) });
+      case '/luma/blackout': return run({ type: 'engine.blackout', on: num(0) === undefined ? !this.engine.blackout : num(0)! > 0 });
+      case '/luma/master': return run({ type: 'engine.master', value: Math.min(1, Math.max(0, num(0) ?? 1)) });
+      case '/luma/bpm': return run({ type: 'engine.bpm', bpm: Math.min(300, Math.max(20, num(0) ?? 120)) });
+      case '/luma/release': return run({ type: 'programmer.release' });
+      case '/luma/stop': return run({ type: 'output.transmit', on: false });
+      case '/luma/timecode': return (await this.handle({ type: 'timeline.timecode', seconds: Math.max(0, num(0) ?? 0) }) as { chasing: boolean }).chasing;
+      default:
+        this.logger.debug('OSC', `Adresse inconnue ${m.address}`);
+        return false;
     }
   }
 
@@ -764,6 +939,12 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   private validationCtx() {
     return { index: this.index, allowStrobe: this.settings.ai.allowStrobe, maxStrobeHz: this.settings.engine.maxStrobeHz };
+  }
+
+  private guardFlashes(p: AiProposal): void {
+    if (this.settings.engine.flashGuard === 'off') return;
+    const n = guardProposalFlashes(p, this.index, this.engine, this.settings.engine.maxStrobeHz);
+    if (n) p.notices.push(`${n} effet(s) refusé(s) par le garde-fou photosensible (Paramètres › Moteur & sécurité).`);
   }
 
   private storeProposal(p: AiProposal): void {
@@ -798,6 +979,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         proposal = proposeLocally(prompt, ctx, this.engine);
         if (ai.provider === 'openrouter') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
       }
+      this.guardFlashes(proposal);
       this.storeProposal(proposal);
       this.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); });
       return proposal;

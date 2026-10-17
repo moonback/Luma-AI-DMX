@@ -45,8 +45,10 @@ npm start
 | `npm run typecheck` | TypeScript strict (`strict`, `noUncheckedIndexedAccess`) |
 | `npm run lint` | ESLint (typescript-eslint + règles des hooks React) |
 | `npm test` | Vitest : tests unitaires, d'intégration et de composants |
+| `npm run eval` | Banc d'évaluation de l'IA locale (`tests/eval/cases.json`) : scores, latence, 0 violation de sécurité exigée ; rapport `test-results/ai-eval.json` |
+| `npm run test:perf` | Mesures temps réel (cadence et gigue de l'ordonnanceur, charge de 1 000 projecteurs), exécutées seules pour ne pas être faussées par les autres tests |
 | `npm run test:e2e` | Build puis Playwright, qui pilote l'application Electron réelle |
-| `npm run check` | typecheck + lint + tests |
+| `npm run check` | typecheck + lint + tests + tests de performance |
 | `npm run package` | Installateur Windows NSIS dans `release/` |
 | `npm run package:dir` | Application décompressée, sans installateur |
 
@@ -89,18 +91,21 @@ La sortie virtuelle (univers 1 à 4 par défaut) enregistre les trames reçues, 
 - L'IA ne produit **que** des actions typées (`setIntensity`, `setColor`, `setPosition`, `startEffect`, `stopEffect`, `createScene`, `applyScene`, `createCue`, `createSequence`, `setBpm`, `releaseAi`). Elle n'envoie jamais de DMX, n'exécute aucun code et n'a pas accès aux fonctions spéciales (reset, lampe). Le strobe exige l'autorisation explicite *Autoriser l'IA à proposer des effets strobe*.
 
 ## Sécurité
-- Electron : `contextIsolation`, `sandbox`, `nodeIntegration: false`, CSP stricte, navigation et nouvelles fenêtres bloquées, seule la permission micro est accordée. Le renderer ne reçoit qu'une API à deux fonctions (`invoke` et `on`). Chaque commande IPC est validée par Zod dans le processus principal ; les origines inconnues sont refusées.
+- Electron : `contextIsolation`, `sandbox`, `nodeIntegration: false`, CSP stricte, navigation bloquée, nouvelles fenêtres limitées à la vue 3D détachée, seules les permissions micro (audio réactif, LTC) et MIDI sont accordées. Le renderer ne reçoit qu'une API à deux fonctions (`invoke` et `on`). Chaque commande IPC est validée par Zod dans le processus principal ; les origines inconnues sont refusées.
 - Priorités : le manuel est toujours prioritaire. À priorité égale : HTP pour l'intensité, LTP pour le reste. Une priorité supérieure remplace. Détails dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Fonctions spéciales : les plages marquées `dangerous` dans les profils (reset, extinction de lampe) ne sont émises qu'après confirmation manuelle. Toute autre source est ramenée à la valeur par défaut du canal.
 - Blackout configurable (*Settings › Moteur & sécurité*) : intensités seules, intensités + shutter fermé (par défaut), ou tous les canaux à 0. **Le blackout n'est pas un état universellement sûr** : vérifiez le comportement de vos appareils.
 - Strobe : fréquence plafonnée (10 Hz par défaut, réglable).
 - Protection contre les boucles : un seul enchaînement automatique de cue par tick, applications IA limitées à une toutes les 300 ms, au plus 50 actions par proposition et 64 cues par séquence.
+- Garde-fou photosensible (*Settings › Moteur & sécurité*) : estimation des flashs vus par le public (> 3 flashs/s ou strobe rapide sur une part importante du kit, logique des tests Harding / ITU-R BT.1702). *Avertir* (par défaut) affiche une alerte ; *Limiter* borne la vitesse de variation des intensités et couleurs et ouvre les strobes rapides, sauf sur ce que tient le programmeur. Les effets IA qui dépasseraient la limite sont refusés à la validation (simulation de 3 s). **Estimation à partir d'un modèle approximatif, pas une certification.**
+- Contrôle externe (*Settings › Contrôle externe*, tout désactivé par défaut) : MIDI (apprentissage de touches et faders), OSC sur UDP (127.0.0.1 par défaut), timecode MTC ou LTC (la timeline suit), télécommande tablette sur le réseau local protégée par jeton. Aucune de ces entrées ne peut armer une sortie ni reprendre les émissions.
+- RDM via Art-Net (*DMX Output › RDM*) : découverte, lecture (modèle, adresse, heures, capteurs), identify et changement d'adresse sur confirmation. Testé contre un nœud simulé uniquement ; RDM via Enttec non implémenté.
 - STOP OUTPUT : arrêt des émissions. Ensuite, **chaque projecteur applique son propre comportement en cas de perte de signal DMX** (maintien de la dernière valeur ou extinction selon le modèle). Consultez la documentation de vos appareils.
 
 ## Limites matérielles
 - **Aucun matériel DMX n'a été testé.** Art-Net et sACN sont implémentés d'après les spécifications. Le format des paquets et l'émission UDP sont vérifiés par des tests en boucle locale (`127.0.0.1`), mais pas avec un nœud ou un projecteur réel.
 - Les pilotes USB-DMX (Enttec DMX USB Pro « label 6 » et Open DMX FTDI) n'ont pas été vérifiés sur matériel. En Open DMX, le break est généré par des appels système : il dure environ 1 ms ou plus, avec une gigue qui dépend du système et du pilote FTDI. Certains récepteurs sensibles au timing peuvent mal le tolérer.
-- La fréquence d'émission est **mesurée**, pas garantie. Sous Windows, la résolution des timers donne environ 37 à 40 Hz pour une consigne de 40 Hz (valeur affichée dans la barre d'état). Les latences réseau et d'interface ne sont pas mesurées.
+- La fréquence d'émission est **mesurée**, pas garantie. L'ordonnanceur calibre la résolution des timers de la machine et termine l'attente par de courtes boucles `setImmediate` : en test, 40 et 44 Hz sont tenus à ± 0,5 Hz avec une gigue p95 < 2 ms (valeur affichée dans la barre d'état). Ces boucles coûtent un peu de CPU (jusqu'à environ 16 ms d'attente active par période si les timers du système sont grossiers). Les latences réseau et d'interface ne sont pas mesurées.
 - Les visualiseurs 2D et 3D sont des représentations approximatives, pas des simulations photométriques : pas d'atténuation réelle, ni de gobos, ni d'ombres.
 - L'audio réactif estime le BPM (histogramme des intervalles entre attaques, parfois faux d'un facteur 2) et détecte des montées d'énergie. Il **ne détecte pas** les refrains ni les drops.
 

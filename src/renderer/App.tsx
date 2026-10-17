@@ -21,6 +21,7 @@ import { StageVisualizer3D, Visualizer } from './features/Visualizer';
 import { AudioPage } from './features/Audio';
 import { OutputPage } from './features/Output';
 import { SettingsPage } from './features/Settings';
+import { externalControl } from './control';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
@@ -174,6 +175,7 @@ function StatusBar() {
       <span className="item">{project?.project.patch.length ?? 0} projecteurs · {project?.project.show.universes ?? 0} univers</span>
       <span className="item">Programmeur : {rt?.engine.programmerCount ?? 0}</span>
       {rt?.engine.aiActive && <span className="item"><span className="led violet" />Couche IA active</span>}
+      {rt?.safety.violation && <span className="item" data-testid="flash-alert" title={rt.safety.reason ?? ''}><span className="led warn" />Flashs dangereux{rt.safety.flashGuard === 'limit' ? ' · limités' : ''}</span>}
       {rt?.audio.active && <span className="item"><AudioLines size={12} />Audio {rt.audio.source === 'simulated' ? '(simulé)' : ''}</span>}
       <div className="grow" />
       <span className="item">Master {Math.round((rt?.engine.master ?? 1) * 100)} %</span>
@@ -230,7 +232,7 @@ function Toasts() {
   );
 }
 
-function runShortcut(action: ShortcutAction): boolean {
+export function runShortcut(action: ShortcutAction): boolean {
   const s = useStore.getState();
   const list = s.cueListId;
   if (action.startsWith('page:')) {
@@ -304,5 +306,6 @@ export async function bootstrap(): Promise<void> {
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
   document.documentElement.style.zoom = String(settings.appearance.uiScale);
   useStore.setState({ shortcuts: settings.shortcuts });
+  void externalControl.configure(settings.control);
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }
