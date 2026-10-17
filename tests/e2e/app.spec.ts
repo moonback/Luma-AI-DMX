@@ -34,6 +34,8 @@ test.afterAll(async () => {
 });
 
 const nav = (id: string) => page.getByTestId(`nav-${id}`).click();
+/** Opens the scene panel unless it already is (it stays open while the page does not change). */
+const openScenePanel = async () => { if (!(await page.getByTestId('stage-settings').isVisible())) await page.getByTestId('stage-settings-toggle').click(); };
 const channel = (ch: number) => page.locator(`.dmx-cell[data-ch="${ch}"]`);
 
 test('sécurité Electron : pas de Node dans le renderer, API minimale exposée', async () => {
@@ -230,8 +232,9 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
     HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { w.__downloads.push(this.href); };
     // The app CSP forbids fetching blob: URLs, so measure the recording when its URL is created.
     const create = URL.createObjectURL.bind(URL);
-    URL.createObjectURL = (o: Blob | MediaSource) => { if (o instanceof Blob) w.__blobSize = o.size; return create(o); };
+    URL.createObjectURL = (o: Blob | MediaSource) => { if (o instanceof Blob) { w.__blobSize = o.size; console.log(`blob ${o.type} ${o.size}`); } return create(o); };
   });
+  page.on('console', (m) => { if (m.text().startsWith('blob ')) console.log('[page]', m.text()); });
   await page.getByTestId('capture').click();
   await page.getByTestId('record').click();
   await page.waitForTimeout(1500);
@@ -286,7 +289,14 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
   await expect.poll(async () => (await lyre1()).position.y).toBe(5);
 
   // Direct editing: top view, drag the gizmo centre of Lyre 1 sideways along its truss.
+  // Editing the truss card selected the truss (one selection at a time): select Lyre 1 again.
   await nav('stage3d');
+  if (!(await page.getByTestId('stage3d-info').isVisible())) {
+    await nav('console');
+    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await nav('stage3d');
+  }
+  await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
   await page.getByTestId('edit3d').click();
   await page.getByTestId('grid').selectOption('0.25');
   await page.getByTestId('cam-top').click();
@@ -413,6 +423,52 @@ test('création rapide : équiper les structures, poser au clic, dupliquer, supp
   await page.getByTestId('truss-add-place').click();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('placing')).toHaveCount(0);
+});
+
+test('bibliothèque : totems, pièces de truss et décor, au clic ou glissés en 2D et en 3D', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  type Vis = { trusses: { id: string; shape: string; height: number; x: number; y: number }[]; props: { kind: string }[] };
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const vis = async () => ((await inv({ type: 'project.get' })).data as { project: { visualizer: Vis } }).project.visualizer;
+  await nav('visualizer');
+  await openScenePanel();
+
+  // Library tile then a click on the plan: a 3 m totem lands there.
+  const trusses = (await vis()).trusses.length;
+  await page.getByTestId('lib-totem-3').click();
+  await expect(page.getByTestId('placing')).toContainText('Totem 3 m');
+  const box = (await page.getByTestId('stage-canvas').boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.3);
+  await expect.poll(async () => (await vis()).trusses.length).toBe(trusses + 1);
+  expect((await vis()).trusses.at(-1)).toMatchObject({ shape: 'totem', height: 3 });
+
+  // Set pieces dragged from the library onto the 2D plan, then onto the 3D view.
+  const props = (await vis()).props.length;
+  await page.getByTestId('lib-group-decor').click();
+  await page.getByTestId('lib-riser-2x1').dragTo(page.getByTestId('stage-canvas'), { targetPosition: { x: box.width * 0.4, y: box.height * 0.5 } });
+  await expect.poll(async () => (await vis()).props.length).toBe(props + 1);
+  await expect(page.getByTestId('prop-row')).toHaveCount(props + 1);
+  await page.screenshot({ path: `${shots}/21-bibliotheque-2d.png` });
+
+  await nav('stage3d');
+  await openScenePanel();
+  await page.getByTestId('lib-group-decor').click();
+  const box3 = (await page.getByTestId('stage-3d').boundingBox())!;
+  await page.getByTestId('lib-speaker').dragTo(page.getByTestId('stage-3d'), { targetPosition: { x: box3.width * 0.35, y: box3.height * 0.75 } });
+  await expect.poll(async () => (await vis()).props.at(-1)?.kind).toBe('speaker');
+
+  // An assembled gantry (two totems, a 6 m straight resting on them, corners) renders without shader errors.
+  const errors: string[] = [];
+  const onConsole = (m: { type: () => string; text: () => string }) => { if (m.type() === 'error' && /shader|WebGL|THREE/i.test(m.text())) errors.push(m.text()); };
+  page.on('console', onConsole);
+  const piece = (id: string, shape: string, x: number, length = 0.5, rotation = 0) => ({ id, name: id, shape, x, y: 6, height: 3, length, rotation, support: 'none' });
+  const current = (await vis()).trusses;
+  await inv({ type: 'project.update', visualizer: { trusses: [...current, piece('portique-g', 'totem', -3), piece('portique-d', 'totem', 3), piece('portique', 'line', 0, 6), piece('angle', 'corner', 3, 0.5, 90), piece('croix', 'cross', -3)] } });
+  await page.getByTestId('cam-foh').click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${shots}/21b-bibliotheque-3d.png` });
+  page.off('console', onConsole);
+  expect(errors).toEqual([]);
 });
 
 test('raccourci reconfiguré : Blackout sur K', async () => {

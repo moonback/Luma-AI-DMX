@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Boxes, Crosshair, ExternalLink, LayoutTemplate, MapPin, Monitor, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
+import { Armchair, Boxes, Crosshair, ExternalLink, LayoutTemplate, Library, MapPin, Monitor, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { NumberInput, PageHead, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import { Stage3D } from './Stage3D';
-import type { FixtureValues, Performer, Project, StageMarker, StageScreen, Truss } from '../../core/model/schemas';
+import type { FixtureValues, Performer, Project, StageMarker, StageProp, StageScreen, Truss } from '../../core/model/schemas';
 import { DARK_LEVEL, performerLight, toHex } from '../../core/visualizer/lighting';
 import { setScreenVideo, screenVideo } from '../screenMedia';
-import { nearestOnTruss, snapToTrusses, trussSegments, trussSupports } from '../../core/visualizer/truss';
-import { SCENE_LABEL, canAdd, findElement, type SceneKind, type SceneRef } from '../../core/visualizer/sceneEdit';
-import { addSceneElement, equipRig, removeSceneElement, useSceneShortcuts } from '../sceneActions';
+import { JUNCTION_ARMS, nearestOnTruss, snapToTrusses, snapTrussEnds, trussSegments, trussSupports } from '../../core/visualizer/truss';
+import { LIBRARY, LIBRARY_GROUPS, PROP_KIND_LABEL, TRUSS_LENGTH_LABEL, TRUSS_SHAPE_LABEL, type LibraryGroup, type LibraryItem } from '../../core/visualizer/library';
+import { SCENE_LABEL, canAdd, findElement, withPatched, type SceneKind, type SceneRef } from '../../core/visualizer/sceneEdit';
+import { LIBRARY_MIME, acceptLibraryDrag, addSceneElement, dropLibraryItem, equipRig, removeSceneElement, useSceneShortcuts } from '../sceneActions';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../core/visualizer/templates';
 
 interface View { scale: number; ox: number; oy: number }
@@ -28,11 +29,11 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ scale: 0, ox: 0, oy: 0 });
-  const drag = useRef<{ kind: 'pan' | 'fixture' | 'marker' | 'performer'; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean; keep?: boolean } | null>(null);
+  const drag = useRef<{ kind: 'pan' | 'fixture' | 'marker' | 'performer' | 'element'; id?: string; ref?: SceneRef; x: number; y: number; ox: number; oy: number; moved: boolean; keep?: boolean } | null>(null);
   const placing = useStore((s) => s.placing);
   const sceneSel = useStore((s) => s.sceneSel);
   const setSceneSel = useStore((s) => s.setSceneSel);
-  const local = useRef(new Map<string, { x: number; y: number }>());
+  const local = useRef(new Map<string, { x: number; y: number; height?: number }>());
   const fitKey = useRef('');
   const model = useMemo(() => buildVisualModel(fixtures, values ?? live), [fixtures, values, live]);
   const group = groupFilter ? project.groups.find((g) => g.id === groupFilter) : null;
@@ -41,6 +42,8 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const thrust = vis.shape === 'thrust' ? vis.thrust : null;
   const front = thrust?.depth ?? 0;
   const markerPos = (m: StageMarker) => local.current.get(m.id) ?? { x: m.x, y: m.y };
+  /** Element at its position while dragged (truss, set piece, screen). */
+  const at = <T extends { id: string; x: number; y: number }>(e: T): T => ({ ...e, ...local.current.get(e.id) });
   /** Performer position, following its stage point (also while that point is being dragged). */
   const performerPos = (pf: Performer) => {
     const m = pf.markerId ? vis.markers.find((x) => x.id === pf.markerId) : undefined;
@@ -116,8 +119,39 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
         g.lineWidth = 1;
       }
     }
-    // Explicit trusses: thick outline, support feet, name.
-    for (const t of vis.trusses) {
+    // Set pieces: footprint in their colour (round for columns and mic stands), outline, name.
+    for (const p0 of vis.props) {
+      const p = at(p0);
+      g.fillStyle = `${p.color}cc`;
+      g.strokeStyle = '#4b5570';
+      g.beginPath();
+      if (p.kind === 'column' || p.kind === 'mic') {
+        const q = toScreen(p.x, p.y);
+        g.arc(q.x, q.y, Math.max(4, (p.width / 2) * view.scale), 0, Math.PI * 2);
+      } else {
+        const a = (p.rotation * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([u, v], i) => {
+          const lx = (u! * p.width) / 2, ly = (v! * p.depth) / 2;
+          const q = toScreen(p.x + lx * c - ly * s, p.y + lx * s + ly * c);
+          if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y);
+        });
+        g.closePath();
+      }
+      g.fill();
+      g.stroke();
+      const q = toScreen(p.x, p.y);
+      g.fillStyle = '#98a3b5';
+      g.font = '10px sans-serif';
+      g.fillText(p.name, q.x + 6, q.y + 3);
+    }
+    // Explicit trusses: thick outline (a totem: a square seen from above), support feet, name.
+    for (const t0 of vis.trusses) {
+      const t = at(t0);
+      if (t.shape === 'totem') {
+        const q = toScreen(t.x, t.y), s = Math.max(8, 0.3 * view.scale);
+        g.fillStyle = '#9aa3b5';
+        g.fillRect(q.x - s / 2, q.y - s / 2, s, s);
+      }
       g.strokeStyle = '#6b7385';
       g.lineWidth = Math.max(3, 0.29 * view.scale);
       g.lineCap = 'round';
@@ -152,7 +186,8 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       g.fillText(m.name, p.x + 10, p.y + 3);
     }
     // Screens: thick bar seen from above, in their colour.
-    for (const sc of vis.screens) {
+    for (const sc0 of vis.screens) {
+      const sc = at(sc0);
       const a2 = (sc.rotation * Math.PI) / 180, hw = sc.width / 2;
       const p1 = toScreen(sc.x - Math.cos(a2) * hw, sc.y - Math.sin(a2) * hw), p2 = toScreen(sc.x + Math.cos(a2) * hw, sc.y + Math.sin(a2) * hw);
       g.strokeStyle = sc.source === 'color' ? sc.color : '#5b6b8c';
@@ -269,22 +304,31 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     const r = wrap.current!.getBoundingClientRect();
     return vis.performers.find((pf) => { const q = toScreen(performerPos(pf).x, performerPos(pf).y); return Math.hypot(q.x - (cx - r.left), q.y - (cy - r.top)) < 10; });
   };
-  /** Truss or screen under the pointer (within 8 px of its outline seen from above). */
+  /** Truss, screen or set piece under the pointer (within 8 px of a truss outline seen from above). */
   const hitStructure = (cx: number, cy: number): SceneRef | undefined => {
     const r = wrap.current!.getBoundingClientRect();
     const x = (cx - r.left - view.ox) / view.scale, y = (view.oy - (cy - r.top)) / view.scale;
-    const near = (t: Truss) => nearestOnTruss(t, x, y).dist * view.scale < 8;
-    const t = vis.trusses.find(near);
+    const tol = 8 / view.scale;
+    const near = (t: Truss) => nearestOnTruss(t, x, y).dist < tol;
+    const t = vis.trusses.find((t) => (t.shape === 'totem' ? Math.hypot(t.x - x, t.y - y) < Math.max(tol, 0.2) : near(t)));
     if (t) return { kind: 'truss', id: t.id };
     // A screen seen from above is a straight bar: test it as a straight truss of the same width.
     const sc = vis.screens.find((s) => near({ ...s, shape: 'line', length: s.width, height: 1, support: 'towers' }));
-    return sc ? { kind: 'screen', id: sc.id } : undefined;
+    if (sc) return { kind: 'screen', id: sc.id };
+    // Set pieces last (large areas), the most recent on top.
+    const pr = [...vis.props].reverse().find((p) => {
+      if (p.kind === 'column' || p.kind === 'mic') return Math.hypot(p.x - x, p.y - y) <= Math.max(p.width / 2, tol);
+      const a = (p.rotation * Math.PI) / 180, dx = x - p.x, dy = y - p.y;
+      const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
+      return Math.abs(lx) <= p.width / 2 + tol / 2 && Math.abs(ly) <= p.depth / 2 + tol / 2;
+    });
+    return pr ? { kind: 'prop', id: pr.id } : undefined;
   };
   const down = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     if (placing && e.button === 0) {
       const r = wrap.current!.getBoundingClientRect();
-      addSceneElement(placing, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale });
+      addSceneElement(placing.kind, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale }, placing.preset);
       return;
     }
     const f = hit(e.clientX, e.clientY);
@@ -297,6 +341,9 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       drag.current = { kind: 'performer', id: pf.id, x: e.clientX, y: e.clientY, ox: at.x, oy: at.y, moved: false };
     } else if (mk && editable) {
       drag.current = { kind: 'marker', id: mk.id, x: e.clientX, y: e.clientY, ox: mk.x, oy: mk.y, moved: false };
+    } else if (ref && editable && (ref.kind === 'truss' || ref.kind === 'prop' || ref.kind === 'screen')) {
+      const el = findElement(vis, ref)!;
+      drag.current = { kind: 'element', ref, id: ref.id, x: e.clientX, y: e.clientY, ox: el.x, oy: el.y, moved: false };
     } else if (f && e.button === 0) {
       setSceneSel(null);
       if (e.ctrlKey || e.shiftKey) setSelection(selection.includes(f.id) ? selection.filter((x) => x !== f.id) : [...selection, f.id]);
@@ -313,8 +360,12 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     d.moved = true;
     if (d.kind === 'pan') setView({ ...view, ox: d.ox + e.clientX - d.x, oy: d.oy + e.clientY - d.y });
     else if (d.id) {
-      // Fixtures and stage points share the local drag overlay (ids never collide: both are UUIDs).
-      local.current.set(d.id, { x: Math.round((d.ox + (e.clientX - d.x) / view.scale) * 10) / 10, y: Math.round((d.oy - (e.clientY - d.y) / view.scale) * 10) / 10 });
+      // Fixtures and stage elements share the local drag overlay (ids never collide: all are UUIDs).
+      const p = { x: Math.round((d.ox + (e.clientX - d.x) / view.scale) * 10) / 10, y: Math.round((d.oy - (e.clientY - d.y) / view.scale) * 10) / 10 };
+      const t = d.ref?.kind === 'truss' ? vis.trusses.find((x) => x.id === d.id) : undefined;
+      // Truss pieces snap end to end (and take the height of the piece they join) while dragged.
+      const snap = t ? snapTrussEnds({ ...t, ...p }, vis.trusses) : null;
+      local.current.set(d.id, snap ? { x: snap.x, y: snap.y, height: snap.height } : p);
       setView({ ...view });
     }
   };
@@ -329,6 +380,12 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       const near = vis.markers.find((m) => Math.hypot(m.x - p.x, m.y - p.y) <= 0.5);
       const performers = vis.performers.map((x) => (x.id === d.id ? { ...x, x: clampPos(near?.x ?? p.x), y: clampPos(near?.y ?? p.y), markerId: near?.id ?? null } : x));
       void act({ type: 'project.update', visualizer: { performers } }).finally(() => local.current.delete(d.id!));
+    }
+    if (d?.kind === 'element' && d.ref && d.id && d.moved) {
+      const p = local.current.get(d.id)!;
+      const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
+      const patch = { x: clampPos(p.x), y: clampPos(p.y), ...(p.height !== undefined ? { height: p.height } : {}) };
+      void act({ type: 'project.update', visualizer: withPatched(vis, d.ref, patch) }).finally(() => local.current.delete(d.id!));
     }
     if (d?.kind === 'marker' && d.id && d.moved) {
       const p = local.current.get(d.id)!;
@@ -357,7 +414,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     setView({ scale, ox: mx - ((mx - view.ox) * scale) / view.scale, oy: my - ((my - view.oy) * scale) / view.scale });
   };
   return (
-    <div ref={wrap} className="canvas-wrap" style={{ height: '100%', cursor: placing ? 'crosshair' : undefined }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onWheel={wheel} data-testid="stage-canvas">
+    <div ref={wrap} className="canvas-wrap" style={{ height: '100%', cursor: placing ? 'crosshair' : undefined }} onPointerDown={down} onDragOver={acceptLibraryDrag} onDrop={(e) => { const r = wrap.current!.getBoundingClientRect(); dropLibraryItem(e, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale }); }} onPointerMove={move} onPointerUp={up} onWheel={wheel} data-testid="stage-canvas">
       <canvas ref={canvas} />
     </div>
   );
@@ -435,12 +492,12 @@ const DeleteBtn = ({ name, title, sel }: { name: string; title?: string; sel: Sc
 /** "+ Add" (next free spot) and "place with a click on the stage" for one kind of element. */
 function AddBtn({ kind, label, testId }: { kind: SceneKind; label: string; testId: string }) {
   const vis = useStore((s) => s.project!.project.visualizer);
-  const placing = useStore((s) => s.placing === kind);
+  const placing = useStore((s) => s.placing?.kind === kind && !s.placing.preset);
   const full = !canAdd(vis, kind);
   return (
     <div className="row" style={{ gap: 6 }}>
       <button className="btn sm" onClick={() => addSceneElement(kind)} disabled={full} data-testid={testId}><Plus size={12} />{label}</button>
-      <button className={`btn sm ${placing ? 'on' : ''}`} onClick={() => useStore.getState().setPlacing(placing ? null : kind)} disabled={full} aria-pressed={placing}
+      <button className={`btn sm ${placing ? 'on' : ''}`} onClick={() => useStore.getState().setPlacing(placing ? null : { kind, label: SCENE_LABEL[kind].toLowerCase() })} disabled={full} aria-pressed={placing}
         title="Poser au clic sur le plateau (2D ou 3D) — Échap pour annuler" data-testid={`${testId}-place`}><Crosshair size={12} />Poser au clic</button>
     </div>
   );
@@ -482,6 +539,9 @@ function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
         <Section icon={<LayoutTemplate size={13} />} title="Partir d’un modèle" open={!hasSceneContent(vis)}>
           <TemplatePicker vis={vis} />
         </Section>
+        <Section icon={<Library size={13} />} title="Bibliothèque">
+          <LibraryPicker />
+        </Section>
         <Section icon={<Theater size={13} />} title="Plateau">
           <div className="chips" role="group" aria-label="Forme du plateau">
             {SHAPES.map((sh) => <button key={sh.id} className={`chip ${vis.shape === sh.id ? 'on' : ''}`} data-testid={`shape-${sh.id}`} onClick={() => update({ shape: sh.id })}>{sh.label}</button>)}
@@ -512,6 +572,7 @@ function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
           <p className="scene-hint">Repères « chanteur », « batteur »… déplaçables en 2D (Positionner).</p>
         </Section>
         <TrussSettings vis={vis} />
+        <PropSettings vis={vis} />
         <PerformerSettings vis={vis} />
         <ScreenSettings vis={vis} />
       </div>
@@ -519,7 +580,95 @@ function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
   );
 }
 
-const TRUSS_SHAPES: { id: Truss['shape']; label: string }[] = [{ id: 'line', label: 'Droite' }, { id: 'circle', label: 'Cercle' }, { id: 'square', label: 'Carré' }];
+/** Small top view of a library item (drawn, so every piece reads at a glance whatever the icon set). */
+function LibraryGlyph({ item }: { item: LibraryItem }) {
+  const s = { stroke: 'currentColor', strokeWidth: 2, fill: 'none', strokeLinecap: 'round' as const };
+  let body: ReactNode;
+  if (item.kind === 'truss') {
+    const p = item.preset;
+    const arms = JUNCTION_ARMS[p.shape ?? 'line'];
+    if (arms) body = <>{arms.map((a) => <line key={a} x1={14} y1={14} x2={14 + 10 * Math.cos((a * Math.PI) / 180)} y2={14 - 10 * Math.sin((a * Math.PI) / 180)} {...s} strokeWidth={4} />)}<rect x={11} y={11} width={6} height={6} fill="currentColor" /></>;
+    else if (p.shape === 'totem') body = <><rect x={11} y={3} width={6} height={20} {...s} /><line x1={6} y1={25} x2={22} y2={25} {...s} /></>;
+    else if (p.shape === 'circle') body = <circle cx={14} cy={14} r={10} {...s} strokeWidth={3} />;
+    else if (p.shape === 'square') body = <rect x={4} y={4} width={20} height={20} {...s} strokeWidth={3} />;
+    else {
+      const len = Math.min(24, 4 + (p.length ?? 2) * 5);
+      body = <><line x1={14 - len / 2} y1={14} x2={14 + len / 2} y2={14} {...s} strokeWidth={4} />{p.support === 'towers' && <><line x1={2} y1={14} x2={2} y2={26} {...s} /><line x1={26} y1={14} x2={26} y2={26} {...s} /></>}</>;
+    }
+  } else if (item.kind === 'prop') {
+    const k = item.preset.kind;
+    if (k === 'column' || k === 'mic') body = <><circle cx={14} cy={k === 'mic' ? 7 : 14} r={k === 'mic' ? 3 : 8} {...s} />{k === 'mic' && <line x1={14} y1={10} x2={14} y2={25} {...s} />}</>;
+    else if (k === 'stairs') body = <path d="M4 24h6v-6h6v-6h6v-6h2" {...s} />;
+    else if (k === 'drape') body = <path d="M4 4v20M9 4v20M14 4v20M19 4v20M24 4v20" {...s} strokeWidth={1.5} />;
+    else if (k === 'monitor') body = <path d="M4 22h20L8 10z" {...s} />;
+    else if (k === 'speaker') body = <><rect x={8} y={3} width={12} height={22} {...s} /><circle cx={14} cy={17} r={4} {...s} /></>;
+    else if (k === 'table') body = <path d="M3 10h22M6 10v14M22 10v14" {...s} />;
+    else body = <rect x={k === 'riser' ? 2 : 6} y={k === 'riser' ? 9 : 6} width={k === 'riser' ? 24 : 16} height={k === 'riser' ? 10 : 16} {...s} />;
+  } else if (item.kind === 'performer') body = <><circle cx={14} cy={7} r={4} {...s} /><path d="M7 25c0-6 3-10 7-10s7 4 7 10" {...s} /></>;
+  else if (item.kind === 'screen') body = <rect x={3} y={7} width={22} height={13} {...s} />;
+  else body = <path d="M14 4l8 10-8 10-8-10z" {...s} />;
+  return <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>{body}</svg>;
+}
+
+/** Library of pieces: click a tile then the stage, or drag the tile onto the 2D / 3D view. */
+function LibraryPicker() {
+  const [group, setGroup] = useState<LibraryGroup>('truss');
+  const placing = useStore((s) => s.placing);
+  return (
+    <>
+      <div className="chips" role="tablist" aria-label="Catégories">
+        {LIBRARY_GROUPS.map((g) => <button key={g.id} role="tab" aria-selected={group === g.id} className={`chip ${group === g.id ? 'on' : ''}`} onClick={() => setGroup(g.id)} data-testid={`lib-group-${g.id}`}>{g.label}</button>)}
+      </div>
+      <div className="scene-library">
+        {LIBRARY.filter((x) => x.group === group).map((item) => (
+          <button key={item.id} className={`scene-lib-item ${placing?.label === item.label ? 'on' : ''}`} draggable data-testid={`lib-${item.id}`}
+            title={`${item.label} — cliquer puis cliquer sur le plateau, ou glisser sur la vue`}
+            onClick={() => useStore.getState().setPlacing(placing?.label === item.label ? null : { kind: item.kind, label: item.label, preset: { ...item.preset } })}
+            onDragStart={(e) => { e.dataTransfer.setData(LIBRARY_MIME, item.id); e.dataTransfer.effectAllowed = 'copy'; }}>
+            <LibraryGlyph item={item} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
+      <p className="scene-hint">Les pièces se raccordent bout à bout quand on les approche (aimantation 35 cm) et prennent la hauteur de la pièce rejointe.</p>
+    </>
+  );
+}
+
+const PROP_KINDS = Object.entries(PROP_KIND_LABEL) as [StageProp['kind'], string][];
+
+/** Set pieces (risers, stairs, speakers, monitors, mic stands, tables, drapes, boxes, columns). */
+function PropSettings({ vis }: { vis: Vis }) {
+  const set = (id: string, patch: Partial<StageProp>) => void act({ type: 'project.update', visualizer: withPatched(vis, { kind: 'prop', id }, patch) });
+  return (
+    <Section icon={<Armchair size={13} />} title="Décor" count={vis.props.length}>
+      {vis.props.map((p) => (
+        <Card key={p.id} testId="prop-row" sel={{ kind: 'prop', id: p.id }} head={<>
+          <NameInput value={p.name} label="Nom de l’élément" onChange={(name) => set(p.id, { name })} />
+          <select className="select" style={{ width: 110 }} value={p.kind} aria-label="Type" onChange={(e) => set(p.id, { kind: e.target.value as StageProp['kind'] })}>
+            {PROP_KINDS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+          <DeleteBtn name={p.name} sel={{ kind: 'prop', id: p.id }} />
+        </>}>
+          <Num label="X" title="Centre, jardin ↔ cour (m)" value={p.x} min={-100} max={100} onChange={(v) => set(p.id, { x: v })} />
+          <Num label="Y" title="Centre, profondeur (m)" value={p.y} min={-100} max={100} onChange={(v) => set(p.id, { y: v })} />
+          <Num label="Rotation" title="Rotation (°)" value={p.rotation} min={-360} max={360} step={15} onChange={(v) => set(p.id, { rotation: v })} />
+          <Num label="Largeur" title="Largeur (m)" value={p.width} min={0.05} max={40} step={0.1} onChange={(v) => set(p.id, { width: v })} />
+          <Num label="Profondeur" title="Profondeur (m)" value={p.depth} min={0.05} max={40} step={0.1} onChange={(v) => set(p.id, { depth: v })} />
+          <Num label="Hauteur" title="Hauteur (m)" value={p.height} min={0.05} max={20} step={0.1} onChange={(v) => set(p.id, { height: v })} />
+          <Num label="Élévation" title="Posé à cette hauteur (empilement sur un praticable…)" value={p.elevation} min={0} max={20} step={0.1} onChange={(v) => set(p.id, { elevation: v })} />
+          <label className="scene-num"><span>Couleur</span>
+            <input type="color" value={p.color} aria-label="Couleur" onChange={(e) => set(p.id, { color: e.target.value })} className="scene-color" />
+          </label>
+        </Card>
+      ))}
+      <AddBtn kind="prop" label="Décor" testId="prop-add" />
+      <p className="scene-hint">Plus de modèles dans la bibliothèque (onglet Décor) ; en mode Positionner, glisser pour déplacer.</p>
+    </Section>
+  );
+}
+
+const TRUSS_SHAPES = Object.entries(TRUSS_SHAPE_LABEL) as [Truss['shape'], string][];
 
 /** Explicit trusses: hung fixtures follow them (handled by the main process when a truss changes). */
 function TrussSettings({ vis }: { vis: Vis }) {
@@ -538,13 +687,13 @@ function TrussSettings({ vis }: { vis: Vis }) {
       {vis.trusses.map((t) => (
         <Card key={t.id} testId="truss-row" sel={{ kind: 'truss', id: t.id }} head={<>
           <NameInput value={t.name} label="Nom de la structure" onChange={(name) => set(t.id, { name })} />
-          <select className="select" style={{ width: 84 }} value={t.shape} aria-label="Forme" onChange={(e) => set(t.id, { shape: e.target.value as Truss['shape'] })}>
-            {TRUSS_SHAPES.map((sh) => <option key={sh.id} value={sh.id}>{sh.label}</option>)}
+          <select className="select" style={{ width: 104 }} value={t.shape} aria-label="Forme" onChange={(e) => set(t.id, { shape: e.target.value as Truss['shape'] })}>
+            {TRUSS_SHAPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
           <DeleteBtn name={t.name} title={`Supprimer « ${t.name} » (les projecteurs restent en place, décrochés)`} sel={{ kind: 'truss', id: t.id }} />
         </>}>
           {/* Field order L, X, Y, H, ° is relied upon by the end-to-end tests. */}
-          <Num label={t.shape === 'circle' ? 'Diamètre' : t.shape === 'square' ? 'Côté' : 'Longueur'} title="Taille (m)" value={t.length} min={0.5} max={60} step={0.5} onChange={(v) => set(t.id, { length: v })} />
+          {t.shape !== 'totem' && <Num label={TRUSS_LENGTH_LABEL[t.shape]} title="Taille (m)" value={t.length} min={0.5} max={60} step={0.5} onChange={(v) => set(t.id, { length: v })} />}
           <Num label="X" title="Centre, jardin ↔ cour (m)" value={t.x} min={-100} max={100} onChange={(v) => set(t.id, { x: v })} />
           <Num label="Y" title="Centre, profondeur (m)" value={t.y} min={-100} max={100} onChange={(v) => set(t.id, { y: v })} />
           <Num label="Hauteur" title="Hauteur de la structure (m)" value={t.height} min={0.5} max={30} onChange={(v) => set(t.id, { height: v })} />
@@ -553,6 +702,7 @@ function TrussSettings({ vis }: { vis: Vis }) {
             <select className="select" value={t.support} aria-label="Support" onChange={(e) => set(t.id, { support: e.target.value as Truss['support'] })}>
               <option value="towers">Sur pieds</option>
               <option value="hung">Suspendue</option>
+              <option value="none">Posée (assemblage)</option>
             </select>
           </label>
         </Card>
@@ -737,7 +887,7 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
           {placing && (
             <div className="stage-empty stage-placing" data-testid="placing">
               <Crosshair size={16} />
-              <span className="grow">Cliquez sur le plateau pour poser : <b>{SCENE_LABEL[placing].toLowerCase()}</b></span>
+              <span className="grow">Cliquez sur le plateau pour poser : <b>{placing.label}</b></span>
               <button className="btn sm" onClick={() => useStore.getState().setPlacing(null)}>Annuler (Échap)</button>
             </div>
           )}

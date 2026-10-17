@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { audienceGlare, beamDirection, beamHit, flickerOn, mountSign, onStage, poolShape, rigAngles, rotateY, beamLength } from '../../src/core/visualizer/beam';
-import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, trussSegments, trussSupports } from '../../src/core/visualizer/truss';
+import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, snapTrussEnds, trussEnds, trussSegments, trussSupports } from '../../src/core/visualizer/truss';
+import { LIBRARY } from '../../src/core/visualizer/library';
 import type { Performer, StageMarker, Truss } from '../../src/core/model/schemas';
 import { buildVisualModel, goboIndex, mountOf, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
 import { createProject, parseProject } from '../../src/core/project/format';
@@ -141,7 +142,7 @@ describe('forme de plateau, points de scène et éblouissement', () => {
   it('un ancien projet reçoit les valeurs par défaut, une mise à jour partielle ne remet rien à zéro', async () => {
     const old = { ...demoProject(), visualizer: { stageWidth: 10, stageDepth: 6 } };
     const { project } = parseProject(JSON.stringify(old));
-    expect(project.visualizer).toEqual({ stageWidth: 10, stageDepth: 6, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [], performers: [], screens: [] });
+    expect(project.visualizer).toEqual({ stageWidth: 10, stageDepth: 6, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [], performers: [], screens: [], props: [] });
 
     const { svc } = makeService();
     await svc.init();
@@ -365,5 +366,43 @@ describe('édition de scène : ajout, copie, presse-papiers, équipement', () =>
     await expect(run({ type: 'fixture.place', placements: [{ id: ids[0], position: { x: 0, y: 0 }, height: 1, trussId: 'absente' }] })).rejects.toThrow('Structure introuvable');
     await run({ type: 'scene.undo' });
     expect(svc.projectState().project.patch.every((f) => !f.trussId)).toBe(true);
+  });
+});
+
+describe('bibliothèque : pièces de truss, décor', () => {
+  const piece = (o: Partial<Truss>): Truss => ({ id: 'p', name: 'P', shape: 'line', x: 0, y: 0, height: 3, length: 2, rotation: 0, support: 'none', ...o });
+
+  it('jonctions, totem : segments, extrémités et appuis', () => {
+    expect(trussSegments(piece({ shape: 'corner', length: 0.5 }))).toHaveLength(2);
+    expect(trussSegments(piece({ shape: 'tee', length: 0.5 }))).toHaveLength(3);
+    expect(trussSegments(piece({ shape: 'cross', length: 0.5 }))).toHaveLength(4);
+    expect(trussSegments(piece({ shape: 'totem' }))).toEqual([]);
+    const ends = trussEnds(piece({ shape: 'corner', length: 0.5, rotation: 90 }));
+    expect(ends[0]!.x).toBeCloseTo(0); expect(ends[0]!.y).toBeCloseTo(0.5);
+    expect(ends[1]!.x).toBeCloseTo(-0.5); expect(ends[1]!.y).toBeCloseTo(0);
+    expect(trussEnds(piece({ shape: 'totem', x: 2, y: 3 }))).toEqual([{ x: 2, y: 3 }]);
+    expect(trussSupports(piece({ support: 'none' }))).toEqual([]);
+    expect(trussSupports(piece({ shape: 'corner', support: 'towers' }))).toEqual([]);
+    expect(trussSupports(piece({ shape: 'totem', x: 1, y: 1, support: 'towers' }))).toEqual([{ x: 1, y: 1 }]);
+  });
+
+  it('aimantation bout à bout : une droite lâchée près d’un totem s’y pose, à sa hauteur', () => {
+    const totem = piece({ id: 'tot', shape: 'totem', height: 2.5 });
+    const snap = snapTrussEnds(piece({ id: 'd', x: 1.1, y: 0.2 }), [totem]);
+    expect(snap).toMatchObject({ x: 1, y: 0, height: 2.5 });
+    expect(snapTrussEnds(piece({ id: 'd', x: 2 }), [totem])).toBeNull();
+    expect(equipTrusses([{ id: 'a', movable: false }], [totem])).toEqual([]);
+  });
+
+  it('chaque élément de la bibliothèque donne un projet valide', () => {
+    let n = 0;
+    const id = () => `b${n++}`;
+    const p = createProject('Bibliothèque');
+    let v = p.visualizer;
+    for (const item of LIBRARY) v = { ...v, ...withElement(v, item.kind, newElement(v, item.kind, id, { x: 1, y: 2 }, item.preset)) };
+    const parsed = projectSchema.parse({ ...p, visualizer: v });
+    expect(parsed.visualizer.props).toHaveLength(LIBRARY.filter((x) => x.kind === 'prop').length);
+    expect(parsed.visualizer.trusses.find((t) => t.shape === 'totem')).toMatchObject({ name: expect.stringMatching(/^Totem 1 m/), x: 1, y: 2 });
+    expect(() => newElement(v, 'prop', id, undefined, { width: -1 })).toThrow();
   });
 });

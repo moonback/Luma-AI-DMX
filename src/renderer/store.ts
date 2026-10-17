@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { LogEntry } from '../core/log/logger';
 import type { FixtureValues } from '../core/model/schemas';
 import type { ProjectState, RuntimeState } from '../shared/commands';
-import type { SceneKind, SceneRef } from '../core/visualizer/sceneEdit';
+import type { PlaceSpec, SceneRef } from '../core/visualizer/sceneEdit';
 
 /** Stable empty defaults: selectors must not return fresh objects (would re-render forever). */
 export const EMPTY_OBJ: Readonly<Record<string, never>> = Object.freeze({});
@@ -78,9 +78,9 @@ interface State {
   preview: { label: string; values: FixtureValues } | null;
   /** Selected stage element (point, truss, performer, screen) and the kind being placed by a click on the stage. */
   sceneSel: SceneRef | null;
-  placing: SceneKind | null;
+  placing: PlaceSpec | null;
   setSceneSel(r: SceneRef | null): void;
-  setPlacing(k: SceneKind | null): void;
+  setPlacing(p: PlaceSpec | null): void;
   /** Onboarding state from the settings (null until loaded) and the open help surface. */
   onboarding: { completed: boolean; checklistHidden: boolean } | null;
   help: 'welcome' | 'tour' | 'demos' | null;
@@ -116,7 +116,7 @@ export const useStore = create<State>((set, get) => ({
   preview: null,
   sceneSel: null,
   placing: null,
-  setSceneSel: (sceneSel) => set({ sceneSel }),
+  setSceneSel: (sceneSel) => set(sceneSel ? { sceneSel, selection: [] } : { sceneSel }),
   setPlacing: (placing) => set({ placing }),
   onboarding: null,
   help: null,
@@ -130,7 +130,8 @@ export const useStore = create<State>((set, get) => ({
     set({ collapsed });
     savePrefs({ page: get().page, collapsed });
   },
-  setSelection: (selection) => set({ selection }),
+  // One selection at a time: picking fixtures clears the stage element and vice versa (the latest wins).
+  setSelection: (selection) => set(selection.length ? { selection, sceneSel: null } : { selection }),
   setCueList: (cueListId) => set({ cueListId }),
   toggleDiag: () => set({ diagOpen: !get().diagOpen }),
   toast: (t) => {

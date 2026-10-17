@@ -290,6 +290,12 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .scene-check { align-self: end; height: 26px; }
 .scene-color { width: 100%; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: none; cursor: pointer; }
 .scene-hint { margin: 0; font-size: 11px; color: var(--text-3); }
+.scene-library { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.scene-lib-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel-2); color: var(--text-2); font-size: 10.5px; line-height: 1.2; text-align: center; cursor: grab; transition: border-color var(--dur), background var(--dur), color var(--dur); }
+.scene-lib-item:hover { color: var(--text); border-color: var(--border-strong); }
+.scene-lib-item.on { color: var(--text); border-color: var(--violet); background: var(--violet-soft); }
+.scene-lib-item:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
+.scene-lib-item:active { cursor: grabbing; }
 .scene-templates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .scene-template { display: flex; flex-direction: column; gap: 2px; padding: 8px 9px; text-align: left; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; transition: border-color var(--dur), background var(--dur); }
 .scene-template:hover { border-color: var(--violet); background: var(--violet-soft); }

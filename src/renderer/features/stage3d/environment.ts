@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import type { VisualFixture } from '../../../core/visualizer/model';
 import type { StageGeometry } from '../../../core/visualizer/beam';
-import type { Project, StageMarker, Truss } from '../../../core/model/schemas';
-import { trussSupports } from '../../../core/visualizer/truss';
+import type { Project, StageMarker, StageProp, Truss } from '../../../core/model/schemas';
+import { JUNCTION_ARMS, trussSupports } from '../../../core/visualizer/truss';
 import { labelSprite } from './rig';
 
 /**
  * Stage set: deck, back wall (cyclorama catching the light), wings, audience floor, and box trusses built from
- * the rig (one truss per row of hanging fixtures, with ground-support towers at both ends).
+ * the scene (`visualizer.trusses`): adding fixtures to the patch never adds a truss.
  */
 export function stageGeometry(vis: Project['visualizer'], fixtures: readonly VisualFixture[]): StageGeometry {
   const top = Math.max(0, ...fixtures.map((f) => f.height));
@@ -60,7 +60,24 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
   const lattice = new THREE.LineBasicMaterial({ color: selected ? 0xa78bfa : 0x6b7385 });
   const r = t.length / 2;
   const add = (o: THREE.Object3D, x: number, z: number, rotY: number) => { o.position.set(x, 0, z); o.rotation.y = rotY; g.add(o); };
-  if (t.shape === 'line') add(boxTruss(t.length, mat, lattice), 0, 0, 0);
+  const arms = JUNCTION_ARMS[t.shape];
+  if (arms) {
+    // Junction: a node block plus one arm per direction (local x rotated by the arm angle, stage y = -z).
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.31, 0.31), mat));
+    for (const deg of arms) {
+      const a = THREE.MathUtils.degToRad(deg);
+      add(boxTruss(t.length, mat, lattice), Math.cos(a) * r, -Math.sin(a) * r, a);
+    }
+  } else if (t.shape === 'totem') {
+    // Vertical tower from the floor to the truss height, with a base plate and a top plate.
+    const tower = boxTruss(t.height, mat, lattice);
+    tower.rotation.z = Math.PI / 2;
+    tower.position.set(0, -t.height / 2, 0);
+    g.add(tower);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 0.6), mat);
+    base.position.y = 0.01 - t.height;
+    g.add(base, new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.34), mat));
+  } else if (t.shape === 'line') add(boxTruss(t.length, mat, lattice), 0, 0, 0);
   else if (t.shape === 'square') {
     add(boxTruss(t.length, mat, lattice), 0, r, 0);
     add(boxTruss(t.length, mat, lattice), 0, -r, 0);
@@ -78,7 +95,7 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
   }
   // Supports in the truss frame (trussSupports gives stage coordinates: undo the placement).
   const inv = new THREE.Matrix4().compose(g.position, new THREE.Quaternion().setFromEuler(g.rotation), new THREE.Vector3(1, 1, 1)).invert();
-  for (const p of trussSupports(t)) {
+  for (const p of t.shape === 'totem' ? [] : trussSupports(t)) {
     const local = new THREE.Vector3(p.x, t.height, -p.y).applyMatrix4(inv);
     if (t.support === 'towers') {
       const tower = boxTruss(t.height + 0.35, mat, lattice);
@@ -102,12 +119,91 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
   return g;
 }
 
+/** Name of the 3D group of a set piece (picked and moved by the editor). */
+export const propObjectName = (id: string) => `prop:${id}`;
+
+/** One set piece, built on its footprint centre at its elevation; every mesh carries `userData.propId` for picking. */
+function buildProp(p: StageProp, selected: boolean): THREE.Group {
+  const g = new THREE.Group();
+  g.name = propObjectName(p.id);
+  g.position.set(p.x, p.elevation, -p.y);
+  g.rotation.y = THREE.MathUtils.degToRad(p.rotation);
+  const mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.8, metalness: 0.1, emissive: selected ? 0x3b1f8a : 0x000000 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x24272e, roughness: 0.9, emissive: selected ? 0x3b1f8a : 0x000000 });
+  const { width: w, depth: d, height: h } = p;
+  const box = (bw: number, bh: number, bd: number, x: number, y: number, z: number, m: THREE.Material = mat) => {
+    const o = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), m);
+    o.position.set(x, y, z);
+    g.add(o);
+    return o;
+  };
+  switch (p.kind) {
+    case 'stairs': {
+      // Steps rising upstage (local -z), about 18 cm each.
+      const n = Math.max(2, Math.round(h / 0.18));
+      for (let i = 0; i < n; i++) box(w, (h * (i + 1)) / n, d / n, 0, (h * (i + 1)) / n / 2, d / 2 - ((i + 0.5) * d) / n);
+      break;
+    }
+    case 'speaker':
+      box(w, h, d, 0, h / 2, 0);
+      box(w * 0.86, h * 0.9, 0.01, 0, h / 2, d / 2 + 0.006, dark); // front grille, towards the audience at 0°
+      break;
+    case 'monitor': {
+      // Wedge: high at the back, sloped face towards local +z.
+      const s = new THREE.Shape([new THREE.Vector2(-d / 2, 0), new THREE.Vector2(d / 2, 0), new THREE.Vector2(-d / 2, h)]);
+      const geo = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false });
+      geo.rotateY(Math.PI / 2);
+      geo.translate(-w / 2, 0, 0);
+      g.add(new THREE.Mesh(geo, mat));
+      break;
+    }
+    case 'mic': {
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, 0.02, 20), mat);
+      base.position.y = 0.01;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, h, 8), mat);
+      pole.position.y = h / 2;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 8), dark);
+      head.position.set(0, h, 0.06);
+      g.add(base, pole, head);
+      break;
+    }
+    case 'table':
+      box(w, 0.05, d, 0, h - 0.025, 0);
+      for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) box(0.05, h - 0.05, 0.05, (x * (w - 0.1)) / 2, (h - 0.05) / 2, (z * (d - 0.1)) / 2, dark);
+      break;
+    case 'drape': {
+      // Folded cloth: a vertical sheet waved along its width.
+      const geo = new THREE.PlaneGeometry(w, h, Math.max(8, Math.round(w * 8)), 1);
+      const pos = geo.attributes.position!;
+      for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * 9) * Math.min(0.08, d));
+      geo.computeVertexNormals();
+      const cloth = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: p.color, roughness: 1, side: THREE.DoubleSide, emissive: selected ? 0x3b1f8a : 0x000000 }));
+      cloth.position.y = h / 2;
+      g.add(cloth);
+      break;
+    }
+    case 'column': {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, h, 24), mat);
+      c.position.y = h / 2;
+      g.add(c);
+      break;
+    }
+    default: {
+      // Riser and box: a solid block; a riser gets a light edge so its outline reads in the dark.
+      const b = box(w, h, d, 0, h / 2, 0);
+      if (p.kind === 'riser') b.add(new THREE.LineSegments(new THREE.EdgesGeometry(b.geometry), new THREE.LineBasicMaterial({ color: selected ? 0xa78bfa : 0x4b5570 })));
+    }
+  }
+  g.traverse((o) => { o.userData.propId = p.id; });
+  return g;
+}
+
 export function buildEnvironment(
   stage: StageGeometry,
-  fixtures: readonly VisualFixture[],
   markers: readonly StageMarker[] = [],
   trusses: readonly Truss[] = [],
-  selectedTruss: string | null = null,
+  selected: string | null = null,
+  props: readonly StageProp[] = [],
 ): THREE.Group {
   const env = new THREE.Group();
   const { width: W, depth: D, wallHeight: H } = stage;
@@ -180,34 +276,9 @@ export function buildEnvironment(
     env.add(tag);
   }
 
-  for (const t of trusses) env.add(buildTruss(t, t.id === selectedTruss));
+  for (const t of trusses) env.add(buildTruss(t, t.id === selected));
+  for (const p of props) env.add(buildProp(p, p.id === selected));
 
-  // Implicit trusses (older projects): one per row (height, depth) of hung fixtures not attached to an explicit truss.
-  const trussMat = new THREE.MeshStandardMaterial({ color: 0x9aa3b5, metalness: 0.85, roughness: 0.3 });
-  const lattice = new THREE.LineBasicMaterial({ color: 0x6b7385 });
-  const rows = new Map<string, VisualFixture[]>();
-  for (const f of fixtures) {
-    if (f.mount !== 'hanging' || f.trussId) continue;
-    const k = `${Math.round(f.height * 2) / 2}|${Math.round(f.y)}`;
-    rows.set(k, [...(rows.get(k) ?? []), f]);
-  }
-  for (const [k, list] of rows) {
-    const [h, y] = k.split('|').map(Number) as [number, number];
-    const minX = Math.min(...list.map((f) => f.x)) - 0.8, maxX = Math.max(...list.map((f) => f.x)) + 0.8;
-    const len = Math.max(2, maxX - minX);
-    const t = boxTruss(len, trussMat, lattice);
-    t.position.set((minX + maxX) / 2, h + 0.2, -y);
-    env.add(t);
-    for (const x of [minX, maxX]) {
-      const tower = boxTruss(h + 0.35, trussMat, lattice);
-      tower.rotation.z = Math.PI / 2;
-      tower.position.set(x, (h + 0.35) / 2, -y);
-      env.add(tower);
-      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.03, 0.7), trussMat);
-      foot.position.set(x, 0.015, -y);
-      env.add(foot);
-    }
-  }
   return env;
 }
 

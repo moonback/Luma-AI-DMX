@@ -423,19 +423,22 @@ const vec3Schema = z.object({ x: z.number().min(-500).max(500), y: z.number().mi
 export const stageViewSchema = z.object({ id: idSchema, name: nameSchema, pos: vec3Schema, target: vec3Schema });
 /**
  * Explicit truss. Position = centre (meters, y upstage), `height` = height of the truss axis, `length` = length of a
- * straight truss, diameter of a circle or side of a square. Rotation in degrees around the vertical (counter-clockwise
- * seen from above, 0 = parallel to the stage lip). Supported by towers on the floor or hung from motors.
+ * straight truss, diameter of a circle, side of a square, or arm length of a corner / tee / cross junction (measured
+ * from the junction node). A totem is a vertical tower from the floor up to `height` (`length` unused). Rotation in
+ * degrees around the vertical (counter-clockwise seen from above, 0 = parallel to the stage lip). Supported by towers
+ * on the floor, hung from motors, or `none` when it rests on other pieces (totems, junctions).
  */
+export const trussShapeSchema = z.enum(['line', 'circle', 'square', 'corner', 'tee', 'cross', 'totem']);
 export const trussSchema = z.object({
   id: idSchema,
   name: nameSchema,
-  shape: z.enum(['line', 'circle', 'square']),
+  shape: trussShapeSchema,
   x: z.number().min(-100).max(100),
   y: z.number().min(-100).max(100),
   height: z.number().min(0.5).max(30),
   length: z.number().min(0.5).max(60),
   rotation: z.number().min(-360).max(360),
-  support: z.enum(['towers', 'hung']),
+  support: z.enum(['towers', 'hung', 'none']),
 });
 export type Truss = z.infer<typeof trussSchema>;
 /** Performer or instrument silhouette (meters, y upstage, rotation like fixtures: 0 = facing the audience). */
@@ -471,6 +474,24 @@ export const screenSchema = z.object({
 });
 export type StageScreen = z.infer<typeof screenSchema>;
 export type StageView = z.infer<typeof stageViewSchema>;
+/**
+ * Set piece from the library (riser, stairs, speaker, stage monitor, mic stand, table, drape, box, column): centre
+ * x, y (meters, y upstage), footprint width × depth, height, raised by `elevation` (stacking), rotation like trusses.
+ */
+export const propSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  kind: z.enum(['riser', 'stairs', 'speaker', 'monitor', 'mic', 'table', 'drape', 'box', 'column']),
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  width: z.number().min(0.05).max(40),
+  depth: z.number().min(0.05).max(40),
+  height: z.number().min(0.05).max(20),
+  elevation: z.number().min(0).max(20),
+  rotation: z.number().min(-360).max(360),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
+export type StageProp = z.infer<typeof propSchema>;
 
 export const PROJECT_FORMAT_VERSION = 3;
 
@@ -509,8 +530,9 @@ export const projectSchema = z.object({
       trusses: z.array(trussSchema).max(64).default([]),
       performers: z.array(performerSchema).max(64).default([]),
       screens: z.array(screenSchema).max(16).default([]),
+      props: z.array(propSchema).max(256).default([]),
     })
-    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [], performers: [], screens: [] }),
+    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [], performers: [], screens: [], props: [] }),
   ai: z
     .object({ notes: z.string().max(2000).default(''), recentPrompts: z.array(z.string().max(500)).max(20).default([]) })
     .default({ notes: '', recentPrompts: [] }),

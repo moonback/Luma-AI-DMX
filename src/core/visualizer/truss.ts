@@ -7,7 +7,7 @@ import type { Fixture, Truss } from '../model/schemas';
 export interface P2 { x: number; y: number }
 
 const DEG = Math.PI / 180;
-/** Fixtures hang 20 cm under the truss axis (same offset as the implicit trusses of older projects). */
+/** Fixtures hang 20 cm under the truss axis. */
 export const HANG_OFFSET = 0.2;
 /** Horizontal distance under which a dropped fixture snaps onto a truss. */
 export const SNAP_DISTANCE = 0.6;
@@ -23,19 +23,62 @@ function rotate(p: P2, deg: number): P2 {
 /** Outline of the truss as straight segments (a circle is approximated by 24 chords). */
 export function trussSegments(t: Truss): [P2, P2][] {
   const h = t.length / 2;
+  const place = (p: P2) => { const r = rotate(p, t.rotation); return { x: t.x + r.x, y: t.y + r.y }; };
+  // Junctions: one arm of `length` from the node per direction.
+  const arms = JUNCTION_ARMS[t.shape];
+  if (arms) return arms.map((deg) => [place({ x: 0, y: 0 }), place(rotate({ x: t.length, y: 0 }, deg))]);
+  if (t.shape === 'totem') return []; // vertical: no horizontal span
   let local: P2[];
   let closed = true;
   if (t.shape === 'line') { local = [{ x: -h, y: 0 }, { x: h, y: 0 }]; closed = false; }
   else if (t.shape === 'square') local = [{ x: -h, y: -h }, { x: h, y: -h }, { x: h, y: h }, { x: -h, y: h }];
   else local = Array.from({ length: CIRCLE_SEGMENTS }, (_, i) => ({ x: h * Math.cos((2 * Math.PI * i) / CIRCLE_SEGMENTS), y: h * Math.sin((2 * Math.PI * i) / CIRCLE_SEGMENTS) }));
-  const pts = local.map((p) => { const r = rotate(p, t.rotation); return { x: t.x + r.x, y: t.y + r.y }; });
+  const pts = local.map(place);
   const segs: [P2, P2][] = [];
   for (let i = 0; i < pts.length - (closed ? 0 : 1); i++) segs.push([pts[i]!, pts[(i + 1) % pts.length]!]);
   return segs;
 }
 
+/** Arm directions (degrees, local frame) of the junction pieces. */
+export const JUNCTION_ARMS: Partial<Record<Truss['shape'], number[]>> = { corner: [0, 90], tee: [0, 90, 180], cross: [0, 90, 180, 270] };
+
+/** Connection points seen from above: ends of a straight truss, arm ends of a junction, top of a totem. */
+export function trussEnds(t: Truss): P2[] {
+  if (t.shape === 'totem') return [{ x: t.x, y: t.y }];
+  if (t.shape === 'line') return trussSegments(t).flat();
+  if (JUNCTION_ARMS[t.shape]) return trussSegments(t).map(([, b]) => b);
+  return [];
+}
+
+/** Distance under which a moved piece snaps end to end on another one. */
+export const END_SNAP = 0.35;
+
+/**
+ * Snaps `t` end to end on the closest connection point of another truss (within `END_SNAP`): the piece is shifted so
+ * both points meet and takes the other piece's height (a straight dropped on a totem sits on top of it). Null if none.
+ */
+export function snapTrussEnds(t: Truss, others: readonly Truss[]): { x: number; y: number; height: number; to: Truss } | null {
+  let best: { dx: number; dy: number; d: number; to: Truss } | null = null;
+  const mine = trussEnds(t);
+  for (const o of others) {
+    if (o.id === t.id) continue;
+    for (const b of trussEnds(o)) {
+      for (const a of mine) {
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d <= END_SNAP && (!best || d < best.d)) best = { dx: b.x - a.x, dy: b.y - a.y, d, to: o };
+      }
+    }
+  }
+  if (!best) return null;
+  const round = (v: number) => Math.round(v * 1000) / 1000;
+  return { x: round(t.x + best.dx), y: round(t.y + best.dy), height: best.to.height, to: best.to };
+}
+
 /** Support points (towers or motors): ends of a straight truss, corners of a square, 4 points on a circle. */
 export function trussSupports(t: Truss): P2[] {
+  // Assembly pieces and junctions rest on other pieces; a totem is its own support.
+  if (t.support === 'none' || JUNCTION_ARMS[t.shape]) return [];
+  if (t.shape === 'totem') return [{ x: t.x, y: t.y }];
   const h = t.length / 2;
   const local = t.shape === 'line' ? [{ x: -h, y: 0 }, { x: h, y: 0 }]
     : t.shape === 'square' ? [{ x: -h, y: -h }, { x: h, y: -h }, { x: h, y: h }, { x: -h, y: h }]

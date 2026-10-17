@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   addressSchema, attributeSchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
-  stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema,
+  stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema, propSchema,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -68,6 +68,7 @@ export const commandSchema = z.discriminatedUnion('type', [
       trusses: z.array(trussSchema).max(64).optional(),
       performers: z.array(performerSchema).max(64).optional(),
       screens: z.array(screenSchema).max(16).optional(),
+      props: z.array(propSchema).max(256).optional(),
     }).optional(),
   }),
   /** Scene-layout history (positions, mounting, trusses, stage settings): independent from the other edits. */

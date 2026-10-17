@@ -3,7 +3,9 @@ import { act, newId } from './api';
 import { useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
-import type { P2 } from '../core/visualizer/truss';
+import { snapTrussEnds, type P2 } from '../core/visualizer/truss';
+import type { Truss } from '../core/model/schemas';
+import { libraryItem } from '../core/visualizer/library';
 import {
   SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
   type SceneKind, type SceneRef,
@@ -11,17 +13,24 @@ import {
 
 /** Scene-element actions shared by the scene panel, the 2D plan and the 3D view (all undoable with Ctrl+Z). */
 
+/** Drag-and-drop type of a library tile (its data is the library item id). */
+export const LIBRARY_MIME = 'application/x-luma-library';
+
 const vis = () => useStore.getState().project?.project.visualizer;
 const toast = (title: string, detail?: string, kind: 'info' | 'error' = 'info') => useStore.getState().toast({ kind, title, detail });
 
 /** Adds an element at `at` (click on the stage) or at the next free spot, and selects it. */
-export function addSceneElement(kind: SceneKind, at?: P2): void {
+export function addSceneElement(kind: SceneKind, at?: P2, preset?: Record<string, unknown>): void {
   const v = vis();
   const st = useStore.getState();
   st.setPlacing(null);
   if (!v) return;
   if (!canAdd(v, kind)) { toast('Limite atteinte', `Nombre maximal de « ${SCENE_LABEL[kind]} » atteint.`, 'error'); return; }
-  const el = newElement(v, kind, newId, at);
+  const el = (() => { try { return newElement(v, kind, newId, at, preset); } catch { return null; } })(); // a preset outside the schema bounds
+  if (!el) { toast('Élément invalide', undefined, 'error'); return; }
+  // A truss piece placed next to another one joins it end to end, at its height.
+  const snap = kind === 'truss' ? snapTrussEnds(el as Truss, v.trusses) : null;
+  if (snap) Object.assign(el, { x: snap.x, y: snap.y, height: snap.height });
   void act({ type: 'project.update', visualizer: withElement(v, kind, el) }).then((r) => r && st.setSceneSel({ kind, id: el.id }));
 }
 
@@ -119,4 +128,17 @@ export function useSceneShortcuts(): void {
       useStore.getState().setPlacing(null);
     };
   }, []);
+}
+
+/** Drag over the stage: accept library tiles only. */
+export function acceptLibraryDrag(e: React.DragEvent): void {
+  if (e.dataTransfer.types.includes(LIBRARY_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
+}
+
+/** Drop of a library tile at a stage position (null when the drop missed the floor). */
+export function dropLibraryItem(e: React.DragEvent, at: P2 | null): void {
+  const item = libraryItem(e.dataTransfer.getData(LIBRARY_MIME));
+  if (!item) return;
+  e.preventDefault();
+  if (at) addSceneElement(item.kind, at, item.preset);
 }

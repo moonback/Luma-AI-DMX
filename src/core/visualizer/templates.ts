@@ -1,4 +1,4 @@
-import type { Performer, Project, StageMarker, StageScreen, Truss } from '../model/schemas';
+import type { Performer, Project, StageMarker, StageProp, StageScreen, Truss } from '../model/schemas';
 
 type Vis = Project['visualizer'];
 /** Everything a template replaces; saved camera views are kept. */
@@ -22,7 +22,9 @@ export function sceneTemplate(tpl: SceneTemplateId, id: () => string): SceneLayo
   const on = (m: StageMarker, kind: Performer['kind'] = 'standing', name = m.name): Performer => ({ id: id(), name, kind, x: m.x, y: m.y, rotation: 0, markerId: m.id });
   const screen = (name: string, x: number, y: number, elevation: number, width: number, height: number, color: string): StageScreen =>
     ({ id: id(), name, x, y, elevation, width, height, rotation: 0, source: 'color', color, image: null, glow: 0.5 });
-  const base = { thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], trusses: [], performers: [], screens: [] };
+  const prop = (name: string, kind: StageProp['kind'], x: number, y: number, width: number, depth: number, height: number, rotation = 0): StageProp =>
+    ({ id: id(), name, kind, x, y, width, depth, height, elevation: 0, rotation, color: '#15171c' });
+  const base = { thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], trusses: [], performers: [], screens: [], props: [] };
 
   switch (tpl) {
     case 'concert': {
@@ -32,6 +34,10 @@ export function sceneTemplate(tpl: SceneTemplateId, id: () => string): SceneLayo
         trusses: [truss('Face', 0, 0.5, 6.5, 12), truss('Contre', 0, 6.8, 7, 12, { support: 'towers' })],
         performers: [on(m[0]!), on(m[1]!), on(m[2]!), on(m[3]!, 'drums')],
         screens: [screen('Écran de fond', 0, 7.8, 2, 8, 4.5, '#1e3a8a')],
+        props: [
+          prop('Enceinte jardin', 'speaker', -5.5, 0.6, 0.6, 0.6, 1.2), prop('Enceinte cour', 'speaker', 5.5, 0.6, 0.6, 0.6, 1.2),
+          prop('Retour chant', 'monitor', 0, 1.2, 0.6, 0.45, 0.35, 180), prop('Pied de micro', 'mic', 0, 2.3, 0.3, 0.3, 1.6),
+        ],
       };
     }
     case 'theatre': {
@@ -81,4 +87,4 @@ export function sceneTemplate(tpl: SceneTemplateId, id: () => string): SceneLayo
 }
 
 /** True when the stage holds something a template would overwrite. */
-export const hasSceneContent = (v: Vis) => v.markers.length + v.trusses.length + v.performers.length + v.screens.length > 0;
+export const hasSceneContent = (v: Vis) => v.markers.length + v.trusses.length + v.performers.length + v.screens.length + v.props.length > 0;

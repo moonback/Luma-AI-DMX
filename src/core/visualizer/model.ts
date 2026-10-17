@@ -27,7 +27,7 @@ export interface VisualFixture {
   mount: VisualMount;
   /** Tilt of the mounting axis in degrees (towards the audience; wall mount: downwards). */
   mountTilt: number;
-  /** Explicit truss the fixture hangs from, null otherwise (older projects draw implicit trusses). */
+  /** Truss the fixture hangs from, null when it is free (drawn alone, without a truss). */
   trussId: string | null;
   /** Per-cell colours for multi-cell fixtures (left to right), already scaled by intensity. */
   cells: string[];
