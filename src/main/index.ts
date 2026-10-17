@@ -50,6 +50,21 @@ async function createService(): Promise<AppService> {
   return svc;
 }
 
+const webPreferences = {
+  preload: path.join(here, '../preload/index.cjs'),
+  contextIsolation: true,
+  sandbox: true,
+  nodeIntegration: false,
+  webSecurity: true,
+  spellcheck: false,
+};
+
+function guardNavigation(w: BrowserWindow): void {
+  w.webContents.on('will-navigate', (e, url) => {
+    if (!isTrustedSender(url)) e.preventDefault();
+  });
+}
+
 function createWindow(): BrowserWindow {
   const w = new BrowserWindow({
     width: 1440,
@@ -60,24 +75,25 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#0B0D12',
     title: BRAND.productName,
     autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(here, '../preload/index.cjs'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      webSecurity: true,
-      spellcheck: false,
-    },
+    webPreferences,
   });
   w.once('ready-to-show', () => w.show());
   // Navigation is restricted to the app itself; external https links open in the system browser.
-  w.webContents.on('will-navigate', (e, url) => {
-    if (!isTrustedSender(url)) e.preventDefault();
-  });
+  guardNavigation(w);
   w.webContents.setWindowOpenHandler(({ url }) => {
+    // Detachable 3D stage view (second screen): same renderer, same locked-down preferences.
+    if (isTrustedSender(url) && url.endsWith('#stage3d')) {
+      return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 720, backgroundColor: '#0B0D12', title: 'Stage 3D', autoHideMenuBar: true, webPreferences } };
+    }
     if (url.startsWith('https://')) void shell.openExternal(url);
     return { action: 'deny' };
   });
+  w.webContents.on('did-create-window', (child) => {
+    guardNavigation(child);
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  });
+  // Detached windows must not keep the app alive once the main window is gone.
+  w.on('closed', () => app.quit());
   w.on('close', (e) => {
     if (quitting || !service?.dirty || process.env.LUMA_E2E) return;
     const choice = dialog.showMessageBoxSync(w, {
@@ -125,7 +141,7 @@ app.whenReady().then(async () => {
   });
 
   const forward = <K extends keyof AppEvents>(name: K) => (payload: AppEvents[K]) => {
-    if (win && !win.isDestroyed()) win.webContents.send('luma:event', name, payload);
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('luma:event', name, payload);
   };
   service.on('project', forward('project'));
   service.on('runtime', forward('runtime'));

@@ -23,6 +23,7 @@ export const SHORTCUT_ACTIONS = [
   { id: 'page:timeline', label: 'Espace Timeline', default: 'Ctrl+7' },
   { id: 'page:ai', label: 'Espace AI Lighting Director', default: 'Ctrl+8' },
   { id: 'page:visualizer', label: 'Espace Stage Visualizer', default: 'Ctrl+9' },
+  { id: 'page:stage3d', label: 'Espace Stage 3D', default: '' },
   { id: 'page:audio', label: 'Espace Audio Reactive', default: 'Ctrl+0' },
   { id: 'page:output', label: 'Espace DMX Output', default: '' },
   { id: 'page:settings', label: 'Espace Settings', default: 'Ctrl+,' },

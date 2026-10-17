@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Move, Theater, X } from 'lucide-react';
+import { ExternalLink, Move, Theater, X } from 'lucide-react';
 import { useStore } from '../store';
 import { act } from '../api';
 import { Empty, NumberInput, PageHead, useResolved } from '../components/ui';
@@ -174,40 +174,44 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   );
 }
 
-export function Visualizer() {
+export const Visualizer = () => <StagePage mode="2d" />;
+export const StageVisualizer3D = () => <StagePage mode="3d" />;
+
+export const DETACHED_STAGE_HASH = '#stage3d';
+
+/** Chrome-less live 3D view for a second screen, opened by the "Détacher" button. F11 : plein écran. */
+export function DetachedStage3D() {
+  const ready = useStore((s) => !!s.project);
+  useEffect(() => {
+    document.title = 'Stage 3D';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'F11') return;
+      e.preventDefault();
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  return <div style={{ height: '100vh' }}>{ready ? <Stage3D /> : <div className="empty">Connexion au moteur…</div>}</div>;
+}
+
+function StagePage({ mode }: { mode: '2d' | '3d' }) {
   const { fixtures } = useResolved();
   const project = useStore((s) => s.project!.project);
   const preview = useStore((s) => s.preview);
   const setPreview = useStore((s) => s.setPreview);
   const [edit, setEdit] = useState(false);
   const [group, setGroup] = useState<string | null>(null);
-  const [mode, setMode] = useState<'2d' | '3d'>(() => {
-    try {
-      return localStorage.getItem('luma.visualizer') === '3d' ? '3d' : '2d';
-    } catch {
-      return '2d';
-    }
-  });
-  const pickMode = (m: '2d' | '3d') => {
-    setMode(m);
-    try {
-      localStorage.setItem('luma.visualizer', m);
-    } catch {
-      // preference simply not persisted
-    }
-  };
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <PageHead title="Stage Visualizer" subtitle={mode === '3d' ? 'Vue 3D approximative — glisser : orbite, clic droit : déplacer, molette : zoom' : 'Vue de dessus 2D synchronisée avec l’état calculé du moteur — molette : zoom, glisser le fond : déplacer la vue'}>
+      <PageHead title={mode === '3d' ? 'Stage 3D' : 'Stage Visualizer'} subtitle={mode === '3d' ? 'Vue 3D approximative — glisser : orbite, clic droit : déplacer, molette : zoom' : 'Vue de dessus 2D synchronisée avec l’état calculé du moteur — molette : zoom, glisser le fond : déplacer la vue'}>
         <select className="select" style={{ width: 160 }} value={group ?? ''} onChange={(e) => setGroup(e.target.value || null)}>
           <option value="">Tous les groupes</option>
           {project.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <div className="chips">
-          <button className={`chip ${mode === '2d' ? 'on' : ''}`} onClick={() => pickMode('2d')} data-testid="view-2d">2D</button>
-          <button className={`chip ${mode === '3d' ? 'on' : ''}`} onClick={() => pickMode('3d')} data-testid="view-3d">3D</button>
-        </div>
-        <button className={`btn ${edit ? 'on' : ''}`} disabled={mode === '3d'} onClick={() => setEdit(!edit)} title="Déplacer les projecteurs sur la scène (enregistré dans le patch)"><Move size={14} />Positionner</button>
+        {mode === '3d' && <button className="btn" data-testid="stage3d-detach" onClick={() => window.open(location.href.split('#')[0] + DETACHED_STAGE_HASH, 'luma-stage3d')} title="Ouvrir la vue 3D dans une fenêtre séparée (second écran, F11 : plein écran)"><ExternalLink size={14} />Détacher</button>}
+        {mode === '2d' && <button className={`btn ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title="Déplacer les projecteurs sur la scène (enregistré dans le patch)"><Move size={14} />Positionner</button>}
         <span className="small muted">Scène</span>
         <div style={{ width: 70 }} title="Largeur (m)"><NumberInput value={project.visualizer.stageWidth} min={2} max={200} onChange={(v) => void act({ type: 'project.update', visualizer: { stageWidth: v } })} /></div>
         <span className="muted">×</span>

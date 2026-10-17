@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
+  Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
   PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
@@ -17,18 +17,18 @@ import { Cues } from './features/Cues';
 import { Effects } from './features/Effects';
 import { TimelinePage } from './features/Timeline';
 import { AiDirector } from './features/AiDirector';
-import { Visualizer } from './features/Visualizer';
+import { StageVisualizer3D, Visualizer } from './features/Visualizer';
 import { AudioPage } from './features/Audio';
 import { OutputPage } from './features/Output';
 import { SettingsPage } from './features/Settings';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
-  timeline: ChartGantt, ai: Bot, visualizer: Theater, audio: AudioLines, output: Cable, settings: SettingsIcon,
+  timeline: ChartGantt, ai: Bot, visualizer: Theater, stage3d: Box, audio: AudioLines, output: Cable, settings: SettingsIcon,
 };
 const VIEWS: Record<PageId, ComponentType> = {
   dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects,
-  timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, audio: AudioPage, output: OutputPage, settings: SettingsPage,
+  timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, stage3d: StageVisualizer3D, audio: AudioPage, output: OutputPage, settings: SettingsPage,
 };
 
 export function newProjectFlow(): void {

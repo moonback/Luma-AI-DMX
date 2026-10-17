@@ -124,13 +124,50 @@ test('captures des autres espaces', async () => {
   }
 });
 
-test('vue 3D du visualiseur', async () => {
-  await nav('visualizer');
-  await page.getByTestId('view-3d').click();
+test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const spots = (await inv({ type: 'fixture.add', profileId: 'demo-spot', mode: '13ch étendu', universe: 2, address: null, count: 4, namePrefix: 'Lyre', tags: [] })).data as { ids: string[] };
+  const bars = (await inv({ type: 'fixture.add', profileId: 'demo-led-bar-4', mode: '14ch pixels', universe: 2, address: null, count: 2, namePrefix: 'Barre', tags: [] })).data as { ids: string[] };
+  for (const [i, id] of bars.ids.entries()) await inv({ type: 'fixture.update', id, patch: { height: 0.2, position: { x: i ? 3 : -3, y: 7 } } });
+  await inv({ type: 'programmer.set', fixtureIds: spots.ids, values: { dimmer: 1, tilt: 0.62, colorWheel: 65 / 255, gobo: 25 / 255, prism: 200 / 255 }, confirmSpecial: false });
+  await inv({ type: 'programmer.set', fixtureIds: bars.ids, values: { dimmer: 1 }, confirmSpecial: false });
+  const fx = (id: string, type: string, targets: string[], params: Record<string, unknown>) => inv({ type: 'effect.upsert', effect: { id, name: id, type, targets: { fixtureIds: targets, groupIds: [] }, params, priority: 50, blend: 'override', duration: null, trigger: 'manual', origin: 'user' } });
+  await fx('mvt', 'panTilt', spots.ids, { speed: 0.2, amplitude: 0.5, phaseSpread: 0.5 });
+  await fx('rbw', 'rainbow', bars.ids, { speed: 0.2, phaseSpread: 1 });
+  await inv({ type: 'programmer.release', fixtureIds: spots.ids, attributes: ['pan'] });
+  await inv({ type: 'effect.start', id: 'mvt' });
+  await inv({ type: 'effect.start', id: 'rbw' });
+
+  await nav('stage3d');
   await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
+  await expect(page.getByTestId('fps')).not.toHaveText('0 i/s', { timeout: 5000 });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${shots}/16-visualizer-3d-regie.png` });
+  await page.getByTestId('cam-front').click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${shots}/16b-visualizer-3d-face.png` });
+  await page.getByTestId('cam-top').click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${shots}/16c-visualizer-3d-dessus.png` });
+  await page.getByTestId('cam-foh').click();
+  // Select a moving head (shared selection with the console) → info panel shows its live data.
+  await nav('console');
+  await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+  await nav('stage3d');
+  await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
+  await expect(page.getByTestId('stage3d-info')).toContainText('prisme');
+  await expect(page.getByTestId('stage3d-info')).toContainText('gobo 2');
   await page.waitForTimeout(500);
-  await page.screenshot({ path: `${shots}/16-visualizer-3d.png` });
-  await page.getByTestId('view-2d').click();
+  await page.screenshot({ path: `${shots}/16d-visualizer-3d-selection.png` });
+  // Detached second-screen window: chrome-less 3D view fed by the same live engine events.
+  const [detached] = await Promise.all([app.waitForEvent('window'), page.getByTestId('stage3d-detach').click()]);
+  await expect(detached.getByTestId('stage-3d').locator('canvas')).toBeVisible();
+  await expect(detached.getByTestId('fps')).not.toHaveText('0 i/s', { timeout: 5000 });
+  await expect(detached.getByTestId('nav-stage3d')).toHaveCount(0);
+  await detached.screenshot({ path: `${shots}/16e-visualizer-3d-detache.png` });
+  await detached.close();
+  await inv({ type: 'effect.stopAll' });
 });
 
 test('raccourci reconfiguré : Blackout sur K', async () => {

@@ -1,162 +1,247 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { Camera, Expand, Eye, Sparkles, Tag, Sun } from 'lucide-react';
 import { useStore } from '../store';
-import { useResolved } from '../components/ui';
+import { act } from '../api';
+import { NumberInput, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import type { FixtureValues } from '../../core/model/schemas';
+import { buildRig, disposeRig, rigKey, updateRig, type Rig } from './stage3d/rig';
+import { buildEnvironment, disposeGroup, stageGeometry } from './stage3d/environment';
+import { disposeTextures } from './stage3d/textures';
 
 /**
- * 3D stage view (three.js) fed by the same renderer-agnostic VisualFixture model as the 2D canvas.
- * Beams are translucent additive cones sized from the profile beam angle and aimed by pan/tilt.
- * It is a visual aid, NOT a photometric simulation (no real light falloff, gobos or shadows).
- *
- * World axes: x = stage left/right, y = height, z = towards the audience (stage depth goes to -z).
+ * 3D stage preview (three.js) fed by the renderer-agnostic VisualFixture model.
+ * Volumetric-looking beams, light pools with gobos on the floor and cyclorama, strobe flashes, prism facets and
+ * per-cell beams for LED bars. A visual aid only: no photometry, shadows or real light transport.
  */
-const DOWN = new THREE.Vector3(0, -1, 0);
-const PAR_TILT_DEG = 35; // fixed fixtures are drawn aimed down-stage
 
-function beamDirection(f: VisualFixture): THREE.Vector3 {
-  const tilt = THREE.MathUtils.degToRad(f.movable ? f.tiltDeg : PAR_TILT_DEG);
-  const pan = THREE.MathUtils.degToRad(f.rotation + (f.movable ? f.panDeg : 0));
-  return new THREE.Vector3(Math.sin(tilt) * Math.sin(pan), -Math.cos(tilt), Math.sin(tilt) * Math.cos(pan)).normalize();
+type ViewId = 'foh' | 'front' | 'top' | 'left' | 'right';
+const VIEWS: { id: ViewId; label: string }[] = [
+  { id: 'foh', label: 'Régie' }, { id: 'front', label: 'Face' }, { id: 'top', label: 'Dessus' }, { id: 'left', label: 'Jardin' }, { id: 'right', label: 'Cour' },
+];
+
+interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; view: ViewId }
+const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, view: 'foh' };
+function loadPrefs(): Prefs {
+  try {
+    return { ...DEFAULT_PREFS, ...(JSON.parse(localStorage.getItem('luma.stage3d') ?? '{}') as Partial<Prefs>) };
+  } catch {
+    return DEFAULT_PREFS;
+  }
+}
+function savePrefs(p: Prefs): void {
+  try {
+    localStorage.setItem('luma.stage3d', JSON.stringify(p));
+  } catch {
+    // preferences simply not persisted
+  }
 }
 
-interface FixtureObjects {
-  root: THREE.Group;
-  body: THREE.Mesh;
-  beam: THREE.Mesh;
-  cells: THREE.Mesh[];
+function viewPose(id: ViewId, W: number, D: number, H: number): { pos: THREE.Vector3; target: THREE.Vector3 } {
+  const span = Math.max(W, D);
+  const target = new THREE.Vector3(0, Math.min(2, H / 3), -D / 2);
+  switch (id) {
+    case 'front': return { pos: new THREE.Vector3(0, 1.7, span * 0.9), target };
+    case 'top': return { pos: new THREE.Vector3(0, span * 1.6, -D / 2 + 0.01), target: new THREE.Vector3(0, 0, -D / 2) };
+    case 'left': return { pos: new THREE.Vector3(-span * 1.1, H * 0.6, -D / 2), target };
+    case 'right': return { pos: new THREE.Vector3(span * 1.1, H * 0.6, -D / 2), target };
+    default: return { pos: new THREE.Vector3(0, H * 0.75, span * 1.25), target };
+  }
 }
 
-function makeFixture(f: VisualFixture): FixtureObjects {
-  const root = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1b2130, roughness: 0.6, metalness: 0.3 });
-  const body = f.movable
-    ? new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.32, 20), bodyMat)
-    : f.cells.length
-      ? new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.6, f.cells.length * 0.18), 0.1, 0.12), bodyMat)
-      : new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.22, 16), bodyMat);
-  body.userData.fixtureId = f.id;
-  root.add(body);
-  const cells = f.cells.map((_, i) => {
-    const w = Math.max(0.6, f.cells.length * 0.18) / f.cells.length;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w * 0.85, 0.02, 0.1), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    m.position.set(-((f.cells.length - 1) * w) / 2 + i * w, -0.06, 0);
-    root.add(m);
-    return m;
-  });
-  const beamGeo = new THREE.ConeGeometry(1, 1, 32, 1, true);
-  beamGeo.translate(0, -0.5, 0); // apex at the origin, opening towards -y
-  const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  root.add(beam);
-  return { root, body, beam, cells };
-}
 
-function updateFixture(o: FixtureObjects, f: VisualFixture, selected: boolean, dimmed: boolean): void {
-  o.root.position.set(f.x, f.height, -f.y);
-  const dir = beamDirection(f);
-  // Beam reaches the floor (capped), cone radius from the beam angle.
-  const length = Math.min(30, f.height / Math.max(0.15, -dir.y));
-  const radius = length * Math.tan(THREE.MathUtils.degToRad(f.beamAngle / 2));
-  o.beam.scale.set(radius, length, radius);
-  o.beam.quaternion.setFromUnitVectors(DOWN, dir);
-  const mat = o.beam.material as THREE.MeshBasicMaterial;
-  mat.color.set(f.color);
-  mat.opacity = f.intensity > 0.01 ? (0.04 + 0.32 * f.intensity) * (dimmed ? 0.3 : 1) : 0;
-  o.beam.visible = mat.opacity > 0;
-  if (f.movable) o.body.quaternion.setFromUnitVectors(DOWN, dir);
-  (o.body.material as THREE.MeshStandardMaterial).emissive.set(selected ? 0x8b5cf6 : 0x000000);
-  f.cells.forEach((c, i) => (o.cells[i]?.material as THREE.MeshBasicMaterial | undefined)?.color.set(c));
+function InfoPanel({ f }: { f: VisualFixture }) {
+  return (
+    <div className="stage3d-panel" data-testid="stage3d-info">
+      <div className="row between"><b>{f.name}</b><span className="badge">{f.type}</span></div>
+      <div className="row small"><span className="swatch-btn" style={{ width: 16, height: 16, background: f.color }} />{f.color.toUpperCase()} · {Math.round(f.intensity * 100)} %</div>
+      {f.movable && <div className="small muted">Pan {f.panDeg.toFixed(0)}° · Tilt {f.tiltDeg.toFixed(0)}°</div>}
+      <div className="small muted">Faisceau {f.beamAngle.toFixed(0)}°{f.strobeHz ? ` · strobe ≈ ${f.strobeHz.toFixed(1)} Hz` : ''}{f.gobo ? ` · gobo ${f.gobo}` : ''}{f.prism ? ' · prisme' : ''}{f.cells.length ? ` · ${f.cells.length} cellules` : ''}</div>
+      <div className="grid g2" style={{ gap: 6 }}>
+        <label className="field"><span className="small muted">Hauteur (m)</span><NumberInput value={f.height} min={0} max={50} step={0.1} onChange={(v) => void act({ type: 'fixture.update', id: f.id, patch: { height: v } })} /></label>
+        <label className="field"><span className="small muted">Rotation (°)</span><NumberInput value={f.rotation} min={-360} max={360} onChange={(v) => void act({ type: 'fixture.update', id: f.id, patch: { rotation: v } })} /></label>
+      </div>
+      <span className="small dim">{f.mount === 'floor' ? 'Posé au sol (faisceau vers le haut)' : 'Accroché (faisceau vers le bas)'} — seuil 1 m</span>
+    </div>
+  );
 }
 
 export function Stage3D({ values, groupFilter }: { values?: FixtureValues; groupFilter?: string | null }) {
+  const wrap = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const live = useStore((s) => s.values);
   const project = useStore((s) => s.project!.project);
   const selection = useStore((s) => s.selection);
   const { fixtures } = useResolved();
   const model = useMemo(() => buildVisualModel(fixtures, values ?? live), [fixtures, values, live]);
+  const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
   const [error, setError] = useState<string | null>(null);
-  const ctx = useRef<{ scene: THREE.Scene; objects: Map<string, FixtureObjects>; stage: THREE.Group } | null>(null);
-  const latest = useRef({ model, selection, group: groupFilter });
-  latest.current = { model, selection, group: groupFilter };
+  const [fps, setFps] = useState(0);
+  const [hover, setHover] = useState<{ x: number; y: number; f: VisualFixture } | null>(null);
+  const setPrefs = (p: Partial<Prefs>) => setPrefsState((cur) => { const n = { ...cur, ...p }; savePrefs(n); return n; });
 
-  // One-time three.js setup.
+  const W = project.visualizer.stageWidth, D = project.visualizer.stageDepth;
+  const stage = useMemo(() => stageGeometry(W, D, model), [W, D, model]);
+  const latest = useRef({ model, selection, groupFilter, prefs, stage });
+  latest.current = { model, selection, groupFilter, prefs, stage };
+  const api = useRef<{ goTo: (v: ViewId) => void; rebuildEnv: () => void; setBloom: (on: boolean) => void } | null>(null);
+
   useEffect(() => {
     const el = host.current;
     if (!el) return;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     } catch (err) {
       setError(`WebGL indisponible : ${(err as Error).message}`);
       return;
     }
-    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
     el.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x07080c);
-    scene.add(new THREE.HemisphereLight(0x8090b0, 0x101018, 0.6));
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
-    camera.position.set(0, 7, 14);
+    scene.background = new THREE.Color(0x05060a);
+    scene.fog = new THREE.Fog(0x05060a, 30, 70);
+    scene.add(new THREE.HemisphereLight(0x8899bb, 0x0b0d14, 0.5));
+    const key = new THREE.DirectionalLight(0xb8c4ff, 0.35);
+    key.position.set(-6, 12, 10);
+    scene.add(key);
+    const camera = new THREE.PerspectiveCamera(48, 1, 0.05, 300);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1.5, -3);
-    controls.maxPolarAngle = Math.PI * 0.495;
-    controls.update();
-    const stage = new THREE.Group();
-    scene.add(stage);
-    const objects = new Map<string, FixtureObjects>();
-    ctx.current = { scene, objects, stage };
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minDistance = 1.5;
+    controls.maxDistance = 120;
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.85, 0.55, 0.12);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+    bloom.enabled = latest.current.prefs.glow;
+
+    let env: THREE.Group | null = null;
+    let envKey = '';
+    const rigs = new Map<string, Rig>();
+
+    // Camera transitions.
+    let anim: { from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; start: number } | null = null;
+    const goTo = (v: ViewId, instant = false) => {
+      const st = latest.current.stage;
+      const pose = viewPose(v, st.width, st.depth, st.wallHeight);
+      if (instant) {
+        camera.position.copy(pose.pos);
+        controls.target.copy(pose.target);
+        controls.update();
+      } else anim = { from: camera.position.clone(), to: pose.pos, tFrom: controls.target.clone(), tTo: pose.target, start: performance.now() };
+    };
+    goTo(latest.current.prefs.view, true);
 
     const resize = () => {
       const r = el.getBoundingClientRect();
-      renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false);
+      const w = Math.max(1, r.width), h = Math.max(1, r.height);
+      renderer.setSize(w, h, false);
+      composer.setSize(w, h);
       renderer.domElement.style.width = '100%';
       renderer.domElement.style.height = '100%';
-      camera.aspect = Math.max(1, r.width) / Math.max(1, r.height);
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(el);
 
-    // Click to select a fixture body.
+    // Picking (click = select, hover = tooltip).
     const ray = new THREE.Raycaster();
+    const pick = (cx: number, cy: number): string | undefined => {
+      const r = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+      const hit = ray.intersectObjects([...rigs.values()].flatMap((x) => x.bodies))[0];
+      return hit?.object.userData.fixtureId as string | undefined;
+    };
     let downAt = { x: 0, y: 0 };
+    let lastHover = 0;
     const onDown = (e: PointerEvent) => { downAt = { x: e.clientX, y: e.clientY }; };
     const onUp = (e: PointerEvent) => {
-      if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 4) return; // orbit drag, not a click
-      const r = renderer.domElement.getBoundingClientRect();
-      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-      const hit = ray.intersectObjects([...objects.values()].map((o) => o.body))[0];
-      const id = hit?.object.userData.fixtureId as string | undefined;
+      if (e.button !== 0 || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 4) return;
+      const id = pick(e.clientX, e.clientY);
       const st = useStore.getState();
       if (!id) st.setSelection([]);
       else if (e.ctrlKey || e.shiftKey) st.setSelection(st.selection.includes(id) ? st.selection.filter((x) => x !== id) : [...st.selection, id]);
       else st.setSelection([id]);
     };
+    const onMove = (e: PointerEvent) => {
+      const now = performance.now();
+      if (e.buttons || now - lastHover < 60) return;
+      lastHover = now;
+      const id = pick(e.clientX, e.clientY);
+      const f = id ? latest.current.model.find((m) => m.id === id) : undefined;
+      const r = el.getBoundingClientRect();
+      setHover(f ? { x: e.clientX - r.left, y: e.clientY - r.top, f } : null);
+    };
+    const onLeave = () => setHover(null);
     renderer.domElement.addEventListener('pointerdown', onDown);
     renderer.domElement.addEventListener('pointerup', onUp);
+    renderer.domElement.addEventListener('pointermove', onMove);
+    renderer.domElement.addEventListener('pointerleave', onLeave);
+
+    api.current = {
+      goTo: (v) => goTo(v),
+      rebuildEnv: () => { envKey = ''; },
+      setBloom: (on) => { bloom.enabled = on; },
+    };
 
     let raf = 0;
+    let frames = 0;
+    let fpsStart = performance.now();
+    const t0 = performance.now();
     const loop = () => {
-      const { model: m, selection: sel, group } = latest.current;
-      const g = group ? useStore.getState().project?.project.groups.find((x) => x.id === group) : null;
+      const now = performance.now();
+      const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st } = latest.current;
+      // Environment follows the stage size and truss rows.
+      const k = `${st.width}|${st.depth}|${st.wallHeight}|${m.filter((f) => f.mount === 'hanging').map((f) => `${f.x.toFixed(1)},${f.y.toFixed(1)},${f.height.toFixed(1)}`).join(';')}`;
+      if (k !== envKey) {
+        if (env) { scene.remove(env); disposeGroup(env); }
+        env = buildEnvironment(st, m);
+        scene.add(env);
+        envKey = k;
+      }
+      const group = gf ? useStore.getState().project?.project.groups.find((g) => g.id === gf) : null;
       const ids = new Set(m.map((f) => f.id));
-      for (const [id, o] of objects) if (!ids.has(id)) { scene.remove(o.root); objects.delete(id); }
+      for (const [id, r] of rigs) if (!ids.has(id)) { disposeRig(r, scene); rigs.delete(id); }
       for (const f of m) {
-        let o = objects.get(f.id);
-        if (!o || o.cells.length !== f.cells.length || (o.body.geometry.type === 'CylinderGeometry') !== (f.movable || !f.cells.length)) {
-          if (o) scene.remove(o.root);
-          o = makeFixture(f);
-          objects.set(f.id, o);
-          scene.add(o.root);
+        let r = rigs.get(f.id);
+        if (!r || r.key !== rigKey(f)) {
+          if (r) disposeRig(r, scene);
+          r = buildRig(f, scene);
+          rigs.set(f.id, r);
         }
-        updateFixture(o, f, sel.includes(f.id), !!g && !g.fixtureIds.includes(f.id));
+        updateRig(r, f, { time: (now - t0) / 1000, haze: p.haze, pools: p.pools, labels: p.labels, selected: sel.includes(f.id), dimmed: !!group && !group.fixtureIds.includes(f.id), stage: st });
+      }
+      if (anim) {
+        const k2 = Math.min(1, (now - anim.start) / 700);
+        const e = k2 < 0.5 ? 2 * k2 * k2 : 1 - (-2 * k2 + 2) ** 2 / 2;
+        camera.position.lerpVectors(anim.from, anim.to, e);
+        controls.target.lerpVectors(anim.tFrom, anim.tTo, e);
+        if (k2 >= 1) anim = null;
       }
       controls.update();
-      renderer.render(scene, camera);
+      if (bloom.enabled) composer.render();
+      else renderer.render(scene, camera);
+      frames++;
+      if (now - fpsStart > 1000) {
+        setFps(Math.round((frames * 1000) / (now - fpsStart)));
+        frames = 0;
+        fpsStart = now;
+      }
       raf = requestAnimationFrame(loop);
     };
     loop();
@@ -167,48 +252,59 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
-      scene.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (mesh.geometry) mesh.geometry.dispose();
-        const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-        else mat?.dispose();
-      });
+      renderer.domElement.removeEventListener('pointermove', onMove);
+      renderer.domElement.removeEventListener('pointerleave', onLeave);
+      for (const r of rigs.values()) disposeRig(r, scene);
+      if (env) disposeGroup(env);
+      disposeTextures();
+      composer.dispose();
       renderer.dispose();
       renderer.domElement.remove();
-      ctx.current = null;
+      api.current = null;
     };
   }, []);
 
-  // Stage floor, trusses and audience marker (rebuilt when the stage size or rig heights change).
-  const heights = [...new Set(model.map((f) => Math.round(f.height * 10) / 10))].join(',');
-  useEffect(() => {
-    const c = ctx.current;
-    if (!c) return;
-    c.stage.clear();
-    const W = project.visualizer.stageWidth, D = project.visualizer.stageDepth;
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.1, D), new THREE.MeshStandardMaterial({ color: 0x10141d, roughness: 0.9 }));
-    floor.position.set(0, -0.05, -D / 2);
-    c.stage.add(floor);
-    const grid = new THREE.GridHelper(Math.max(W, D), Math.max(W, D), 0x283142, 0x1a2030);
-    grid.position.set(0, 0.002, -D / 2);
-    c.stage.add(grid);
-    const trussMat = new THREE.MeshStandardMaterial({ color: 0x5a6070, metalness: 0.7, roughness: 0.4 });
-    for (const h of heights ? heights.split(',').map(Number) : []) {
-      if (h <= 0.3) continue;
-      for (const f of model.filter((x) => Math.round(x.height * 10) / 10 === h)) {
-        const bar = new THREE.Mesh(new THREE.BoxGeometry(1, 0.12, 0.12), trussMat);
-        bar.position.set(f.x, h + 0.2, -f.y);
-        c.stage.add(bar);
-      }
-    }
-    const audience = new THREE.Mesh(new THREE.PlaneGeometry(W, 1.5), new THREE.MeshBasicMaterial({ color: 0x1a2235, side: THREE.DoubleSide }));
-    audience.rotation.x = -Math.PI / 2;
-    audience.position.set(0, 0.001, 1.2);
-    c.stage.add(audience);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt on stage size / height set only, not every value frame
-  }, [project.visualizer.stageWidth, project.visualizer.stageDepth, heights, fixtures]);
+  useEffect(() => api.current?.setBloom(prefs.glow), [prefs.glow]);
+
+  const selected = selection.length === 1 ? model.find((f) => f.id === selection[0]) : undefined;
+  const fullscreen = () => {
+    const el = wrap.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen().catch(() => undefined);
+  };
 
   if (error) return <div className="empty">{error}. Utilisez la vue 2D.</div>;
-  return <div ref={host} className="canvas-wrap" style={{ height: '100%' }} data-testid="stage-3d" />;
+  return (
+    <div ref={wrap} className="canvas-wrap stage3d" style={{ height: '100%' }}>
+      <div ref={host} style={{ position: 'absolute', inset: 0 }} data-testid="stage-3d" />
+      <div className="stage3d-toolbar">
+        <div className="chips" role="group" aria-label="Caméras">
+          <Camera size={14} className="dim" />
+          {VIEWS.map((v) => (
+            <button key={v.id} className={`chip ${prefs.view === v.id ? 'on' : ''}`} data-testid={`cam-${v.id}`} onClick={() => { setPrefs({ view: v.id }); api.current?.goTo(v.id); }}>{v.label}</button>
+          ))}
+        </div>
+        <div className="grow" />
+        <label className="row small" title="Densité de brume : visibilité des faisceaux dans l’air">
+          <Sun size={13} className="dim" />Brume
+          <input type="range" min={0} max={100} value={Math.round(prefs.haze * 100)} style={{ width: 90 }} onChange={(e) => setPrefs({ haze: Number(e.target.value) / 100 })} data-testid="haze" />
+        </label>
+        <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title="Halo lumineux (bloom)"><Sparkles size={12} /> Glow</button>
+        <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title="Taches de lumière et gobos au sol et sur le cyclorama"><Eye size={12} /> Taches</button>
+        <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title="Noms des projecteurs"><Tag size={12} /> Noms</button>
+        <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)"><Expand size={12} /></button>
+        <span className="mono small dim" data-testid="fps">{fps} i/s</span>
+      </div>
+      {hover && (
+        <div className="stage3d-tip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <b>{hover.f.name}</b>
+          <span className="small muted">{Math.round(hover.f.intensity * 100)} % · {hover.f.color.toUpperCase()}{hover.f.movable ? ` · P ${hover.f.panDeg.toFixed(0)}° T ${hover.f.tiltDeg.toFixed(0)}°` : ''}</span>
+        </div>
+      )}
+      {selected && <InfoPanel f={selected} />}
+      <div className="stage3d-hint small dim">Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique</div>
+    </div>
+  );
 }
+

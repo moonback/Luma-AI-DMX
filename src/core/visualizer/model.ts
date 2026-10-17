@@ -1,10 +1,11 @@
-import type { FixtureProfile, FixtureType, FixtureValues, Fixture, FixtureMode } from '../model/schemas';
+import type { FixtureProfile, FixtureType, FixtureValues, Fixture, FixtureMode, Channel } from '../model/schemas';
 import { cellColors, displayColor } from '../fixtures/color';
+import { coarseChannel, rangeAt } from '../fixtures/profiles';
 import { rgbToHex } from '../util/math';
 
 /**
- * Renderer-agnostic visual model. The 2D canvas consumes it today; a Three.js / R3F view can consume the same
- * structure (x/y in meters, pan/tilt in degrees, beam angle). This is an approximation, not a photometric simulation.
+ * Renderer-agnostic visual model consumed by the 2D canvas and the 3D view.
+ * Positions/height in meters, pan/tilt in degrees. This is an approximation, not a photometric simulation.
  */
 export interface VisualFixture {
   id: string;
@@ -18,11 +19,48 @@ export interface VisualFixture {
   movable: boolean;
   panDeg: number;
   tiltDeg: number;
+  /** Effective beam angle in degrees (profile angle, widened/narrowed by the zoom channel when present). */
   beamAngle: number;
   /** Mounting height in meters. */
   height: number;
+  /** Hung from a truss (beam points down) or standing on the floor (beam points up). */
+  mount: 'hanging' | 'floor';
   /** Per-cell colours for multi-cell fixtures (left to right), already scaled by intensity. */
   cells: string[];
+  /** Estimated strobe frequency in Hz from the strobe/shutter channel, 0 when not strobing. */
+  strobeHz: number;
+  /** 1-based index of the selected gobo slot, 0 when open / no gobo wheel. */
+  gobo: number;
+  /** Prism engaged (beam split). */
+  prism: boolean;
+}
+
+/** Floor-standing below this height. */
+export const FLOOR_MOUNT_MAX_HEIGHT = 1;
+const MIN_STROBE_HZ = 1;
+const MAX_STROBE_HZ = 20;
+
+/** Position inside a "strobe" range → frequency (slow → fast), as most profiles document. */
+export function strobeFrequency(channel: Channel | undefined, value: number | undefined): number {
+  if (!channel || value === undefined) return 0;
+  const dmx = Math.round(value * 255);
+  const r = rangeAt(channel, dmx);
+  if (!r || (r.kind !== 'strobe' && r.kind !== 'random' && r.kind !== 'pulse')) return 0;
+  const k = r.to > r.from ? (dmx - r.from) / (r.to - r.from) : 0;
+  return MIN_STROBE_HZ + k * (MAX_STROBE_HZ - MIN_STROBE_HZ);
+}
+
+export function goboIndex(channel: Channel | undefined, value: number | undefined): number {
+  if (!channel || value === undefined) return 0;
+  const r = rangeAt(channel, Math.round(value * 255));
+  if (!r || r.kind !== 'gobo') return 0;
+  return channel.ranges.filter((x) => x.kind === 'gobo').indexOf(r) + 1;
+}
+
+/** Zoom 0..1 maps the nominal angle from 40 % to 160 % (approximation: real zoom ranges are fixture specific). */
+export function zoomedAngle(nominal: number, zoom: number | undefined): number {
+  if (zoom === undefined) return nominal;
+  return Math.min(90, Math.max(2, nominal * (0.4 + 1.2 * zoom)));
 }
 
 export function buildVisualModel(
@@ -33,6 +71,12 @@ export function buildVisualModel(
     const v = values[rf.fixture.id] ?? {};
     const { color, intensity } = displayColor(rf, v);
     const movable = rf.attributes.includes('pan') || rf.attributes.includes('tilt');
+    const strobe = Math.max(
+      strobeFrequency(coarseChannel(rf.mode, 'strobe'), v.strobe),
+      strobeFrequency(coarseChannel(rf.mode, 'shutter'), v.shutter),
+    );
+    const prism = coarseChannel(rf.mode, 'prism');
+    const prismRange = prism && v.prism !== undefined ? rangeAt(prism, Math.round(v.prism * 255)) : undefined;
     return {
       id: rf.fixture.id,
       name: rf.fixture.name,
@@ -45,9 +89,13 @@ export function buildVisualModel(
       movable,
       panDeg: movable ? ((v.pan ?? 0.5) - 0.5) * rf.profile.physical.panRange : 0,
       tiltDeg: movable ? ((v.tilt ?? 0.5) - 0.5) * rf.profile.physical.tiltRange : 0,
-      beamAngle: rf.profile.physical.beamAngle,
+      beamAngle: zoomedAngle(rf.profile.physical.beamAngle, rf.attributes.includes('zoom') ? v.zoom : undefined),
       height: rf.fixture.height,
+      mount: rf.fixture.height < FLOOR_MOUNT_MAX_HEIGHT ? 'floor' : 'hanging',
       cells: cellColors(rf, v).map((c) => rgbToHex(c.color)),
+      strobeHz: strobe,
+      gobo: goboIndex(coarseChannel(rf.mode, 'gobo'), v.gobo),
+      prism: !!prismRange && prismRange.kind !== 'open' && !/sans|aucun|no function|open/i.test(prismRange.label),
     };
   });
 }

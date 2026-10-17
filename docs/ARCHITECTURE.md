@@ -60,7 +60,15 @@ Aucun élément de l'interface ne présente l'état calculé comme une preuve de
 Les effets sont des fonctions pures de la phase (`computeEffect`). Les instances intègrent leur phase dans le tick : aucun timer par effet, pas de travail sur le thread de l'interface. L'aléatoire utilise un hachage déterministe (`hash01(seed, cycle, fixture)`), ce qui donne des résultats reproductibles. Le strobe est plafonné par `maxStrobeHz`.
 
 ## Visualiseurs 2D et 3D
-`core/visualizer/model.ts` produit des `VisualFixture` : position et hauteur en mètres, pan/tilt en degrés, angle de faisceau, couleur, intensité, couleurs des cellules. Le canvas 2D et la vue 3D three.js (`renderer/features/Stage3D.tsx`) consomment ce même modèle. En 3D, chaque faisceau est un cône additif orienté par pan/tilt, de longueur limitée au sol, dont le rayon dérive de l'angle du profil. Le rendu tourne dans une boucle `requestAnimationFrame` qui ne recrée pas les objets à chaque trame.
+`core/visualizer/model.ts` produit des `VisualFixture` : position et hauteur en mètres, pan/tilt en degrés, angle de faisceau, couleur, intensité, couleurs des cellules. Le modèle inclut aussi l'accroche (au sol sous 1 m), la fréquence de strobe estimée, le gobo actif, le prisme et l'angle zoomé. Le canvas 2D et la vue 3D consomment ce même modèle.
+
+La vue 3D (`renderer/features/Stage3D.tsx` + `renderer/features/stage3d/`) se compose de :
+- `core/visualizer/beam.ts` : géométrie pure et testée (direction, impact sol/cyclorama, forme et atténuation des taches, flashs de strobe) ;
+- `stage3d/rig.ts` : modèles articulés (racine → lyre (pan) → tête (tilt) → lentille) et shader de faisceau volumétrique (bords adoucis selon l'angle de vue, cœur lumineux, atténuation le long du faisceau, mélange additif) ;
+- `stage3d/environment.ts` : plateau, cyclorama, coulisses, salle, truss en treillis générés par rangée de projecteurs accrochés ;
+- `stage3d/textures.ts` : tache de lumière et gobos procéduraux.
+
+Le post-traitement glow (bloom) passe par l'EffectComposer de three.js. Les objets ne sont reconstruits que si la structure d'un projecteur change ; tout le reste est mis à jour à chaque image. Ce n'est pas une simulation photométrique : pas d'ombres ni de transport réel de la lumière.
 
 ## Projecteurs multi-cellules
 Un canal de profil peut porter `cell: n`. Sa valeur est alors stockée sous la clé `attribut#n` (par exemple `red#3`). La fusion, le rendu DMX, le virtual dimmer et le blackout utilisent ces clés. `colorToAttributes` applique une couleur à toutes les cellules ou à une seule. Rainbow et Color cycle traitent chaque cellule comme un élément de la répartition de phase.

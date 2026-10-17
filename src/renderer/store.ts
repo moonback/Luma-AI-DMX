@@ -17,6 +17,7 @@ export const PAGES = [
   { id: 'timeline', label: 'Timeline' },
   { id: 'ai', label: 'AI Lighting Director' },
   { id: 'visualizer', label: 'Stage Visualizer' },
+  { id: 'stage3d', label: 'Stage 3D' },
   { id: 'audio', label: 'Audio Reactive' },
   { id: 'output', label: 'DMX Output' },
   { id: 'settings', label: 'Settings' },

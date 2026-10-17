@@ -57,7 +57,14 @@ npm start
 4. **Enregistrer une scène** : *Live Console › Enregistrer scène* (à partir des valeurs du programmeur).
 5. **Créer des cues** : *Cues & Sequences*. Chaque cue référence une scène, avec un fondu, un délai, une courbe et un déclenchement manuel ou enchaîné. Commandes : `Espace` = GO, `Maj+Espace` = BACK, `P` = pause/reprise.
 6. **Effets et timeline** : *Effects* (10 types, synchronisation BPM, graine aléatoire) et *Timeline* (scènes, effets et cues sur une ligne de temps, avec annuler/rétablir).
-7. **Visualiseur** : *Stage Visualizer*, vue 2D de dessus ou vue 3D (three.js) avec faisceaux orientés par pan/tilt et cellules des barres LED.
+7. **Visualiseur** : *Stage Visualizer*, vue 2D de dessus ou vue 3D (three.js).
+   - Faisceaux volumétriques dans une brume réglable, avec halo (glow).
+   - Taches de lumière et gobos au sol et sur le cyclorama.
+   - Lyres articulées (base, lyre, tête suivant pan/tilt), facettes de prisme, flashs de strobe, zoom.
+   - Un faisceau par cellule pour les barres LED.
+   - Truss générés à partir du kit, avec pieds ; décor complet (plateau, cyclorama, coulisses, salle).
+   - 5 caméras (Régie, Face, Dessus, Jardin, Cour), infobulle au survol, panneau du projecteur sélectionné (hauteur et rotation modifiables), noms, plein écran, compteur d'images/s.
+   - Un projecteur à moins de 1 m de hauteur est considéré posé au sol : son faisceau part vers le haut.
 8. **Assistant IA** : *AI Lighting Director*. Décrivez l'ambiance souhaitée, vérifiez la proposition (cibles, avertissements, aperçu), modifiez ou excluez des actions, puis appliquez. Un rapport indique les actions exécutées, celles qui ont été ignorées et la vérification de l'état calculé.
 9. **Enregistrer** : `Ctrl+S`. Au moment de quitter, l'application signale les modifications non enregistrées.
 
