@@ -75,6 +75,8 @@ Effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaines et plus
 > - **Déplacement libre** : en 2D (mode Positionner) pour les structures, le décor et les écrans ; en 3D au gizmo (mode Éditer) pour les structures et le décor (la hauteur du gizmo règle l'élévation du décor). Le panneau 3D de sélection propose Dupliquer et Supprimer.
 > - **Une seule sélection active** : sélectionner des projecteurs désélectionne l'élément de scène, et inversement.
 >
+> **Projecteurs seuls** : ajouter des projecteurs au patch n'ajoute plus de truss en 3D. Les « truss implicites », dessinées pour chaque rangée de projecteurs suspendus non accrochés, sont retirées ; seules les structures posées par l'utilisateur apparaissent.
+>
 > Les anciens projets s'ouvrent avec `props: []`. Le modèle « Concert » reçoit enceintes, retour et pied de micro.
 >
 > **Reste** : les faisceaux ne s'arrêtent pas encore sur le décor (`beamHit`, fonctionnalité 1 de roadmap-scene) ; les interprètes ne montent pas sur un praticable (pas d'élévation) ; pas encore d'accroche de projecteur sur un totem.

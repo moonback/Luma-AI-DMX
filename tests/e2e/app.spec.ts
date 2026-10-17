@@ -232,9 +232,8 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
     HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { w.__downloads.push(this.href); };
     // The app CSP forbids fetching blob: URLs, so measure the recording when its URL is created.
     const create = URL.createObjectURL.bind(URL);
-    URL.createObjectURL = (o: Blob | MediaSource) => { if (o instanceof Blob) { w.__blobSize = o.size; console.log(`blob ${o.type} ${o.size}`); } return create(o); };
+    URL.createObjectURL = (o: Blob | MediaSource) => { if (o instanceof Blob) w.__blobSize = o.size; return create(o); };
   });
-  page.on('console', (m) => { if (m.text().startsWith('blob ')) console.log('[page]', m.text()); });
   await page.getByTestId('capture').click();
   await page.getByTestId('record').click();
   await page.waitForTimeout(1500);
