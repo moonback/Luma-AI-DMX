@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Effect, FixtureValues, Project } from '../model/schemas';
 import { effectParamsSchema } from '../model/schemas';
 import { colorCapability, colorToAttributes, displayColor } from '../fixtures/color';
+import { findModule, moduleDimmerKeys } from '../fixtures/modules';
 import type { ResolvedFixture } from '../fixtures/profiles';
 import type { Engine } from '../engine/Engine';
 import type { ProjectIndex } from '../engine/resolve';
@@ -35,6 +36,11 @@ export function resolveAiTarget(index: ProjectIndex, t: AiTarget): { ids: string
   const hasSelector = explicit.size > 0 || t.all === true;
   if (t.fixtureTypes?.length) pool = pool.filter((r) => t.fixtureTypes!.includes(r.profile.type));
   if (t.tags?.length) pool = pool.filter((r) => r.fixture.tags.some((tag) => t.tags!.map(normalize).includes(normalize(tag))));
+  if (t.module) {
+    const before = pool.length;
+    pool = pool.filter((r) => findModule(r.profile, t.module!));
+    if (before && !pool.length) problems.push(`Aucun projecteur ciblé n’a de module « ${t.module} »`);
+  }
   if (!hasSelector && !t.fixtureTypes?.length && !t.tags?.length && problems.length) pool = [];
   let ids = pool.map((r) => r.fixture.id);
   if (t.limit) ids = ids.slice(0, t.limit);
@@ -65,6 +71,7 @@ const hasPosition = (rf: ResolvedFixture) => rf.attributes.includes('pan') || rf
 function checkEffect(spec: AiEffectSpec, ctx: ValidationContext, messages: string[]): string[] | null {
   const { ids, problems } = resolveAiTarget(ctx.index, spec.target);
   messages.push(...problems);
+  if (spec.target.module) messages.push(`Les effets s’appliquent au projecteur entier, pas seulement au module « ${spec.target.module} »`);
   if (spec.effectType === 'strobe' && !ctx.allowStrobe) {
     messages.push('Strobe interdit par les paramètres de sécurité (Paramètres › Sécurité)');
     return null;
@@ -200,9 +207,10 @@ export function lookToValues(index: ProjectIndex, look: readonly LookPart[]): Fi
       const rf = index.fixtures.get(id);
       if (!rf) return;
       const v = (out[id] ??= {});
-      if (part.level !== undefined) v.dimmer = part.level;
+      const mod = part.target.module ? findModule(rf.profile, part.target.module) : undefined;
+      if (part.level !== undefined) for (const k of mod ? moduleDimmerKeys(rf, mod) : ['dimmer']) v[k] = part.level;
       const c = colors[i % Math.max(1, colors.length)];
-      if (c) Object.assign(v, colorToAttributes(rf, hexToRgb(c)));
+      if (c) Object.assign(v, colorToAttributes(rf, hexToRgb(c), undefined, mod));
       if (part.pan !== undefined && rf.attributes.includes('pan')) v.pan = part.pan;
       if (part.tilt !== undefined && rf.attributes.includes('tilt')) v.tilt = part.tilt;
     });
@@ -218,7 +226,7 @@ function immediateValues(index: ProjectIndex, a: AiAction, ids: string[], pendin
   const allowed = new Set(ids);
   switch (a.type) {
     case 'setIntensity':
-      return Object.fromEntries(ids.map((id) => [id, { dimmer: a.level }]));
+      return filterIds(lookToValues(index, [{ target: a.target, level: a.level }]), allowed);
     case 'setColor':
       return filterIds(lookToValues(index, [{ target: a.target, ...(a.color ? { color: a.color } : {}), ...(a.colors ? { colors: a.colors } : {}) }]), allowed);
     case 'setPosition':
@@ -265,7 +273,7 @@ export function interpreterContext(index: ProjectIndex, engine: Engine, allowStr
     current[id] = { color: rgbToHex(d.color), level: d.intensity };
   }
   return {
-    fixtures: [...index.fixtures.values()].map((rf) => ({ id: rf.fixture.id, name: rf.fixture.name, type: rf.profile.type, attributes: rf.attributes })),
+    fixtures: [...index.fixtures.values()].map((rf) => ({ id: rf.fixture.id, name: rf.fixture.name, type: rf.profile.type, attributes: rf.attributes, modules: rf.profile.modules.map((m) => m.name) })),
     groups: [...index.groups.values()].map((g) => ({ name: g.name })),
     current,
     allowStrobe,

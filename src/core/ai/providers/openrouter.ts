@@ -17,6 +17,7 @@ const target = z.object({
   fixtureNames: z.array(z.string()).optional(),
   fixtureTypes: z.array(z.enum(FIXTURE_TYPES)).optional(),
   limit: z.number().optional(),
+  module: z.string().optional(),
 });
 const look = z.object({ target, level: z.number().optional(), color: z.string().optional(), colors: z.array(z.string()).optional(), pan: z.number().optional(), tilt: z.number().optional() });
 const effect = z.object({
@@ -59,6 +60,7 @@ Rules:
 ${JSON.stringify(PLAN_JSON_SCHEMA)}
 - Values are normalized 0..1 (level, pan, tilt, amplitude, offset, phaseSpread). Colours are "#RRGGBB". Fades/holds are seconds. speed is cycles per second.
 - Target fixtures only by the exact group names, fixture names or fixture types listed in the rig description. {"all": true} targets the whole rig.
+- Multi-head fixtures list their "modules" (e.g. main head + LED ring). Add "module": "<module name>" to a target to change only that head's colour/intensity.
 - Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove) need pan/tilt. Colour effects need colour attributes.
 - Never touch reset, lamp or other special/control functions; they are not available to you.
 - Strobe effects are only allowed when the rig description says strobeAllowed: true.
@@ -74,6 +76,7 @@ export function describeRig(index: ProjectIndex, allowStrobe: boolean, bpm: numb
       name: rf.fixture.name,
       type: rf.profile.type,
       attributes: [...new Set(rf.attributes.map(baseAttribute))].filter((a) => a !== 'control' && a !== 'macro'),
+      ...(rf.profile.modules.length ? { modules: rf.profile.modules.map((m) => m.name) } : {}),
     })),
     groups: [...index.groups.values()].map((g) => ({ name: g.name, size: g.fixtureIds.length })),
     scenes: [...index.scenes.values()].map((s) => s.name),

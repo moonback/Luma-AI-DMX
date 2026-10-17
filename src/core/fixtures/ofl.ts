@@ -19,6 +19,10 @@ const capSchema = z.looseObject({
   wheel: z.union([z.string(), z.array(z.string())]).optional(),
   comment: z.string().optional(),
   hold: z.string().optional(),
+  speedStart: z.string().optional(),
+  speedEnd: z.string().optional(),
+  angleStart: z.string().optional(),
+  angleEnd: z.string().optional(),
 });
 type OflCap = z.infer<typeof capSchema>;
 const chanSchema = z.looseObject({
@@ -43,6 +47,11 @@ export const oflFixtureSchema = z.looseObject({
     .looseObject({
       lens: z.looseObject({ degreesMinMax: z.tuple([z.number(), z.number()]).optional() }).optional(),
       focus: z.looseObject({ panMax: z.union([z.number(), z.string()]).optional(), tiltMax: z.union([z.number(), z.string()]).optional() }).optional(),
+      /** [width, height, depth] in mm. */
+      dimensions: z.tuple([z.number(), z.number(), z.number()]).optional(),
+      weight: z.number().optional(),
+      power: z.number().optional(),
+      DMXconnector: z.string().optional(),
     })
     .optional(),
   matrix: z
@@ -190,7 +199,15 @@ function capRange(f: OflFixture, chanName: string, cap: OflCap, scale: number): 
       dangerous = true;
       break;
   }
-  return { from, to, label: label.slice(0, 64) || cap.type, kind, ...(color ? { color } : {}), dangerous };
+  const hz = (s: string | undefined) => (s && /^\d+(\.\d+)?Hz$/.test(s) ? parseFloat(s) : undefined);
+  const deg = (s: string | undefined) => (s && /^-?\d+(\.\d+)?deg$/.test(s) ? parseFloat(s) : undefined);
+  const hzFrom = hz(cap.speedStart), hzTo = hz(cap.speedEnd ?? cap.speedStart);
+  const physFrom = deg(cap.angleStart), physTo = deg(cap.angleEnd ?? cap.angleStart);
+  return {
+    from, to, label: label.slice(0, 64) || cap.type, kind, ...(color ? { color } : {}), dangerous,
+    ...(hzFrom !== undefined && hzTo !== undefined && hzFrom <= 100 && hzTo <= 100 ? { hzFrom, hzTo } : {}),
+    ...(physFrom !== undefined && physTo !== undefined ? { physFrom, physTo } : {}),
+  };
 }
 
 function attributeFor(f: OflFixture, chanName: string, list: OflCap[]): string | null {
@@ -273,19 +290,22 @@ export function convertOflFixture(json: unknown, opts: { manufacturer: string; k
         const open = ranges.find((x) => x.kind === 'open');
         def = open ? Math.round((open.from + open.to) / 2) : 0;
       }
+      const def16 = scale === 256 && typeof r.chan.defaultValue === 'number' && r.chan.defaultValue >= 0 && r.chan.defaultValue <= 65535 ? { default16: Math.round(r.chan.defaultValue) } : {};
       if (!attr) {
         const g = generic(key);
         return { ...g, default: Math.max(0, Math.min(255, def ?? 0)), ranges: dedupeRanges(ranges) };
       }
       used.add(keyOf(attr));
       used.add(`coarse:${keyOf(attr)}`);
-      return { name: key.slice(0, 48), attribute: attr, fine: false, default: Math.max(0, Math.min(255, def ?? 0)), ranges: dedupeRanges(ranges), ...(cell ? { cell } : {}) };
+      return { name: key.slice(0, 48), attribute: attr, fine: false, default: Math.max(0, Math.min(255, def ?? 0)), ...def16, ranges: dedupeRanges(ranges), ...(cell ? { cell } : {}) };
     });
     modes.push({ name: m.name.slice(0, 48), channels });
   }
   const lens = f.physical?.lens?.degreesMinMax;
   const num = (v: number | string | undefined, d: number) => (typeof v === 'number' ? v : d);
   const moving = type.startsWith('moving');
+  const dims = f.physical?.dimensions;
+  const pos = (v: number | undefined, max: number) => v !== undefined && v > 0 && v <= max;
   const candidate = {
     id: `ofl-${slug(opts.manufacturer)}-${slug(opts.key)}`.slice(0, 64),
     name: f.name.slice(0, 80),
@@ -296,6 +316,11 @@ export function convertOflFixture(json: unknown, opts: { manufacturer: string; k
       panRange: moving ? Math.min(720, num(f.physical?.focus?.panMax, 540)) : 0,
       tiltRange: moving ? Math.min(360, num(f.physical?.focus?.tiltMax, 270)) : 0,
       beamAngle: Math.max(1, Math.min(90, lens ? lens[1] || lens[0] || 25 : 25)),
+      ...(lens && lens[0] >= 1 && lens[1] <= 90 && lens[0] < lens[1] ? { zoomMin: lens[0], zoomMax: lens[1] } : {}),
+      ...(dims && dims.every((d) => d > 0 && d <= 10000) ? { dimensions: { width: dims[0] / 1000, height: dims[1] / 1000, depth: dims[2] / 1000 } } : {}),
+      ...(pos(f.physical?.weight, 1000) ? { weight: f.physical!.weight } : {}),
+      ...(pos(f.physical?.power, 100000) ? { power: f.physical!.power } : {}),
+      ...(f.physical?.DMXconnector ? { connector: f.physical.DMXconnector.slice(0, 48) } : {}),
     },
     modes,
   };

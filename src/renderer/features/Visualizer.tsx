@@ -277,6 +277,14 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
           g.fillRect(p.x - (f.cells.length * w) / 2 + i * w, p.y + 9, w - 1, 5);
         });
       }
+      f.rings.forEach((c, i) => {
+        // LED ring module: drawn around the body, not as a separate beam.
+        g.lineWidth = 2;
+        g.strokeStyle = c;
+        g.beginPath();
+        g.arc(p.x, p.y, (f.movable ? 11 : 9) + i * 3, 0, Math.PI * 2);
+        g.stroke();
+      });
       g.lineWidth = selection.includes(f.id) ? 2 : 1;
       g.strokeStyle = selection.includes(f.id) ? '#8b5cf6' : group?.fixtureIds.includes(f.id) ? group.color : '#36415a';
       g.beginPath();

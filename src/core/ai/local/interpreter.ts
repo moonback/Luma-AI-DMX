@@ -9,7 +9,7 @@ import type { AiAction, AiEffectSpec, AiTarget, LookPart } from '../actions';
  */
 
 export interface InterpreterContext {
-  fixtures: { id: string; name: string; type: FixtureType; attributes: string[] }[];
+  fixtures: { id: string; name: string; type: FixtureType; attributes: string[]; modules?: string[] }[];
   groups: { name: string }[];
   /** Current computed look per fixture (display colour + intensity). */
   current: Record<string, { color: string; level: number }>;
@@ -85,6 +85,9 @@ function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; 
   if (has(text, /\bwash\b/) && !types.includes('moving-head-wash')) types.push('moving-head-wash');
   if (has(text, /\bpars?\b|\bpar ?leds?\b/)) types.push('par');
   if (has(text, /\b(stroboscopes?|les strobes|des strobes)\b/)) types.push('strobe');
+  // A head of multi-head fixtures: generic words first, then the module names of the rig.
+  const module = has(text, /\b(anneaux?|rings?)\b/) ? 'anneau' : has(text, /\btetes? principales?\b/) ? 'tête principale'
+    : [...new Set(ctx.fixtures.flatMap((f) => f.modules ?? []))].find((m) => new RegExp(`\\b${escapeRe(normalize(m))}\\b`).test(text));
   const parts: string[] = [];
   const target: AiTarget = {};
   if (groupNames.length) { target.groupNames = groupNames; parts.push(`groupe(s) ${groupNames.join(', ')}`); }
@@ -92,6 +95,7 @@ function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; 
   if (types.length) { target.fixtureTypes = [...new Set(types)]; parts.push(typeLabel(types)); }
   if (limit && Number.isFinite(limit)) { target.limit = limit; parts.unshift(`${limit} premier(s)`); }
   if (!parts.length) { target.all = true; parts.push('tous les projecteurs'); }
+  if (module) { target.module = module; parts.unshift(`${module} de`); }
   return { target, label: parts.join(' ') };
 }
 

@@ -6,6 +6,7 @@ import { Empty, Modal, Field, PageHead, Panel, pct, useResolved, useThrottled } 
 import { attributeClass, attributeLabel, EMITTER_ATTRIBUTES } from '../../core/fixtures/attributes';
 import { cellColors, colorCapability, colorCells, displayColor } from '../../core/fixtures/color';
 import { channelKey, coarseChannel, type ResolvedFixture } from '../../core/fixtures/profiles';
+import { findModule, moduleDimmerKeys, moduleOfCell } from '../../core/fixtures/modules';
 import { rgbToHex } from '../../core/util/math';
 import type { Channel } from '../../core/model/schemas';
 
@@ -142,23 +143,37 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
   const channelFor = (a: string) => selected.map((rf) => coarseChannel(rf.mode, a)).find((c) => c);
   const colorCaps = new Set(selected.map(colorCapability));
   const emitters = EMITTER_ATTRIBUTES.filter(has);
+  // Multi-head fixtures: « Toutes » or one head (module) of the first selected fixture's profile.
+  const modules = first.profile.modules;
+  const [scope, setScope] = useState('');
+  const scopeModule = scope ? findModule(first.profile, scope) : undefined;
+  const dimmerKeys = modules.length ? moduleDimmerKeys(first, scopeModule) : ['dimmer'];
+  const setDimmer = (v: number) => sendThrottled(Object.fromEntries(dimmerKeys.map((k) => [k, v])));
+  const colorScope = scopeModule ? { module: scopeModule.name } : {};
   const beam = attrs.filter((a) => attributeClass(a) === 'beam' || attributeClass(a) === 'special');
-  const sendColor = useThrottled((hex: string) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: hex }), 40);
+  const sendColor = useThrottled((hex: string) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: hex, ...colorScope }), 40);
   const d = displayColor(first, values[first.fixture.id] ?? {});
 
   return (
     <div className="col gap-lg">
+      {modules.length > 1 && (
+        <div className="chips" role="group" aria-label="Tête">
+          {[{ name: '', label: 'Toutes' }, ...modules.map((m) => ({ name: m.name, label: m.name }))].map((m) => (
+            <button key={m.name} className={`chip ${scope === m.name ? 'on' : ''}`} aria-pressed={scope === m.name} onClick={() => setScope(m.name)}>{m.label}</button>
+          ))}
+        </div>
+      )}
       <Panel title="Intensité">
         <div className="row" style={{ alignItems: 'flex-end', gap: 18 }}>
           <div className="fader">
-            <span className="val">{pct(cur('dimmer'))}</span>
-            <input type="range" min={0} max={255} value={Math.round(cur('dimmer') * 255)} aria-label="Intensité" data-testid="dimmer-fader" onChange={(e) => set('dimmer', Number(e.target.value) / 255)} />
+            <span className="val">{pct(cur(dimmerKeys[0] ?? 'dimmer'))}</span>
+            <input type="range" min={0} max={255} value={Math.round(cur(dimmerKeys[0] ?? 'dimmer') * 255)} aria-label="Intensité" data-testid="dimmer-fader" onChange={(e) => setDimmer(Number(e.target.value) / 255)} />
             <span className="lbl">Dimmer{!first.attributes.includes('dimmer') && <><br /><span className="dim">virtuel</span></>}</span>
             {src('dimmer') && <span className="tag-src">{src('dimmer')}</span>}
           </div>
           <div className="col">
             <div className="row">
-              {[0, 0.25, 0.5, 0.75, 1].map((v) => <button key={v} className="btn sm" onClick={() => set('dimmer', v)}>{v * 100}%</button>)}
+              {[0, 0.25, 0.5, 0.75, 1].map((v) => <button key={v} className="btn sm" onClick={() => setDimmer(v)}>{v * 100}%</button>)}
             </div>
             <div className="small muted">Le manuel est toujours prioritaire. « Relâcher » rend la main aux cues, effets et IA.</div>
           </div>
@@ -171,7 +186,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
             <div className="row">
               <input type="color" value={rgbToHex(d.color)} onChange={(e) => sendColor(e.target.value)} title="Couleur convertie selon les capacités de chaque projecteur (RGB, RGBW, roue)" />
               <div className="swatches">
-                {QUICK_COLORS.map((c) => <button key={c} className="swatch-btn" style={{ background: c }} title={c} onClick={() => void act({ type: 'programmer.setColor', fixtureIds: ids, color: c })} />)}
+                {QUICK_COLORS.map((c) => <button key={c} className="swatch-btn" style={{ background: c }} title={c} onClick={() => void act({ type: 'programmer.setColor', fixtureIds: ids, color: c, ...colorScope })} />)}
               </div>
             </div>
             {emitters.map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} onChange={(v) => set(a, v)} />)}
@@ -188,7 +203,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
               {cellColors(first, values[first.fixture.id] ?? {}).map(({ cell, color }) => (
                 <label key={cell} className="col" style={{ alignItems: 'center', gap: 2 }} title={`Couleur de la cellule ${cell} (toutes les barres sélectionnées ayant cette cellule)`}>
                   <input type="color" aria-label={`Cellule ${cell}`} value={rgbToHex(color.r + color.g + color.b > 0 ? color : { r: 0, g: 0, b: 0 })} onChange={(e) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: e.target.value, cell })} />
-                  <span className="small dim">{cell}</span>
+                  <span className="small dim">{moduleOfCell(first.profile, cell)?.name ?? cell}</span>
                 </label>
               ))}
             </div>

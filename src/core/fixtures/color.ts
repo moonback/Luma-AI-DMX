@@ -1,7 +1,9 @@
 import type { AttributeValues } from '../model/schemas';
 import { clamp01, hexToRgb, type Rgb } from '../util/math';
 import { baseAttribute, cellKey, cellOf } from './attributes';
+import { moduleOfCell } from './modules';
 import { coarseChannel, rangeAt, type ResolvedFixture } from './profiles';
+import type { FixtureModule } from '../model/schemas';
 
 /** 'rgbw' covers RGB plus any white emitter (white, warmWhite, coldWhite). */
 export type ColorCapability = 'rgb' | 'rgbw' | 'cmy' | 'wheel' | 'none';
@@ -15,8 +17,15 @@ const capabilityOf = (attrs: Set<string>): ColorCapability => {
   return 'none';
 };
 
+export interface ColorGroup {
+  cell: number | undefined;
+  cap: ColorCapability;
+  /** Name of the profile module the group belongs to (« Anneau »…), when the profile declares modules. */
+  module?: string;
+}
+
 /** Colour groups of a fixture: one per cell carrying colour channels, plus the whole-fixture group (cell undefined). */
-export function colorGroups(rf: ResolvedFixture): { cell: number | undefined; cap: ColorCapability }[] {
+export function colorGroups(rf: ResolvedFixture): ColorGroup[] {
   const byCell = new Map<number | undefined, Set<string>>();
   for (const key of rf.attributes) {
     const c = cellOf(key);
@@ -24,10 +33,11 @@ export function colorGroups(rf: ResolvedFixture): { cell: number | undefined; ca
     set.add(baseAttribute(key));
     byCell.set(c, set);
   }
-  const groups: { cell: number | undefined; cap: ColorCapability }[] = [];
+  const groups: ColorGroup[] = [];
   for (const [cell, attrs] of byCell) {
     const cap = capabilityOf(attrs);
-    if (cap !== 'none') groups.push({ cell, cap });
+    const module = moduleOfCell(rf.profile, cell)?.name;
+    if (cap !== 'none') groups.push({ cell, cap, ...(module ? { module } : {}) });
   }
   return groups.sort((a, b) => (a.cell ?? 0) - (b.cell ?? 0));
 }
@@ -79,12 +89,13 @@ function groupColor(rf: ResolvedFixture, cap: ColorCapability, cell: number | un
 /**
  * Converts a target RGB colour into the attributes this fixture actually has.
  * Never assumes a channel layout: RGB, RGBW (white extraction), CMY, colour wheels and multi-cell fixtures are
- * handled. `cell` limits the change to one cell; by default every colour group (all cells) receives the colour.
+ * handled. `cell` limits the change to one cell and `module` to one head; by default every colour group receives it.
  */
-export function colorToAttributes(rf: ResolvedFixture, rgb: Rgb, cell?: number): AttributeValues {
+export function colorToAttributes(rf: ResolvedFixture, rgb: Rgb, cell?: number, module?: FixtureModule): AttributeValues {
   const out: AttributeValues = {};
   for (const g of colorGroups(rf)) {
     if (cell !== undefined && g.cell !== cell) continue;
+    if (module && g.module !== module.name) continue;
     Object.assign(out, groupColor(rf, g.cap, g.cell, rgb));
   }
   return out;
@@ -92,15 +103,25 @@ export function colorToAttributes(rf: ResolvedFixture, rgb: Rgb, cell?: number):
 
 const WARM_WHITE: Rgb = { r: 1, g: 0.9, b: 0.75 };
 
+/** Approximate light colour of each emitter; a channel's `emitterColor` overrides it. */
+const EMITTER_TINTS: Record<string, Rgb> = {
+  red: { r: 1, g: 0, b: 0 }, green: { r: 0, g: 1, b: 0 }, blue: { r: 0, g: 0, b: 1 }, white: { r: 1, g: 1, b: 1 },
+  warmWhite: { r: 1, g: 0.85, b: 0.6 }, coldWhite: { r: 0.85, g: 0.9, b: 1 }, amber: { r: 1, g: 0.6, b: 0 },
+  uv: { r: 0.4, g: 0, b: 0.9 }, lime: { r: 0.6, g: 1, b: 0 }, indigo: { r: 0.3, g: 0, b: 1 },
+};
+
 function groupDisplay(rf: ResolvedFixture, cap: ColorCapability, cell: number | undefined, v: AttributeValues): Rgb {
   const g = (a: string) => v[cellKey(a, cell)] ?? 0;
   if (cap === 'rgb' || cap === 'rgbw') {
-    const w = g('white'), ww = g('warmWhite'), cw = g('coldWhite'), am = g('amber'), uv = g('uv'), li = g('lime'), ind = g('indigo');
-    return {
-      r: clamp01(g('red') + w + ww + cw * 0.85 + am + uv * 0.4 + li * 0.6 + ind * 0.3),
-      g: clamp01(g('green') + w + ww * 0.85 + cw * 0.9 + am * 0.6 + li),
-      b: clamp01(g('blue') + w + ww * 0.6 + cw + uv * 0.9 + ind),
-    };
+    const sum = { r: 0, g: 0, b: 0 };
+    for (const [a, def] of Object.entries(EMITTER_TINTS)) {
+      const level = g(a);
+      if (!level) continue;
+      const hex = coarseChannel(rf.mode, cellKey(a, cell))?.emitterColor;
+      const t = hex ? hexToRgb(hex) : def;
+      sum.r += level * t.r; sum.g += level * t.g; sum.b += level * t.b;
+    }
+    return { r: clamp01(sum.r), g: clamp01(sum.g), b: clamp01(sum.b) };
   }
   if (cap === 'cmy') return { r: 1 - g('cyan'), g: 1 - g('magenta'), b: 1 - g('yellow') };
   if (cap === 'wheel') {
@@ -121,12 +142,14 @@ function fixtureIntensity(rf: ResolvedFixture, v: AttributeValues): number {
   return clamp01(intensity);
 }
 
-/** Per-cell display colours (already scaled by the fixture intensity). Empty for single-cell fixtures. */
+/** Per-cell display colours, scaled by the cell's own dimmer or else the fixture intensity. Empty for single-cell fixtures. */
 export function cellColors(rf: ResolvedFixture, v: AttributeValues): { cell: number; color: Rgb }[] {
-  const k = fixtureIntensity(rf, v);
+  const fixtureK = fixtureIntensity(rf, v);
   return colorGroups(rf)
     .filter((g) => g.cell !== undefined)
     .map((g) => {
+      const own = v[cellKey('dimmer', g.cell)];
+      const k = own !== undefined ? clamp01(own) : fixtureK;
       const c = groupDisplay(rf, g.cap, g.cell, v);
       return { cell: g.cell!, color: { r: c.r * k, g: c.g * k, b: c.b * k } };
     });

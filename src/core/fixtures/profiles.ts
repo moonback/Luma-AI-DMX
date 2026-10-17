@@ -19,6 +19,17 @@ export function validateProfile(data: unknown): ProfileValidationResult {
     return { ok: false, errors: parsed.error.issues.map((i) => `${i.path.join('.') || 'profil'}: ${i.message}`) };
   }
   const errors: string[] = [];
+  const moduleNames = new Set<string>();
+  const moduleCells = new Map<number | undefined, string>();
+  for (const m of parsed.data.modules) {
+    if (moduleNames.has(m.name.toLowerCase())) errors.push(`Module « ${m.name} » déclaré deux fois`);
+    moduleNames.add(m.name.toLowerCase());
+    for (const c of m.cells.length ? m.cells : [undefined]) {
+      const other = moduleCells.get(c);
+      if (other) errors.push(`${c === undefined ? 'Tête principale' : `Cellule ${c}`} rattachée à « ${other} » et « ${m.name} »`);
+      moduleCells.set(c, m.name);
+    }
+  }
   for (const mode of parsed.data.modes) {
     for (const ch of mode.channels) {
       const sorted = [...ch.ranges].sort((a, b) => a.from - b.from);

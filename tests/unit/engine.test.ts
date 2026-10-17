@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mergeSources } from '../../src/core/engine/merge';
 import { computeEffect, effectRate } from '../../src/core/engine/effects';
 import { ProjectIndex } from '../../src/core/engine/resolve';
-import { finalizeFixture } from '../../src/core/engine/render';
+import { finalizeFixture, renderFixture } from '../../src/core/engine/render';
 import type { ResolvedFixture } from '../../src/core/fixtures/profiles';
 import { effectSchema, type Effect } from '../../src/core/model/schemas';
 import { demoProject, makeEngine, run, u1 } from '../helpers';
@@ -91,6 +91,20 @@ describe('moteur : rendu DMX', () => {
     const r = engine.setProgrammer(['par1', 'ghost'], { red: 1.5 });
     expect(r.applied).toBe(0);
     expect(r.rejected.map((x) => x.reason)).toEqual(['Valeur hors plage (0..1)', 'Projecteur inconnu']);
+  });
+
+  it('le défaut 16 bits exact est rendu sur les deux octets', () => {
+    const rf = {
+      fixture: { address: 1 },
+      mode: { name: 'M', channels: [
+        { name: 'Pan', attribute: 'pan', fine: false, default: 128, default16: 0x7fab, ranges: [] },
+        { name: 'Pan fin', attribute: 'pan', fine: true, default: 0, ranges: [] },
+      ] },
+    } as unknown as ResolvedFixture;
+    const values = finalizeFixture(rf, undefined, { master: 1, blackout: false, policy: 'intensity' });
+    const u = new Uint8Array(512);
+    renderFixture(rf, values, u, () => false);
+    expect([u[0], u[1]]).toEqual([0x7f, 0xab]);
   });
 
   describe('lyre + anneau LED (dimmer de cellule séparé)', () => {

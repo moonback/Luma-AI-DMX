@@ -21,7 +21,7 @@ export function finalizeFixture(rf: ResolvedFixture, merged: AttributeValues | u
   for (const ch of rf.mode.channels) {
     if (ch.fine) continue;
     const key = channelKey(ch);
-    out[key] = merged?.[key] ?? ch.default / 255;
+    out[key] = merged?.[key] ?? (ch.default16 !== undefined ? ch.default16 / 65535 : ch.default / 255);
   }
   const keys = Object.keys(out);
   const dimmers = keys.filter((k) => baseAttribute(k) === 'dimmer');

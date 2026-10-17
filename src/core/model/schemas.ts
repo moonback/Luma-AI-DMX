@@ -30,6 +30,11 @@ export const attributeSchema = z.union([
   z.string().regex(/^custom:[a-z0-9][a-z0-9-]{0,31}$/, 'Attribut personnalisé: custom:<nom>'),
 ]);
 export type Attribute = z.infer<typeof attributeSchema>;
+/** Value key: an attribute, or "<attribute>#<cell>" for a cell of a multi-cell / multi-head fixture. */
+export const attributeKeySchema = z.string().max(48).refine((k) => {
+  const [attr, cell, ...rest] = k.split('#');
+  return rest.length === 0 && attributeSchema.safeParse(attr).success && (cell === undefined || /^[1-9]\d{0,2}$/.test(cell));
+}, 'Attribut inconnu (attribut ou attribut#cellule)');
 
 /* ------------------------------------------------------------------ */
 /* Fixture profiles                                                    */
@@ -46,6 +51,12 @@ export const channelRangeSchema = z
     color: hexColorSchema.optional(),
     /** Values in a dangerous range (reset, lamp off…) are only emitted after explicit manual confirmation. */
     dangerous: z.boolean().default(false),
+    /** Real strobe/pulse frequency at `from` and `to` (Hz), when the manual documents it. */
+    hzFrom: z.number().min(0).max(100).optional(),
+    hzTo: z.number().min(0).max(100).optional(),
+    /** Generic physical value at `from` and `to` (degrees, rpm…: unit given by the attribute). */
+    physFrom: z.number().optional(),
+    physTo: z.number().optional(),
   })
   .refine((r) => r.from <= r.to, { message: 'Plage DMX inversée (from > to)' });
 export type ChannelRange = z.infer<typeof channelRangeSchema>;
@@ -58,6 +69,10 @@ export const channelSchema = z.object({
   /** Cell number for multi-cell fixtures (LED bars, pixel battens). Absent = whole fixture. */
   cell: z.number().int().min(1).max(512).optional(),
   default: dmxValueSchema.default(0),
+  /** Exact 16-bit default (0..65535) of an attribute with a fine channel; overrides `default` for both bytes. */
+  default16: z.number().int().min(0).max(65535).optional(),
+  /** Light colour of a colour emitter (e.g. #FFFFCC for a warm white), used by the visualizer. */
+  emitterColor: hexColorSchema.optional(),
   ranges: z.array(channelRangeSchema).default([]),
 });
 export type Channel = z.infer<typeof channelSchema>;
@@ -84,6 +99,21 @@ export const modeSchema = z
   });
 export type FixtureMode = z.infer<typeof modeSchema>;
 
+export const MODULE_BEAMS = ['spot', 'wash', 'beam', 'led', 'none'] as const;
+/** 'lens' = the main optic, 'ring' = LED ring around the lens, 'pixel' = k-th pixel along a bar (order of `cells`). */
+export const MODULE_GEOMETRIES = ['lens', 'ring', 'pixel'] as const;
+/** One head of a multi-head fixture (moving head + LED ring, bar + strobe…). */
+export const fixtureModuleSchema = z.object({
+  name: z.string().trim().min(1).max(48),
+  /** Cells whose channels belong to this module; empty = the channels without a cell (main head). */
+  cells: z.array(z.number().int().min(1).max(512)).max(512).default([]),
+  beam: z.enum(MODULE_BEAMS).default('wash'),
+  /** Beam angle in degrees, absent = the profile's beamAngle. */
+  angle: z.number().min(1).max(90).optional(),
+  geometry: z.enum(MODULE_GEOMETRIES).default('lens'),
+});
+export type FixtureModule = z.infer<typeof fixtureModuleSchema>;
+
 export const FIXTURE_TYPES = ['par', 'moving-head-spot', 'moving-head-wash', 'strobe', 'dimmer', 'led-bar', 'other'] as const;
 export type FixtureType = (typeof FIXTURE_TYPES)[number];
 export const profileSchema = z.object({
@@ -98,9 +128,23 @@ export const profileSchema = z.object({
       panRange: z.number().min(0).max(720).default(540),
       tiltRange: z.number().min(0).max(360).default(270),
       beamAngle: z.number().min(1).max(90).default(25),
+      /** Asymmetric tilt travel in degrees (tilt 0 → tiltMin, 1 → tiltMax); absent = ±tiltRange/2. */
+      tiltMin: z.number().min(-360).max(360).optional(),
+      tiltMax: z.number().min(-360).max(360).optional(),
+      /** Beam angle in degrees at zoom 0 and zoom 1. */
+      zoomMin: z.number().min(1).max(90).optional(),
+      zoomMax: z.number().min(1).max(90).optional(),
+      /** Seconds for a 540° pan move at full speed. */
+      panTiltTime: z.number().positive().max(60).optional(),
+      /** Body size in meters. */
+      dimensions: z.object({ width: z.number().positive().max(10), height: z.number().positive().max(10), depth: z.number().positive().max(10) }).optional(),
+      weight: z.number().positive().max(1000).optional(),
+      power: z.number().positive().max(100000).optional(),
+      connector: z.string().trim().min(1).max(48).optional(),
     })
     .default({ panRange: 540, tiltRange: 270, beamAngle: 25 }),
   modes: z.array(modeSchema).min(1),
+  modules: z.array(fixtureModuleSchema).max(64).default([]),
 });
 export type FixtureProfile = z.infer<typeof profileSchema>;
 

@@ -120,11 +120,13 @@ export interface Rig {
   bodies: THREE.Mesh[];
   beams: BeamUnit[];
   ring: THREE.Mesh;
+  /** LED rings around the lens (ring modules), one per VisualFixture.rings entry. */
+  leds: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
   label: THREE.Sprite;
 }
 
 /** Changes in these properties need a rebuild of the rig (structure), everything else is updated per frame. */
-export const rigKey = (f: VisualFixture) => `${f.type}|${f.movable}|${f.mount}|${f.cells.length}|${f.prism}`;
+export const rigKey = (f: VisualFixture) => `${f.type}|${f.movable}|${f.mount}|${f.cells.length}|${f.rings.length}|${f.prism}`;
 
 export function labelSprite(text: string): THREE.Sprite {
   const c = document.createElement('canvas');
@@ -222,6 +224,15 @@ export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
     if (f.prism) for (const a of [-0.16, 0.16]) makeBeam(0, -1, a);
   }
 
+  // A ring module is drawn as a glowing ring around the lens, not as a second beam.
+  const leds = f.rings.map((_, i) => {
+    const led = new THREE.Mesh(new THREE.RingGeometry(0.115 + i * 0.03, 0.14 + i * 0.03, 32), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }));
+    led.position.set(0, s * (lensOffset + 0.002), 0);
+    led.rotation.x = Math.PI / 2;
+    head.add(led);
+    return led;
+  });
+
   const ring = new THREE.Mesh(g.ring!, new THREE.MeshBasicMaterial({ color: 0x8b5cf6, side: THREE.DoubleSide, transparent: true, opacity: 0.9, depthTest: false }));
   ring.rotation.x = Math.PI / 2;
   ring.renderOrder = 9;
@@ -230,7 +241,7 @@ export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
   label.position.set(0, -s * 0.45, 0);
   root.add(label);
   scene.add(root);
-  return { key: rigKey(f), root, yoke, head, bodies, beams, ring, label };
+  return { key: rigKey(f), root, yoke, head, bodies, beams, ring, leds, label };
 }
 
 export function disposeRig(r: Rig, scene: THREE.Scene): void {
@@ -283,6 +294,10 @@ export function updateRig(r: Rig, f: VisualFixture, o: FrameOptions): void {
   for (const b of r.bodies) (b.material as THREE.MeshStandardMaterial).emissive.set(o.selected ? 0x2a1a55 : 0x000000);
 
   const flash = flickerOn(o.time, f.strobeHz) ? 1 : 0;
+  r.leds.forEach((led, i) => {
+    const { color, level } = colorOf(f.rings[i] ?? '#000000');
+    led.material.color.copy(color).multiplyScalar(Math.min(1, level * (o.dimmed ? 0.25 : 1) * 1.4));
+  });
   const base = colorOf(f.color);
   for (const b of r.beams) {
     const cellHex = b.cell >= 0 ? f.cells[b.cell] : undefined;

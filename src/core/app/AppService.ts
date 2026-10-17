@@ -12,6 +12,7 @@ import { VirtualOutput } from '../protocols/virtual';
 import type { OutputState } from '../protocols/types';
 import { attributeClass } from '../fixtures/attributes';
 import { colorToAttributes } from '../fixtures/color';
+import { findModule } from '../fixtures/modules';
 import { channelCount, parseProfileFile } from '../fixtures/profiles';
 import { BUILTIN_PROFILES } from '../fixtures/builtinProfiles';
 import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../fixtures/ofl';
@@ -674,7 +675,9 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         let applied = 0;
         for (const fid of cmd.fixtureIds) {
           const rf = this.index.fixtures.get(fid);
-          if (rf) applied += e.setProgrammer([fid], colorToAttributes(rf, hexToRgb(cmd.color), cmd.cell)).applied;
+          // A fixture without the requested head (module) is left untouched.
+          const mod = cmd.module !== undefined && rf ? findModule(rf.profile, cmd.module) : undefined;
+          if (rf && (cmd.module === undefined || mod)) applied += e.setProgrammer([fid], colorToAttributes(rf, hexToRgb(cmd.color), cmd.cell, mod)).applied;
         }
         return { applied };
       }

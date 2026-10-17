@@ -14,6 +14,8 @@ export const aiTargetSchema = z.object({
   tags: z.array(z.string().max(32)).max(16).optional(),
   /** Keep only the first N fixtures after resolution (e.g. "les quatre lyres"). */
   limit: z.number().int().min(1).max(512).optional(),
+  /** One head of multi-head fixtures (module name, or « anneau » / « tête principale »); fixtures without it are skipped. */
+  module: z.string().trim().min(1).max(48).optional(),
 });
 export type AiTarget = z.infer<typeof aiTargetSchema>;
 

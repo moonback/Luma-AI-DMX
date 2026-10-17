@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  addressSchema, attributeSchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
+  addressSchema, attributeKeySchema, attributeSchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
   stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema, propSchema,
 } from '../core/model/schemas';
@@ -125,9 +125,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('palette.apply'), id: idSchema, fixtureIds: z.array(idSchema).min(1) }),
   z.object({ type: z.literal('palette.recordFromProgrammer'), name: nameSchema, kind: z.enum(['color', 'position', 'intensity', 'beam']), fixtureId: idSchema }),
   // Programmer (manual)
-  z.object({ type: z.literal('programmer.set'), fixtureIds: z.array(idSchema).min(1).max(1024), values: z.record(attributeSchema, unitSchema), confirmSpecial: z.boolean().default(false) }),
-  z.object({ type: z.literal('programmer.setColor'), fixtureIds: z.array(idSchema).min(1).max(1024), color: z.string().regex(/^#[0-9a-fA-F]{6}$/), cell: z.number().int().min(1).max(512).optional() }),
-  z.object({ type: z.literal('programmer.release'), fixtureIds: z.array(idSchema).optional(), attributes: z.array(attributeSchema).optional() }),
+  z.object({ type: z.literal('programmer.set'), fixtureIds: z.array(idSchema).min(1).max(1024), values: z.record(attributeKeySchema, unitSchema), confirmSpecial: z.boolean().default(false) }),
+  z.object({ type: z.literal('programmer.setColor'), fixtureIds: z.array(idSchema).min(1).max(1024), color: z.string().regex(/^#[0-9a-fA-F]{6}$/), cell: z.number().int().min(1).max(512).optional(), module: z.string().trim().min(1).max(48).optional() }),
+  z.object({ type: z.literal('programmer.release'), fixtureIds: z.array(idSchema).optional(), attributes: z.array(attributeKeySchema).optional() }),
   // Scenes
   z.object({ type: z.literal('scene.record'), name: nameSchema, fixtureIds: z.array(idSchema).optional() }),
   z.object({ type: z.literal('scene.upsert'), scene: sceneSchema }),

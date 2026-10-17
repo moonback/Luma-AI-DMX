@@ -3,7 +3,7 @@ import { audienceGlare, beamDirection, beamHit, flickerOn, mountSign, onStage, p
 import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, snapTrussEnds, trussEnds, trussSegments, trussSupports } from '../../src/core/visualizer/truss';
 import { LIBRARY } from '../../src/core/visualizer/library';
 import type { Performer, StageMarker, StageProp, Truss } from '../../src/core/model/schemas';
-import { buildVisualModel, goboIndex, mountOf, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
+import { buildVisualModel, goboIndex, mountOf, strobeFrequency, tiltDegrees, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
 import { createProject, parseProject } from '../../src/core/project/format';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../src/core/visualizer/templates';
 import { cloneElement, equipTrusses, newElement, parseElement, serializeElement, withElement, withoutElement } from '../../src/core/visualizer/sceneEdit';
@@ -91,6 +91,18 @@ describe('modèle visuel enrichi', () => {
     expect(zoomedAngle(25, 1)).toBe(40);
   });
 
+  it('utilise les valeurs physiques exactes du profil : Hz, zoom et tilt asymétrique', () => {
+    const strobe = { name: 'S', attribute: 'strobe', fine: false, default: 0, ranges: [{ from: 10, to: 250, label: 'Strobe', kind: 'strobe' as const, dangerous: false, hzFrom: 0.5, hzTo: 25 }] };
+    expect(strobeFrequency(strobe, 10 / 255)).toBeCloseTo(0.5);
+    expect(strobeFrequency(strobe, 250 / 255)).toBeCloseTo(25);
+    expect(zoomedAngle(25, 0, { zoomMin: 4, zoomMax: 40 })).toBe(4);
+    expect(zoomedAngle(25, 1, { zoomMin: 4, zoomMax: 40 })).toBe(40);
+    const phys = { panRange: 540, tiltRange: 270, beamAngle: 15 };
+    expect(tiltDegrees(phys, 0)).toBe(-135);
+    expect(tiltDegrees({ ...phys, tiltMin: -45, tiltMax: 225 }, 0)).toBe(-45);
+    expect(tiltDegrees({ ...phys, tiltMin: -45, tiltMax: 225 }, 1)).toBe(225);
+  });
+
   it('accroche selon la hauteur, gobo et prisme lus depuis les valeurs calculées', () => {
     const p = demoProject();
     p.patch[3]!.height = 6;
@@ -108,7 +120,7 @@ describe('modèle visuel enrichi', () => {
 describe('forme de plateau, points de scène et éblouissement', () => {
   const vf = (o: Partial<VisualFixture>): VisualFixture => ({
     id: 'f', name: 'Lyre', type: 'moving-head', x: 0, y: 1, rotation: 0, color: '#ffffff', intensity: 1, movable: true, panDeg: 0, tiltDeg: 0,
-    beamAngle: 15, height: 4, mount: 'hanging', cells: [], strobeHz: 0, gobo: 0, prism: false, ...o,
+    beamAngle: 15, height: 4, mount: 'hanging', cells: [], rings: [], strobeHz: 0, gobo: 0, prism: false, ...o,
   } as VisualFixture);
 
   it('sans cyclo ou en arène, le faisceau traverse le fond de scène', () => {
@@ -260,7 +272,7 @@ describe('structures, accroches et historique de scène', () => {
 describe('interprètes, éclairement estimé et écrans', () => {
   const spot = (o: Partial<VisualFixture> = {}): VisualFixture => ({
     id: 's', name: 'Douche', type: 'moving-head', x: 0, y: 3, rotation: 0, color: '#ff0000', intensity: 1, movable: true, panDeg: 0, tiltDeg: 0,
-    beamAngle: 30, height: 6, mount: 'hanging', mountTilt: 0, trussId: null, cells: [], strobeHz: 0, gobo: 0, prism: false, ...o,
+    beamAngle: 30, height: 6, mount: 'hanging', mountTilt: 0, trussId: null, cells: [], rings: [], strobeHz: 0, gobo: 0, prism: false, ...o,
   } as VisualFixture);
   const singer = { id: 'p', name: 'Chant', kind: 'standing' as const, x: 0, y: 3, rotation: 0, markerId: null };
 
