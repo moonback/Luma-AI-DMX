@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mergeSources } from '../../src/core/engine/merge';
 import { computeEffect, effectRate } from '../../src/core/engine/effects';
 import { ProjectIndex } from '../../src/core/engine/resolve';
+import { finalizeFixture } from '../../src/core/engine/render';
+import type { ResolvedFixture } from '../../src/core/fixtures/profiles';
 import { effectSchema, type Effect } from '../../src/core/model/schemas';
 import { demoProject, makeEngine, run, u1 } from '../helpers';
 
@@ -89,6 +91,47 @@ describe('moteur : rendu DMX', () => {
     const r = engine.setProgrammer(['par1', 'ghost'], { red: 1.5 });
     expect(r.applied).toBe(0);
     expect(r.rejected.map((x) => x.reason)).toEqual(['Valeur hors plage (0..1)', 'Projecteur inconnu']);
+  });
+
+  describe('lyre + anneau LED (dimmer de cellule séparé)', () => {
+    const ch = (attribute: string, cell?: number, ranges: object[] = []) => ({ name: attribute, attribute, cell, fine: false, default: 0, ranges });
+    const rf = {
+      mode: {
+        name: 'Ring',
+        channels: [
+          ch('dimmer'), ch('red'), ch('green'), ch('blue'), ch('shutter', 1, [{ from: 0, to: 3, label: 'Fermé', kind: 'closed', dangerous: false }]),
+          ch('dimmer', 1), ch('red', 1), ch('green', 1), ch('blue', 1), ch('red', 2),
+        ],
+      },
+    } as unknown as ResolvedFixture;
+    const merged = { dimmer: 1, red: 1, 'dimmer#1': 1, 'red#1': 1, 'red#2': 1, 'shutter#1': 1 };
+
+    it('blackout coupe le dimmer global et celui de l’anneau, ferme shutter#n', () => {
+      const out = finalizeFixture(rf, merged, { master: 1, blackout: true, policy: 'intensity-shutter' });
+      expect(out.dimmer).toBe(0);
+      expect(out['dimmer#1']).toBe(0);
+      expect(out['shutter#1']).toBe(2 / 255);
+      expect(out['red#1']).toBe(1); // driven by dimmer#1, not rescaled
+    });
+
+    it('le grand master à 50 % s’applique aux deux dimmers', () => {
+      const out = finalizeFixture(rf, merged, { master: 0.5, blackout: false, policy: 'intensity' });
+      expect(out.dimmer).toBe(0.5);
+      expect(out['dimmer#1']).toBe(0.5);
+      expect(out.red).toBe(1);
+      expect(out['red#1']).toBe(1);
+      expect(out['red#2']).toBe(1); // cell without dimmer follows the global hardware dimmer
+    });
+
+    it('sans dimmer global, une cellule sans dimmer suit le dimmer virtuel', () => {
+      const noGlobal = { mode: { name: 'Bar', channels: [ch('red', 1), ch('dimmer', 2), ch('red', 2)] } } as unknown as ResolvedFixture;
+      const out = finalizeFixture(noGlobal, { dimmer: 0.5, 'red#1': 1, 'dimmer#2': 1, 'red#2': 1 }, { master: 0.5, blackout: false, policy: 'intensity' });
+      expect(out['red#1']).toBe(0.25);
+      expect(out['red#2']).toBe(1);
+      expect(out['dimmer#2']).toBe(0.5);
+      const bo = finalizeFixture(noGlobal, { 'red#1': 1, 'dimmer#2': 1, 'red#2': 1 }, { master: 1, blackout: true, policy: 'intensity' });
+      expect(bo).toEqual({ 'red#1': 0, 'dimmer#2': 0, 'red#2': 1 });
+    });
   });
 });
 
