@@ -103,7 +103,7 @@ export const useStore = create<State>((set, get) => ({
   values: {},
   sources: {},
   logs: [],
-  page: prefs.page && PAGES.some((p) => p.id === prefs.page) ? prefs.page : 'dashboard',
+  page: 'dashboard',
   collapsed: prefs.collapsed ?? false,
   selection: [],
   cueListId: null,
