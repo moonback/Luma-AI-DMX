@@ -1,5 +1,5 @@
 import { createProject, migrateProject, parseProject, ProjectLoadError, serializeProject } from '../../src/core/project/format';
-import { AudioAnalyzer, estimateBpm, simulateFrames } from '../../src/core/audio/analyzer';
+import { AudioAnalyzer, simulateFrames } from '../../src/core/audio/analyzer';
 import { demoProject } from '../helpers';
 
 describe('format de projet', () => {
@@ -52,9 +52,9 @@ describe('analyse audio', () => {
   });
 
   it('n’annonce pas de tempo sans assez d’attaques et détecte une montée d’énergie', () => {
-    expect(estimateBpm([0, 1]).bpm).toBeNull();
     const a = new AudioAnalyzer({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, riseRatio: 1.8 });
     let rises = 0;
+    expect(a.push({ t: 0, rms: 0.1, bass: 0.1 }).bpm).toBeNull(); // no tempo without enough signal
     for (const f of simulateFrames({ bpm: 120, seconds: 10, level: 0.1 })) if (a.push(f).energyRise) rises++;
     for (const f of simulateFrames({ bpm: 120, seconds: 3, level: 0.9 })) if (a.push({ ...f, t: f.t + 10 }).energyRise) rises++;
     expect(rises).toBe(1);

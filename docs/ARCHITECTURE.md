@@ -15,6 +15,8 @@ src/
     audio/       analyzer (niveau, énergie, attaques, BPM, montées d'énergie), reactive (réactions → moteur)
     safety/      flashGuard (estimation des flashs photosensibles, limiteur du moteur, refus des effets IA dangereux)
     control/     midi (messages, MTC), timecode (décodeur LTC), osc (UDP), remote (télécommande HTTP + SSE)
+    music/       dsp (FFT, bandes, chroma), analyze (tempo, battements, premiers temps, structure, tonalité, événements),
+                 tempoTracker (tempo live), dropPredictor (drop / refrain), songToShow (plan + compilateur)
     project/     format (création, versions, migrations), store (écriture atomique, .bak, récupération)
     settings/    paramètres applicatifs ; log/ journal en mémoire ; visualizer/ modèle visuel 2D/3D
     app/         AppService : orchestration + bus de commandes (injection des dialogues et secrets)
@@ -57,6 +59,11 @@ Aucun élément de l'interface ne présente l'état calculé comme une preuve de
 - Effets : appliqués ensuite. Un effet ne touche un attribut que si son propriétaire actuel a une priorité inférieure ou égale. Mode `override` = remplace ; mode `scale` = multiplie.
 - Programmeur : écrase tout. Le relâcher rend immédiatement la main aux autres sources.
 - Attributs non contrôlés : valeur par défaut du profil (par exemple shutter « ouvert », pan/tilt au centre).
+
+## Intelligence musicale (`core/music`)
+- **Analyse de fichier** (renderer, tranches asynchrones) : trames de 93 ms, saut de 23 ms. Tempo par peigne d'autocorrélation du flux spectral, avec un a priori sur la plage du genre. Battements par programmation dynamique (Ellis). Premiers temps par accents de basse et changements harmoniques. Structure par matrice d'auto-similarité par mesure et noyau en damier, avec frontières calées sur les phrases de 4 mesures. Étiquettes par répétitions (vecteurs centrés : harmonie, timbre, énergie) et règles d'énergie. Tonalité par Krumhansl–Schmuckler.
+- **Tempo live** : enveloppe d'attaques rééchantillonnée à 50 Hz (8 s). La grosse caisse définit le temps : une candidate qui a une attaque forte à sa demi-période est pénalisée. Kalman avec confirmation des changements (3 estimations concordantes). Pendant un breakdown sans basse, le tempo et la grille continuent sur leur lancée. Le recalage de phase est progressif.
+- **Song-to-Show** : le planificateur (règles locales, ou OpenRouter revalidé par `showSectionPlanSchema`) produit un plan typé par section. Le compilateur déterministe le traduit en scènes, en effets synchronisés au BPM et calés sur la mesure (`barSync`), et en timeline (fondus enchaînés grâce à `fadeOut`, accents sur les impacts). Chaque effet est contrôlé par le garde-fou photosensible.
 
 ## Moteur d'effets
 Les effets sont des fonctions pures de la phase (`computeEffect`). Les instances intègrent leur phase dans le tick : aucun timer par effet, pas de travail sur le thread de l'interface. L'aléatoire utilise un hachage déterministe (`hash01(seed, cycle, fixture)`), ce qui donne des résultats reproductibles. Le strobe est plafonné par `maxStrobeHz`.

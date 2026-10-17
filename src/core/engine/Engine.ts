@@ -271,6 +271,22 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
     const i = this.effects.get(instanceId);
     if (i) i.paused = paused;
   }
+  private barCount = 0;
+  /**
+   * Audio downbeat: BPM-synced effects with `barSync` snap their cycle to the bar/phrase grid
+   * (cycle start every beatsPerCycle / 4 bars), rounding the phase so the correction never exceeds half a cycle.
+   */
+  onDownbeat(): void {
+    this.barCount++;
+    for (const i of this.effects.values()) {
+      const p = this.index.effects.get(i.effectId)?.params;
+      if (!p?.barSync || !p.bpmSync) continue;
+      const bars = Math.max(1, Math.round(p.beatsPerCycle / 4));
+      // A downbeat starts a cycle when the cycle fits in a bar, else only at the start of each phrase.
+      if (p.beatsPerCycle <= 4 || this.barCount % bars === 0) i.phase = Math.round(i.phase);
+    }
+  }
+
   /** Audio beat: re-phase effects whose trigger is `beat`. */
   onBeat(): void {
     for (const i of this.effects.values()) if (this.index.effects.get(i.effectId)?.trigger === 'beat') i.phase = 0;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   addressSchema, attributeSchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
-  paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema,
+  paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -122,7 +122,13 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('timeline.play'), id: idSchema }),
   empty('timeline.pause'),
   /** External timecode position (MTC/LTC decoded in the renderer, or OSC): the timeline chases it. */
-  z.object({ type: z.literal('timeline.timecode'), seconds: z.number().min(0).max(86400) }),
+  z.object({ type: z.literal('timeline.timecode'), seconds: z.number().min(0).max(86400), timelineId: idSchema.optional() }),
+  // Music (Song-to-Show)
+  z.object({ type: z.literal('music.addTrack'), name: z.string().trim().min(1).max(200), hash: z.string().regex(/^[0-9a-f]{64}$/), analysis: songAnalysisSchema }),
+  z.object({ type: z.literal('music.removeTrack'), id: idSchema }),
+  z.object({ type: z.literal('music.setSection'), trackId: idSchema, index: z.number().int().min(0).max(300), label: z.enum(SECTION_LABELS).optional(), locked: z.boolean().optional() }),
+  z.object({ type: z.literal('music.generate'), trackId: idSchema, intent: z.string().max(500), nextVariant: z.boolean().default(false) }),
+  z.object({ type: z.literal('music.regenerateSection'), trackId: idSchema, index: z.number().int().min(0).max(300), instruction: z.string().max(200).default('') }),
   empty('timeline.stop'),
   z.object({ type: z.literal('timeline.seek'), seconds: z.number().min(0).max(86400) }),
   // Engine
@@ -154,12 +160,17 @@ export const commandSchema = z.discriminatedUnion('type', [
   // Audio
   z.object({
     type: z.literal('audio.features'),
-    source: z.enum(['live', 'simulated']),
+    source: z.enum(['live', 'simulated', 'track']),
     features: z.object({
       t: z.number(), level: z.number().min(0).max(1), levelDb: z.number(), energy: z.number().min(0).max(1), onset: z.boolean(),
       onsetStrength: z.number(), bpm: z.number().min(20).max(300).nullable(), bpmConfidence: z.number().min(0).max(1), energyRise: z.boolean(),
+      beat: z.boolean().default(false), barPosition: z.number().int().min(0).max(3).nullable().default(null), tempoLocked: z.boolean().default(false),
+      bass: unitSchema.default(0), brightness: unitSchema.default(0), onsetDensity: unitSchema.default(0),
+      prediction: z.object({ kind: z.enum(['drop', 'chorus']), confidence: unitSchema, at: z.number(), inBeats: z.number().min(0).max(64), source: z.enum(['live', 'track']) }).nullable().default(null),
     }),
   }),
+  /** Arms (or disarms) the predicted-drop GO for one shot. Never armed at start-up. */
+  z.object({ type: z.literal('audio.armDrop'), on: z.boolean() }),
   z.object({ type: z.literal('audio.config'), config: audioConfigSchema }),
   // Settings / logs
   empty('settings.get'),
@@ -266,6 +277,11 @@ export interface CommandResults {
   'timeline.play': Void;
   'timeline.pause': Void;
   'timeline.timecode': { chasing: boolean };
+  'music.addTrack': { id: string; cached: boolean };
+  'music.removeTrack': Void;
+  'music.setSection': Void;
+  'music.generate': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
+  'music.regenerateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'timeline.stop': Void;
   'timeline.seek': Void;
   'engine.master': Void;
@@ -292,6 +308,7 @@ export interface CommandResults {
   'ai.setKey': Void;
   'audio.features': Void;
   'audio.config': Void;
+  'audio.armDrop': Void;
   'settings.get': Settings;
   'settings.update': Void;
   'logs.recent': LogEntry[];

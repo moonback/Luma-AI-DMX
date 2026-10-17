@@ -41,6 +41,7 @@ function Editor({ effect }: { effect: Effect }) {
           <button className="btn sm" disabled={!selection.length} onClick={() => setDraft({ ...draft, targets: { ...draft.targets, fixtureIds: selection } })}>Utiliser la sélection ({selection.length})</button>
         </Field>
         <label className="check"><input type="checkbox" checked={p.bpmSync} onChange={(e) => setP({ bpmSync: e.target.checked })} />Synchronisé au BPM</label>
+        {p.bpmSync && <label className="check" title="Avec une source audio, le cycle repart sur les premiers temps de mesure (phrases de 4, 8, 16 temps)"><input type="checkbox" checked={p.barSync} onChange={(e) => setP({ barSync: e.target.checked })} />Calé sur la mesure</label>}
         {p.bpmSync ? (
           <Field label="Temps par cycle"><NumberInput value={p.beatsPerCycle} min={0.25} max={64} step={0.25} onChange={(v) => setP({ beatsPerCycle: v })} /></Field>
         ) : (

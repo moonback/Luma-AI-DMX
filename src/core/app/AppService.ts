@@ -29,8 +29,11 @@ import { buildVisualModel } from '../visualizer/model';
 import { OscServer, type OscMessage } from '../control/osc';
 import { RemoteServer, type RemoteState } from '../control/remote';
 import { ArtNetRdm } from '../protocols/rdm';
+import { adjustSection, compileShow, planLocally, rigInfo } from '../music/songToShow';
+import { KEY_NAMES, SECTION_NAMES } from '../music/analyze';
+import type { MusicTrack, ShowPlan } from '../model/schemas';
 import { interpretLocally } from '../ai/local/interpreter';
-import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel } from '../ai/providers/openrouter';
+import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, planShowWithOpenRouter, proposeWithOpenRouter, type OpenRouterModel } from '../ai/providers/openrouter';
 import type { Alert, Command, CommandOf, CommandResults, CommandType, ProjectState, RuntimeState, UniverseView, ValuesFrame } from '../../shared/commands';
 
 export interface Dialogs {
@@ -105,6 +108,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.outputs = new OutputManager(opts.adapterFactory ?? ((c) => createAdapter(c, this.settings.sacn?.cid)));
     this.engine = new Engine(this.index, this.outputs, this.engineSettings());
     this.audio = new AudioReactive(this.engine, () => this.index, () => this.project.audio, () => this.settings.engine.priorities.audio);
+    this.audio.onDropFired = (id) => this.logger.info('Audio', `Drop prédit : GO sur « ${this.project.cueLists.find((l) => l.id === id)?.name ?? id} » (désarmé)`);
     this.logger.on('entry', (e) => {
       if (e.level === 'warn' || e.level === 'error') {
         this.alerts.push({ id: e.id, t: e.t, level: e.level, message: `${e.source} : ${e.message}` });
@@ -671,10 +675,60 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       case 'timeline.stop': e.timelineStop(); return ok;
       case 'timeline.seek': e.timelineSeek(cmd.seconds); return ok;
       case 'timeline.timecode': {
-        const id = e.snapshot().timeline.timelineId ?? this.project.timelines[0]?.id;
+        const id = cmd.timelineId ?? e.snapshot().timeline.timelineId ?? this.project.timelines[0]?.id;
         const chasing = !!id && e.timelineChase(id, cmd.seconds);
         if (chasing) this.timecodeAt = Date.now();
         return { chasing };
+      }
+
+      /* ---------- music (Song-to-Show) ---------- */
+      case 'music.addTrack': {
+        const existing = this.project.music.tracks.find((t) => t.hash === cmd.hash);
+        if (existing) return { id: existing.id, cached: true };
+        const id = randomUUID();
+        this.mutate((d) => { d.music.tracks.push({ id, name: cmd.name, hash: cmd.hash, analysis: cmd.analysis, plan: null, created: { sceneIds: [], effectIds: [], timelineId: null } }); });
+        const a = cmd.analysis;
+        this.logger.info('Musique', `« ${cmd.name} » analysé : ${a.bpm.toFixed(1)} BPM, ${KEY_NAMES[a.key.tonic]} ${a.key.mode === 'major' ? 'majeur' : 'mineur'}, ${a.sections.length} sections`);
+        return { id, cached: false };
+      }
+      case 'music.removeTrack': {
+        const t = this.track(cmd.id);
+        this.mutate((d) => {
+          this.removeGenerated(d, t);
+          d.music.tracks = d.music.tracks.filter((x) => x.id !== cmd.id);
+        });
+        return ok;
+      }
+      case 'music.setSection':
+        this.mutate((d) => {
+          const t = d.music.tracks.find((x) => x.id === cmd.trackId);
+          const s = t?.analysis.sections[cmd.index];
+          if (!t || !s) throw new UserError('Section introuvable');
+          if (cmd.label) s.label = cmd.label;
+          const p = t.plan?.sections[cmd.index];
+          if (cmd.locked !== undefined && p) p.locked = cmd.locked;
+        });
+        return ok;
+      case 'music.generate': {
+        const t = this.track(cmd.trackId);
+        const variant = cmd.nextVariant ? (t.plan?.variant ?? 0) + 1 : t.plan?.variant ?? 0;
+        const { plan, notices } = await this.planShow(t, cmd.intent, variant);
+        return this.applyShow(t, plan, notices);
+      }
+      case 'music.regenerateSection': {
+        const t = this.track(cmd.trackId);
+        if (!t.plan) throw new UserError('Générez d’abord le show de ce morceau');
+        const rig = rigInfo(this.index, this.settings.ai.allowStrobe);
+        const plan: ShowPlan = structuredClone(t.plan);
+        const s = plan.sections[cmd.index];
+        if (!s) throw new UserError('Section introuvable');
+        if (cmd.instruction.trim()) plan.sections[cmd.index] = adjustSection(s, cmd.instruction, rig);
+        else {
+          // No instruction: a new variant of this section only.
+          const fresh = planLocally(t.analysis, plan.intent, rig, plan.variant + 1 + cmd.index);
+          plan.sections[cmd.index] = { ...fresh.sections[cmd.index]!, locked: s.locked };
+        }
+        return this.applyShow(t, plan, []);
       }
 
       /* ---------- engine ---------- */
@@ -792,6 +846,10 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       case 'audio.features':
         this.audio.push(cmd.features, cmd.source);
         return ok;
+      case 'audio.armDrop':
+        this.audio.armDrop(cmd.on);
+        this.logger.info('Audio', cmd.on ? 'GO sur drop prédit ARMÉ (un seul déclenchement)' : 'GO sur drop prédit désarmé');
+        return ok;
       case 'audio.config':
         this.mutate((d) => { d.audio = cmd.config; });
         return ok;
@@ -812,6 +870,78 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       }
       case 'logs.recent': return this.logger.recent();
     }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Music (Song-to-Show)                                                */
+  /* ------------------------------------------------------------------ */
+
+  private track(id: string): MusicTrack {
+    const t = this.project.music.tracks.find((x) => x.id === id);
+    if (!t) throw new UserError('Morceau introuvable');
+    return t;
+  }
+
+  private removeGenerated(d: Project, t: MusicTrack): void {
+    const scenes = new Set(t.created.sceneIds), effects = new Set(t.created.effectIds);
+    d.scenes = d.scenes.filter((s) => !scenes.has(s.id));
+    d.effects = d.effects.filter((e) => !effects.has(e.id));
+    if (t.created.timelineId) d.timelines = d.timelines.filter((x) => x.id !== t.created.timelineId);
+  }
+
+  /** Plan with OpenRouter when configured (validated, local fallback), else with the local rules. */
+  private async planShow(t: MusicTrack, intent: string, variant: number): Promise<{ plan: ShowPlan; notices: string[] }> {
+    const rig = rigInfo(this.index, this.settings.ai.allowStrobe);
+    const local = planLocally(t.analysis, intent, rig, variant, t.plan);
+    const ai = this.settings.ai;
+    const key = this.opts.secrets.get(OPENROUTER_KEY);
+    if (ai.provider !== 'openrouter' || !key) return { plan: local, notices: ai.provider === 'openrouter' ? ['Aucune clé API : plan généré par les règles locales.'] : [] };
+    if (this.aiBusy) throw new UserError('Une demande IA est déjà en cours');
+    this.aiBusy = true;
+    try {
+      const a = t.analysis;
+      // Only the symbolic structure leaves the machine: no audio.
+      const structure = [
+        `Tempo ${a.bpm.toFixed(1)} BPM, key ${KEY_NAMES[a.key.tonic]} ${a.key.mode}, duration ${a.duration.toFixed(0)} s.`,
+        `Rig: ${rig.wash} wash/PAR, ${rig.moving} moving heads, ${rig.bars} LED bars; strobeAllowed: ${rig.allowStrobe}.`,
+        'Sections (index, label, start s, duration s, measured energy 0..1, repeat group):',
+        ...a.sections.map((s, i) => `${i}. ${s.label} (${SECTION_NAMES[s.label]}) start ${s.start.toFixed(1)} dur ${(s.end - s.start).toFixed(1)} energy ${s.energy.toFixed(2)} group ${s.cluster}`),
+      ].join('\n');
+      const model = ai.model || DEFAULT_OPENROUTER_MODEL;
+      const caps = (await this.openRouterModels().catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
+      const r = await planShowWithOpenRouter(intent, structure, { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps }, a.sections.length);
+      this.aiLastError = null;
+      // Locked sections are kept from the previous plan.
+      const sections = r.sections.map((s, i) => (t.plan?.sections[i]?.locked && t.plan.sections.length === r.sections.length ? t.plan.sections[i]! : s));
+      return { plan: { intent: intent.slice(0, 500), provider: 'openrouter', model: r.model, variant, summary: r.summary, sections }, notices: r.notices };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.aiLastError = msg;
+      this.logger.error('Musique', `Planification OpenRouter indisponible : ${msg}`);
+      if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
+      return { plan: local, notices: [`OpenRouter indisponible (${msg}) : plan généré par les règles locales.`] };
+    } finally {
+      this.aiBusy = false;
+    }
+  }
+
+  /** Compiles the plan, replaces the track's previously generated objects and stores the plan. */
+  private applyShow(t: MusicTrack, plan: ShowPlan, notices: string[]) {
+    const c = compileShow(this.index, t.name, t.analysis, plan, { maxStrobeHz: this.settings.engine.maxStrobeHz, allowStrobe: this.settings.ai.allowStrobe });
+    if (this.engine.snapshot().timeline.timelineId === t.created.timelineId) this.engine.timelineStop();
+    this.mutate((d) => {
+      const track = d.music.tracks.find((x) => x.id === t.id)!;
+      this.removeGenerated(d, track);
+      d.scenes.push(...c.scenes);
+      d.effects.push(...c.effects);
+      d.timelines.push(c.timeline);
+      track.plan = plan;
+      track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id };
+    });
+    const all = [...notices, ...c.notices];
+    this.logger.info('Musique', `Show généré pour « ${t.name} » (${plan.provider === 'openrouter' ? `OpenRouter · ${plan.model}` : 'règles locales'}) : ${c.scenes.length} scènes, ${c.effects.length} effets, timeline « ${c.timeline.name} »`);
+    for (const n of c.notices) this.logger.warn('Musique', n);
+    return { timelineId: c.timeline.id, notices: all, provider: plan.provider };
   }
 
   /* ------------------------------------------------------------------ */

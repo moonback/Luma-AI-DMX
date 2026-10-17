@@ -23,7 +23,9 @@ type Json = Record<string, unknown>;
 /**
  * Format history:
  *  v1 – first internal development format: patch stored under `fixtures`, no `audio`/`visualizer` sections.
- *  v2 – current: `patch` key, audio-reactive and visualizer settings.
+ *  v2 – `patch` key, audio-reactive and visualizer settings.
+ *  v3 – current: `music` (analysed tracks, Song-to-Show plans). Older apps refuse v3 files instead of silently
+ *       dropping the section.
  * Each migration takes the previous version's JSON and returns the next version's JSON.
  */
 const MIGRATIONS: Record<number, (p: Json) => Json> = {
@@ -31,6 +33,7 @@ const MIGRATIONS: Record<number, (p: Json) => Json> = {
     const { fixtures, ...rest } = p;
     return { ...rest, patch: Array.isArray(fixtures) ? fixtures : [], version: 2 };
   },
+  2: (p) => ({ ...p, music: { tracks: [] }, version: 3 }),
 };
 
 export function migrateProject(raw: unknown): { data: unknown; migratedFrom: number | null } {
