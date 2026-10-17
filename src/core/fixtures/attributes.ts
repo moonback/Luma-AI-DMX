@@ -11,7 +11,7 @@ const CLASS: Record<string, AttributeClass> = {
   shutter: 'beam', strobe: 'beam', gobo: 'beam', goboRotation: 'beam', prism: 'beam',
   focus: 'beam', zoom: 'beam', iris: 'beam', frost: 'beam', effectWheel: 'beam', zoomMode: 'beam',
   gobo2: 'beam', gobo2Rotation: 'beam', prismIndex: 'beam', prismRotation: 'beam',
-  speed: 'special', macro: 'special', control: 'special', macroSpeed: 'special', fog: 'special', fan: 'special',
+  speed: 'special', macro: 'special', control: 'special', macroSpeed: 'special', fog: 'special', fan: 'special', dimmerCurve: 'special',
 };
 
 /**
@@ -44,7 +44,7 @@ export const ATTRIBUTE_LABELS: Record<string, string> = {
   shutter: 'Shutter', strobe: 'Strobe', gobo: 'Gobo', goboRotation: 'Rotation gobo', prism: 'Prisme',
   focus: 'Focus', zoom: 'Zoom', iris: 'Iris', frost: 'Frost', effectWheel: 'Roue d’effets', zoomMode: 'Mode zoom',
   gobo2: 'Gobo 2', gobo2Rotation: 'Rotation gobo 2', prismIndex: 'Indexation prisme', prismRotation: 'Rotation prisme',
-  speed: 'Vitesse', macro: 'Macro', control: 'Contrôle', macroSpeed: 'Vitesse macro', fog: 'Fumée', fan: 'Ventilateur',
+  speed: 'Vitesse', macro: 'Macro', control: 'Contrôle', macroSpeed: 'Vitesse macro', fog: 'Fumée', fan: 'Ventilateur', dimmerCurve: 'Courbe dimmer',
 };
 
 export function attributeLabel(attr: string): string {

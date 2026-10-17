@@ -23,7 +23,7 @@ export const BUILTIN_ATTRIBUTES = [
   'pan', 'tilt', 'panTiltSpeed', 'panTiltMode',
   'shutter', 'strobe', 'gobo', 'goboRotation', 'prism', 'focus', 'zoom', 'iris', 'frost', 'effectWheel', 'zoomMode',
   'gobo2', 'gobo2Rotation', 'prismIndex', 'prismRotation',
-  'speed', 'macro', 'control', 'macroSpeed', 'fog', 'fan',
+  'speed', 'macro', 'control', 'macroSpeed', 'fog', 'fan', 'dimmerCurve',
 ] as const;
 export type BuiltinAttribute = (typeof BUILTIN_ATTRIBUTES)[number];
 export const attributeSchema = z.union([

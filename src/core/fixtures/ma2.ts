@@ -46,7 +46,7 @@ const MA2_ATTR: Record<string, string> = {
   CTO: 'cto', COLORTEMPERATURE: 'colorTemperature', COLORSUB_C: 'cyan', COLORSUB_M: 'magenta', COLORSUB_Y: 'yellow',
   POSITIONMODE: 'panTiltMode', POSITIONMSPEED: 'panTiltSpeed', EFFECTMACROS: 'macro', EFFECTMACRORATE: 'macroSpeed', EFFECTWHEEL: 'effectWheel',
   ZOOMMODE: 'zoomMode', COLORMIXMACROFADETIME: 'colorMacroFade', COLORMIXMACRO: 'colorMacro', COLORMACRO1: 'colorMacro',
-  FIXTUREGLOBALRESET: 'control', CONTROL: 'control', FAN: 'fan', FOG: 'fog',
+  FIXTUREGLOBALRESET: 'control', CONTROL: 'control', FAN: 'fan', FOG: 'fog', DIMMERCURVE: 'dimmerCurve', MACROS: 'macro',
   GOBO2: 'gobo2', GOBO2_POS: 'gobo2Rotation', GOBO2_ROT: 'gobo2Rotation', GOBO2POSROTATE: 'gobo2Rotation',
   PRISMA_POS: 'prismIndex', PRISMA1_POS: 'prismIndex', PRISMA_ROT: 'prismRotation', PRISMA1_ROT: 'prismRotation',
 };

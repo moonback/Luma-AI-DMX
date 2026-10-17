@@ -87,6 +87,16 @@ describe('import grandMA2', () => {
     expect(r.profile!.type).toBe('par');
   });
 
+  it('courbe dimmer et macros (BTF100Z Fresnel) reconnus sans avertissement', () => {
+    const xml = `<MA><FixtureType name="BTF100Z" mode="5 Channels"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="Conventional">
+      <ChannelType coarse="1" attribute="DIM"/><ChannelType coarse="2" attribute="SHUTTER"/><ChannelType coarse="3" attribute="ZOOM"/>
+      <ChannelType coarse="4" attribute="DIMMERCURVE"><ChannelFunction subattribute="DIMMERCURVE" min_dmx_24="0" max_dmx_24="16777215"/></ChannelType>
+      <ChannelType coarse="5" attribute="MACROS"/></Module></Modules></FixtureType></MA>`;
+    const r = convertMa2Fixture(xml);
+    expect(r.warnings).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['dimmer', 'shutter', 'zoom', 'dimmerCurve', 'macro']);
+  });
+
   it('roue de couleurs depuis <Wheels><Wheel><Slot>', () => {
     const xml = `<MA><FixtureType name="Spot" mode="M"><manufacturer>Acme</manufacturer><Modules><Module index="0" name="Main" class="Headmover" beamtype="Spot">
       <ChannelType attribute="COLOR1" coarse="1"><ChannelFunction wheel="1" min_dmx_24="0" max_dmx_24="16777215">
