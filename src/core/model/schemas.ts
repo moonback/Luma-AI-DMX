@@ -438,6 +438,38 @@ export const trussSchema = z.object({
   support: z.enum(['towers', 'hung']),
 });
 export type Truss = z.infer<typeof trussSchema>;
+/** Performer or instrument silhouette (meters, y upstage, rotation like fixtures: 0 = facing the audience). */
+export const performerSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  kind: z.enum(['standing', 'seated', 'drums', 'keys', 'lectern']),
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  rotation: z.number().min(-360).max(360),
+  /** Stage point the performer stands on: the silhouette follows it. */
+  markerId: idSchema.nullable().optional(),
+});
+export type Performer = z.infer<typeof performerSchema>;
+/**
+ * LED screen / video surface: centre x, y (meters, y upstage), bottom edge `elevation`, size, rotation (0 = facing
+ * the audience). Image stored as a small data URL; videos are chosen per session and never saved in the project.
+ */
+export const screenSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  elevation: z.number().min(0).max(30),
+  width: z.number().min(0.2).max(60),
+  height: z.number().min(0.2).max(30),
+  rotation: z.number().min(-360).max(360),
+  source: z.enum(['color', 'image', 'video', 'pixels']),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  image: z.string().max(1_500_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/).nullable().optional(),
+  /** Light spill on the surroundings, 0..1. */
+  glow: z.number().min(0).max(1),
+});
+export type StageScreen = z.infer<typeof screenSchema>;
 export type StageView = z.infer<typeof stageViewSchema>;
 
 export const PROJECT_FORMAT_VERSION = 3;
@@ -475,8 +507,10 @@ export const projectSchema = z.object({
       markers: z.array(stageMarkerSchema).max(64).default([]),
       views: z.array(stageViewSchema).max(20).default([]),
       trusses: z.array(trussSchema).max(64).default([]),
+      performers: z.array(performerSchema).max(64).default([]),
+      screens: z.array(screenSchema).max(16).default([]),
     })
-    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [] }),
+    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [], performers: [], screens: [] }),
   ai: z
     .object({ notes: z.string().max(2000).default(''), recentPrompts: z.array(z.string().max(500)).max(20).default([]) })
     .default({ notes: '', recentPrompts: [] }),

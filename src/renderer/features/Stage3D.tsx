@@ -6,7 +6,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { Camera, CircleStop, Cloud, Crosshair, Expand, Eye, ImageDown, Move3d, Plus, Rotate3d, Sparkles, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
+import { Camera, CircleStop, Cloud, Lightbulb, Moon, Crosshair, Expand, Eye, ImageDown, Move3d, Plus, Rotate3d, Sparkles, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
 import { useStore } from '../store';
 import { act, call, newId } from '../api';
 import { NumberInput, useResolved } from '../components/ui';
@@ -17,6 +17,10 @@ import { audienceGlare, beamDirection, type StageGeometry } from '../../core/vis
 import { buildRig, disposeRig, rigKey, updateRig, type Rig } from './stage3d/rig';
 import { buildEnvironment, buildLowFog, disposeGroup, setLowFog, stageGeometry, trussObjectName } from './stage3d/environment';
 import { disposeTextures } from './stage3d/textures';
+import { buildPerformer, buildScreen, disposeScreen, screenKey, updatePerformer, updateScreen, type PerformerRig, type ScreenRig } from './stage3d/actors';
+import { AMBIENCES, FLOORS, LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeReflector, type AmbienceId, type FloorId } from './stage3d/quality';
+import { DARK_LEVEL, performerLight } from '../../core/visualizer/lighting';
+import { screenMediaVersion } from '../screenMedia';
 
 /**
  * 3D stage preview (three.js) fed by the renderer-agnostic VisualFixture model.
@@ -30,8 +34,8 @@ const VIEWS: { id: ViewId; label: string }[] = [
 ];
 
 /** `view`: a built-in camera id or the id of a view saved in the project. */
-interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number }
-const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25 };
+interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId }
+const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte' };
 /** Editor grid steps in meters (0 = free); rotations snap to 15° whenever a grid is on. */
 const GRIDS = [0, 0.25, 0.5, 1];
 const ROTATION_SNAP_DEG = 15;
@@ -173,12 +177,15 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const vis = project.visualizer;
   const stage = useMemo(() => stageGeometry(vis, model), [vis, model]);
   const glare = useMemo(() => audienceGlare(model, stage), [model, stage]);
+  const dark = useMemo(() => vis.performers.filter((pf) => performerLight(pf, vis.markers, model).level < DARK_LEVEL), [vis.performers, vis.markers, model]);
   const [follow, setFollow] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [edit, setEdit] = useState(false);
   const [tool, setTool] = useState<'translate' | 'rotate'>('translate');
   const [selTruss, setSelTruss] = useState<string | null>(null);
   const [dims, setDims] = useState<string | null>(null);
+  const [lights, setLights] = useState(0);
+  const [shadows, setShadows] = useState(0);
   const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selTruss });
   latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selTruss };
   const api = useRef<{
@@ -206,10 +213,20 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x05060a);
     scene.fog = new THREE.Fog(0x05060a, 30, 70);
-    scene.add(new THREE.HemisphereLight(0x8899bb, 0x0b0d14, 0.5));
+    const hemi = new THREE.HemisphereLight(0x8899bb, 0x0b0d14, 0.5);
+    scene.add(hemi);
     const key = new THREE.DirectionalLight(0xb8c4ff, 0.35);
     key.position.set(-6, 12, 10);
     scene.add(key);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    const real = new RealLights(scene, renderer.capabilities.maxTextures);
+    let ambienceKey = '';
+    let floorGroup: THREE.Group | null = null;
+    const performers = new Map<string, PerformerRig>();
+    const screens = new Map<string, ScreenRig>();
+    let mediaVersion = -1;
+    let budgetAt = performance.now();
     const camera = new THREE.PerspectiveCamera(48, 1, 0.05, 300);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -420,9 +437,41 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         if (env) { scene.remove(env); disposeGroup(env); }
         if (fog) { scene.remove(fog); disposeGroup(fog); }
         env = buildEnvironment(st, m, cfg.markers, cfg.trusses, editing ? selT : null);
+        // Real-lighting mode: the set receives shadows, the trusses cast them.
+        env.traverse((o) => { if (o instanceof THREE.Mesh) { o.receiveShadow = true; o.castShadow = !!o.userData.trussId; } });
         fog = buildLowFog(st);
         scene.add(env, fog);
         envKey = k;
+        ambienceKey = ''; // the floor mirror follows the stage outline
+      }
+      const ak = `${p.ambience}|${p.floor}|${envKey}`;
+      if (ak !== ambienceKey) {
+        ambienceKey = ak;
+        applyAmbience(p.ambience, scene, hemi, key);
+        if (floorGroup) { scene.remove(floorGroup); disposeReflector(floorGroup); }
+        floorGroup = buildFloorReflector(p.floor, st, renderer.getDrawingBufferSize(new THREE.Vector2()));
+        if (floorGroup) scene.add(floorGroup);
+      }
+      // Performers and screens: rebuilt when added/removed or when their structure changes, updated every frame.
+      for (const [id, r] of performers) {
+        const pf = cfg.performers.find((x) => x.id === id);
+        if (!pf || r.group.userData.kind !== `${pf.kind}|${pf.name}`) { scene.remove(r.group); disposeGroup(r.group); performers.delete(id); }
+      }
+      for (const pf of cfg.performers) {
+        let r = performers.get(pf.id);
+        if (!r) { r = buildPerformer(pf); r.group.userData.kind = `${pf.kind}|${pf.name}`; performers.set(pf.id, r); scene.add(r.group); }
+        updatePerformer(r, pf, cfg.markers, m, { realLights: p.real, labels: p.labels });
+      }
+      const mv = screenMediaVersion();
+      for (const [id, r] of screens) {
+        const sc = cfg.screens.find((x) => x.id === id);
+        if (!sc || r.key !== screenKey(sc) || mv !== mediaVersion) { scene.remove(r.group); disposeScreen(r); screens.delete(id); }
+      }
+      mediaVersion = mv;
+      for (const sc of cfg.screens) {
+        let r = screens.get(sc.id);
+        if (!r) { r = buildScreen(sc); screens.set(sc.id, r); scene.add(r.group); }
+        updateScreen(r, sc, m, p.haze);
       }
       if (fog) setLowFog(fog, (now - t0) / 1000, p.smoke ? 0.25 + 0.5 * p.haze : 0);
       const group = gf ? useStore.getState().project?.project.groups.find((g) => g.id === gf) : null;
@@ -436,8 +485,10 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           rigs.set(f.id, r);
         }
         const o = overrides.get(f.id);
-        updateRig(r, o ? { ...f, ...o } : f, { time: (now - t0) / 1000, haze: p.haze, pools: p.pools, labels: p.labels, selected: sel.includes(f.id), dimmed: !!group && !group.fixtureIds.includes(f.id), stage: st });
+        updateRig(r, o ? { ...f, ...o } : f, { time: (now - t0) / 1000, haze: p.haze, pools: p.pools && !p.real, labels: p.labels, selected: sel.includes(f.id), dimmed: !!group && !group.fixtureIds.includes(f.id), stage: st });
       }
+      real.setEnabled(p.real);
+      real.update(m, (f) => !!group && !group.fixtureIds.includes(f.id));
       if (anim) {
         const k2 = Math.min(1, (now - anim.start) / 700);
         const e = k2 < 0.5 ? 2 * k2 * k2 : 1 - (-2 * k2 + 2) ** 2 / 2;
@@ -488,7 +539,16 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       }
       frames++;
       if (now - fpsStart > 1000) {
-        setFps(Math.round((frames * 1000) / (now - fpsStart)));
+        const rate = (frames * 1000) / (now - fpsStart);
+        // Adaptive shadow budget: fewer lights below 30 i/s, more above 50 i/s (at most one step every 3 s).
+        if (p.real && now - budgetAt > 3000) {
+          const n = real.budget;
+          if (rate < 30 && n > LIGHT_BUDGET.min) { real.setBudget(n - LIGHT_BUDGET.step); budgetAt = now; }
+          else if (rate > 50 && n < LIGHT_BUDGET.max) { real.setBudget(n + LIGHT_BUDGET.step); budgetAt = now; }
+        }
+        setLights(p.real ? real.budget : 0);
+        setShadows(real.shadows);
+        setFps(Math.round(rate));
         frames = 0;
         fpsStart = now;
       }
@@ -510,6 +570,10 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       for (const r of rigs.values()) disposeRig(r, scene);
       if (env) disposeGroup(env);
       if (fog) disposeGroup(fog);
+      if (floorGroup) disposeReflector(floorGroup);
+      for (const r of performers.values()) disposeGroup(r.group);
+      for (const r of screens.values()) disposeScreen(r);
+      real.dispose();
       disposeTextures();
       composer.dispose();
       renderer.dispose();
@@ -558,6 +622,11 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           ))}
           {vis.views.length < 20 && <button className="chip" onClick={saveView} title="Enregistrer le point de vue actuel dans le projet" data-testid="cam-save"><Plus size={12} /></button>}
         </div>
+        {dark.length > 0 && (
+          <span className="badge warn" data-testid="dark" title={`Visage peu ou pas éclairé : ${dark.map((x) => x.name).join(', ')}. Estimation sans occultation.`}>
+            <Moon size={12} /> Dans le noir : {dark.length}
+          </span>
+        )}
         {glare.length > 0 && (
           <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
             <TriangleAlert size={12} /> Éblouissement public : {glare.length}
@@ -571,6 +640,13 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title="Halo lumineux (bloom)"><Sparkles size={12} /> Glow</button>
         <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title="Taches de lumière et gobos au sol et sur le cyclorama"><Eye size={12} /> Taches</button>
         <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title="Fumée lourde au sol" data-testid="smoke"><Cloud size={12} /> Fumée</button>
+        <button className={`chip ${prefs.real ? 'on' : ''}`} onClick={() => setPrefs({ real: !prefs.real })} title={`Éclairage réel avec ombres : les projecteurs les plus intenses (budget adaptatif ${LIGHT_BUDGET.min}–${LIGHT_BUDGET.max} sources, dont ${shadows || 'jusqu’à'} ombrées selon la carte graphique)`} data-testid="real-lights"><Lightbulb size={12} /> Ombres{prefs.real && lights ? ` · ${lights}` : ''}</button>
+        <select className="select" style={{ width: 150, height: 26 }} value={prefs.ambience} onChange={(e) => setPrefs({ ambience: e.target.value as AmbienceId })} title="Ambiance de la salle" data-testid="ambience">
+          {(Object.keys(AMBIENCES) as AmbienceId[]).map((id) => <option key={id} value={id}>{AMBIENCES[id].label}</option>)}
+        </select>
+        <select className="select" style={{ width: 96, height: 26 }} value={prefs.floor} onChange={(e) => setPrefs({ floor: e.target.value as FloorId })} title="Sol du plateau (laqué / mouillé : reflets)" data-testid="floor">
+          {(Object.keys(FLOORS) as FloorId[]).map((id) => <option key={id} value={id}>Sol {FLOORS[id].toLowerCase()}</option>)}
+        </select>
         <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title="Noms des projecteurs"><Tag size={12} /> Noms</button>
         <button className={`chip ${edit ? 'on' : ''}`} onClick={() => { setEdit(!edit); setSelTruss(null); }} title="Édition directe : déplacer et pivoter projecteurs et structures" data-testid="edit3d"><Move3d size={12} /> Éditer</button>
         {edit && (

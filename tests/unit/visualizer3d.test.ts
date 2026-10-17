@@ -3,7 +3,9 @@ import { audienceGlare, beamDirection, beamHit, flickerOn, mountSign, onStage, p
 import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, trussSegments, trussSupports } from '../../src/core/visualizer/truss';
 import type { Truss } from '../../src/core/model/schemas';
 import { buildVisualModel, goboIndex, mountOf, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
-import { parseProject } from '../../src/core/project/format';
+import { createProject, parseProject } from '../../src/core/project/format';
+import { projectSchema } from '../../src/core/model/schemas';
+import { DARK_LEVEL, FACE_HEIGHT, lightAt, performerLight, performerSpot, toHex } from '../../src/core/visualizer/lighting';
 import { commandSchema } from '../../src/shared/commands';
 import { ProjectIndex } from '../../src/core/engine/resolve';
 import { ProfileLibrary, coarseChannel } from '../../src/core/fixtures/profiles';
@@ -137,7 +139,7 @@ describe('forme de plateau, points de scène et éblouissement', () => {
   it('un ancien projet reçoit les valeurs par défaut, une mise à jour partielle ne remet rien à zéro', async () => {
     const old = { ...demoProject(), visualizer: { stageWidth: 10, stageDepth: 6 } };
     const { project } = parseProject(JSON.stringify(old));
-    expect(project.visualizer).toEqual({ stageWidth: 10, stageDepth: 6, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [] });
+    expect(project.visualizer).toEqual({ stageWidth: 10, stageDepth: 6, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [], performers: [], screens: [] });
 
     const { svc } = makeService();
     await svc.init();
@@ -249,5 +251,49 @@ describe('structures, accroches et historique de scène', () => {
     expect(svc.projectState().sceneHistory).toEqual(h1);
     await svc.execute({ type: 'project.new', name: 'Autre' });
     expect(svc.projectState().sceneHistory).toEqual({ undo: 0, redo: 0 });
+  });
+});
+
+describe('interprètes, éclairement estimé et écrans', () => {
+  const spot = (o: Partial<VisualFixture> = {}): VisualFixture => ({
+    id: 's', name: 'Douche', type: 'moving-head', x: 0, y: 3, rotation: 0, color: '#ff0000', intensity: 1, movable: true, panDeg: 0, tiltDeg: 0,
+    beamAngle: 30, height: 6, mount: 'hanging', mountTilt: 0, trussId: null, cells: [], strobeHz: 0, gobo: 0, prism: false, ...o,
+  } as VisualFixture);
+  const singer = { id: 'p', name: 'Chant', kind: 'standing' as const, x: 0, y: 3, rotation: 0, markerId: null };
+
+  it('dans le cône : couleur et niveau du faisceau ; hors cône ou éteint : dans le noir', () => {
+    const lit = performerLight(singer, [], [spot()]);
+    expect(lit.level).toBeGreaterThan(0.5);
+    expect(lit.g).toBe(0);
+    expect(lit.r).toBeCloseTo(lit.level);
+    expect(performerLight({ ...singer, x: 3 }, [], [spot()]).level).toBeLessThan(DARK_LEVEL); // 3 m aside of a 30° beam
+    expect(performerLight(singer, [], [spot({ intensity: 0 })]).level).toBe(0);
+    // Two colours add up; the level saturates at 1.
+    const mix = lightAt({ x: 0, y: 1.6, z: -3 }, [spot(), spot({ id: 'b', color: '#0000ff' })]);
+    expect(mix.r).toBeGreaterThan(0.5);
+    expect(mix.b).toBeGreaterThan(0.5);
+    expect(toHex({ r: 1, g: 0.5, b: 0 })).toBe('#ff8000');
+    // Soft edge: a little dimmer just outside the nominal half angle than on the axis.
+    const edgeX = 4.4 * Math.tan((15 * Math.PI) / 180) * 1.05;
+    const edge = performerLight({ ...singer, x: edgeX }, [], [spot()]).level;
+    expect(edge).toBeGreaterThan(0);
+    expect(edge).toBeLessThan(lit.level);
+  });
+
+  it('un interprète posé sur un point de scène le suit ; le visage assis est plus bas', () => {
+    const marker = { id: 'm', name: 'Centre', x: 2, y: 5, height: 1.7 };
+    expect(performerSpot({ ...singer, markerId: 'm' }, [marker])).toEqual({ x: 2, y: 5 });
+    expect(performerSpot({ ...singer, markerId: 'absent' }, [marker])).toEqual({ x: 0, y: 3 });
+    expect(FACE_HEIGHT.seated).toBeLessThan(FACE_HEIGHT.standing);
+  });
+
+  it('schéma : écrans et interprètes validés, image limitée à une data URL', () => {
+    const base = createProject('Écrans');
+    const screen = { id: 'e1', name: 'Fond', x: 0, y: 7, elevation: 1, width: 6, height: 3, rotation: 0, source: 'image', color: '#000000', glow: 0.5 };
+    const ok = (v: unknown) => projectSchema.safeParse({ ...base, visualizer: { ...base.visualizer, ...(v as object) } }).success;
+    expect(ok({ screens: [{ ...screen, image: 'data:image/jpeg;base64,AAAA' }], performers: [singer] })).toBe(true);
+    expect(ok({ screens: [{ ...screen, image: 'file:///C:/secret.png' }] })).toBe(false);
+    expect(ok({ screens: [{ ...screen, color: 'red' }] })).toBe(false);
+    expect(ok({ performers: [{ ...singer, kind: 'danseur' }] })).toBe(false);
   });
 });

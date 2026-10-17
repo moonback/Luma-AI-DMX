@@ -67,6 +67,7 @@ Légende effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaine
 - **Prérequis direct** de la 3.2 (focus automatique) et de la 3.3 (suivi) du ROADMAP principal.
 
 #### 7. Interprètes et instruments · M
+> **Livré (17/10/2026)** : silhouettes debout, assis, batterie, clavier, pupitre, posées librement ou sur un point de scène (elles le suivent) ; éclairement estimé sur le visage (couleur et niveau en 2D et en 3D) et badge « Dans le noir ». Reste : l'option de déplacement le long d'un chemin synchronisé sur la timeline.
 - Silhouettes déplaçables (personne debout / assise, batterie, clavier, pupitre) rattachables à un point de scène (6).
 - **Éclairement estimé** : chaque silhouette prend la couleur et le niveau des faisceaux qui la touchent (test d'appartenance au cône depuis `beamDirection` + `beamAngle`), pour voir immédiatement si quelqu'un est dans le noir.
 - Option : rejouer un déplacement d'interprète le long d'un chemin, synchronisé sur la timeline.
@@ -74,6 +75,7 @@ Légende effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaine
 ### Lot B — Rendu
 
 #### 8. Mode « éclairage réel » avec ombres · L
+> **Livré (17/10/2026)** : bouton « Ombres » sans rechargement ; spots three.js donnés aux projecteurs les plus intenses, budget adaptatif de 4 à 24 sources selon la cadence ; ombres des truss, interprètes et écrans. Mesuré : 55 i/s avec 12 à 16 sources. Limite matérielle : une ombre occupe une unité de texture, donc 12 sources ombrées au plus sur une carte à 16 unités ; les suivantes éclairent sans ombre. Le critère de 24 sources ombrées n'est pas atteignable sur ce matériel.
 - Mode qualité optionnel : `SpotLight` three.js pour les N projecteurs les plus contributifs (budget adaptatif), ombres portées du décor (1) et des interprètes (7).
 - Le mode actuel (shader de cône + taches) reste le mode rapide par défaut.
 - **Critères** : ≥ 30 i/s avec 24 sources ombrées sur une carte graphique intégrée ; bascule sans recharger la scène.
@@ -85,10 +87,12 @@ Légende effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaine
 - Le curseur « brume » existant pilote l'ensemble.
 
 #### 10. Ambiances de salle et matériaux · S
+> **Livré (17/10/2026)** : salle noire, lumière de service, plein air nuit, club, théâtre ; sol mat, laqué ou mouillé (reflets réels du plateau et de l'avancée). Le sol réfléchissant coûte un rendu de plus (≈ 38 i/s mesurés avec les ombres).
 - Préréglages : salle noire, lumière de service, plein air nuit, club, théâtre (couleur du fond, éclairage ambiant, brouillard de distance).
 - Sol réfléchissant optionnel (plateau laqué / sol mouillé) et choix du matériau du plateau.
 
 #### 11. Écrans LED et surfaces vidéo · M
+> **Livré (17/10/2026)** : écrans placés librement (couleur, image réduite à 512 px et enregistrée dans le projet, vidéo choisie pour la séance et non enregistrée, pixel mapping des barres LED) ; halo dans la brume et lumière diffusée sur le plateau. Écart : les écrans ne font pas encore partie d'un décor (fonctionnalité 1).
 - Surfaces d'écran dans le décor (1) affichant : une couleur, une image, une vidéo, ou le **pixel mapping** des barres LED et matrices du kit.
 - L'écran éclaire légèrement son environnement (contribution à la brume et au sol).
 

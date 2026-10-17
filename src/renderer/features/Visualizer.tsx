@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, MapPin, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, X } from 'lucide-react';
+import { ExternalLink, MapPin, Monitor, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, X } from 'lucide-react';
 import { useStore } from '../store';
 import { act, newId } from '../api';
 import { Empty, NumberInput, PageHead, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import { Stage3D } from './Stage3D';
-import type { FixtureValues, Project, StageMarker, Truss } from '../../core/model/schemas';
+import type { FixtureValues, Performer, Project, StageMarker, StageScreen, Truss } from '../../core/model/schemas';
+import { DARK_LEVEL, performerLight, toHex } from '../../core/visualizer/lighting';
+import { setScreenVideo, screenVideo } from '../screenMedia';
 import { snapToTrusses, trussSegments, trussSupports } from '../../core/visualizer/truss';
 
 interface View { scale: number; ox: number; oy: number }
@@ -23,7 +25,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ scale: 0, ox: 0, oy: 0 });
-  const drag = useRef<{ kind: 'pan' | 'fixture' | 'marker'; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const drag = useRef<{ kind: 'pan' | 'fixture' | 'marker' | 'performer'; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
   const local = useRef(new Map<string, { x: number; y: number }>());
   const fitKey = useRef('');
   const model = useMemo(() => buildVisualModel(fixtures, values ?? live), [fixtures, values, live]);
@@ -33,6 +35,11 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const thrust = vis.shape === 'thrust' ? vis.thrust : null;
   const front = thrust?.depth ?? 0;
   const markerPos = (m: StageMarker) => local.current.get(m.id) ?? { x: m.x, y: m.y };
+  /** Performer position, following its stage point (also while that point is being dragged). */
+  const performerPos = (pf: Performer) => {
+    const m = pf.markerId ? vis.markers.find((x) => x.id === pf.markerId) : undefined;
+    return local.current.get(pf.id) ?? (m ? markerPos(m) : { x: pf.x, y: pf.y });
+  };
 
   // Fit stage on first layout.
   useEffect(() => {
@@ -138,6 +145,34 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       g.font = '10px sans-serif';
       g.fillText(m.name, p.x + 10, p.y + 3);
     }
+    // Screens: thick bar seen from above, in their colour.
+    for (const sc of vis.screens) {
+      const a2 = (sc.rotation * Math.PI) / 180, hw = sc.width / 2;
+      const p1 = toScreen(sc.x - Math.cos(a2) * hw, sc.y - Math.sin(a2) * hw), p2 = toScreen(sc.x + Math.cos(a2) * hw, sc.y + Math.sin(a2) * hw);
+      g.strokeStyle = sc.source === 'color' ? sc.color : '#5b6b8c';
+      g.lineWidth = 5;
+      g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.stroke();
+      g.lineWidth = 1;
+      g.fillStyle = '#7d879c';
+      g.font = '10px sans-serif';
+      g.fillText(sc.name, (p1.x + p2.x) / 2 + 6, (p1.y + p2.y) / 2 - 6);
+    }
+    // Performers: disc tinted by the light on their face, red ring when in the dark.
+    for (const pf of vis.performers) {
+      const q = toScreen(performerPos(pf).x, performerPos(pf).y);
+      const l = performerLight({ ...pf, ...performerPos(pf), markerId: null }, vis.markers, model);
+      g.beginPath();
+      g.arc(q.x, q.y, 8, 0, Math.PI * 2);
+      g.fillStyle = l.level < DARK_LEVEL ? '#1b1f29' : toHex({ r: 0.15 + l.r * 0.85, g: 0.15 + l.g * 0.85, b: 0.15 + l.b * 0.85 });
+      g.fill();
+      g.lineWidth = 2;
+      g.strokeStyle = l.level < DARK_LEVEL ? '#f87171' : '#e2e8f0';
+      g.stroke();
+      g.lineWidth = 1;
+      g.fillStyle = '#e2e8f0';
+      g.font = '10px sans-serif';
+      g.fillText(`${pf.name} · ${Math.round(l.level * 100)} %`, q.x + 11, q.y + 3);
+    }
     // Beams first (additive look), then bodies
     g.globalCompositeOperation = 'lighter';
     for (const f of model) {
@@ -204,11 +239,19 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     const r = wrap.current!.getBoundingClientRect();
     return vis.markers.find((m) => { const p = toScreen(markerPos(m).x, markerPos(m).y); return Math.hypot(p.x - (cx - r.left), p.y - (cy - r.top)) < 9; });
   };
+  const hitPerformer = (cx: number, cy: number) => {
+    const r = wrap.current!.getBoundingClientRect();
+    return vis.performers.find((pf) => { const q = toScreen(performerPos(pf).x, performerPos(pf).y); return Math.hypot(q.x - (cx - r.left), q.y - (cy - r.top)) < 10; });
+  };
   const down = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const f = hit(e.clientX, e.clientY);
-    const mk = editable && !f && e.button === 0 ? hitMarker(e.clientX, e.clientY) : undefined;
-    if (mk) {
+    const pf = editable && !f && e.button === 0 ? hitPerformer(e.clientX, e.clientY) : undefined;
+    const mk = editable && !f && !pf && e.button === 0 ? hitMarker(e.clientX, e.clientY) : undefined;
+    if (pf) {
+      const at = performerPos(pf);
+      drag.current = { kind: 'performer', id: pf.id, x: e.clientX, y: e.clientY, ox: at.x, oy: at.y, moved: false };
+    } else if (mk) {
       drag.current = { kind: 'marker', id: mk.id, x: e.clientX, y: e.clientY, ox: mk.x, oy: mk.y, moved: false };
     } else if (f && e.button === 0) {
       if (e.ctrlKey || e.shiftKey) setSelection(selection.includes(f.id) ? selection.filter((x) => x !== f.id) : [...selection, f.id]);
@@ -233,6 +276,14 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     const d = drag.current;
     drag.current = null;
     if (d?.kind === 'pan' && !d.moved) setSelection([]);
+    if (d?.kind === 'performer' && d.id && d.moved) {
+      const p = local.current.get(d.id)!;
+      const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
+      // Dropped on a stage point (within 50 cm): the performer stands on it and follows it; else free.
+      const near = vis.markers.find((m) => Math.hypot(m.x - p.x, m.y - p.y) <= 0.5);
+      const performers = vis.performers.map((x) => (x.id === d.id ? { ...x, x: clampPos(near?.x ?? p.x), y: clampPos(near?.y ?? p.y), markerId: near?.id ?? null } : x));
+      void act({ type: 'project.update', visualizer: { performers } }).finally(() => local.current.delete(d.id!));
+    }
     if (d?.kind === 'marker' && d.id && d.moved) {
       const p = local.current.get(d.id)!;
       const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
@@ -331,6 +382,8 @@ function StageSettings({ vis }: { vis: Vis }) {
         </div>
       ))}
       <TrussSettings vis={vis} />
+      <PerformerSettings vis={vis} />
+      <ScreenSettings vis={vis} />
     </div>
   );
 }
@@ -338,6 +391,125 @@ function StageSettings({ vis }: { vis: Vis }) {
 const TRUSS_SHAPES: { id: Truss['shape']; label: string }[] = [{ id: 'line', label: 'Droite' }, { id: 'circle', label: 'Cercle' }, { id: 'square', label: 'Carré' }];
 
 /** Explicit trusses: hung fixtures follow them (handled by the main process when a truss changes). */
+const PERFORMER_KINDS: { id: Performer['kind']; label: string }[] = [
+  { id: 'standing', label: 'Debout' }, { id: 'seated', label: 'Assis' }, { id: 'drums', label: 'Batterie' }, { id: 'keys', label: 'Clavier' }, { id: 'lectern', label: 'Pupitre' },
+];
+
+/** Performer and instrument silhouettes; their face shows the light received (2D disc, 3D tint). */
+function PerformerSettings({ vis }: { vis: Vis }) {
+  const save = (performers: Performer[]) => void act({ type: 'project.update', visualizer: { performers } });
+  const set = (id: string, patch: Partial<Performer>) => save(vis.performers.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const add = () => save([...vis.performers, { id: newId(), name: `Artiste ${vis.performers.length + 1}`, kind: 'standing', x: 0, y: Math.round(vis.stageDepth * 4) / 10, rotation: 0, markerId: null }]);
+  return (
+    <>
+      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+        <UserRound size={13} className="dim" /><span className="small muted grow">Interprètes et instruments — déplaçables en mode Positionner, posés sur un point de scène s’ils y sont lâchés</span>
+        <button className="btn sm" onClick={add} disabled={vis.performers.length >= 64} data-testid="performer-add"><Plus size={12} />Interprète</button>
+      </div>
+      {vis.performers.map((pf) => (
+        <div key={pf.id} className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }} data-testid="performer-row">
+          <input className="input" style={{ width: 130 }} defaultValue={pf.name} maxLength={80} aria-label="Nom de l’interprète" onBlur={(e) => { const name = e.target.value.trim(); if (name && name !== pf.name) set(pf.id, { name }); else e.target.value = pf.name; }} />
+          <select className="select" style={{ width: 100 }} value={pf.kind} aria-label="Silhouette" onChange={(e) => set(pf.id, { kind: e.target.value as Performer['kind'] })}>
+            {PERFORMER_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+          </select>
+          <select className="select" style={{ width: 150 }} value={pf.markerId ?? ''} aria-label="Point de scène" data-testid="performer-marker" onChange={(e) => {
+            const m = vis.markers.find((x) => x.id === e.target.value);
+            set(pf.id, m ? { markerId: m.id, x: m.x, y: m.y } : { markerId: null });
+          }}>
+            <option value="">Position libre</option>
+            {vis.markers.map((m) => <option key={m.id} value={m.id}>Sur « {m.name} »</option>)}
+          </select>
+          {!pf.markerId && (
+            <>
+              <span className="small muted">X</span><div style={{ width: 60 }}><NumberInput value={pf.x} min={-100} max={100} step={0.25} onChange={(v) => set(pf.id, { x: v })} /></div>
+              <span className="small muted">Y</span><div style={{ width: 60 }}><NumberInput value={pf.y} min={-100} max={100} step={0.25} onChange={(v) => set(pf.id, { y: v })} /></div>
+            </>
+          )}
+          <span className="small muted" title="Orientation (0° = face au public)">°</span><div style={{ width: 60 }}><NumberInput value={pf.rotation} min={-360} max={360} step={15} onChange={(v) => set(pf.id, { rotation: v })} /></div>
+          <button className="btn ghost sm icon" title={`Supprimer « ${pf.name} »`} aria-label={`Supprimer ${pf.name}`} onClick={() => save(vis.performers.filter((x) => x.id !== pf.id))}><Trash2 size={12} /></button>
+        </div>
+      ))}
+    </>
+  );
+}
+
+const SCREEN_SOURCES: { id: StageScreen['source']; label: string }[] = [
+  { id: 'color', label: 'Couleur' }, { id: 'image', label: 'Image' }, { id: 'video', label: 'Vidéo' }, { id: 'pixels', label: 'Pixel mapping' },
+];
+/** Images are downscaled before being stored in the project (keeps project files small). */
+const SCREEN_IMAGE_MAX_PX = 512;
+
+function shrinkImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, SCREEN_IMAGE_MAX_PX / Math.max(img.width, img.height));
+      const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.width * k)), height: Math.max(1, Math.round(img.height * k)) });
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
+    img.src = url;
+  });
+}
+
+/** LED screens / video surfaces with a light spill on their surroundings. */
+function ScreenSettings({ vis }: { vis: Vis }) {
+  const [, rerender] = useState(0);
+  const toast = useStore((s) => s.toast);
+  const save = (screens: StageScreen[]) => void act({ type: 'project.update', visualizer: { screens } });
+  const set = (id: string, patch: Partial<StageScreen>) => save(vis.screens.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const add = () => save([...vis.screens, {
+    id: newId(), name: `Écran ${vis.screens.length + 1}`, x: 0, y: Math.round(vis.stageDepth * 9) / 10, elevation: 1.5,
+    width: Math.min(6, vis.stageWidth / 2), height: 3, rotation: 0, source: 'color', color: '#3b82f6', image: null, glow: 0.5,
+  }]);
+  const num = (label: string, title: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void) => (
+    <><span className="small muted" title={title}>{label}</span><div style={{ width: 56 }} title={title}><NumberInput value={value} min={min} max={max} step={step} onChange={onChange} /></div></>
+  );
+  return (
+    <>
+      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+        <Monitor size={13} className="dim" /><span className="small muted grow">Écrans LED — couleur, image, vidéo (non enregistrée dans le projet) ou pixel mapping des barres LED</span>
+        <button className="btn sm" onClick={add} disabled={vis.screens.length >= 16} data-testid="screen-add"><Plus size={12} />Écran</button>
+      </div>
+      {vis.screens.map((sc) => (
+        <div key={sc.id} className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }} data-testid="screen-row">
+          <input className="input" style={{ width: 110 }} defaultValue={sc.name} maxLength={80} aria-label="Nom de l’écran" onBlur={(e) => { const name = e.target.value.trim(); if (name && name !== sc.name) set(sc.id, { name }); else e.target.value = sc.name; }} />
+          <select className="select" style={{ width: 120 }} value={sc.source} aria-label="Contenu" data-testid="screen-source" onChange={(e) => set(sc.id, { source: e.target.value as StageScreen['source'] })}>
+            {SCREEN_SOURCES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+          {sc.source === 'color' && <input type="color" value={sc.color} aria-label="Couleur de l’écran" onChange={(e) => set(sc.id, { color: e.target.value })} style={{ width: 34, height: 26, padding: 0, border: 0, background: 'none' }} />}
+          {sc.source === 'image' && (
+            <label className="btn sm" title="Image (réduite à 512 px et enregistrée dans le projet)">{sc.image ? 'Changer l’image' : 'Choisir une image'}
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) shrinkImage(file).then((image) => set(sc.id, { image })).catch((err: Error) => toast({ kind: 'error', title: 'Image', detail: err.message }));
+              }} />
+            </label>
+          )}
+          {sc.source === 'video' && (
+            <label className="btn sm" title="Vidéo lue pendant cette session uniquement : le fichier n’est pas copié dans le projet">{screenVideo(sc.id) ? 'Changer la vidéo' : 'Choisir une vidéo'}
+              <input type="file" accept="video/*" hidden onChange={(e) => { setScreenVideo(sc.id, e.target.files?.[0] ?? null); rerender((n) => n + 1); }} />
+            </label>
+          )}
+          {num('X', 'Centre, jardin ↔ cour (m)', sc.x, -100, 100, 0.25, (v) => set(sc.id, { x: v }))}
+          {num('Y', 'Profondeur (m)', sc.y, -100, 100, 0.25, (v) => set(sc.id, { y: v }))}
+          {num('Z', 'Hauteur du bas de l’écran (m)', sc.elevation, 0, 30, 0.25, (v) => set(sc.id, { elevation: v }))}
+          {num('L', 'Largeur (m)', sc.width, 0.2, 60, 0.25, (v) => set(sc.id, { width: v }))}
+          {num('H', 'Hauteur (m)', sc.height, 0.2, 30, 0.25, (v) => set(sc.id, { height: v }))}
+          {num('°', 'Rotation (0° = face au public)', sc.rotation, -360, 360, 15, (v) => set(sc.id, { rotation: v }))}
+          <label className="row small" title="Lumière diffusée sur le plateau et la brume">Halo
+            <input type="range" min={0} max={100} value={Math.round(sc.glow * 100)} style={{ width: 70 }} onChange={(e) => set(sc.id, { glow: Number(e.target.value) / 100 })} />
+          </label>
+          <button className="btn ghost sm icon" title={`Supprimer « ${sc.name} »`} aria-label={`Supprimer l’écran ${sc.name}`} onClick={() => { setScreenVideo(sc.id, null); save(vis.screens.filter((x) => x.id !== sc.id)); }}><Trash2 size={12} /></button>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function TrussSettings({ vis }: { vis: Vis }) {
   const save = (trusses: Truss[]) => void act({ type: 'project.update', visualizer: { trusses } });
   const set = (id: string, patch: Partial<Truss>) => save(vis.trusses.map((t) => (t.id === id ? { ...t, ...patch } : t)));

@@ -313,6 +313,64 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
   await page.getByTestId('cam-foh').click();
 });
 
+test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol', async () => {
+  const renderErrors: string[] = [];
+  const onConsole = (m: { type: () => string; text: () => string }) => { if (m.type() === 'error' && /shader|WebGL|THREE/i.test(m.text())) renderErrors.push(m.text()); };
+  page.on('console', onConsole);
+
+  // Two performers (one on the stage point), a drum kit and a pixel-mapped LED screen, from the scene panel.
+  await nav('visualizer');
+  await page.getByTestId('stage-settings-toggle').click();
+  await page.getByTestId('performer-add').click();
+  await page.getByTestId('performer-add').click();
+  await expect(page.getByTestId('performer-row')).toHaveCount(2);
+  await page.getByTestId('performer-marker').first().selectOption({ label: 'Sur « Point 1 »' });
+  await page.getByTestId('performer-row').nth(1).locator('select').first().selectOption('drums');
+  await page.getByTestId('screen-add').click();
+  await page.getByTestId('screen-source').selectOption('pixels');
+  await expect(page.getByTestId('screen-row')).toHaveCount(1);
+  await page.screenshot({ path: `${shots}/19-interpretes-ecrans-2d.png` });
+
+  // Light the rig: every fixture full, moving heads straight down (tilt 0,5 = 0°).
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const patch = ((await inv({ type: 'project.get' })).data as { project: { patch: { id: string; name: string }[] } }).project.patch;
+  const ids = patch.map((f) => f.id);
+  await inv({ type: 'programmer.set', fixtureIds: ids, values: { dimmer: 1 }, confirmSpecial: false });
+  await inv({ type: 'programmer.set', fixtureIds: patch.filter((f) => f.name.startsWith('Lyre')).map((f) => f.id), values: { tilt: 0.5, pan: 0.5, gobo: 0, prism: 0 }, confirmSpecial: false });
+  await inv({ type: 'effect.start', id: 'rbw' }); // rainbow on the LED bars → pixel-mapped screen
+  await nav('stage3d');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${shots}/19b-interpretes-ecrans-3d.png` });
+
+  // Real lighting: shadow-casting spot lights, budget shown on the chip, switch without reloading.
+  await page.getByTestId('real-lights').click();
+  await expect(page.getByTestId('real-lights')).toContainText(/Ombres · \d+/, { timeout: 5000 });
+  await page.waitForTimeout(5000); // first frames compile the shadow shaders
+  console.log(`éclairage réel : ${await page.getByTestId('fps').textContent()} · ${await page.getByTestId('real-lights').textContent()}`);
+  await page.screenshot({ path: `${shots}/19c-eclairage-reel.png` });
+
+  // Ambience and reflective floor.
+  await page.getByTestId('ambience').selectOption('club');
+  await page.getByTestId('floor').selectOption('wet');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${shots}/19d-club-sol-mouille.png` });
+  await page.getByTestId('ambience').selectOption('work');
+  await page.getByTestId('floor').selectOption('lacquer');
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${shots}/19e-service-sol-laque.png` });
+
+  // Back to the defaults (preferences persist per viewer).
+  await page.getByTestId('real-lights').click();
+  await page.getByTestId('ambience').selectOption('black');
+  await page.getByTestId('floor').selectOption('matte');
+  await expect(page.getByTestId('fps')).not.toHaveText('0 i/s');
+  page.off('console', onConsole);
+  expect(renderErrors).toEqual([]);
+  await inv({ type: 'effect.stopAll' });
+  await inv({ type: 'programmer.release', fixtureIds: ids });
+});
+
 test('raccourci reconfiguré : Blackout sur K', async () => {
   await nav('settings');
   await page.getByRole('tab', { name: 'Raccourcis' }).click();
