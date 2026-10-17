@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, Move, Theater, X } from 'lucide-react';
+import { ExternalLink, MapPin, Move, Plus, Settings2, Theater, Trash2, X } from 'lucide-react';
 import { useStore } from '../store';
-import { act } from '../api';
+import { act, newId } from '../api';
 import { Empty, NumberInput, PageHead, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import { Stage3D } from './Stage3D';
-import type { FixtureValues } from '../../core/model/schemas';
+import type { FixtureValues, Project, StageMarker } from '../../core/model/schemas';
 
 interface View { scale: number; ox: number; oy: number }
 
@@ -22,11 +22,16 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ scale: 0, ox: 0, oy: 0 });
-  const drag = useRef<{ kind: 'pan' | 'fixture'; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const drag = useRef<{ kind: 'pan' | 'fixture' | 'marker'; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
   const local = useRef(new Map<string, { x: number; y: number }>());
+  const fitKey = useRef('');
   const model = useMemo(() => buildVisualModel(fixtures, values ?? live), [fixtures, values, live]);
   const group = groupFilter ? project.groups.find((g) => g.id === groupFilter) : null;
-  const W = project.visualizer.stageWidth, D = project.visualizer.stageDepth;
+  const vis = project.visualizer;
+  const W = vis.stageWidth, D = vis.stageDepth;
+  const thrust = vis.shape === 'thrust' ? vis.thrust : null;
+  const front = thrust?.depth ?? 0;
+  const markerPos = (m: StageMarker) => local.current.get(m.id) ?? { x: m.x, y: m.y };
 
   // Fit stage on first layout.
   useEffect(() => {
@@ -34,13 +39,20 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     if (!el) return;
     const fit = () => {
       const r = el.getBoundingClientRect();
-      setView((v) => (v.scale ? v : { scale: Math.min(r.width / (W + 4), r.height / (D + 4)), ox: r.width / 2, oy: r.height - 20 }));
+      const key = `${W}|${D}|${front}`;
+      setView((v) => {
+        // Refit when the stage outline changes, keep the user's zoom/pan otherwise.
+        if (v.scale && fitKey.current === key) return v;
+        fitKey.current = key;
+        const scale = Math.min(r.width / (W + 4), r.height / (D + front + 4));
+        return { scale, ox: r.width / 2, oy: r.height - 20 - front * scale };
+      });
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [W, D]);
+  }, [W, D, front]);
 
   const toScreen = (x: number, y: number, v = view) => ({ x: v.ox + x * v.scale, y: v.oy - y * v.scale });
   const pos = (f: VisualFixture) => local.current.get(f.id) ?? { x: f.x, y: f.y };
@@ -65,9 +77,46 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     g.strokeStyle = 'rgba(40,49,66,0.45)';
     for (let x = Math.ceil(-W / 2); x <= W / 2; x++) { const p = toScreen(x, 0), q = toScreen(x, D); g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke(); }
     for (let y = 1; y < D; y++) { const p = toScreen(-W / 2, y), q = toScreen(W / 2, y); g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke(); }
+    if (thrust) {
+      const ta = toScreen(-thrust.width / 2, 0), tb = toScreen(thrust.width / 2, -thrust.depth);
+      g.fillStyle = '#0d1018';
+      g.fillRect(ta.x, ta.y, tb.x - ta.x, tb.y - ta.y);
+      g.strokeStyle = '#283142';
+      g.strokeRect(ta.x, ta.y, tb.x - ta.x, tb.y - ta.y);
+    }
     g.fillStyle = '#66718a';
     g.font = '11px sans-serif';
-    g.fillText('PUBLIC', toScreen(0, 0).x - 20, toScreen(0, 0).y + 14);
+    if (vis.shape === 'arena') {
+      g.fillText('PUBLIC', toScreen(0, D).x - 20, toScreen(0, D).y - 8);
+      g.fillText('PUBLIC', toScreen(0, 0).x - 20, toScreen(0, 0).y + 14);
+    } else {
+      const lip = toScreen(thrust ? thrust.width / 2 + 1 : 0, 0);
+      g.fillText('PUBLIC', lip.x - (thrust ? 0 : 20), lip.y + 14);
+      if (vis.cyclo) {
+        g.strokeStyle = '#4b5570';
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(a.x, a.y);
+        g.lineTo(b.x, a.y);
+        g.stroke();
+        g.lineWidth = 1;
+      }
+    }
+    // Stage points: cyan diamond + name.
+    for (const m of vis.markers) {
+      const p = toScreen(markerPos(m).x, markerPos(m).y);
+      g.fillStyle = '#22d3ee';
+      g.beginPath();
+      g.moveTo(p.x, p.y - 7);
+      g.lineTo(p.x + 7, p.y);
+      g.lineTo(p.x, p.y + 7);
+      g.lineTo(p.x - 7, p.y);
+      g.closePath();
+      g.fill();
+      g.fillStyle = '#67e8f9';
+      g.font = '10px sans-serif';
+      g.fillText(m.name, p.x + 10, p.y + 3);
+    }
     // Beams first (additive look), then bodies
     g.globalCompositeOperation = 'lighter';
     for (const f of model) {
@@ -130,10 +179,17 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     const x = cx - r.left, y = cy - r.top;
     return model.find((f) => { const p = toScreen(pos(f).x, pos(f).y); return Math.hypot(p.x - x, p.y - y) < 11; });
   };
+  const hitMarker = (cx: number, cy: number) => {
+    const r = wrap.current!.getBoundingClientRect();
+    return vis.markers.find((m) => { const p = toScreen(markerPos(m).x, markerPos(m).y); return Math.hypot(p.x - (cx - r.left), p.y - (cy - r.top)) < 9; });
+  };
   const down = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const f = hit(e.clientX, e.clientY);
-    if (f && e.button === 0) {
+    const mk = editable && !f && e.button === 0 ? hitMarker(e.clientX, e.clientY) : undefined;
+    if (mk) {
+      drag.current = { kind: 'marker', id: mk.id, x: e.clientX, y: e.clientY, ox: mk.x, oy: mk.y, moved: false };
+    } else if (f && e.button === 0) {
       if (e.ctrlKey || e.shiftKey) setSelection(selection.includes(f.id) ? selection.filter((x) => x !== f.id) : [...selection, f.id]);
       else if (!selection.includes(f.id)) setSelection([f.id]);
       drag.current = editable ? { kind: 'fixture', id: f.id, x: e.clientX, y: e.clientY, ox: pos(f).x, oy: pos(f).y, moved: false } : null;
@@ -147,6 +203,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     d.moved = true;
     if (d.kind === 'pan') setView({ ...view, ox: d.ox + e.clientX - d.x, oy: d.oy + e.clientY - d.y });
     else if (d.id) {
+      // Fixtures and stage points share the local drag overlay (ids never collide: both are UUIDs).
       local.current.set(d.id, { x: Math.round((d.ox + (e.clientX - d.x) / view.scale) * 10) / 10, y: Math.round((d.oy - (e.clientY - d.y) / view.scale) * 10) / 10 });
       setView({ ...view });
     }
@@ -155,6 +212,12 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     const d = drag.current;
     drag.current = null;
     if (d?.kind === 'pan' && !d.moved) setSelection([]);
+    if (d?.kind === 'marker' && d.id && d.moved) {
+      const p = local.current.get(d.id)!;
+      const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
+      const markers = vis.markers.map((m) => (m.id === d.id ? { ...m, x: clampPos(p.x), y: clampPos(p.y) } : m));
+      void act({ type: 'project.update', visualizer: { markers } }).finally(() => local.current.delete(d.id!));
+    }
     if (d?.kind === 'fixture' && d.id && d.moved) {
       const p = local.current.get(d.id)!;
       void act({ type: 'fixture.update', id: d.id, patch: { position: { x: Math.max(-100, Math.min(100, p.x)), y: Math.max(-100, Math.min(100, p.y)) } } }).finally(() => local.current.delete(d.id!));
@@ -196,12 +259,59 @@ export function DetachedStage3D() {
   return <div style={{ height: '100vh' }}>{ready ? <Stage3D /> : <div className="empty">Connexion au moteur…</div>}</div>;
 }
 
+type Vis = Project['visualizer'];
+const SHAPES: { id: Vis['shape']; label: string }[] = [
+  { id: 'rect', label: 'Rectangle' }, { id: 'thrust', label: 'Avancée' }, { id: 'arena', label: 'Arène (360°)' },
+];
+
+/** Stage layout and stage points (singer, drummer…) shared by the 2D and 3D views. */
+function StageSettings({ vis }: { vis: Vis }) {
+  const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
+  const setMarker = (id: string, patch: Partial<StageMarker>) => update({ markers: vis.markers.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
+  const addMarker = () => update({ markers: [...vis.markers, { id: newId(), name: `Point ${vis.markers.length + 1}`, x: 0, y: Math.round(vis.stageDepth * 5) / 10, height: 1.7 }] });
+  return (
+    <div className="panel" style={{ padding: '10px 12px', marginBottom: 10 }} data-testid="stage-settings">
+      <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+        <span className="small muted">Forme</span>
+        <div className="chips" role="group" aria-label="Forme du plateau">
+          {SHAPES.map((sh) => <button key={sh.id} className={`chip ${vis.shape === sh.id ? 'on' : ''}`} data-testid={`shape-${sh.id}`} onClick={() => update({ shape: sh.id })}>{sh.label}</button>)}
+        </div>
+        {vis.shape === 'thrust' && (
+          <>
+            <span className="small muted">Avancée</span>
+            <div style={{ width: 64 }} title="Largeur de l’avancée (m)"><NumberInput value={vis.thrust.width} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, width: v } })} /></div>
+            <span className="muted">×</span>
+            <div style={{ width: 64 }} title="Profondeur de l’avancée (m)"><NumberInput value={vis.thrust.depth} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, depth: v } })} /></div>
+          </>
+        )}
+        {vis.shape !== 'arena' && (
+          <label className="row small"><input type="checkbox" checked={vis.cyclo} onChange={(e) => update({ cyclo: e.target.checked })} data-testid="cyclo" />Cyclorama</label>
+        )}
+      </div>
+      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+        <MapPin size={13} className="dim" /><span className="small muted grow">Points de scène — déplaçables en mode Positionner, visibles en 3D</span>
+        <button className="btn sm" onClick={addMarker} disabled={vis.markers.length >= 64} data-testid="marker-add"><Plus size={12} />Point</button>
+      </div>
+      {vis.markers.map((m) => (
+        <div key={m.id} className="row" style={{ gap: 6, marginTop: 6 }} data-testid="marker-row">
+          <input className="input" style={{ width: 150 }} defaultValue={m.name} maxLength={80} aria-label="Nom du point" onBlur={(e) => { const name = e.target.value.trim(); if (name && name !== m.name) setMarker(m.id, { name }); else e.target.value = m.name; }} />
+          <span className="small muted">X</span><div style={{ width: 64 }}><NumberInput value={m.x} min={-100} max={100} step={0.1} onChange={(v) => setMarker(m.id, { x: v })} /></div>
+          <span className="small muted">Y</span><div style={{ width: 64 }}><NumberInput value={m.y} min={-100} max={100} step={0.1} onChange={(v) => setMarker(m.id, { y: v })} /></div>
+          <span className="small muted" title="Hauteur de visée">H</span><div style={{ width: 64 }}><NumberInput value={m.height} min={0} max={10} step={0.1} onChange={(v) => setMarker(m.id, { height: v })} /></div>
+          <button className="btn ghost sm icon" title={`Supprimer « ${m.name} »`} aria-label={`Supprimer le point ${m.name}`} onClick={() => update({ markers: vis.markers.filter((x) => x.id !== m.id) })}><Trash2 size={12} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StagePage({ mode }: { mode: '2d' | '3d' }) {
   const { fixtures } = useResolved();
   const project = useStore((s) => s.project!.project);
   const preview = useStore((s) => s.preview);
   const setPreview = useStore((s) => s.setPreview);
   const [edit, setEdit] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [group, setGroup] = useState<string | null>(null);
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -216,7 +326,9 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
         <div style={{ width: 70 }} title="Largeur (m)"><NumberInput value={project.visualizer.stageWidth} min={2} max={200} onChange={(v) => void act({ type: 'project.update', visualizer: { stageWidth: v } })} /></div>
         <span className="muted">×</span>
         <div style={{ width: 70 }} title="Profondeur (m)"><NumberInput value={project.visualizer.stageDepth} min={2} max={200} onChange={(v) => void act({ type: 'project.update', visualizer: { stageDepth: v } })} /></div>
+        <button className={`btn ${settings ? 'on' : ''}`} onClick={() => setSettings(!settings)} title="Forme du plateau, cyclorama et points de scène" data-testid="stage-settings-toggle"><Settings2 size={14} />Scène</button>
       </PageHead>
+      {settings && <StageSettings vis={project.visualizer} />}
       {preview && (
         <div className="panel row" style={{ padding: '8px 12px', marginBottom: 10, borderColor: 'rgba(139,92,246,.6)' }}>
           <span className="badge violet">APERÇU</span>

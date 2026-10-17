@@ -220,6 +220,8 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .chip:hover { color: var(--text); border-color: var(--border-strong); }
 .chip.on { color: var(--text); border-color: var(--violet); background: var(--violet-soft); }
 .chip.danger { border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; }
+span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default; }
+.chip-link { background: none; border: 0; padding: 0 2px; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; }
 
 /* DMX monitor */
 .dmx-grid { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; }

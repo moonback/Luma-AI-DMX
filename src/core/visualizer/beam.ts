@@ -5,7 +5,17 @@ import type { VisualFixture } from './model';
  * z = towards the audience. The stage deck spans z ∈ [-depth, 0]; the back wall (cyclorama) stands at z = -depth.
  */
 export interface Vec3 { x: number; y: number; z: number }
-export interface StageGeometry { width: number; depth: number; wallHeight: number }
+export interface StageGeometry {
+  width: number;
+  depth: number;
+  wallHeight: number;
+  /** Back wall present (false: no cyclorama, beams go through). Default true. */
+  wall?: boolean;
+  /** Runway from the stage lip towards the audience (z ∈ [0, depth]). */
+  thrust?: { width: number; depth: number } | null;
+  /** Audience all around the deck (no cyclorama). */
+  arena?: boolean;
+}
 
 const DEG = Math.PI / 180;
 /** Fixed aim of non-moving fixtures, in degrees from their mounting axis (floor fixtures wash the back wall). */
@@ -47,9 +57,9 @@ export function beamHit(origin: Vec3, dir: Vec3, stage: StageGeometry): BeamHit 
   if (dir.y < -1e-3) {
     const t = -origin.y / dir.y;
     const p = { x: origin.x + dir.x * t, y: 0, z: origin.z + dir.z * t };
-    if (t > 0.05 && Math.abs(p.x) <= stage.width / 2 + 10 && p.z >= -stage.depth && p.z <= 15) hits.push({ surface: 'floor', point: p, normal: { x: 0, y: 1, z: 0 }, distance: t });
+    if (t > 0.05 && Math.abs(p.x) <= stage.width / 2 + 10 && p.z >= -stage.depth - (stage.arena ? 15 : 0) && p.z <= 15) hits.push({ surface: 'floor', point: p, normal: { x: 0, y: 1, z: 0 }, distance: t });
   }
-  if (dir.z < -1e-3) {
+  if (dir.z < -1e-3 && stage.wall !== false && !stage.arena) {
     const t = (-stage.depth - origin.z) / dir.z;
     const p = { x: origin.x + dir.x * t, y: origin.y + dir.y * t, z: -stage.depth };
     if (t > 0.05 && p.y >= 0 && p.y <= stage.wallHeight && Math.abs(p.x) <= stage.width / 2 + 2) hits.push({ surface: 'wall', point: p, normal: { x: 0, y: 0, z: 1 }, distance: t });
@@ -80,4 +90,36 @@ export function flickerOn(t: number, hz: number): boolean {
 /** Visual length of the beam: up to the first surface, capped. */
 export function beamLength(hit: BeamHit | null, cap = 30): number {
   return Math.min(cap, hit ? hit.distance : cap);
+}
+
+/** On the deck or the thrust (performers' area), as opposed to the audience. World coordinates. */
+export function onStage(x: number, z: number, stage: StageGeometry): boolean {
+  if (Math.abs(x) <= stage.width / 2 && z <= 0 && z >= -stage.depth) return true;
+  const t = stage.thrust;
+  return !!t && Math.abs(x) <= t.width / 2 && z >= 0 && z <= t.depth;
+}
+
+/** Audience eye level (seated to standing), meters. */
+export const EYE_LEVEL = { min: 1.1, max: 1.8 } as const;
+
+/**
+ * Moving heads whose beam axis crosses the audience at eye level (glare risk). Fixed fixtures are skipped: their aim
+ * is the visualizer's assumption (FIXED_AIM), not a measured focus. Approximation: the axis only, not the whole
+ * cone, sampled every 20 cm up to the first surface; only beams above 5 % intensity count.
+ */
+export function audienceGlare(fixtures: readonly VisualFixture[], stage: StageGeometry): VisualFixture[] {
+  return fixtures.filter((f) => {
+    if (!f.movable || f.intensity < 0.05) return false;
+    const o = { x: f.x, y: f.height, z: -f.y };
+    const d = beamDirection(f);
+    const len = beamLength(beamHit(o, d, stage));
+    for (let t = 0.2; t <= len; t += 0.2) {
+      const y = o.y + d.y * t;
+      if (y < EYE_LEVEL.min || y > EYE_LEVEL.max) continue;
+      const x = o.x + d.x * t, z = o.z + d.z * t;
+      if (onStage(x, z, stage) || Math.abs(x) > stage.width / 2 + 10 || z > 15) continue;
+      if (stage.arena || z > 0) return true;
+    }
+    return false;
+  });
 }

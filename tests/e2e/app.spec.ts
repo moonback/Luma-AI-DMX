@@ -177,6 +177,75 @@ test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection
   await inv({ type: 'effect.stopAll' });
 });
 
+test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecteur, éblouissement, captures', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const shaderErrors: string[] = [];
+  page.on('console', (m) => { if (m.type() === 'error' && /shader|WebGLProgram|THREE/i.test(m.text())) shaderErrors.push(m.text()); });
+
+  // Stage layout and stage point from the 2D settings panel.
+  await nav('visualizer');
+  await page.getByTestId('stage-settings-toggle').click();
+  await page.getByTestId('shape-thrust').click();
+  await page.getByTestId('marker-add').click();
+  await expect(page.getByTestId('marker-row')).toHaveCount(1);
+  await page.screenshot({ path: `${shots}/17-scene-reglages-2d.png` });
+
+  // Moving heads aimed into the house at eye level → glare badge.
+  const state = (await inv({ type: 'project.get' })).data as { project: { patch: { id: string; name: string }[] } };
+  const lyres = state.project.patch.filter((f) => f.name.startsWith('Lyre')).map((f) => f.id);
+  await inv({ type: 'programmer.set', fixtureIds: lyres, values: { dimmer: 1, pan: 0.5, tilt: 0.78, prism: 0 }, confirmSpecial: false });
+  // Lyre 1 may still be selected by the previous scenario: a tile click toggles, so only click when needed.
+  await nav('stage3d');
+  if (!(await page.getByTestId('stage3d-info').isVisible())) {
+    await nav('console');
+    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await nav('stage3d');
+  }
+  await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
+  await expect(page.getByTestId('glare')).toContainText('Éblouissement public');
+  await page.getByTestId('smoke').click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${shots}/17b-scene-avancee-fumee.png` });
+
+  // Saved view round trip.
+  await page.getByTestId('cam-top').click();
+  await page.waitForTimeout(900);
+  await page.getByTestId('cam-save').click();
+  await expect(page.getByTestId('cam-saved')).toHaveCount(1);
+  await page.getByTestId('cam-foh').click();
+  await page.getByTestId('cam-saved').getByText('Vue 1').click();
+
+  // Beam's-eye view on the selected moving head.
+  await page.getByTestId('beam-view').click();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${shots}/17c-scene-vue-projecteur.png` });
+  await page.getByTestId('beam-view').click();
+
+  // Captures: intercept the download link instead of opening the save dialog.
+  await page.evaluate(() => {
+    const w = window as unknown as { __downloads: string[]; __blobSize: number };
+    w.__downloads = [];
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { w.__downloads.push(this.href); };
+    // The app CSP forbids fetching blob: URLs, so measure the recording when its URL is created.
+    const create = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (o: Blob | MediaSource) => { if (o instanceof Blob) w.__blobSize = o.size; return create(o); };
+  });
+  await page.getByTestId('capture').click();
+  await page.getByTestId('record').click();
+  await page.waitForTimeout(1500);
+  await page.getByTestId('record').click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __downloads: string[] }).__downloads.length)).toBe(2);
+  const [png, webm] = await page.evaluate(() => {
+    const w = window as unknown as { __downloads: string[]; __blobSize: number };
+    return [w.__downloads[0]!.length, w.__blobSize];
+  });
+  expect(png).toBeGreaterThan(20_000); // a black frame would compress to a few KB
+  expect(webm).toBeGreaterThan(0);
+  expect(shaderErrors).toEqual([]);
+  await inv({ type: 'programmer.release', fixtureIds: lyres });
+});
+
 test('raccourci reconfiguré : Blackout sur K', async () => {
   await nav('settings');
   await page.getByRole('tab', { name: 'Raccourcis' }).click();

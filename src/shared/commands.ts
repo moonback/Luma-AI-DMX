@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   addressSchema, attributeSchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
+  stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -51,7 +52,16 @@ export const commandSchema = z.discriminatedUnion('type', [
     type: z.literal('project.update'),
     meta: z.object({ name: nameSchema.optional(), show: z.string().trim().max(80).optional(), notes: z.string().max(5000).optional() }).optional(),
     show: z.object({ bpm: z.number().min(20).max(300).optional(), universes: z.number().int().min(1).max(64).optional() }).optional(),
-    visualizer: z.object({ stageWidth: z.number().min(2).max(200).optional(), stageDepth: z.number().min(2).max(200).optional() }).optional(),
+    // No `.default()` here: absent fields must stay absent so a partial update never resets the others.
+    visualizer: z.object({
+      stageWidth: z.number().min(2).max(200).optional(),
+      stageDepth: z.number().min(2).max(200).optional(),
+      shape: stageShapeSchema.optional(),
+      thrust: thrustSchema.optional(),
+      cyclo: z.boolean().optional(),
+      markers: z.array(stageMarkerSchema).max(64).optional(),
+      views: z.array(stageViewSchema).max(20).optional(),
+    }).optional(),
   }),
   empty('project.listRecovery'),
   z.object({ type: z.literal('project.openRecovery'), file: z.string().min(1).max(1000) }),

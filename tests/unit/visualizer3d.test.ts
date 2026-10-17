@@ -1,8 +1,10 @@
-import { beamDirection, beamHit, flickerOn, poolShape, rotateY, beamLength } from '../../src/core/visualizer/beam';
-import { buildVisualModel, goboIndex, strobeFrequency, zoomedAngle } from '../../src/core/visualizer/model';
+import { audienceGlare, beamDirection, beamHit, flickerOn, onStage, poolShape, rotateY, beamLength } from '../../src/core/visualizer/beam';
+import { buildVisualModel, goboIndex, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
+import { parseProject } from '../../src/core/project/format';
+import { commandSchema } from '../../src/shared/commands';
 import { ProjectIndex } from '../../src/core/engine/resolve';
 import { ProfileLibrary, coarseChannel } from '../../src/core/fixtures/profiles';
-import { demoProject } from '../helpers';
+import { demoProject, makeService } from '../helpers';
 
 const stage = { width: 12, depth: 8, wallHeight: 6 };
 const close = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => {
@@ -92,5 +94,55 @@ describe('modèle visuel enrichi', () => {
     expect(s1).toMatchObject({ mount: 'hanging', gobo: 1, prism: true, movable: true });
     expect(s2.mount).toBe('floor');
     expect(s2.prism).toBe(false);
+  });
+});
+
+describe('forme de plateau, points de scène et éblouissement', () => {
+  const vf = (o: Partial<VisualFixture>): VisualFixture => ({
+    id: 'f', name: 'Lyre', type: 'moving-head', x: 0, y: 1, rotation: 0, color: '#ffffff', intensity: 1, movable: true, panDeg: 0, tiltDeg: 0,
+    beamAngle: 15, height: 4, mount: 'hanging', cells: [], strobeHz: 0, gobo: 0, prism: false, ...o,
+  } as VisualFixture);
+
+  it('sans cyclo ou en arène, le faisceau traverse le fond de scène', () => {
+    const o = { x: 0, y: 0.3, z: -7.5 }, d = beamDirection({ ...mover, movable: false, mount: 'floor' });
+    expect(beamHit(o, d, stage)!.surface).toBe('wall');
+    expect(beamHit(o, d, { ...stage, wall: false })).toBeNull();
+    expect(beamHit(o, d, { ...stage, arena: true })).toBeNull();
+    // Arena: the audience floor also exists behind the deck.
+    expect(beamHit({ x: 0, y: 4, z: -10 }, { x: 0, y: -1, z: 0 }, { ...stage, arena: true })!.surface).toBe('floor');
+  });
+
+  it('l’avancée fait partie du plateau, pas de la salle', () => {
+    const thrust = { ...stage, thrust: { width: 3, depth: 4 } };
+    expect(onStage(0, 2, thrust)).toBe(true);
+    expect(onStage(0, 2, stage)).toBe(false);
+    expect(onStage(3, 2, thrust)).toBe(false);
+  });
+
+  it('signale une lyre pointée dans la salle à hauteur des yeux, pas une lyre vers le sol ni un projecteur fixe', () => {
+    const intoHouse = vf({ id: 'a', tiltDeg: 70 });
+    expect(audienceGlare([intoHouse], stage).map((f) => f.id)).toEqual(['a']);
+    expect(audienceGlare([vf({ tiltDeg: 0 })], stage)).toEqual([]);
+    expect(audienceGlare([vf({ tiltDeg: 70, intensity: 0 })], stage)).toEqual([]);
+    expect(audienceGlare([vf({ tiltDeg: 70, movable: false })], stage)).toEqual([]);
+    // Same beam over a long thrust: it lands on performers, not on the audience.
+    expect(audienceGlare([intoHouse], { ...stage, thrust: { width: 6, depth: 12 } })).toEqual([]);
+    // Arena: aiming upstage over the back edge also reaches spectators.
+    expect(audienceGlare([vf({ y: 7, tiltDeg: 70, rotation: 180 })], { ...stage, arena: true })).toHaveLength(1);
+  });
+
+  it('un ancien projet reçoit les valeurs par défaut, une mise à jour partielle ne remet rien à zéro', async () => {
+    const old = { ...demoProject(), visualizer: { stageWidth: 10, stageDepth: 6 } };
+    const { project } = parseProject(JSON.stringify(old));
+    expect(project.visualizer).toEqual({ stageWidth: 10, stageDepth: 6, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [] });
+
+    const { svc } = makeService();
+    await svc.init();
+    await svc.execute({ type: 'project.new', name: 'Scène' });
+    const markers = [{ id: 'chant', name: 'Chanteur', x: 0, y: 2, height: 1.7 }];
+    await svc.execute(commandSchema.parse({ type: 'project.update', visualizer: { markers, shape: 'thrust' } }) as never);
+    await svc.execute(commandSchema.parse({ type: 'project.update', visualizer: { stageWidth: 14 } }) as never);
+    expect(svc.projectState().project.visualizer).toMatchObject({ stageWidth: 14, shape: 'thrust', markers });
+    expect(() => commandSchema.parse({ type: 'project.update', visualizer: { markers: [{ id: 'x', name: '', x: 0, y: 0, height: 1 }] } })).toThrow();
   });
 });

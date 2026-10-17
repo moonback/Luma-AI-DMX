@@ -5,14 +5,15 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { Camera, Expand, Eye, Sparkles, Tag, Sun } from 'lucide-react';
+import { Camera, CircleStop, Cloud, Crosshair, Expand, Eye, ImageDown, Plus, Sparkles, Tag, Sun, TriangleAlert, Video, X } from 'lucide-react';
 import { useStore } from '../store';
-import { act } from '../api';
+import { act, newId } from '../api';
 import { NumberInput, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import type { FixtureValues } from '../../core/model/schemas';
+import { audienceGlare, beamDirection, type StageGeometry } from '../../core/visualizer/beam';
 import { buildRig, disposeRig, rigKey, updateRig, type Rig } from './stage3d/rig';
-import { buildEnvironment, disposeGroup, stageGeometry } from './stage3d/environment';
+import { buildEnvironment, buildLowFog, disposeGroup, setLowFog, stageGeometry } from './stage3d/environment';
 import { disposeTextures } from './stage3d/textures';
 
 /**
@@ -26,8 +27,9 @@ const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'foh', label: 'Régie' }, { id: 'front', label: 'Face' }, { id: 'top', label: 'Dessus' }, { id: 'left', label: 'Jardin' }, { id: 'right', label: 'Cour' },
 ];
 
-interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; view: ViewId }
-const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, view: 'foh' };
+/** `view`: a built-in camera id or the id of a view saved in the project. */
+interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string }
+const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh' };
 function loadPrefs(): Prefs {
   try {
     return { ...DEFAULT_PREFS, ...(JSON.parse(localStorage.getItem('luma.stage3d') ?? '{}') as Partial<Prefs>) };
@@ -43,20 +45,32 @@ function savePrefs(p: Prefs): void {
   }
 }
 
-function viewPose(id: ViewId, W: number, D: number, H: number): { pos: THREE.Vector3; target: THREE.Vector3 } {
+function viewPose(id: ViewId, st: StageGeometry): { pos: THREE.Vector3; target: THREE.Vector3 } {
+  const { width: W, wallHeight: H } = st;
+  // Frame the whole playing area: deck plus thrust.
+  const front = st.thrust?.depth ?? 0;
+  const D = st.depth + front;
   const span = Math.max(W, D);
-  const target = new THREE.Vector3(0, Math.min(2, H / 3), -D / 2);
+  const target = new THREE.Vector3(0, Math.min(2, H / 3), front - D / 2);
   switch (id) {
-    case 'front': return { pos: new THREE.Vector3(0, 1.7, span * 0.9), target };
-    case 'top': return { pos: new THREE.Vector3(0, span * 1.6, -D / 2 + 0.01), target: new THREE.Vector3(0, 0, -D / 2) };
-    case 'left': return { pos: new THREE.Vector3(-span * 1.1, H * 0.6, -D / 2), target };
-    case 'right': return { pos: new THREE.Vector3(span * 1.1, H * 0.6, -D / 2), target };
-    default: return { pos: new THREE.Vector3(0, H * 0.75, span * 1.25), target };
+    case 'front': return { pos: new THREE.Vector3(0, 1.7, front + span * 0.9), target };
+    case 'top': return { pos: new THREE.Vector3(0, span * 1.6, target.z + 0.01), target: new THREE.Vector3(0, 0, target.z) };
+    case 'left': return { pos: new THREE.Vector3(-span * 1.1, H * 0.6, target.z), target };
+    case 'right': return { pos: new THREE.Vector3(span * 1.1, H * 0.6, target.z), target };
+    default: return { pos: new THREE.Vector3(0, H * 0.75, front + span * 1.25), target };
   }
 }
 
 
-function InfoPanel({ f }: { f: VisualFixture }) {
+function download(url: string, name: string): void {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+}
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+
+function InfoPanel({ f, following, onFollow }: { f: VisualFixture; following: boolean; onFollow: () => void }) {
   return (
     <div className="stage3d-panel" data-testid="stage3d-info">
       <div className="row between"><b>{f.name}</b><span className="badge">{f.type}</span></div>
@@ -68,6 +82,7 @@ function InfoPanel({ f }: { f: VisualFixture }) {
         <label className="field"><span className="small muted">Rotation (°)</span><NumberInput value={f.rotation} min={-360} max={360} onChange={(v) => void act({ type: 'fixture.update', id: f.id, patch: { rotation: v } })} /></label>
       </div>
       <span className="small dim">{f.mount === 'floor' ? 'Posé au sol (faisceau vers le haut)' : 'Accroché (faisceau vers le bas)'} — seuil 1 m</span>
+      <button className={`btn sm ${following ? 'on' : ''}`} onClick={onFollow} data-testid="beam-view" title="Placer la caméra dans l’axe du faisceau pour régler un focus"><Crosshair size={12} />{following ? 'Quitter la vue projecteur' : 'Vue projecteur'}</button>
     </div>
   );
 }
@@ -86,11 +101,20 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const [hover, setHover] = useState<{ x: number; y: number; f: VisualFixture } | null>(null);
   const setPrefs = (p: Partial<Prefs>) => setPrefsState((cur) => { const n = { ...cur, ...p }; savePrefs(n); return n; });
 
-  const W = project.visualizer.stageWidth, D = project.visualizer.stageDepth;
-  const stage = useMemo(() => stageGeometry(W, D, model), [W, D, model]);
-  const latest = useRef({ model, selection, groupFilter, prefs, stage });
-  latest.current = { model, selection, groupFilter, prefs, stage };
-  const api = useRef<{ goTo: (v: ViewId) => void; rebuildEnv: () => void; setBloom: (on: boolean) => void } | null>(null);
+  const vis = project.visualizer;
+  const stage = useMemo(() => stageGeometry(vis, model), [vis, model]);
+  const glare = useMemo(() => audienceGlare(model, stage), [model, stage]);
+  const [follow, setFollow] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow });
+  latest.current = { model, selection, groupFilter, prefs, stage, vis, follow };
+  const api = useRef<{
+    goTo: (v: string) => void;
+    pose: () => { pos: THREE.Vector3; target: THREE.Vector3 };
+    capture: () => void;
+    record: (on: boolean) => void;
+    setBloom: (on: boolean) => void;
+  } | null>(null);
 
   useEffect(() => {
     const el = host.current;
@@ -129,14 +153,18 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     bloom.enabled = latest.current.prefs.glow;
 
     let env: THREE.Group | null = null;
+    let fog: THREE.Group | null = null;
     let envKey = '';
     const rigs = new Map<string, Rig>();
 
     // Camera transitions.
     let anim: { from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; start: number } | null = null;
-    const goTo = (v: ViewId, instant = false) => {
-      const st = latest.current.stage;
-      const pose = viewPose(v, st.width, st.depth, st.wallHeight);
+    const goTo = (v: string, instant = false) => {
+      const { stage: st, vis: cfg } = latest.current;
+      const saved = cfg.views.find((x) => x.id === v);
+      const pose = saved
+        ? { pos: new THREE.Vector3(saved.pos.x, saved.pos.y, saved.pos.z), target: new THREE.Vector3(saved.target.x, saved.target.y, saved.target.z) }
+        : viewPose(VIEWS.some((x) => x.id === v) ? (v as ViewId) : 'foh', st);
       if (instant) {
         camera.position.copy(pose.pos);
         controls.target.copy(pose.target);
@@ -193,9 +221,25 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     renderer.domElement.addEventListener('pointermove', onMove);
     renderer.domElement.addEventListener('pointerleave', onLeave);
 
+    let wantCapture = false;
+    let recorder: MediaRecorder | null = null;
     api.current = {
       goTo: (v) => goTo(v),
-      rebuildEnv: () => { envKey = ''; },
+      pose: () => ({ pos: camera.position.clone(), target: controls.target.clone() }),
+      capture: () => { wantCapture = true; },
+      record: (on) => {
+        if (!on) { recorder?.stop(); return; }
+        const chunks: Blob[] = [];
+        recorder = new MediaRecorder(renderer.domElement.captureStream(30), { mimeType: 'video/webm' });
+        recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+        recorder.onstop = () => {
+          const url = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+          download(url, `scene-${stamp()}.webm`);
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          recorder = null;
+        };
+        recorder.start(1000);
+      },
       setBloom: (on) => { bloom.enabled = on; },
     };
 
@@ -205,15 +249,18 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     const t0 = performance.now();
     const loop = () => {
       const now = performance.now();
-      const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st } = latest.current;
-      // Environment follows the stage size and truss rows.
-      const k = `${st.width}|${st.depth}|${st.wallHeight}|${m.filter((f) => f.mount === 'hanging').map((f) => `${f.x.toFixed(1)},${f.y.toFixed(1)},${f.height.toFixed(1)}`).join(';')}`;
+      const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st, vis: cfg, follow: fid } = latest.current;
+      // Environment follows the stage layout, stage points and truss rows.
+      const k = `${JSON.stringify(st)}|${JSON.stringify(cfg.markers)}|${m.filter((f) => f.mount === 'hanging').map((f) => `${f.x.toFixed(1)},${f.y.toFixed(1)},${f.height.toFixed(1)}`).join(';')}`;
       if (k !== envKey) {
         if (env) { scene.remove(env); disposeGroup(env); }
-        env = buildEnvironment(st, m);
-        scene.add(env);
+        if (fog) { scene.remove(fog); disposeGroup(fog); }
+        env = buildEnvironment(st, m, cfg.markers);
+        fog = buildLowFog(st);
+        scene.add(env, fog);
         envKey = k;
       }
+      if (fog) setLowFog(fog, (now - t0) / 1000, p.smoke ? 0.25 + 0.5 * p.haze : 0);
       const group = gf ? useStore.getState().project?.project.groups.find((g) => g.id === gf) : null;
       const ids = new Set(m.map((f) => f.id));
       for (const [id, r] of rigs) if (!ids.has(id)) { disposeRig(r, scene); rigs.delete(id); }
@@ -233,9 +280,23 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         controls.target.lerpVectors(anim.tFrom, anim.tTo, e);
         if (k2 >= 1) anim = null;
       }
-      controls.update();
+      // Beam's-eye view: the camera rides just ahead of the lens along the beam axis (orbit disabled meanwhile).
+      const followed = fid ? m.find((f) => f.id === fid) : undefined;
+      controls.enabled = !followed;
+      if (followed) {
+        const d = beamDirection(followed);
+        const dir = new THREE.Vector3(d.x, d.y, d.z);
+        camera.position.set(followed.x, followed.height, -followed.y).addScaledVector(dir, 0.45);
+        camera.lookAt(camera.position.clone().addScaledVector(dir, 10));
+        anim = null;
+      } else controls.update();
       if (bloom.enabled) composer.render();
       else renderer.render(scene, camera);
+      if (wantCapture) {
+        // Read back in the same task as the render: the drawing buffer is not preserved afterwards.
+        wantCapture = false;
+        download(renderer.domElement.toDataURL('image/png'), `scene-${stamp()}.png`);
+      }
       frames++;
       if (now - fpsStart > 1000) {
         setFps(Math.round((frames * 1000) / (now - fpsStart)));
@@ -248,6 +309,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
 
     return () => {
       cancelAnimationFrame(raf);
+      if (recorder?.state === 'recording') recorder.stop();
       ro.disconnect();
       controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', onDown);
@@ -256,6 +318,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       renderer.domElement.removeEventListener('pointerleave', onLeave);
       for (const r of rigs.values()) disposeRig(r, scene);
       if (env) disposeGroup(env);
+      if (fog) disposeGroup(fog);
       disposeTextures();
       composer.dispose();
       renderer.dispose();
@@ -267,6 +330,17 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   useEffect(() => api.current?.setBloom(prefs.glow), [prefs.glow]);
 
   const selected = selection.length === 1 ? model.find((f) => f.id === selection[0]) : undefined;
+  const pickView = (id: string) => { setFollow(null); setPrefs({ view: id }); api.current?.goTo(id); };
+  const saveView = () => {
+    const pose = api.current?.pose();
+    if (!pose) return;
+    const r = (v: THREE.Vector3) => ({ x: Math.round(v.x * 100) / 100, y: Math.round(v.y * 100) / 100, z: Math.round(v.z * 100) / 100 });
+    const view = { id: newId(), name: `Vue ${vis.views.length + 1}`, pos: r(pose.pos), target: r(pose.target) };
+    void act({ type: 'project.update', visualizer: { views: [...vis.views, view] } });
+    setPrefs({ view: view.id });
+  };
+  const deleteView = (id: string) => void act({ type: 'project.update', visualizer: { views: vis.views.filter((v) => v.id !== id) } });
+  const toggleRecord = () => { api.current?.record(!recording); setRecording(!recording); };
   const fullscreen = () => {
     const el = wrap.current;
     if (!el) return;
@@ -282,9 +356,21 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         <div className="chips" role="group" aria-label="Caméras">
           <Camera size={14} className="dim" />
           {VIEWS.map((v) => (
-            <button key={v.id} className={`chip ${prefs.view === v.id ? 'on' : ''}`} data-testid={`cam-${v.id}`} onClick={() => { setPrefs({ view: v.id }); api.current?.goTo(v.id); }}>{v.label}</button>
+            <button key={v.id} className={`chip ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid={`cam-${v.id}`} onClick={() => pickView(v.id)}>{v.label}</button>
           ))}
+          {vis.views.map((v) => (
+            <span key={v.id} className={`chip ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid="cam-saved">
+              <button className="chip-link" onClick={() => pickView(v.id)}>{v.name}</button>
+              <button className="chip-link" onClick={() => deleteView(v.id)} title={`Supprimer « ${v.name} »`} aria-label={`Supprimer la vue ${v.name}`}><X size={10} /></button>
+            </span>
+          ))}
+          {vis.views.length < 20 && <button className="chip" onClick={saveView} title="Enregistrer le point de vue actuel dans le projet" data-testid="cam-save"><Plus size={12} /></button>}
         </div>
+        {glare.length > 0 && (
+          <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
+            <TriangleAlert size={12} /> Éblouissement public : {glare.length}
+          </span>
+        )}
         <div className="grow" />
         <label className="row small" title="Densité de brume : visibilité des faisceaux dans l’air">
           <Sun size={13} className="dim" />Brume
@@ -292,7 +378,10 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         </label>
         <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title="Halo lumineux (bloom)"><Sparkles size={12} /> Glow</button>
         <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title="Taches de lumière et gobos au sol et sur le cyclorama"><Eye size={12} /> Taches</button>
+        <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title="Fumée lourde au sol" data-testid="smoke"><Cloud size={12} /> Fumée</button>
         <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title="Noms des projecteurs"><Tag size={12} /> Noms</button>
+        <button className="chip" onClick={() => api.current?.capture()} title="Capture d’image (PNG)" data-testid="capture"><ImageDown size={12} /></button>
+        <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
         <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)"><Expand size={12} /></button>
         <span className="mono small dim" data-testid="fps">{fps} i/s</span>
       </div>
@@ -302,7 +391,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           <span className="small muted">{Math.round(hover.f.intensity * 100)} % · {hover.f.color.toUpperCase()}{hover.f.movable ? ` · P ${hover.f.panDeg.toFixed(0)}° T ${hover.f.tiltDeg.toFixed(0)}°` : ''}</span>
         </div>
       )}
-      {selected && <InfoPanel f={selected} />}
+      {selected && <InfoPanel f={selected} following={follow === selected.id} onFollow={() => setFollow(follow === selected.id ? null : selected.id)} />}
       <div className="stage3d-hint small dim">Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique</div>
     </div>
   );

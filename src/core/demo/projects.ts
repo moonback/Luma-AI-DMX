@@ -21,7 +21,7 @@ function build(spec: DemoSpec): Project {
   p.meta.show = spec.show.slice(0, 80);
   p.meta.notes = `${spec.description}\n\nLieu : ${spec.venue} (fictif).\n${spec.notes}`;
   p.show.bpm = spec.bpm;
-  p.visualizer = { stageWidth: W, stageDepth: D };
+  p.visualizer = { ...p.visualizer, stageWidth: W, stageDepth: D };
   p.cueLists = [];
   const pid = (s: string) => `${spec.id}-${slug(s)}`.slice(0, 64);
 

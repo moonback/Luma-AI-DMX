@@ -397,6 +397,23 @@ export type MusicTrack = z.infer<typeof musicTrackSchema>;
 /* Project                                                             */
 /* ------------------------------------------------------------------ */
 
+/** Stage layout. `thrust` adds a runway towards the audience; `arena` has the audience all around and no cyclorama. */
+export const stageShapeSchema = z.enum(['rect', 'thrust', 'arena']);
+export const thrustSchema = z.object({ width: z.number().min(1).max(50), depth: z.number().min(1).max(50) });
+/** Named stage point (singer, drummer…), position like fixtures (meters, y upstage) plus the aiming height. */
+export const stageMarkerSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  height: z.number().min(0).max(10),
+});
+export type StageMarker = z.infer<typeof stageMarkerSchema>;
+const vec3Schema = z.object({ x: z.number().min(-500).max(500), y: z.number().min(-500).max(500), z: z.number().min(-500).max(500) });
+/** Saved 3D camera (world coordinates of the visualizer). */
+export const stageViewSchema = z.object({ id: idSchema, name: nameSchema, pos: vec3Schema, target: vec3Schema });
+export type StageView = z.infer<typeof stageViewSchema>;
+
 export const PROJECT_FORMAT_VERSION = 3;
 
 export const projectSchema = z.object({
@@ -423,8 +440,16 @@ export const projectSchema = z.object({
   audio: audioConfigSchema.default({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, bpmRange: { min: 70, max: 180 }, reactions: DEFAULT_AUDIO_REACTIONS }),
   music: z.object({ tracks: z.array(musicTrackSchema).max(100).default([]) }).default({ tracks: [] }),
   visualizer: z
-    .object({ stageWidth: z.number().min(2).max(200).default(12), stageDepth: z.number().min(2).max(200).default(8) })
-    .default({ stageWidth: 12, stageDepth: 8 }),
+    .object({
+      stageWidth: z.number().min(2).max(200).default(12),
+      stageDepth: z.number().min(2).max(200).default(8),
+      shape: stageShapeSchema.default('rect'),
+      thrust: thrustSchema.default({ width: 3, depth: 4 }),
+      cyclo: z.boolean().default(true),
+      markers: z.array(stageMarkerSchema).max(64).default([]),
+      views: z.array(stageViewSchema).max(20).default([]),
+    })
+    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [] }),
   ai: z
     .object({ notes: z.string().max(2000).default(''), recentPrompts: z.array(z.string().max(500)).max(20).default([]) })
     .default({ notes: '', recentPrompts: [] }),
