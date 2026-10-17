@@ -5,20 +5,20 @@ src/
   shared/      brand.ts, commands.ts (contrat IPC Zod + types de résultats), api.ts (types du pont preload)
   core/        logique métier SANS Electron ni React (testable sous Node)
     model/       schémas Zod du domaine (profils, patch, scènes, cues, effets, timeline, projet)
-    fixtures/    attributs, profils (validation, bibliothèque, profils fictifs), patch (chevauchements), couleur
+    fixtures/    attributs (+ cellules « red#3 »), profils, profils fictifs, patch, couleur, ofl (import Open Fixture Library)
     engine/      Engine (tick), merge (priorités), render (DMX 8/16 bits, fonctions spéciales, blackout),
                  playback (cue lists), effects, timeline, resolve (index du projet)
-    protocols/   config (schémas), types (OutputAdapter : état, stats, reconnexion), artnet, sacn, enttec,
+    protocols/   config (schémas), types (OutputAdapter : état, stats, reconnexion), artnet, sacn, enttec, opendmx,
                  virtual, OutputManager (armement, STOP, cadence, état transmis)
     ai/          actions (schéma strict), director (validation, aperçu, exécution, vérification),
-                 local/interpreter (mode déterministe), providers/anthropic (SDK officiel)
+                 local/interpreter (mode déterministe), providers/openrouter (API compatible OpenAI, fetch)
     audio/       analyzer (niveau, énergie, attaques, BPM, montées d'énergie), reactive (réactions → moteur)
     project/     format (création, versions, migrations), store (écriture atomique, .bak, récupération)
     settings/    paramètres applicatifs ; log/ journal en mémoire ; visualizer/ modèle visuel 2D/3D
     app/         AppService : orchestration + bus de commandes (injection des dialogues et secrets)
   main/        Electron : fenêtre sécurisée, IPC validé, secrets chiffrés (safeStorage)
   preload/     contextBridge : { invoke, on }
-  renderer/    React + Zustand : App (shell), features/* (12 espaces), audioEngine (Web Audio)
+  renderer/    React + Zustand : App (shell), features/* (12 espaces, Stage3D three.js), audioEngine (Web Audio), shortcuts
 tests/         unit, integration (parcours complet), components (Testing Library), e2e (Playwright + Electron)
 ```
 
@@ -59,8 +59,14 @@ Aucun élément de l'interface ne présente l'état calculé comme une preuve de
 ## Moteur d'effets
 Les effets sont des fonctions pures de la phase (`computeEffect`). Les instances intègrent leur phase dans le tick : aucun timer par effet, pas de travail sur le thread de l'interface. L'aléatoire utilise un hachage déterministe (`hash01(seed, cycle, fixture)`), ce qui donne des résultats reproductibles. Le strobe est plafonné par `maxStrobeHz`.
 
-## Préparation 3D
-`core/visualizer/model.ts` produit des `VisualFixture` (position en mètres, pan/tilt en degrés, angle de faisceau, couleur, intensité), indépendants du canvas 2D. Une vue Three.js ou React Three Fiber peut consommer ce même modèle sans toucher au moteur.
+## Visualiseurs 2D et 3D
+`core/visualizer/model.ts` produit des `VisualFixture` : position et hauteur en mètres, pan/tilt en degrés, angle de faisceau, couleur, intensité, couleurs des cellules. Le canvas 2D et la vue 3D three.js (`renderer/features/Stage3D.tsx`) consomment ce même modèle. En 3D, chaque faisceau est un cône additif orienté par pan/tilt, de longueur limitée au sol, dont le rayon dérive de l'angle du profil. Le rendu tourne dans une boucle `requestAnimationFrame` qui ne recrée pas les objets à chaque trame.
+
+## Projecteurs multi-cellules
+Un canal de profil peut porter `cell: n`. Sa valeur est alors stockée sous la clé `attribut#n` (par exemple `red#3`). La fusion, le rendu DMX, le virtual dimmer et le blackout utilisent ces clés. `colorToAttributes` applique une couleur à toutes les cellules ou à une seule. Rainbow et Color cycle traitent chaque cellule comme un élément de la répartition de phase.
+
+## Import Open Fixture Library
+`core/fixtures/ofl.ts` convertit le format OFL (licence MIT, vérifiée) : canaux disponibles, alias fins (16 bits), capacités → attributs, roues (couleurs et gobos), canaux modèles et `matrixChannels` (pixels → cellules), `Maintenance` → plages marquées dangereuses. Le catalogue en ligne lit `manufacturers.json` et les fichiers bruts du dépôt GitHub d'OFL.
 
 ## Choix techniques
 - **Protocoles implémentés en interne** (dgram) plutôt qu'avec des bibliothèques tierces : Art-Net (ArtDmx) et E1.31 (paquet de données) tiennent en environ 100 lignes chacun, dont les octets sont testés contre les offsets des spécifications. Cela évite des dépendances peu maintenues.
@@ -75,8 +81,9 @@ Les effets sont des fonctions pures de la phase (`computeEffect`). Les instances
 | zustand | état partagé du renderer |
 | zod | validation aux frontières (IPC, fichiers, IA, paramètres) |
 | lucide-react | jeu d'icônes uniforme |
-| serialport | accès série pour l'Enttec DMX USB Pro (module natif N-API, chargé dynamiquement) |
-| @anthropic-ai/sdk | fournisseur IA externe (SDK officiel, sorties structurées) |
+| serialport | accès série : Enttec DMX USB Pro et Open DMX (module natif N-API, chargé dynamiquement) |
+| three, @types/three | visualiseur 3D |
+| (aucune) | OpenRouter et OFL passent par le `fetch` natif de Node : pas de SDK |
 | vitest, jsdom, @testing-library/* | tests unitaires, d'intégration et de composants |
 | @playwright/test | tests end-to-end sur l'application Electron |
 | eslint, typescript-eslint, eslint-plugin-react-hooks | lint |

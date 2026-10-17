@@ -1,5 +1,5 @@
 import type { FixtureProfile, FixtureType, FixtureValues, Fixture, FixtureMode } from '../model/schemas';
-import { displayColor } from '../fixtures/color';
+import { cellColors, displayColor } from '../fixtures/color';
 import { rgbToHex } from '../util/math';
 
 /**
@@ -19,6 +19,10 @@ export interface VisualFixture {
   panDeg: number;
   tiltDeg: number;
   beamAngle: number;
+  /** Mounting height in meters. */
+  height: number;
+  /** Per-cell colours for multi-cell fixtures (left to right), already scaled by intensity. */
+  cells: string[];
 }
 
 export function buildVisualModel(
@@ -42,6 +46,8 @@ export function buildVisualModel(
       panDeg: movable ? ((v.pan ?? 0.5) - 0.5) * rf.profile.physical.panRange : 0,
       tiltDeg: movable ? ((v.tilt ?? 0.5) - 0.5) * rf.profile.physical.tiltRange : 0,
       beamAngle: rf.profile.physical.beamAngle,
+      height: rf.fixture.height,
+      cells: cellColors(rf, v).map((c) => rgbToHex(c.color)),
     };
   });
 }

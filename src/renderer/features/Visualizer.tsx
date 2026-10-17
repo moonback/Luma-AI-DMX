@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { act } from '../api';
 import { Empty, NumberInput, PageHead, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
+import { Stage3D } from './Stage3D';
 import type { FixtureValues } from '../../core/model/schemas';
 
 interface View { scale: number; ox: number; oy: number }
@@ -102,6 +103,14 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       const rgb = [1, 3, 5].map((i) => Math.round(parseInt(f.color.slice(i, i + 2), 16) * k));
       g.fillStyle = `rgb(${rgb.join(',')})`;
       g.fill();
+      if (f.cells.length) {
+        // Multi-cell fixture: draw its cells as a row of segments under the body.
+        const w = 6;
+        f.cells.forEach((c, i) => {
+          g.fillStyle = c;
+          g.fillRect(p.x - (f.cells.length * w) / 2 + i * w, p.y + 9, w - 1, 5);
+        });
+      }
       g.lineWidth = selection.includes(f.id) ? 2 : 1;
       g.strokeStyle = selection.includes(f.id) ? '#8b5cf6' : group?.fixtureIds.includes(f.id) ? group.color : '#36415a';
       g.beginPath();
@@ -172,14 +181,33 @@ export function Visualizer() {
   const setPreview = useStore((s) => s.setPreview);
   const [edit, setEdit] = useState(false);
   const [group, setGroup] = useState<string | null>(null);
+  const [mode, setMode] = useState<'2d' | '3d'>(() => {
+    try {
+      return localStorage.getItem('luma.visualizer') === '3d' ? '3d' : '2d';
+    } catch {
+      return '2d';
+    }
+  });
+  const pickMode = (m: '2d' | '3d') => {
+    setMode(m);
+    try {
+      localStorage.setItem('luma.visualizer', m);
+    } catch {
+      // preference simply not persisted
+    }
+  };
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <PageHead title="Stage Visualizer" subtitle="Vue de dessus 2D synchronisée avec l’état calculé du moteur — molette : zoom, glisser le fond : déplacer la vue">
+      <PageHead title="Stage Visualizer" subtitle={mode === '3d' ? 'Vue 3D approximative — glisser : orbite, clic droit : déplacer, molette : zoom' : 'Vue de dessus 2D synchronisée avec l’état calculé du moteur — molette : zoom, glisser le fond : déplacer la vue'}>
         <select className="select" style={{ width: 160 }} value={group ?? ''} onChange={(e) => setGroup(e.target.value || null)}>
           <option value="">Tous les groupes</option>
           {project.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <button className={`btn ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title="Déplacer les projecteurs sur la scène (enregistré dans le patch)"><Move size={14} />Positionner</button>
+        <div className="chips">
+          <button className={`chip ${mode === '2d' ? 'on' : ''}`} onClick={() => pickMode('2d')} data-testid="view-2d">2D</button>
+          <button className={`chip ${mode === '3d' ? 'on' : ''}`} onClick={() => pickMode('3d')} data-testid="view-3d">3D</button>
+        </div>
+        <button className={`btn ${edit ? 'on' : ''}`} disabled={mode === '3d'} onClick={() => setEdit(!edit)} title="Déplacer les projecteurs sur la scène (enregistré dans le patch)"><Move size={14} />Positionner</button>
         <span className="small muted">Scène</span>
         <div style={{ width: 70 }} title="Largeur (m)"><NumberInput value={project.visualizer.stageWidth} min={2} max={200} onChange={(v) => void act({ type: 'project.update', visualizer: { stageWidth: v } })} /></div>
         <span className="muted">×</span>
@@ -196,7 +224,7 @@ export function Visualizer() {
         <Empty icon={<Theater size={32} />} title="Scène vide">Ajoutez des projecteurs : ils apparaissent ici à leur position de scène.</Empty>
       ) : (
         <div style={{ flex: 1, minHeight: 320 }}>
-          <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />
+          {mode === '3d' ? <Stage3D values={preview?.values} groupFilter={group} /> : <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />}
         </div>
       )}
     </div>

@@ -110,7 +110,7 @@ export interface ValidatedAction {
 export interface AiProposal {
   id: string;
   prompt: string;
-  provider: 'local' | 'anthropic';
+  provider: 'local' | 'openrouter';
   model: string | null;
   understanding: string;
   notices: string[];

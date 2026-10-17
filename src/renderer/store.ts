@@ -65,6 +65,10 @@ interface State {
   cueListId: string | null;
   diagOpen: boolean;
   newProjectOpen: boolean;
+  /** User overrides of keyboard shortcuts (from settings). */
+  shortcuts: Record<string, string>;
+  /** True while the Settings page records a new shortcut (global handler paused). */
+  capturingShortcut: boolean;
   toasts: Toast[];
   confirm: ConfirmRequest | null;
   /** Values shown by the visualizer instead of live values (AI or scene preview). */
@@ -93,6 +97,8 @@ export const useStore = create<State>((set, get) => ({
   cueListId: null,
   diagOpen: false,
   newProjectOpen: false,
+  shortcuts: {},
+  capturingShortcut: false,
   toasts: [],
   confirm: null,
   preview: null,

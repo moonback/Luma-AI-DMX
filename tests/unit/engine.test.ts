@@ -245,7 +245,7 @@ describe('charge', () => {
     const p = demoProject();
     p.patch = [];
     for (let i = 0; i < 1000; i++) {
-      p.patch.push({ id: `f${i}`, name: `F${i}`, profileId: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', universe: 1 + Math.floor(i / 85), address: 1 + (i % 85) * 6, tags: [], position: { x: 0, y: 0 }, rotation: 0, notes: '' });
+      p.patch.push({ id: `f${i}`, name: `F${i}`, profileId: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', universe: 1 + Math.floor(i / 85), address: 1 + (i % 85) * 6, tags: [], position: { x: 0, y: 0 }, rotation: 0, height: 4, notes: '' });
     }
     p.show.universes = 12;
     p.groups = [{ id: 'all', name: 'All', color: '#ffffff', fixtureIds: p.patch.map((f) => f.id) }];

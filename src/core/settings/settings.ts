@@ -1,19 +1,45 @@
 import { z } from 'zod';
 import { outputConfigSchema } from '../protocols/config';
 
-export const SHORTCUTS: { keys: string; action: string }[] = [
-  { keys: 'Espace', action: 'GO sur la liste de cues sélectionnée' },
-  { keys: 'Maj + Espace', action: 'BACK (cue précédent)' },
-  { keys: 'P', action: 'Pause / reprise de la liste sélectionnée' },
-  { keys: 'B', action: 'Blackout on/off' },
-  { keys: 'Maj + Échap', action: 'STOP OUTPUT : arrêt immédiat des émissions réelles' },
-  { keys: 'Échap', action: 'Relâcher le programmeur (reprise des playbacks)' },
-  { keys: 'Ctrl + 1 … 9, 0', action: 'Changer d’espace de travail' },
-  { keys: 'Ctrl + S / Ctrl + Maj + S', action: 'Enregistrer / Enregistrer sous' },
-  { keys: 'Ctrl + O / Ctrl + N', action: 'Ouvrir / Nouveau projet' },
-  { keys: 'Ctrl + Z / Ctrl + Y', action: 'Annuler / rétablir (timeline)' },
-  { keys: 'Ctrl + `', action: 'Console de diagnostic' },
-];
+/** Rebindable keyboard actions. Bindings use the form "Ctrl+Shift+S", "Space", "Shift+Escape", "F5"… */
+export const SHORTCUT_ACTIONS = [
+  { id: 'go', label: 'GO sur la liste de cues sélectionnée', default: 'Space' },
+  { id: 'back', label: 'BACK (cue précédent)', default: 'Shift+Space' },
+  { id: 'pause', label: 'Pause / reprise de la liste sélectionnée', default: 'P' },
+  { id: 'blackout', label: 'Blackout on/off', default: 'B' },
+  { id: 'stopOutput', label: 'STOP OUTPUT : arrêt immédiat des émissions réelles', default: 'Shift+Escape' },
+  { id: 'release', label: 'Relâcher le programmeur (reprise des playbacks)', default: 'Escape' },
+  { id: 'save', label: 'Enregistrer', default: 'Ctrl+S' },
+  { id: 'saveAs', label: 'Enregistrer sous', default: 'Ctrl+Shift+S' },
+  { id: 'open', label: 'Ouvrir un projet', default: 'Ctrl+O' },
+  { id: 'new', label: 'Nouveau projet', default: 'Ctrl+N' },
+  { id: 'diagnostics', label: 'Console de diagnostic', default: 'Ctrl+`' },
+  { id: 'page:dashboard', label: 'Espace Dashboard', default: 'Ctrl+1' },
+  { id: 'page:fixtures', label: 'Espace Fixtures', default: 'Ctrl+2' },
+  { id: 'page:console', label: 'Espace Live Console', default: 'Ctrl+3' },
+  { id: 'page:programmer', label: 'Espace Programmer', default: 'Ctrl+4' },
+  { id: 'page:cues', label: 'Espace Cues & Sequences', default: 'Ctrl+5' },
+  { id: 'page:effects', label: 'Espace Effects', default: 'Ctrl+6' },
+  { id: 'page:timeline', label: 'Espace Timeline', default: 'Ctrl+7' },
+  { id: 'page:ai', label: 'Espace AI Lighting Director', default: 'Ctrl+8' },
+  { id: 'page:visualizer', label: 'Espace Stage Visualizer', default: 'Ctrl+9' },
+  { id: 'page:audio', label: 'Espace Audio Reactive', default: 'Ctrl+0' },
+  { id: 'page:output', label: 'Espace DMX Output', default: '' },
+  { id: 'page:settings', label: 'Espace Settings', default: 'Ctrl+,' },
+] as const;
+export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number]['id'];
+
+/** Effective bindings: defaults overridden by the user's settings ("" = unassigned). */
+export function resolveShortcuts(overrides: Record<string, string>): Record<ShortcutAction, string> {
+  return Object.fromEntries(SHORTCUT_ACTIONS.map((a) => [a.id, overrides[a.id] ?? a.default])) as Record<ShortcutAction, string>;
+}
+
+/** Actions sharing the same non-empty binding. */
+export function shortcutConflicts(bindings: Record<string, string>): string[][] {
+  const by = new Map<string, string[]>();
+  for (const [id, combo] of Object.entries(bindings)) if (combo) by.set(combo, [...(by.get(combo) ?? []), id]);
+  return [...by.values()].filter((ids) => ids.length > 1);
+}
 
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
@@ -41,17 +67,21 @@ export const settingsSchema = z.object({
   sacn: z.object({ cid: z.uuid() }).optional(),
   ai: z
     .object({
-      provider: z.enum(['local', 'anthropic']).default('local'),
-      model: z.string().min(1).max(100).default('claude-opus-5-5'),
+      // Settings written by earlier versions used the direct Anthropic provider: migrate them to OpenRouter.
+      provider: z.preprocess((v) => (v === 'anthropic' ? 'openrouter' : v), z.enum(['local', 'openrouter'])).default('local'),
+      /** OpenRouter model id ("vendor/model"); ids without a vendor come from the old Anthropic setting. */
+      model: z.preprocess((v) => (typeof v === 'string' && v.includes('/') ? v : 'openrouter/auto'), z.string().min(3).max(150)).default('openrouter/auto'),
       effort: z.enum(['low', 'medium', 'high']).default('medium'),
       timeoutSec: z.number().int().min(5).max(300).default(60),
       allowStrobe: z.boolean().default(false),
       /** Fall back to the local interpreter when the external provider fails. */
       fallbackToLocal: z.boolean().default(true),
     })
-    .default({ provider: 'local', model: 'claude-opus-5-5', effort: 'medium', timeoutSec: 60, allowStrobe: false, fallbackToLocal: true }),
+    .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, fallbackToLocal: true }),
   audio: z.object({ deviceId: z.string().max(300).nullable().default(null) }).default({ deviceId: null }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
+  /** Overrides of the default shortcuts, by action id. */
+  shortcuts: z.record(z.string().max(40), z.string().max(40)).default({}),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

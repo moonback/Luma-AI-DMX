@@ -22,7 +22,7 @@ Le nom et la marque sont centralisés dans [`src/shared/brand.ts`](src/shared/br
 ## Prérequis
 - Node.js 22 ou plus récent (développé avec Node 24.16) et npm.
 - Windows 10/11 x64 : c'est la plateforme où le build et les tests ont été exécutés. macOS et Linux sont configurés dans `electron-builder.yml`, mais **n'ont pas été construits ni testés**.
-- Facultatif : une clé API Anthropic pour le fournisseur IA externe.
+- Facultatif : une clé API OpenRouter pour utiliser un modèle de langage externe.
 
 ## Installation et démarrage
 ```bash
@@ -52,19 +52,21 @@ npm start
 
 ## Prise en main
 1. **Créer un projet** : icône « + » de la barre supérieure ou `Ctrl+N`.
-2. **Patcher des projecteurs** : *Fixtures › Ajouter*. Choisissez un profil, un mode, un univers et une quantité. L'adresse est automatique ou manuelle. Les chevauchements et les dépassements de 512 sont refusés. Les profils inclus sont **fictifs** (« Luma Demo ») et servent aux tests : ils ne décrivent aucun modèle commercial. Pour vos projecteurs, importez des profils (voir [docs/PROFILE_FORMAT.md](docs/PROFILE_FORMAT.md)).
-3. **Piloter en manuel** : dans la *Live Console*, sélectionnez des projecteurs ou un groupe. Les contrôles sont générés à partir des fonctions du profil : dimmer, couleur (RGB, RGBW ou roue), pan/tilt 16 bits, shutter, gobo… Le manuel est **toujours prioritaire**. `Échap` le relâche.
+2. **Patcher des projecteurs** : *Fixtures › Ajouter*. Choisissez un profil, un mode, un univers et une quantité. L'adresse est automatique ou manuelle. Les chevauchements et les dépassements de 512 sont refusés. Les profils inclus sont **fictifs** (« Luma Demo ») et servent aux tests : ils ne décrivent aucun modèle commercial. Pour vos projecteurs, utilisez *Fixtures › Open Fixture Library* (catalogue en ligne ou fichier OFL) ou importez un profil au format Luma (voir [docs/PROFILE_FORMAT.md](docs/PROFILE_FORMAT.md)).
+3. **Piloter en manuel** : dans la *Live Console*, sélectionnez des projecteurs ou un groupe. Les contrôles sont générés à partir des fonctions du profil : dimmer, couleur (RGB, RGBW ou roue), pan/tilt 16 bits, shutter, gobo, couleur par cellule pour les barres LED… Le manuel est **toujours prioritaire**. `Échap` le relâche.
 4. **Enregistrer une scène** : *Live Console › Enregistrer scène* (à partir des valeurs du programmeur).
 5. **Créer des cues** : *Cues & Sequences*. Chaque cue référence une scène, avec un fondu, un délai, une courbe et un déclenchement manuel ou enchaîné. Commandes : `Espace` = GO, `Maj+Espace` = BACK, `P` = pause/reprise.
 6. **Effets et timeline** : *Effects* (10 types, synchronisation BPM, graine aléatoire) et *Timeline* (scènes, effets et cues sur une ligne de temps, avec annuler/rétablir).
-7. **Assistant IA** : *AI Lighting Director*. Décrivez l'ambiance souhaitée, vérifiez la proposition (cibles, avertissements, aperçu), modifiez ou excluez des actions, puis appliquez. Un rapport indique les actions exécutées, celles qui ont été ignorées et la vérification de l'état calculé.
-8. **Enregistrer** : `Ctrl+S`. Au moment de quitter, l'application signale les modifications non enregistrées.
+7. **Visualiseur** : *Stage Visualizer*, vue 2D de dessus ou vue 3D (three.js) avec faisceaux orientés par pan/tilt et cellules des barres LED.
+8. **Assistant IA** : *AI Lighting Director*. Décrivez l'ambiance souhaitée, vérifiez la proposition (cibles, avertissements, aperçu), modifiez ou excluez des actions, puis appliquez. Un rapport indique les actions exécutées, celles qui ont été ignorées et la vérification de l'état calculé.
+9. **Enregistrer** : `Ctrl+S`. Au moment de quitter, l'application signale les modifications non enregistrées.
 
 ## Configuration DMX
 Dans *DMX Output › Sorties* :
 - **Art-Net** : destination IPv4 (nœud ou broadcast, par exemple `2.255.255.255`), interface locale, correspondance univers local → Port-Address (0–32767), séquence 1–255.
 - **sACN / E1.31** : multicast (`239.255.hi.lo`) ou unicast, priorité 0–200, CID persistant. À l'arrêt, l'application envoie 3 paquets « stream terminated ».
 - **USB-DMX (Enttec DMX USB Pro)** : choix du port série. La détection signale les puces FTDI, ce qui **ne confirme pas** qu'il s'agit d'une Enttec.
+- **USB-DMX (Open DMX / FTDI sans microcontrôleur)** : le logiciel génère lui-même le break DMX puis la trame (250 000 bauds, 8N2). Cadence par défaut : 30 images/s.
 - **Sortie virtuelle** : aucune émission matérielle.
 
 Les sorties réelles **démarrent toujours désarmées**. Pour émettre, cliquez sur *Armer* puis confirmez. Le badge **SIMULATION / LIVE** de la barre supérieure indique en permanence si une sortie réelle est armée. Le bouton **STOP** (`Maj+Échap`) coupe immédiatement toutes les émissions réelles.
@@ -76,7 +78,7 @@ La sortie virtuelle (univers 1 à 4 par défaut) enregistre les trames reçues, 
 
 ## Configuration de l'IA
 - **Mode local déterministe (par défaut)** : règles et modèles intégrés, en français et en partie en anglais, sans réseau. Il comprend notamment les ambiances (lounge, club…), les couleurs, les durées, les intensités, les cibles (« les quatre lyres », noms de groupes), les effets (chase, vague, arc-en-ciel, pulse, mouvements, strobe si autorisé), les drops, les shows de N minutes, les variantes et les ajustements (« plus chaud et moins agressif »). Ce mode est signalé comme tel et ne se présente jamais comme un modèle de langage. Une demande non reconnue est déclarée comme telle.
-- **Claude (Anthropic)** : *Settings › IA et fournisseurs* : fournisseur « Claude », modèle (par défaut `claude-opus-5-5`), effort, délai. La clé API est saisie dans l'application, chiffrée par le système (Electron `safeStorage`) dans le processus principal. Elle n'est jamais renvoyée à l'interface ni écrite dans un projet. Les réponses passent par les sorties structurées du SDK officiel `@anthropic-ai/sdk`, puis sont **revalidées** par le schéma strict de l'application. Le repli serveur (`fallbacks: "default"`) est activé en cas de refus de modèle. Si le fournisseur est indisponible, l'application bascule sur le mode local et le signale.
+- **OpenRouter** : *Settings › IA et fournisseurs* : fournisseur « OpenRouter », puis choix du modèle. *Charger la liste des modèles* affiche le catalogue OpenRouter avec recherche, contexte, prix par million de jetons et format pris en charge. On peut aussi saisir un identifiant `fournisseur/modèle` ; `openrouter/auto` laisse OpenRouter choisir. La clé API (`sk-or-v1-…`) est chiffrée par le système (Electron `safeStorage`) dans le processus principal. Elle n'est jamais renvoyée à l'interface ni écrite dans un projet. Le format JSON est imposé selon les capacités du modèle : sortie structurée (`json_schema`), sinon mode JSON, sinon consigne seule. La réponse est ensuite **revalidée** par le schéma strict de l'application. L'effort de raisonnement n'est transmis qu'aux modèles qui le prennent en charge. Si le fournisseur est indisponible (réseau, clé, crédits, modèle), l'application bascule sur le mode local et le signale. Données envoyées : la demande et une description du kit (noms, types, capacités, groupes, scènes).
 - L'IA ne produit **que** des actions typées (`setIntensity`, `setColor`, `setPosition`, `startEffect`, `stopEffect`, `createScene`, `applyScene`, `createCue`, `createSequence`, `setBpm`, `releaseAi`). Elle n'envoie jamais de DMX, n'exécute aucun code et n'a pas accès aux fonctions spéciales (reset, lampe). Le strobe exige l'autorisation explicite *Autoriser l'IA à proposer des effets strobe*.
 
 ## Sécurité
@@ -90,15 +92,16 @@ La sortie virtuelle (univers 1 à 4 par défaut) enregistre les trames reçues, 
 
 ## Limites matérielles
 - **Aucun matériel DMX n'a été testé.** Art-Net et sACN sont implémentés d'après les spécifications. Le format des paquets et l'émission UDP sont vérifiés par des tests en boucle locale (`127.0.0.1`), mais pas avec un nœud ou un projecteur réel.
-- Le pilote USB-DMX ne prend en charge que l'Enttec DMX USB Pro (« label 6 », d'après la documentation Enttec) et n'a pas été vérifié sur matériel. Les interfaces « Open DMX » (FTDI sans microcontrôleur, qui demandent un timing de break précis) ne sont **pas** prises en charge.
+- Les pilotes USB-DMX (Enttec DMX USB Pro « label 6 » et Open DMX FTDI) n'ont pas été vérifiés sur matériel. En Open DMX, le break est généré par des appels système : il dure environ 1 ms ou plus, avec une gigue qui dépend du système et du pilote FTDI. Certains récepteurs sensibles au timing peuvent mal le tolérer.
 - La fréquence d'émission est **mesurée**, pas garantie. Sous Windows, la résolution des timers donne environ 37 à 40 Hz pour une consigne de 40 Hz (valeur affichée dans la barre d'état). Les latences réseau et d'interface ne sont pas mesurées.
-- Le visualiseur 2D est une représentation approximative, pas une simulation photométrique.
+- Les visualiseurs 2D et 3D sont des représentations approximatives, pas des simulations photométriques : pas d'atténuation réelle, ni de gobos, ni d'ombres.
 - L'audio réactif estime le BPM (histogramme des intervalles entre attaques, parfois faux d'un facteur 2) et détecte des montées d'énergie. Il **ne détecte pas** les refrains ni les drops.
 
 ## Problèmes connus
-- Les projecteurs multi-cellules (barres LED à plusieurs segments RGB) ne sont pas modélisés : un attribut par mode.
+- Projecteurs multi-cellules : les effets Rainbow et Color cycle se répartissent par cellule ; les autres effets (chase, pulse…) agissent sur le projecteur entier.
+- Import OFL : conversion automatique à vérifier avec le manuel. Les canaux non représentables (24 bits, fonctions sans équivalent) deviennent des canaux génériques, adresses conservées. Les ordres de pixels autres que XYZ sont approximés. Le catalogue en ligne passe par l'API GitHub (limite d'environ 60 requêtes/heure sans authentification).
 - Dans une liste de cues, les attributs non-intensité absents du cue suivant sont **maintenus** (tracking), alors que les intensités absentes retombent à 0.
 - Quand une proposition IA contient plusieurs actions immédiates avec des fondus différents, le fondu le plus long s'applique à l'ensemble.
-- Les raccourcis clavier sont fixes (liste dans *Settings › Raccourcis*).
-- Le visualiseur 3D n'est pas implémenté : l'architecture est prête (modèle `VisualFixture` indépendant du rendu).
+- Raccourcis : configurables dans *Settings › Raccourcis* ; annuler/rétablir de la timeline restent fixés à Ctrl+Z / Ctrl+Y.
+- OpenRouter n'a été testé qu'avec des réponses simulées : aucun appel facturé n'a été effectué. La liste réelle des modèles a, elle, été récupérée avec succès.
 - L'installateur n'est pas signé (avertissement SmartScreen possible).

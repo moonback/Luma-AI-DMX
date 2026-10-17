@@ -42,7 +42,11 @@ Pour importer des profils : *Fixtures › Importer des profils*. Le fichier JSON
 - `type` : `par`, `moving-head-spot`, `moving-head-wash`, `strobe`, `dimmer`, `led-bar` ou `other`. Ce type est utilisé par l'IA (« les lyres »).
 - `attribute` : `dimmer red green blue white amber uv cyan magenta yellow cto colorWheel pan tilt panTiltSpeed shutter strobe gobo goboRotation prism focus zoom iris frost speed macro control`, ou `custom:<nom>`.
 - Un attribut apparaît au plus une fois par mode. Un canal `fine: true` est l'octet de poids faible d'un attribut 16 bits, dont le canal principal doit exister.
+- `cell` (facultatif) : numéro de cellule pour les projecteurs multi-cellules (barres LED, pixels). Un même attribut peut alors apparaître une fois par cellule (par exemple `red` en cellules 1 à 8).
 - `default` : valeur DMX (0–255) émise quand aucune source ne contrôle le canal. Pour un shutter, choisissez la valeur « ouvert ».
 - `ranges` : plages DMX qui ne se chevauchent pas, avec `kind` (`open`, `closed`, `strobe`, `color` + `color` en hexadécimal pour les roues, `gobo`, `reset`, `lamp-on`, `lamp-off`…). `dangerous: true` impose une confirmation manuelle et interdit la valeur à l'IA, aux scènes et aux effets.
 
-Les noms et fonctions des canaux proviennent toujours du profil chargé : l'application ne suppose aucune disposition commune. La compatibilité avec des bibliothèques externes (par exemple Open Fixture Library) n'est **pas** implémentée : leur licence et leur format restent à vérifier avant d'écrire un convertisseur.
+Les noms et fonctions des canaux proviennent toujours du profil chargé : l'application ne suppose aucune disposition commune.
+
+## Open Fixture Library
+*Fixtures › Open Fixture Library* importe directement les fixtures OFL (licence MIT), soit depuis le catalogue en ligne (fabricant → modèle), soit depuis un fichier `.json` OFL. Le convertisseur gère les alias fins 16 bits, les roues de couleurs et de gobos, les shutters et strobes, les matrices de pixels (converties en cellules) et les canaux `Maintenance` (marqués dangereux). Tout canal non représentable devient un canal générique : les adresses restent exactes et un avertissement est affiché. Vérifiez toujours le profil importé avec le manuel du fabricant.

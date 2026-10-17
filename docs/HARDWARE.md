@@ -22,6 +22,11 @@ Ces étapes n'ont **pas** été réalisées pendant le développement : aucun ma
 2. *+ USB-DMX* : choisissez le port (puce FTDI détectée = compatible possible, **non confirmé**), puis armez.
 3. Débranchez le câble pendant l'émission : la sortie doit passer en **Erreur**, une alerte doit apparaître et la reconnexion doit être tentée.
 
+## USB-DMX « Open DMX » (FTDI sans microcontrôleur)
+1. Installez le pilote FTDI VCP. Le pilote doit accepter 250 000 bauds, ce qui est le cas du FT232R.
+2. *DMX Output › + USB-DMX (Open DMX / FTDI)* : choisissez le port, gardez 30 images/s, puis armez.
+3. Le break est généré par le logiciel (environ 1 ms, avec gigue). Si un récepteur clignote ou perd le signal, baissez la cadence ou utilisez une interface avec microcontrôleur (Enttec Pro, nœud Art-Net/sACN).
+
 ## Vérifications à faire
 - Contrôlez canal par canal sur l'appareil (ou avec un testeur DMX) : moniteur « Transmis » = valeurs reçues.
 - 16 bits : pan/tilt fins, dans le bon sens.

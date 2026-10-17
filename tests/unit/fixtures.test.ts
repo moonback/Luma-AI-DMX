@@ -5,8 +5,8 @@ import { colorToAttributes } from '../../src/core/fixtures/color';
 import { demoProject } from '../helpers';
 
 describe('profils de projecteurs', () => {
-  it('les 5 profils intégrés sont valides et marqués fictifs', () => {
-    expect(BUILTIN_PROFILES).toHaveLength(5);
+  it('les 6 profils intégrés sont valides et marqués fictifs', () => {
+    expect(BUILTIN_PROFILES).toHaveLength(6);
     for (const p of BUILTIN_PROFILES) {
       expect(validateProfile(p).ok).toBe(true);
       expect(p.fictional).toBe(true);

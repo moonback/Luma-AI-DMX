@@ -4,8 +4,8 @@ import { useStore, confirmAction, EMPTY_OBJ } from '../store';
 import { act } from '../api';
 import { Empty, Modal, Field, PageHead, Panel, pct, useResolved, useThrottled } from '../components/ui';
 import { attributeClass, attributeLabel } from '../../core/fixtures/attributes';
-import { colorCapability, displayColor } from '../../core/fixtures/color';
-import { coarseChannel, type ResolvedFixture } from '../../core/fixtures/profiles';
+import { cellColors, colorCapability, colorCells, displayColor } from '../../core/fixtures/color';
+import { channelKey, coarseChannel, type ResolvedFixture } from '../../core/fixtures/profiles';
 import { rgbToHex } from '../../core/util/math';
 import type { Channel } from '../../core/model/schemas';
 
@@ -182,6 +182,22 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
         </Panel>
       )}
 
+      {colorCells(first).length > 0 && (
+        <Panel title={`Cellules — ${first.fixture.name}`}>
+          <div className="col">
+            <div className="row wrap">
+              {cellColors(first, values[first.fixture.id] ?? {}).map(({ cell, color }) => (
+                <label key={cell} className="col" style={{ alignItems: 'center', gap: 2 }} title={`Couleur de la cellule ${cell} (toutes les barres sélectionnées ayant cette cellule)`}>
+                  <input type="color" aria-label={`Cellule ${cell}`} value={rgbToHex(color.r + color.g + color.b > 0 ? color : { r: 0, g: 0, b: 0 })} onChange={(e) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: e.target.value, cell })} />
+                  <span className="small dim">{cell}</span>
+                </label>
+              ))}
+            </div>
+            <span className="small dim">Le sélecteur « Couleur » ci-dessus applique la couleur à toutes les cellules. Les effets Rainbow et Color cycle se répartissent cellule par cellule.</span>
+          </div>
+        </Panel>
+      )}
+
       {(has('pan') || has('tilt')) && (
         <Panel title="Position">
           <div className="row" style={{ alignItems: 'flex-start', gap: 16 }}>
@@ -223,9 +239,10 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
           <thead><tr><th>Adr</th><th>Canal</th><th>Valeur</th><th>Source</th></tr></thead>
           <tbody>
             {first.mode.channels.map((c, i) => {
-              const v = values[first.fixture.id]?.[c.attribute];
-              const raw = v === undefined ? c.default : first.mode.channels.some((x) => x.fine && x.attribute === c.attribute) ? (c.fine ? Math.round(v * 65535) & 255 : Math.round(v * 65535) >> 8) : Math.round(v * 255);
-              return <tr key={i}><td className="mono">{first.fixture.universe}.{first.fixture.address + i}</td><td>{c.name}</td><td className="mono">{raw}</td><td>{c.fine ? '' : <span className="tag-src">{sources[first.fixture.id]?.[c.attribute] ?? 'défaut'}</span>}</td></tr>;
+              const key = channelKey(c);
+              const v = values[first.fixture.id]?.[key];
+              const raw = v === undefined ? c.default : first.mode.channels.some((x) => x.fine && channelKey(x) === key) ? (c.fine ? Math.round(v * 65535) & 255 : Math.round(v * 65535) >> 8) : Math.round(v * 255);
+              return <tr key={i}><td className="mono">{first.fixture.universe}.{first.fixture.address + i}</td><td>{c.name}</td><td className="mono">{raw}</td><td>{c.fine ? '' : <span className="tag-src">{sources[first.fixture.id]?.[key] ?? 'défaut'}</span>}</td></tr>;
             })}
           </tbody>
         </table>

@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { profileSchema, type Channel, type ChannelRange, type FixtureMode, type FixtureProfile, type Fixture } from '../model/schemas';
 import { BUILTIN_PROFILES } from './builtinProfiles';
+import { cellKey } from './attributes';
+
+/** Value key of a channel ("red" or "red#2" for cell 2). */
+export const channelKey = (ch: Channel): string => cellKey(ch.attribute, ch.cell);
 
 export interface ProfileValidationResult {
   ok: boolean;
@@ -79,17 +83,22 @@ export function channelCount(profile: FixtureProfile, modeName: string): number 
   return getMode(profile, modeName)?.channels.length ?? 0;
 }
 
-/** Coarse attributes available for a fixture mode, in channel order. */
+/** Coarse attribute keys available for a fixture mode, in channel order (cells as "red#2"). */
 export function modeAttributes(mode: FixtureMode): string[] {
-  return mode.channels.filter((c) => !c.fine).map((c) => c.attribute);
+  return mode.channels.filter((c) => !c.fine).map(channelKey);
 }
 
-export function hasFine(mode: FixtureMode, attr: string): boolean {
-  return mode.channels.some((c) => c.fine && c.attribute === attr);
+/** Cell numbers used by the mode, sorted (empty for single-cell fixtures). */
+export function modeCells(mode: FixtureMode): number[] {
+  return [...new Set(mode.channels.map((c) => c.cell).filter((c): c is number => c !== undefined))].sort((a, b) => a - b);
 }
 
-export function coarseChannel(mode: FixtureMode, attr: string): Channel | undefined {
-  return mode.channels.find((c) => !c.fine && c.attribute === attr);
+export function hasFine(mode: FixtureMode, key: string): boolean {
+  return mode.channels.some((c) => c.fine && channelKey(c) === key);
+}
+
+export function coarseChannel(mode: FixtureMode, key: string): Channel | undefined {
+  return mode.channels.find((c) => !c.fine && channelKey(c) === key);
 }
 
 export function rangeAt(channel: Channel, dmx: number): ChannelRange | undefined {

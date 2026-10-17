@@ -32,11 +32,11 @@ export function makeService(dataDir = tempDir(), files: Record<string, string | 
 export function demoProject(): Project {
   const p = createProject('Test');
   p.patch = [
-    { id: 'par1', name: 'PAR 1', profileId: 'demo-par-rgb', mode: '3ch RGB', universe: 1, address: 1, tags: [], position: { x: -2, y: 1 }, rotation: 0, notes: '' },
-    { id: 'par2', name: 'PAR 2', profileId: 'demo-par-rgb', mode: '3ch RGB', universe: 1, address: 4, tags: [], position: { x: 2, y: 1 }, rotation: 0, notes: '' },
-    { id: 'rgbw', name: 'PAR W', profileId: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', universe: 1, address: 10, tags: [], position: { x: 0, y: 1 }, rotation: 0, notes: '' },
-    { id: 'spot1', name: 'Spot 1', profileId: 'demo-spot', mode: '13ch étendu', universe: 1, address: 20, tags: [], position: { x: -3, y: 5 }, rotation: 0, notes: '' },
-    { id: 'spot2', name: 'Spot 2', profileId: 'demo-spot', mode: '13ch étendu', universe: 1, address: 40, tags: [], position: { x: 3, y: 5 }, rotation: 0, notes: '' },
+    { id: 'par1', name: 'PAR 1', profileId: 'demo-par-rgb', mode: '3ch RGB', universe: 1, address: 1, tags: [], position: { x: -2, y: 1 }, rotation: 0, height: 4, notes: '' },
+    { id: 'par2', name: 'PAR 2', profileId: 'demo-par-rgb', mode: '3ch RGB', universe: 1, address: 4, tags: [], position: { x: 2, y: 1 }, rotation: 0, height: 4, notes: '' },
+    { id: 'rgbw', name: 'PAR W', profileId: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', universe: 1, address: 10, tags: [], position: { x: 0, y: 1 }, rotation: 0, height: 4, notes: '' },
+    { id: 'spot1', name: 'Spot 1', profileId: 'demo-spot', mode: '13ch étendu', universe: 1, address: 20, tags: [], position: { x: -3, y: 5 }, rotation: 0, height: 4, notes: '' },
+    { id: 'spot2', name: 'Spot 2', profileId: 'demo-spot', mode: '13ch étendu', universe: 1, address: 40, tags: [], position: { x: 3, y: 5 }, rotation: 0, height: 4, notes: '' },
   ];
   p.groups = [{ id: 'g-pars', name: 'Pars', color: '#22D3EE', fixtureIds: ['par1', 'par2', 'rgbw'] }];
   return p;

@@ -7,6 +7,8 @@ import { BRAND } from '../shared/brand';
 import { PAGES, useStore, confirmAction, type PageId } from './store';
 import { act, call } from './api';
 import { ConfirmHost, Modal, Field } from './components/ui';
+import { allowedWhileTyping, bindingsFrom, comboFromEvent } from './shortcuts';
+import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings';
 import { Dashboard } from './features/Dashboard';
 import { Fixtures } from './features/Fixtures';
 import { LiveConsole } from './features/LiveConsole';
@@ -114,7 +116,7 @@ function TopBar() {
       </button>
       <div className="stat" title={rt?.ai.lastError ?? ''}>
         <span className="k">Assistant IA</span>
-        <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />{rt?.ai.provider === 'anthropic' && rt.ai.hasKey ? 'Claude' : 'Local'}</span>
+        <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />{rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? 'OpenRouter' : 'Local'}</span>
       </div>
       <div className="grow" />
       <button className="btn ghost icon" title={`${alerts} alerte(s) — ouvrir la console de diagnostic`} onClick={toggleDiag} style={{ position: 'relative' }}>
@@ -141,13 +143,15 @@ function Sidebar() {
   const setPage = useStore((s) => s.setPage);
   const collapsed = useStore((s) => s.collapsed);
   const toggle = useStore((s) => s.toggleCollapsed);
+  const keys = resolveShortcuts(useStore((s) => s.shortcuts));
   return (
     <nav className="sidebar" aria-label="Espaces de travail">
-      {PAGES.map((p, i) => {
+      {PAGES.map((p) => {
         const Icon = ICONS[p.id];
+        const k = keys[`page:${p.id}` as ShortcutAction];
         return (
-          <button key={p.id} className={`nav-item ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)} title={`${p.label}${i < 10 ? ` (Ctrl+${(i + 1) % 10})` : ''}`} data-testid={`nav-${p.id}`}>
-            <Icon size={17} /><span>{p.label}</span>{i < 10 && <span className="kbd">^{(i + 1) % 10}</span>}
+          <button key={p.id} className={`nav-item ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)} title={`${p.label}${k ? ` (${k})` : ''}`} data-testid={`nav-${p.id}`}>
+            <Icon size={17} /><span>{p.label}</span>{k && <span className="kbd">{k.replace('Ctrl+', '^')}</span>}
           </button>
         );
       })}
@@ -226,49 +230,54 @@ function Toasts() {
   );
 }
 
+function runShortcut(action: ShortcutAction): boolean {
+  const s = useStore.getState();
+  const list = s.cueListId;
+  if (action.startsWith('page:')) {
+    s.setPage(action.slice(5) as PageId);
+    return true;
+  }
+  switch (action) {
+    case 'go': if (list) void act({ type: 'cue.go', listId: list }); return !!list;
+    case 'back': if (list) void act({ type: 'cue.back', listId: list }); return !!list;
+    case 'pause': {
+      if (!list) return false;
+      const st = s.runtime?.engine.playbacks.find((p) => p.cueListId === list)?.state;
+      void act({ type: st === 'paused' ? 'cue.resume' : 'cue.pause', listId: list });
+      return true;
+    }
+    case 'blackout': void act({ type: 'engine.blackout', on: !s.runtime?.engine.blackout }); return true;
+    case 'stopOutput': void act({ type: 'output.transmit', on: false }); return true;
+    case 'release': void act({ type: 'programmer.release' }); return true;
+    case 'save': void act({ type: 'project.save' }); return true;
+    case 'saveAs': void act({ type: 'project.saveAs' }); return true;
+    case 'open': void openProject(); return true;
+    case 'new': newProjectFlow(); return true;
+    case 'diagnostics': s.toggleDiag(); return true;
+    default: return false;
+  }
+}
+
 function useShortcuts() {
+  const overrides = useStore((s) => s.shortcuts);
   useEffect(() => {
+    const bindings = bindingsFrom(overrides);
     const onKey = (e: KeyboardEvent) => {
+      const s = useStore.getState();
+      if (s.capturingShortcut) return;
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const action = bindings.get(combo);
+      if (!action) return;
       const el = e.target as HTMLElement;
       const typing = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
-      const s = useStore.getState();
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (e.shiftKey && e.key === 'Escape') {
-        e.preventDefault();
-        void act({ type: 'output.transmit', on: false });
-        return;
-      }
-      if (ctrl && /^[0-9]$/.test(e.key)) {
-        const idx = e.key === '0' ? 9 : Number(e.key) - 1;
-        const p = PAGES[idx];
-        if (p) { e.preventDefault(); s.setPage(p.id); }
-        return;
-      }
-      if (ctrl && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        void act({ type: e.shiftKey ? 'project.saveAs' : 'project.save' });
-        return;
-      }
-      if (ctrl && e.key.toLowerCase() === 'o') { e.preventDefault(); void openProject(); return; }
-      if (ctrl && e.key.toLowerCase() === 'n') { e.preventDefault(); newProjectFlow(); return; }
-      if (ctrl && e.key === '`') { e.preventDefault(); s.toggleDiag(); return; }
-      if (typing || ctrl || e.altKey || s.confirm) return;
-      const list = s.cueListId;
-      if (e.key === ' ' && list) {
-        e.preventDefault();
-        void act({ type: e.shiftKey ? 'cue.back' : 'cue.go', listId: list });
-      } else if (e.key.toLowerCase() === 'p' && list) {
-        const st = s.runtime?.engine.playbacks.find((p) => p.cueListId === list)?.state;
-        void act({ type: st === 'paused' ? 'cue.resume' : 'cue.pause', listId: list });
-      } else if (e.key.toLowerCase() === 'b') {
-        void act({ type: 'engine.blackout', on: !s.runtime?.engine.blackout });
-      } else if (e.key === 'Escape') {
-        void act({ type: 'programmer.release' });
-      }
+      if (typing && !allowedWhileTyping(combo)) return;
+      if (s.confirm && action !== 'stopOutput') return;
+      if (runShortcut(action)) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [overrides]);
 }
 
 export function App() {
@@ -294,5 +303,6 @@ export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
   document.documentElement.style.zoom = String(settings.appearance.uiScale);
+  useStore.setState({ shortcuts: settings.shortcuts });
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

@@ -3,8 +3,10 @@ import { FolderOpen, KeyRound } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { Field, NumberInput, PageHead, Panel, Tabs } from '../components/ui';
-import { SHORTCUTS, type Settings } from '../../core/settings/settings';
+import { resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, type Settings } from '../../core/settings/settings';
+import { comboFromEvent } from '../shortcuts';
 import type { RecoveryEntry } from '../../core/project/store';
+import type { OpenRouterModel } from '../../core/ai/providers/openrouter';
 
 const TABS = [
   { id: 'general', label: 'Général' }, { id: 'appearance', label: 'Apparence' }, { id: 'engine', label: 'Moteur & sécurité' },
@@ -12,6 +14,110 @@ const TABS = [
   { id: 'shortcuts', label: 'Raccourcis' }, { id: 'logs', label: 'Logs & diagnostics' }, { id: 'backups', label: 'Sauvegardes' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
+
+function ShortcutEditor({ value, onChange }: { value: Record<string, string>; onChange: (v: Record<string, string>) => void }) {
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const bindings = resolveShortcuts(value);
+  const conflicts = shortcutConflicts(bindings);
+  const conflicted = new Set(conflicts.flat());
+  useEffect(() => {
+    useStore.setState({ capturingShortcut: capturing !== null });
+    if (!capturing) return;
+    const onKey = (e: KeyboardEvent) => {
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onChange({ ...value, [capturing]: combo });
+      setCapturing(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [capturing, value, onChange]);
+  useEffect(() => () => useStore.setState({ capturingShortcut: false }), []);
+  const label = (id: string) => SHORTCUT_ACTIONS.find((a) => a.id === id)?.label ?? id;
+  return (
+    <div>
+      {conflicts.length > 0 && (
+        <div className="small" style={{ padding: '8px 12px', color: '#fca5a5' }}>
+          Conflits : {conflicts.map((ids) => `« ${bindings[ids[0] as keyof typeof bindings]} » → ${ids.map(label).join(' / ')}`).join(' ; ')}. Seule la première action reçoit le raccourci.
+        </div>
+      )}
+      <table className="table" data-testid="shortcut-table">
+        <tbody>
+          {SHORTCUT_ACTIONS.map((a) => {
+            const combo = bindings[a.id];
+            const custom = value[a.id] !== undefined;
+            return (
+              <tr key={a.id}>
+                <td>{a.label}</td>
+                <td style={{ width: 170 }}>
+                  {capturing === a.id ? <span className="badge violet">Appuyez sur une combinaison…</span> : combo ? <span className={`badge mono ${conflicted.has(a.id) ? 'err' : custom ? 'cyan' : ''}`}>{combo}</span> : <span className="dim small">non attribué</span>}
+                </td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {capturing === a.id ? (
+                    <button className="btn ghost sm" onClick={() => setCapturing(null)}>Annuler</button>
+                  ) : (
+                    <button className="btn ghost sm" data-testid={`rebind-${a.id}`} onClick={() => setCapturing(a.id)}>Modifier</button>
+                  )}
+                  <button className="btn ghost sm" disabled={!combo} onClick={() => onChange({ ...value, [a.id]: '' })}>Effacer</button>
+                  <button className="btn ghost sm" disabled={!custom} onClick={() => { const { [a.id]: _, ...rest } = value; onChange(rest); }}>Défaut</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="row" style={{ padding: 12 }}>
+        <button className="btn" disabled={!Object.keys(value).length} onClick={() => onChange({})}>Rétablir tous les raccourcis par défaut</button>
+        <span className="small dim">Les raccourcis sans Ctrl/Alt sont ignorés pendant la saisie dans un champ. Annuler/rétablir de la timeline : Ctrl+Z / Ctrl+Y.</span>
+      </div>
+    </div>
+  );
+}
+
+function ModelPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const [models, setModels] = useState<OpenRouterModel[] | null>(null);
+  const [q, setQ] = useState('');
+  const [loading, setLoading] = useState(false);
+  const load = async (refresh = false) => {
+    setLoading(true);
+    const m = await act({ type: 'ai.listModels', refresh });
+    setLoading(false);
+    if (m) setModels(m);
+  };
+  const shown = (models ?? []).filter((m) => `${m.id} ${m.name}`.toLowerCase().includes(q.toLowerCase())).slice(0, 200);
+  const current = models?.find((m) => m.id === value);
+  const price = (v: number | null) => (v === null ? '?' : v === 0 ? 'gratuit' : `${v} $`);
+  return (
+    <Field label="Modèle" hint={current ? `${current.name} · contexte ${current.contextLength ?? '?'} · entrée ${price(current.promptPrice)} / sortie ${price(current.completionPrice)} par million de jetons${current.structuredOutputs ? ' · sortie structurée' : current.jsonMode ? ' · mode JSON' : ' · JSON par consigne uniquement'}` : 'Identifiant OpenRouter « fournisseur/modèle ». « openrouter/auto » laisse OpenRouter choisir.'}>
+      <div className="col">
+        <div className="row">
+          <input className="input mono" data-testid="ai-model" value={value} onChange={(e) => onChange(e.target.value.trim())} />
+          <button className="btn" onClick={() => void load(models !== null)} disabled={loading}>{loading ? 'Chargement…' : models ? 'Actualiser la liste' : 'Charger la liste des modèles'}</button>
+        </div>
+        {models && (
+          <div className="panel" style={{ maxHeight: 260, overflow: 'auto' }}>
+            <div style={{ padding: 8, position: 'sticky', top: 0, background: 'var(--panel)' }}><input className="input" placeholder={`Rechercher parmi ${models.length} modèles…`} value={q} onChange={(e) => setQ(e.target.value)} /></div>
+            <table className="table small">
+              <thead><tr><th>Modèle</th><th>Contexte</th><th>$ / M jetons (entrée · sortie)</th><th>Format</th></tr></thead>
+              <tbody>
+                {shown.map((m) => (
+                  <tr key={m.id} className={`clickable ${m.id === value ? 'sel' : ''}`} onClick={() => onChange(m.id)}>
+                    <td>{m.name}<div className="dim mono">{m.id}</div></td>
+                    <td className="mono">{m.contextLength ?? '?'}</td>
+                    <td className="mono">{price(m.promptPrice)} · {price(m.completionPrice)}</td>
+                    <td>{m.structuredOutputs ? <span className="badge ok">structuré</span> : m.jsonMode ? <span className="badge cyan">JSON</span> : <span className="badge">consigne</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Field>
+  );
+}
 
 export function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
@@ -29,7 +135,7 @@ export function SettingsPage() {
   if (!s) return <div className="page">Chargement…</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
-  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
+  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts }); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
 
   return (
     <div className="page">
@@ -92,31 +198,32 @@ export function SettingsPage() {
           <Panel title="IA et fournisseurs">
             <div className="grid g2">
               <Field label="Fournisseur">
-                <select className="select" value={s.ai.provider} onChange={(e) => set('ai', { provider: e.target.value as Settings['ai']['provider'] })}>
+                <select className="select" value={s.ai.provider} data-testid="ai-provider" onChange={(e) => set('ai', { provider: e.target.value as Settings['ai']['provider'] })}>
                   <option value="local">Local déterministe (sans réseau)</option>
-                  <option value="anthropic">Claude (Anthropic API)</option>
-                </select>
-              </Field>
-              <Field label="Modèle"><input className="input mono" value={s.ai.model} onChange={(e) => set('ai', { model: e.target.value })} disabled={s.ai.provider === 'local'} /></Field>
-              <Field label="Effort de raisonnement">
-                <select className="select" value={s.ai.effort} onChange={(e) => set('ai', { effort: e.target.value as Settings['ai']['effort'] })} disabled={s.ai.provider === 'local'}>
-                  <option value="low">Faible (rapide)</option><option value="medium">Moyen</option><option value="high">Élevé</option>
+                  <option value="openrouter">OpenRouter (choix du modèle)</option>
                 </select>
               </Field>
               <Field label="Délai maximal (s)"><NumberInput value={s.ai.timeoutSec} min={5} max={300} onChange={(v) => set('ai', { timeoutSec: v })} /></Field>
               <label className="check"><input type="checkbox" checked={s.ai.fallbackToLocal} onChange={(e) => set('ai', { fallbackToLocal: e.target.checked })} />Repli sur le mode local si le fournisseur est indisponible</label>
               <label className="check" title="Protection photosensible"><input type="checkbox" checked={s.ai.allowStrobe} onChange={(e) => set('ai', { allowStrobe: e.target.checked })} />Autoriser l’IA à proposer des effets strobe</label>
             </div>
-            {s.ai.provider === 'anthropic' && (
+            {s.ai.provider === 'openrouter' && (
               <div className="col" style={{ marginTop: 14 }}>
-                <Field label="Clé API Anthropic" hint="Chiffrée par le système (safeStorage) dans le processus principal. Jamais renvoyée à l’interface, jamais écrite dans un projet.">
+                <ModelPicker value={s.ai.model} onChange={(model) => set('ai', { model })} />
+                <Field label="Effort de raisonnement" hint="Transmis uniquement aux modèles qui prennent en charge le raisonnement">
+                  <select className="select" style={{ maxWidth: 260 }} value={s.ai.effort} onChange={(e) => set('ai', { effort: e.target.value as Settings['ai']['effort'] })}>
+                    <option value="low">Faible (rapide)</option><option value="medium">Moyen</option><option value="high">Élevé</option>
+                  </select>
+                </Field>
+                <Field label="Clé API OpenRouter" hint="Chiffrée par le système (safeStorage) dans le processus principal. Jamais renvoyée à l’interface, jamais écrite dans un projet.">
                   <div className="row">
-                    <input className="input mono" type="password" autoComplete="off" placeholder={rt?.ai.hasKey ? '•••••••• (enregistrée)' : 'sk-ant-…'} value={key} onChange={(e) => setKey(e.target.value)} />
+                    <input className="input mono" type="password" autoComplete="off" placeholder={rt?.ai.hasKey ? '•••••••• (enregistrée)' : 'sk-or-v1-…'} value={key} onChange={(e) => setKey(e.target.value)} />
                     <button className="btn primary" disabled={key.trim().length < 10} onClick={() => void act({ type: 'ai.setKey', key: key.trim() }).then((r) => r && setKey(''))}><KeyRound size={13} />Enregistrer</button>
                     <button className="btn danger" disabled={!rt?.ai.hasKey} onClick={() => void act({ type: 'ai.setKey', key: null })}>Supprimer</button>
                   </div>
                 </Field>
                 <span className="small">État : {rt?.ai.hasKey ? <span className="badge ok">clé configurée</span> : <span className="badge warn">aucune clé — le mode local sera utilisé</span>}{rt?.ai.lastError ? <span className="badge err" style={{ marginLeft: 6 }}>{rt.ai.lastError}</span> : null}</span>
+                <p className="small dim" style={{ margin: 0 }}>Les demandes sont envoyées à OpenRouter (openrouter.ai), qui les transmet au fournisseur du modèle choisi. Seuls la demande et une description du kit (noms, types, capacités, groupes, scènes) sont envoyés.</p>
               </div>
             )}
           </Panel>
@@ -128,7 +235,7 @@ export function SettingsPage() {
         )}
         {tab === 'shortcuts' && (
           <Panel title="Raccourcis clavier" flush>
-            <table className="table"><tbody>{SHORTCUTS.map((k) => <tr key={k.keys}><td className="mono" style={{ width: 220 }}>{k.keys}</td><td>{k.action}</td></tr>)}</tbody></table>
+            <ShortcutEditor value={s.shortcuts} onChange={(shortcuts) => setS({ ...s, shortcuts })} />
           </Panel>
         )}
         {tab === 'logs' && (

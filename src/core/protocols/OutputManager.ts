@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { FrameSink } from '../engine/Engine';
 import { ArtNetOutput } from './artnet';
 import { EnttecProOutput } from './enttec';
+import { OpenDmxOutput } from './opendmx';
 import { SacnOutput } from './sacn';
 import { OutputAdapter, type OutputConfig, type OutputStatus } from './types';
 import { VirtualOutput } from './virtual';
@@ -14,6 +15,7 @@ export function createAdapter(config: OutputConfig, sacnCid?: string): OutputAda
     case 'artnet': return new ArtNetOutput(config);
     case 'sacn': return new SacnOutput(config, sacnCid);
     case 'enttec-pro': return new EnttecProOutput(config);
+    case 'open-dmx': return new OpenDmxOutput(config);
   }
 }
 
@@ -22,7 +24,8 @@ function routes(c: OutputConfig): { local: number; remote: number }[] {
     case 'virtual': return c.universes.map((u) => ({ local: u, remote: u }));
     case 'artnet':
     case 'sacn': return c.universeMap;
-    case 'enttec-pro': return [{ local: c.universe, remote: c.universe }];
+    case 'enttec-pro':
+    case 'open-dmx': return [{ local: c.universe, remote: c.universe }];
   }
 }
 

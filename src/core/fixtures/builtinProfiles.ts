@@ -180,6 +180,43 @@ const raw = [
     ],
   },
   {
+    id: 'demo-led-bar-4',
+    name: 'Demo Barre LED 4 cellules',
+    manufacturer: 'Luma Demo (fictif)',
+    type: 'led-bar',
+    fictional: true,
+    physical: { panRange: 0, tiltRange: 0, beamAngle: 25 },
+    modes: [
+      {
+        name: '14ch pixels',
+        channels: [
+          { name: 'Dimmer', attribute: 'dimmer' },
+          {
+            name: 'Strobe', attribute: 'strobe',
+            ranges: [
+              { from: 0, to: 9, label: 'Pas de strobe', kind: 'open' },
+              { from: 10, to: 255, label: 'Strobe lent → rapide', kind: 'strobe' },
+            ],
+          },
+          ...[1, 2, 3, 4].flatMap((cell) => [
+            { name: `Rouge ${cell}`, attribute: 'red', cell },
+            { name: `Vert ${cell}`, attribute: 'green', cell },
+            { name: `Bleu ${cell}`, attribute: 'blue', cell },
+          ]),
+        ],
+      },
+      {
+        name: '4ch DRGB global',
+        channels: [
+          { name: 'Dimmer', attribute: 'dimmer' },
+          { name: 'Rouge', attribute: 'red' },
+          { name: 'Vert', attribute: 'green' },
+          { name: 'Bleu', attribute: 'blue' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'demo-strobe',
     name: 'Demo Stroboscope',
     manufacturer: 'Luma Demo (fictif)',
@@ -202,6 +239,6 @@ const raw = [
       },
     ],
   },
-] as const;
+];
 
 export const BUILTIN_PROFILES: readonly FixtureProfile[] = raw.map((p) => profileSchema.parse(p));

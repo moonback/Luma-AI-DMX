@@ -123,3 +123,38 @@ test('captures des autres espaces', async () => {
     await page.screenshot({ path: `${shots}/${n}-${id}.png` });
   }
 });
+
+test('vue 3D du visualiseur', async () => {
+  await nav('visualizer');
+  await page.getByTestId('view-3d').click();
+  await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${shots}/16-visualizer-3d.png` });
+  await page.getByTestId('view-2d').click();
+});
+
+test('raccourci reconfiguré : Blackout sur K', async () => {
+  await nav('settings');
+  await page.getByRole('tab', { name: 'Raccourcis' }).click();
+  await page.getByTestId('rebind-blackout').click();
+  await page.keyboard.press('k');
+  await expect(page.getByTestId('shortcut-table')).toContainText('K');
+  await page.screenshot({ path: `${shots}/17-shortcuts.png` });
+  await page.getByTestId('settings-save').click();
+  await nav('dashboard');
+  await page.keyboard.press('k');
+  await expect(page.getByTestId('blackout')).toHaveClass(/solid/);
+  await page.keyboard.press('b'); // old binding no longer active
+  await expect(page.getByTestId('blackout')).toHaveClass(/solid/);
+  await page.keyboard.press('k');
+  await expect(page.getByTestId('blackout')).not.toHaveClass(/solid/);
+});
+
+test('fournisseur OpenRouter sélectionnable avec choix du modèle', async () => {
+  await nav('settings');
+  await page.getByRole('tab', { name: 'IA et fournisseurs' }).click();
+  await page.getByTestId('ai-provider').selectOption('openrouter');
+  await expect(page.getByTestId('ai-model')).toHaveValue('openrouter/auto');
+  await page.getByTestId('ai-model').fill('mistralai/mistral-small');
+  await page.screenshot({ path: `${shots}/18-openrouter.png` });
+});

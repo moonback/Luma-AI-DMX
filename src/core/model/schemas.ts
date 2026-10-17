@@ -54,6 +54,8 @@ export const channelSchema = z.object({
   attribute: attributeSchema,
   /** true = low byte of the 16-bit attribute whose coarse channel is also in the mode. */
   fine: z.boolean().default(false),
+  /** Cell number for multi-cell fixtures (LED bars, pixel battens). Absent = whole fixture. */
+  cell: z.number().int().min(1).max(512).optional(),
   default: dmxValueSchema.default(0),
   ranges: z.array(channelRangeSchema).default([]),
 });
@@ -69,10 +71,11 @@ export const modeSchema = z
     const fine = new Set<string>();
     for (const [i, ch] of mode.channels.entries()) {
       const set = ch.fine ? fine : coarse;
-      if (set.has(ch.attribute)) {
-        ctx.addIssue({ code: 'custom', path: ['channels', i, 'attribute'], message: `Attribut « ${ch.attribute} » déclaré deux fois dans le mode « ${mode.name} »` });
+      const key = ch.cell ? `${ch.attribute}#${ch.cell}` : ch.attribute;
+      if (set.has(key)) {
+        ctx.addIssue({ code: 'custom', path: ['channels', i, 'attribute'], message: `Attribut « ${key} » déclaré deux fois dans le mode « ${mode.name} »` });
       }
-      set.add(ch.attribute);
+      set.add(key);
     }
     for (const a of fine) {
       if (!coarse.has(a)) ctx.addIssue({ code: 'custom', path: ['channels'], message: `Canal fin « ${a} » sans canal principal` });
@@ -116,6 +119,8 @@ export const fixtureSchema = z.object({
   position: z.object({ x: z.number().min(-100).max(100), y: z.number().min(-100).max(100) }).default({ x: 0, y: 0 }),
   /** Mounting rotation in degrees (0 = facing audience). */
   rotation: z.number().min(-360).max(360).default(0),
+  /** Mounting height in meters (3D visualizer). */
+  height: z.number().min(0).max(50).default(4),
   notes: z.string().max(500).default(''),
 });
 export type Fixture = z.infer<typeof fixtureSchema>;

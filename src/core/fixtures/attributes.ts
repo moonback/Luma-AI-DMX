@@ -11,8 +11,22 @@ const CLASS: Record<string, AttributeClass> = {
   speed: 'special', macro: 'special', control: 'special',
 };
 
+/**
+ * Multi-cell fixtures (LED bars, pixel battens) expose the same attribute once per cell.
+ * Their value key is "<attribute>#<cell>" (e.g. "red#3"); single-cell attributes keep the bare name.
+ */
+export const cellKey = (attr: string, cell?: number): string => (cell ? `${attr}#${cell}` : attr);
+export const baseAttribute = (key: string): string => {
+  const i = key.indexOf('#');
+  return i < 0 ? key : key.slice(0, i);
+};
+export const cellOf = (key: string): number | undefined => {
+  const i = key.indexOf('#');
+  return i < 0 ? undefined : Number(key.slice(i + 1));
+};
+
 export function attributeClass(attr: string): AttributeClass {
-  return CLASS[attr] ?? 'special';
+  return CLASS[baseAttribute(attr)] ?? 'special';
 }
 
 /** Additive emitters that the virtual dimmer scales when a fixture has no dimmer channel. */
@@ -27,5 +41,8 @@ export const ATTRIBUTE_LABELS: Record<string, string> = {
 };
 
 export function attributeLabel(attr: string): string {
-  return ATTRIBUTE_LABELS[attr] ?? attr.replace(/^custom:/, '');
+  const base = baseAttribute(attr);
+  const cell = cellOf(attr);
+  const label = ATTRIBUTE_LABELS[base] ?? base.replace(/^custom:/, '');
+  return cell ? `${label} ${cell}` : label;
 }

@@ -23,7 +23,7 @@ export function Dashboard() {
   const p = ps.project;
   const outputs = rt?.outputs ?? [];
   const real = outputs.filter((o) => o.real);
-  const protocols = [...new Set(outputs.filter((o) => o.enabled).map((o) => ({ virtual: 'Virtuelle', artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX' })[o.kind]))];
+  const protocols = [...new Set(outputs.filter((o) => o.enabled).map((o) => ({ virtual: 'Virtuelle', artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[o.kind]))];
   const active = rt?.engine.playbacks.filter((pb) => pb.state !== 'idle') ?? [];
   const universesUsed = new Set(p.patch.map((f) => f.universe)).size;
   const m = rt?.engine.metrics;
@@ -40,7 +40,7 @@ export function Dashboard() {
         <Kpi label="Cue actif" src="computed" value={active[0]?.cueName ?? '—'} sub={active.length ? `${p.cueLists.find((l) => l.id === active[0]!.cueListId)?.name ?? ''} · ${Math.round(active[0]!.progress * 100)} %` : `${p.cueLists.reduce((n, l) => n + l.cues.length, 0)} cue(s) programmé(s)`} />
         <Kpi label="BPM" src={rt?.engine.bpmSource === 'audio' ? 'estimate' : 'persisted'} value={rt?.engine.bpm.toFixed(0) ?? '–'} sub={rt?.engine.bpmSource === 'audio' ? `Estimation audio (confiance ${Math.round((audio?.bpmConfidence ?? 0) * 100)} %)` : 'Défini manuellement / tap tempo'} />
         <Kpi label="Charge moteur" src="measured" value={m ? `${(m.load * 100).toFixed(1)} %` : '–'} sub={m ? `${m.measuredHz} Hz mesurés · tick ${m.avgTickMs} ms · ${m.overruns} dépassement(s)` : ''} />
-        <Kpi label="Assistant IA" src="config" value={rt?.ai.provider === 'anthropic' ? (rt.ai.hasKey ? 'Claude' : 'Claude (sans clé)') : 'Local'} sub={rt?.ai.lastError ? `Dernière erreur : ${rt.ai.lastError}` : rt?.ai.provider === 'local' ? 'Règles et modèles déterministes' : rt?.ai.model} icon={<Bot size={13} />} />
+        <Kpi label="Assistant IA" src="config" value={rt?.ai.provider === 'openrouter' ? (rt.ai.hasKey ? 'OpenRouter' : 'OpenRouter (sans clé)') : 'Local'} sub={rt?.ai.lastError ? `Dernière erreur : ${rt.ai.lastError}` : rt?.ai.provider === 'local' ? 'Règles et modèles déterministes' : rt?.ai.model} icon={<Bot size={13} />} />
       </div>
       <div className="grid g2">
         <Panel title="Actions rapides">

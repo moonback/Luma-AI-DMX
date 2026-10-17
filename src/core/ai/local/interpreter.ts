@@ -148,7 +148,7 @@ function shiftCurrent(ctx: InterpreterContext, fn: (hex: string) => string): AiA
   for (const f of ctx.fixtures) {
     const cur = ctx.current[f.id];
     if (!cur || cur.level <= 0.01) continue;
-    if (!f.attributes.some((a) => ['red', 'colorWheel', 'cyan'].includes(a))) continue;
+    if (!f.attributes.some((a) => ['red', 'colorWheel', 'cyan'].includes(a.split('#')[0]!))) continue;
     const next = fn(cur.color);
     const list = byColor.get(next) ?? [];
     list.push(f.name);

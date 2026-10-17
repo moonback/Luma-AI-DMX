@@ -1,5 +1,5 @@
 import type { Effect, FixtureValues } from '../model/schemas';
-import { colorToAttributes } from '../fixtures/color';
+import { colorCells, colorToAttributes } from '../fixtures/color';
 import type { ResolvedFixture } from '../fixtures/profiles';
 import { clamp01, hash01, hexToRgb, hsvToRgb, lerp, type Rgb } from '../util/math';
 
@@ -53,6 +53,21 @@ export function computeEffect(effect: Effect, phase: number, targets: readonly R
   const [lo, hi] = range(effect);
   const p = effect.params;
   const isReverse = p.direction === 'reverse';
+
+  // Colour effects run per pixel: every cell of a multi-cell fixture is its own element in the phase spread.
+  if (effect.type === 'rainbow' || effect.type === 'colorCycle') {
+    const elements = targets.flatMap((rf) => {
+      const cells = colorCells(rf);
+      return cells.length ? cells.map((cell) => ({ rf, cell })) : [{ rf, cell: undefined as number | undefined }];
+    });
+    elements.forEach(({ rf, cell }, i) => {
+      const ph = fixturePhase(effect, phase, i, elements.length);
+      const rgb = effect.type === 'rainbow' ? hsvToRgb(frac(ph), 1, 1) : colorAt(p.colors, ph);
+      const vals = colorToAttributes(rf, rgb, cell);
+      if (Object.keys(vals).length) out[rf.fixture.id] = { ...(out[rf.fixture.id] ?? {}), ...vals };
+    });
+    return out;
+  }
 
   targets.forEach((rf, i) => {
     const has = (a: string) => rf.attributes.includes(a);

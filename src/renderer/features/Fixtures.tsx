@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Copy, Lightbulb, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { Empty, Field, Modal, NumberInput, PageHead, Panel, useResolved } from '../components/ui';
-import { channelCount } from '../../core/fixtures/profiles';
+import { channelCount, channelKey } from '../../core/fixtures/profiles';
 import { findFreeAddress } from '../../core/fixtures/patch';
 import { attributeLabel } from '../../core/fixtures/attributes';
 
@@ -69,6 +69,78 @@ function AddDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+function OflDialog({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<'online' | 'file'>('online');
+  const [mans, setMans] = useState<{ key: string; name: string }[] | null>(null);
+  const [man, setMan] = useState('');
+  const [fixtures, setFixtures] = useState<string[] | null>(null);
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [manName, setManName] = useState('Open Fixture Library');
+  const [result, setResult] = useState<{ imported: string | null; warnings: string[]; errors: string[] } | null>(null);
+  useEffect(() => {
+    if (tab === 'online' && !mans) void act({ type: 'ofl.manufacturers' }).then((m) => setMans(m ?? []));
+  }, [tab, mans]);
+  const pickMan = async (key: string) => {
+    setMan(key);
+    setFixtures(null);
+    if (key) setFixtures((await act({ type: 'ofl.fixtures', manufacturer: key })) ?? []);
+  };
+  const run = async (source: { kind: 'online'; manufacturer: string; key: string } | { kind: 'file'; manufacturerName: string }) => {
+    setBusy(true);
+    const r = await act({ type: 'profile.importOfl', source });
+    setBusy(false);
+    if (r && (r.imported || r.errors.length)) setResult(r);
+    if (r?.imported) useStore.getState().toast({ kind: r.warnings.length ? 'warn' : 'success', title: `Profil importé : ${r.imported}`, detail: r.warnings.length ? `${r.warnings.length} avertissement(s)` : undefined });
+  };
+  const shown = (fixtures ?? []).filter((k) => k.includes(q.toLowerCase()));
+  return (
+    <Modal title="Importer depuis Open Fixture Library" wide onClose={onClose} footer={<button className="btn" onClick={onClose}>Fermer</button>}>
+      <div className="col">
+        <div className="chips">
+          <button className={`chip ${tab === 'online' ? 'on' : ''}`} onClick={() => setTab('online')}>Catalogue en ligne</button>
+          <button className={`chip ${tab === 'file' ? 'on' : ''}`} onClick={() => setTab('file')}>Fichier .json OFL</button>
+        </div>
+        {tab === 'online' ? (
+          <div className="grid g2">
+            <Field label="Fabricant" hint={mans ? `${mans.length} fabricants` : 'Chargement du catalogue…'}>
+              <select className="select" value={man} onChange={(e) => void pickMan(e.target.value)} data-testid="ofl-manufacturer">
+                <option value="">— choisir —</option>
+                {(mans ?? []).map((m) => <option key={m.key} value={m.key}>{m.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Modèle" hint={fixtures ? `${fixtures.length} modèle(s)` : man ? 'Chargement…' : ''}>
+              <input className="input" placeholder="Filtrer…" value={q} onChange={(e) => setQ(e.target.value)} disabled={!fixtures} />
+            </Field>
+            <div className="panel" style={{ gridColumn: '1 / -1', maxHeight: 240, overflow: 'auto' }}>
+              {shown.map((k) => (
+                <div key={k} className="row between" style={{ padding: '4px 10px', borderBottom: '1px solid var(--border)' }}>
+                  <span className="mono small">{k}</span>
+                  <button className="btn sm primary" disabled={busy} onClick={() => void run({ kind: 'online', manufacturer: man, key: k })}>Importer</button>
+                </div>
+              ))}
+              {fixtures && !shown.length && <p className="muted small" style={{ padding: 10, margin: 0 }}>Aucun modèle.</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="row" style={{ alignItems: 'flex-end' }}>
+            <Field label="Nom du fabricant"><input className="input" value={manName} onChange={(e) => setManName(e.target.value)} /></Field>
+            <button className="btn primary" disabled={busy || !manName.trim()} onClick={() => void run({ kind: 'file', manufacturerName: manName.trim() })}><Upload size={14} />Choisir le fichier…</button>
+          </div>
+        )}
+        {result && (
+          <div className="col small">
+            {result.imported && <span style={{ color: '#34d399' }}>✓ {result.imported} ajouté au projet</span>}
+            {result.errors.map((e, i) => <span key={i} style={{ color: '#fca5a5' }}>✗ {e}</span>)}
+            {result.warnings.slice(0, 8).map((w, i) => <span key={i} style={{ color: '#f59e0b' }}>⚠ {w}</span>)}
+          </div>
+        )}
+        <p className="small dim" style={{ margin: 0 }}>Données Open Fixture Library (licence MIT), récupérées depuis le dépôt GitHub du projet. Les profils importés sont des conversions automatiques : vérifiez-les avec le manuel du projecteur avant un spectacle. Les canaux non représentables deviennent des canaux génériques (adresses conservées).</p>
+      </div>
+    </Modal>
+  );
+}
+
 function Editor({ id }: { id: string }) {
   const { lib, byId } = useResolved();
   const rf = byId.get(id);
@@ -93,6 +165,7 @@ function Editor({ id }: { id: string }) {
           <Field label="Position X (m)"><NumberInput value={f.position.x} min={-100} max={100} step={0.1} onChange={(v) => update({ position: { ...f.position, x: v } })} /></Field>
           <Field label="Position Y (m)"><NumberInput value={f.position.y} min={-100} max={100} step={0.1} onChange={(v) => update({ position: { ...f.position, y: v } })} /></Field>
           <Field label="Rotation (°)"><NumberInput value={f.rotation} min={-360} max={360} onChange={(v) => update({ rotation: v })} /></Field>
+          <Field label="Hauteur (m)" hint="Accroche, pour la vue 3D"><NumberInput value={f.height} min={0} max={50} step={0.1} onChange={(v) => update({ height: v })} /></Field>
           <Field label="Tags"><input className="input" key={f.tags.join()} defaultValue={f.tags.join(', ')} onBlur={(e) => update({ tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })} /></Field>
         </div>
         <Field label="Notes"><textarea className="textarea" rows={2} key={f.notes} defaultValue={f.notes} onBlur={(e) => e.target.value !== f.notes && update({ notes: e.target.value })} /></Field>
@@ -100,7 +173,7 @@ function Editor({ id }: { id: string }) {
           <thead><tr><th>Ch</th><th>Adr</th><th>Fonction</th></tr></thead>
           <tbody>
             {rf.mode.channels.map((c, i) => (
-              <tr key={i}><td className="mono">{i + 1}</td><td className="mono">{f.address + i}</td><td>{c.name} <span className="dim">{attributeLabel(c.attribute)}{c.fine ? ' · 16 bits (fin)' : ''}{c.ranges.some((r) => r.dangerous) ? ' · fonctions spéciales' : ''}</span></td></tr>
+              <tr key={i}><td className="mono">{i + 1}</td><td className="mono">{f.address + i}</td><td>{c.name} <span className="dim">{attributeLabel(channelKey(c))}{c.fine ? ' · 16 bits (fin)' : ''}{c.ranges.some((r) => r.dangerous) ? ' · fonctions spéciales' : ''}</span></td></tr>
             ))}
           </tbody>
         </table>
@@ -116,6 +189,7 @@ export function Fixtures() {
   const setSelection = useStore((s) => s.setSelection);
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
+  const [ofl, setOfl] = useState(false);
   const [universe, setUniverse] = useState<number | 'all'>('all');
   const issueIds = useMemo(() => new Set(ps.issues.flatMap((i) => i.fixtureIds)), [ps.issues]);
   const shown = fixtures.filter((rf) => {
@@ -146,6 +220,7 @@ export function Fixtures() {
     <div className="page">
       <PageHead title="Fixtures" subtitle="Patch DMX : profils, univers, adresses et positions">
         <button className="btn" onClick={() => void importProfiles()} title="Importer des profils au format JSON documenté (docs/PROFILE_FORMAT.md)"><Upload size={15} />Importer des profils</button>
+        <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
         <button className="btn primary" data-testid="add-fixture" onClick={() => setAdding(true)}><Plus size={15} />Ajouter</button>
       </PageHead>
       {ps.issues.length > 0 && (
@@ -204,6 +279,7 @@ export function Fixtures() {
         )}
       </div>
       {adding && <AddDialog onClose={() => setAdding(false)} />}
+      {ofl && <OflDialog onClose={() => setOfl(false)} />}
     </div>
   );
 }

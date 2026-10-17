@@ -14,6 +14,7 @@ import { attributeClass } from '../fixtures/attributes';
 import { colorToAttributes } from '../fixtures/color';
 import { channelCount, parseProfileFile } from '../fixtures/profiles';
 import { BUILTIN_PROFILES } from '../fixtures/builtinProfiles';
+import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../fixtures/ofl';
 import { findFreeAddress, validatePatch } from '../fixtures/patch';
 import { createProject, ProjectLoadError, serializeProject } from '../project/format';
 import { listRecovery, loadProjectFile, saveProjectFile, writeFileAtomic } from '../project/store';
@@ -24,7 +25,7 @@ import { hexToRgb } from '../util/math';
 import type { AiProposal } from '../ai/actions';
 import { buildProposal, executeProposal, interpreterContext, proposeLocally } from '../ai/director';
 import { interpretLocally } from '../ai/local/interpreter';
-import { DEFAULT_ANTHROPIC_MODEL, describeClaudeError, describeRig, proposeWithClaude } from '../ai/providers/anthropic';
+import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel } from '../ai/providers/openrouter';
 import type { Alert, Command, CommandOf, CommandResults, CommandType, ProjectState, RuntimeState, UniverseView, ValuesFrame } from '../../shared/commands';
 
 export interface Dialogs {
@@ -49,7 +50,7 @@ export interface AppServiceOptions {
 
 export class UserError extends Error {}
 
-const ANTHROPIC_KEY = 'anthropic-api-key';
+const OPENROUTER_KEY = 'openrouter-api-key';
 
 /**
  * Application service: owns the project document, the engine, the outputs, AI and audio.
@@ -165,7 +166,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       outputs: this.outputs.status(),
       transmitting: this.outputs.transmitting,
       liveMode: this.outputs.liveMode,
-      ai: { provider: this.settings.ai.provider, hasKey: !!this.opts.secrets.get(ANTHROPIC_KEY), busy: this.aiBusy, lastError: this.aiLastError, model: this.settings.ai.model },
+      ai: { provider: this.settings.ai.provider, hasKey: !!this.opts.secrets.get(OPENROUTER_KEY), busy: this.aiBusy, lastError: this.aiLastError, model: this.settings.ai.model },
       audio: this.audio.status(),
       alerts: [...this.alerts],
       programmer: this.engine.getProgrammer(),
@@ -341,6 +342,45 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         if (accepted.length) this.logger.info('Profils', `${accepted.length} profil(s) importé(s)`);
         return { imported: accepted.map((p) => p.name), errors };
       }
+      case 'ofl.manufacturers':
+        return oflManufacturers().catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`); });
+      case 'ofl.fixtures':
+        return oflFixtureKeys(cmd.manufacturer).catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`); });
+      case 'profile.importOfl': {
+        let json: unknown;
+        let manufacturer: string;
+        let key: string;
+        if (cmd.source.kind === 'online') {
+          const src = cmd.source;
+          try {
+            json = await oflFetchFixture(src.manufacturer, src.key);
+            manufacturer = (await oflManufacturers().catch(() => [])).find((m) => m.key === src.manufacturer)?.name ?? src.manufacturer;
+          } catch (err) {
+            throw new UserError(`Téléchargement impossible : ${(err as Error).message}`);
+          }
+          key = src.key;
+        } else {
+          const file = cmd.source.path ?? (await this.opts.dialogs.openProfile());
+          if (!file) return { imported: null, profileId: null, warnings: [], errors: [] };
+          try {
+            json = JSON.parse(await fs.readFile(file, 'utf8'));
+          } catch (err) {
+            throw new UserError(`Fichier OFL illisible : ${(err as Error).message}`);
+          }
+          manufacturer = cmd.source.manufacturerName;
+          key = path.basename(file).replace(/.json$/i, '');
+        }
+        const r = convertOflFixture(json, { manufacturer, key });
+        for (const w of r.warnings) this.logger.warn('OFL', `${key} : ${w}`);
+        if (!r.profile) {
+          this.logger.error('OFL', `${key} : conversion impossible — ${r.errors.join(' ; ')}`);
+          return { imported: null, profileId: null, warnings: r.warnings, errors: r.errors };
+        }
+        const profile = r.profile;
+        this.mutate((d) => { d.profiles = [...d.profiles.filter((x) => x.id !== profile.id), profile]; });
+        this.logger.info('OFL', `Profil importé : ${profile.manufacturer} ${profile.name} (${profile.modes.length} mode(s))`);
+        return { imported: `${profile.manufacturer} ${profile.name}`, profileId: profile.id, warnings: r.warnings, errors: r.errors };
+      }
       case 'profile.remove': {
         const used = this.project.patch.filter((f) => f.profileId === cmd.id);
         if (used.length) throw new UserError(`Profil utilisé par ${used.length} projecteur(s)`);
@@ -372,7 +412,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
             d.patch.push({
               id, name, profileId: profile.id, mode: cmd.mode, universe: cmd.universe, address: addr, tags: cmd.tags,
               position: { x: Math.round((-w / 2 + ((i + 0.5) * w) / cmd.count) * 10) / 10, y: moving ? d.visualizer.stageDepth * 0.7 : d.visualizer.stageDepth * 0.25 },
-              rotation: 0, notes: '',
+              rotation: 0, height: moving ? 6 : 4, notes: '',
             });
             next = addr + count;
           }
@@ -478,7 +518,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         let applied = 0;
         for (const fid of cmd.fixtureIds) {
           const rf = this.index.fixtures.get(fid);
-          if (rf) applied += e.setProgrammer([fid], colorToAttributes(rf, hexToRgb(cmd.color))).applied;
+          if (rf) applied += e.setProgrammer([fid], colorToAttributes(rf, hexToRgb(cmd.color), cmd.cell)).applied;
         }
         return { applied };
       }
@@ -674,8 +714,11 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         e.releaseAi();
         for (const fx of e.snapshot().effects) if (fx.owner === 'ai') e.stopEffect(fx.instanceId);
         return ok;
+      case 'ai.listModels':
+        if (cmd.refresh) this.modelCache = null;
+        return this.openRouterModels();
       case 'ai.setKey':
-        this.opts.secrets.set(ANTHROPIC_KEY, cmd.key);
+        this.opts.secrets.set(OPENROUTER_KEY, cmd.key);
         this.logger.info('IA', cmd.key ? 'Clé API enregistrée (stockage chiffré du système)' : 'Clé API supprimée');
         return ok;
 
@@ -707,6 +750,18 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   /* AI                                                                  */
   /* ------------------------------------------------------------------ */
 
+  private modelCache: { at: number; models: Promise<OpenRouterModel[]> } | null = null;
+
+  /** OpenRouter catalogue, cached 10 min (public endpoint, no key needed). */
+  private openRouterModels(): Promise<OpenRouterModel[]> {
+    if (!this.modelCache || Date.now() - this.modelCache.at > 600_000) {
+      const models = listOpenRouterModels({ timeoutMs: 15_000 });
+      this.modelCache = { at: Date.now(), models };
+      models.catch(() => { this.modelCache = null; });
+    }
+    return this.modelCache.models;
+  }
+
   private validationCtx() {
     return { index: this.index, allowStrobe: this.settings.ai.allowStrobe, maxStrobeHz: this.settings.engine.maxStrobeHz };
   }
@@ -722,24 +777,26 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     try {
       const ctx = this.validationCtx();
       const ai = this.settings.ai;
-      const key = this.opts.secrets.get(ANTHROPIC_KEY);
+      const key = this.opts.secrets.get(OPENROUTER_KEY);
       let proposal: AiProposal;
-      if (ai.provider === 'anthropic' && key) {
+      if (ai.provider === 'openrouter' && key) {
         try {
-          const r = await proposeWithClaude(prompt, describeRig(this.index, ai.allowStrobe, this.engine.bpm), { apiKey: key, model: ai.model || DEFAULT_ANTHROPIC_MODEL, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000 });
-          proposal = buildProposal({ prompt, provider: 'anthropic', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx });
+          const model = ai.model || DEFAULT_OPENROUTER_MODEL;
+          const caps = (await this.openRouterModels().catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
+          const r = await proposeWithOpenRouter(prompt, describeRig(this.index, ai.allowStrobe, this.engine.bpm), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps });
+          proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx });
           this.aiLastError = null;
         } catch (err) {
-          const msg = describeClaudeError(err);
+          const msg = err instanceof Error ? err.message : String(err);
           this.aiLastError = msg;
-          this.logger.error('IA', `Fournisseur Claude indisponible : ${msg}`);
+          this.logger.error('IA', `Fournisseur OpenRouter indisponible : ${msg}`);
           if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
           proposal = proposeLocally(prompt, ctx, this.engine);
-          proposal.notices.unshift(`Fournisseur Claude indisponible (${msg}) : proposition générée par le mode local déterministe.`);
+          proposal.notices.unshift(`Fournisseur OpenRouter indisponible (${msg}) : proposition générée par le mode local déterministe.`);
         }
       } else {
         proposal = proposeLocally(prompt, ctx, this.engine);
-        if (ai.provider === 'anthropic') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
+        if (ai.provider === 'openrouter') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
       }
       this.storeProposal(proposal);
       this.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); });

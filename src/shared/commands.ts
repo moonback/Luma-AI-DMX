@@ -16,6 +16,7 @@ import type { SerialPortInfo } from '../core/protocols/enttec';
 import type { RecoveryEntry } from '../core/project/store';
 import type { LogEntry } from '../core/log/logger';
 import type { Settings } from '../core/settings/settings';
+import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 
 /**
  * Single typed command bus between renderer and main. Every payload is validated with Zod in the main process
@@ -33,6 +34,7 @@ const fixturePatchSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(32)).max(16).optional(),
   position: z.object({ x: z.number().min(-100).max(100), y: z.number().min(-100).max(100) }).optional(),
   rotation: z.number().min(-360).max(360).optional(),
+  height: z.number().min(0).max(50).optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -55,6 +57,15 @@ export const commandSchema = z.discriminatedUnion('type', [
   // Profiles
   z.object({ type: z.literal('profile.import'), path: optPath }),
   z.object({ type: z.literal('profile.remove'), id: idSchema }),
+  empty('ofl.manufacturers'),
+  z.object({ type: z.literal('ofl.fixtures'), manufacturer: z.string().regex(/^[a-z0-9-]+$/) }),
+  z.object({
+    type: z.literal('profile.importOfl'),
+    source: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('online'), manufacturer: z.string().regex(/^[a-z0-9-]+$/), key: z.string().regex(/^[a-z0-9-]+$/) }),
+      z.object({ kind: z.literal('file'), path: optPath, manufacturerName: z.string().trim().min(1).max(80).default('Open Fixture Library') }),
+    ]),
+  }),
   // Patch
   z.object({
     type: z.literal('fixture.add'),
@@ -79,7 +90,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('palette.recordFromProgrammer'), name: nameSchema, kind: z.enum(['color', 'position', 'intensity', 'beam']), fixtureId: idSchema }),
   // Programmer (manual)
   z.object({ type: z.literal('programmer.set'), fixtureIds: z.array(idSchema).min(1).max(1024), values: z.record(attributeSchema, unitSchema), confirmSpecial: z.boolean().default(false) }),
-  z.object({ type: z.literal('programmer.setColor'), fixtureIds: z.array(idSchema).min(1).max(1024), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) }),
+  z.object({ type: z.literal('programmer.setColor'), fixtureIds: z.array(idSchema).min(1).max(1024), color: z.string().regex(/^#[0-9a-fA-F]{6}$/), cell: z.number().int().min(1).max(512).optional() }),
   z.object({ type: z.literal('programmer.release'), fixtureIds: z.array(idSchema).optional(), attributes: z.array(attributeSchema).optional() }),
   // Scenes
   z.object({ type: z.literal('scene.record'), name: nameSchema, fixtureIds: z.array(idSchema).optional() }),
@@ -131,6 +142,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ai.revise'), proposalId: z.string().uuid(), actions: z.array(z.unknown()).max(50) }),
   z.object({ type: z.literal('ai.apply'), proposalId: z.string().uuid() }),
   empty('ai.release'),
+  z.object({ type: z.literal('ai.listModels'), refresh: z.boolean().default(false) }),
   z.object({ type: z.literal('ai.setKey'), key: z.string().trim().min(10).max(500).nullable() }),
   // Audio
   z.object({
@@ -173,7 +185,7 @@ export interface RuntimeState {
   outputs: OutputStatus[];
   transmitting: boolean;
   liveMode: boolean;
-  ai: { provider: 'local' | 'anthropic'; hasKey: boolean; busy: boolean; lastError: string | null; model: string };
+  ai: { provider: 'local' | 'openrouter'; hasKey: boolean; busy: boolean; lastError: string | null; model: string };
   audio: AudioStatus;
   alerts: Alert[];
   programmer: Record<string, Record<string, number>>;
@@ -203,6 +215,9 @@ export interface CommandResults {
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
   'profile.import': { imported: string[]; errors: string[] };
   'profile.remove': Void;
+  'ofl.manufacturers': { key: string; name: string }[];
+  'ofl.fixtures': string[];
+  'profile.importOfl': { imported: string | null; profileId: string | null; warnings: string[]; errors: string[] };
   'fixture.add': { ids: string[] };
   'fixture.update': Void;
   'fixture.remove': Void;
@@ -260,6 +275,7 @@ export interface CommandResults {
   'ai.revise': AiProposal;
   'ai.apply': AiExecutionReport;
   'ai.release': Void;
+  'ai.listModels': OpenRouterModel[];
   'ai.setKey': Void;
   'audio.features': Void;
   'audio.config': Void;

@@ -5,9 +5,13 @@ import { buildVisualModel } from '../../src/core/visualizer/model';
 import { ProjectIndex } from '../../src/core/engine/resolve';
 import { run, makeService, tempDir } from '../helpers';
 
-vi.mock('../../src/core/ai/providers/anthropic', async (orig) => {
-  const mod = await orig<typeof import('../../src/core/ai/providers/anthropic')>();
-  return { ...mod, proposeWithClaude: vi.fn(async () => { throw new Error('getaddrinfo ENOTFOUND api.anthropic.com'); }) };
+vi.mock('../../src/core/ai/providers/openrouter', async (orig) => {
+  const mod = await orig<typeof import('../../src/core/ai/providers/openrouter')>();
+  return {
+    ...mod,
+    listOpenRouterModels: vi.fn(async () => []),
+    proposeWithOpenRouter: vi.fn(async () => { throw new Error('Connexion impossible (réseau indisponible ?) : getaddrinfo ENOTFOUND openrouter.ai'); }),
+  };
 });
 
 describe('parcours complet (AppService sans Electron)', () => {
@@ -153,9 +157,9 @@ describe('sécurité et cas d’erreur', () => {
   it('fournisseur IA indisponible : repli sur le mode local, moteur manuel intact', async () => {
     const { svc, id } = await ready();
     const s = svc.getSettings();
-    s.ai.provider = 'anthropic';
+    s.ai.provider = 'openrouter';
     await svc.execute({ type: 'settings.update', settings: s });
-    await svc.execute({ type: 'ai.setKey', key: 'sk-ant-test-0000000000' });
+    await svc.execute({ type: 'ai.setKey', key: 'sk-or-v1-test-0000000000' });
     const p = await svc.execute({ type: 'ai.propose', prompt: 'monte l’intensité à 50 %' });
     expect(p.provider).toBe('local');
     expect(p.notices[0]).toMatch(/indisponible/);
@@ -164,8 +168,8 @@ describe('sécurité et cas d’erreur', () => {
     svc.engine.tick(25);
     expect(svc.engine.universes.get(1)![5]).toBe(255);
     // the key never leaves the main process / project
-    expect(JSON.stringify(svc.projectState())).not.toContain('sk-ant');
-    expect(JSON.stringify(svc.runtimeState())).not.toContain('sk-ant');
+    expect(JSON.stringify(svc.projectState())).not.toContain('sk-or-v1');
+    expect(JSON.stringify(svc.runtimeState())).not.toContain('sk-or-v1');
     await svc.dispose();
   });
 

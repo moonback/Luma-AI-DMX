@@ -8,7 +8,7 @@ import type { UniverseView } from '../../shared/commands';
 import type { ChannelChange } from '../../core/protocols/virtual';
 import type { SerialPortInfo } from '../../core/protocols/enttec';
 
-const KIND_LABEL: Record<OutputKind, string> = { virtual: 'Virtuelle', artnet: 'Art-Net', sacn: 'sACN / E1.31', 'enttec-pro': 'USB-DMX (Enttec Pro)' };
+const KIND_LABEL: Record<OutputKind, string> = { virtual: 'Virtuelle', artnet: 'Art-Net', sacn: 'sACN / E1.31', 'enttec-pro': 'USB-DMX (Enttec Pro)', 'open-dmx': 'USB-DMX (Open DMX / FTDI)' };
 
 function defaults(kind: OutputKind): OutputConfig {
   const base = { id: newId(), enabled: true, maxFps: 40 };
@@ -17,6 +17,7 @@ function defaults(kind: OutputKind): OutputConfig {
     case 'artnet': return { ...base, kind, name: 'Art-Net', host: '2.255.255.255', bindAddress: '', broadcast: true, universeMap: [{ local: 1, remote: 0 }] };
     case 'sacn': return { ...base, kind, name: 'sACN', mode: 'multicast', host: '', bindAddress: '', priority: 100, universeMap: [{ local: 1, remote: 1 }] };
     case 'enttec-pro': return { ...base, kind, name: 'Enttec DMX USB Pro', path: '', universe: 1 };
+    case 'open-dmx': return { ...base, kind, name: 'Open DMX USB', maxFps: 30, path: '', universe: 1 };
   }
 }
 
@@ -52,7 +53,7 @@ function OutputForm({ cfg, interfaces, ports, onSave, onCancel }: { cfg: OutputC
           {d.mode === 'unicast' && <Field label="Destination (IPv4)" error={err('host')}><input className="input mono" value={d.host} onChange={(e) => set({ host: e.target.value.trim() })} /></Field>}
           <Field label="Priorité du flux (0–200)" hint="Défaut 100 ; le récepteur suit la source de plus haute priorité"><NumberInput value={d.priority} min={0} max={200} onChange={(v) => set({ priority: v })} /></Field>
         </>}
-        {d.kind === 'enttec-pro' && <>
+        {(d.kind === 'enttec-pro' || d.kind === 'open-dmx') && <>
           <Field label="Port série" error={err('path')} hint="FTDI détecté ≠ Enttec confirmé">
             <select className="select" value={d.path} onChange={(e) => set({ path: e.target.value })}>
               <option value="">— choisir —</option>
@@ -182,7 +183,7 @@ export function OutputPage() {
       <Tabs tabs={[{ id: 'outputs', label: 'Sorties' }, { id: 'monitor', label: 'Moniteur 512 canaux' }, { id: 'history', label: 'Historique virtuel' }, { id: 'diag', label: 'Diagnostics' }] as const} value={tab} onChange={setTab} />
       {tab === 'outputs' && (
         <div className="col gap-lg">
-          <Panel title="Sorties configurées" flush actions={<div className="row">{(['virtual', 'artnet', 'sacn', 'enttec-pro'] as const).map((k) => <button key={k} className="btn sm" onClick={() => setEditing(defaults(k))}><Plus size={12} />{KIND_LABEL[k]}</button>)}</div>}>
+          <Panel title="Sorties configurées" flush actions={<div className="row">{(['virtual', 'artnet', 'sacn', 'enttec-pro', 'open-dmx'] as const).map((k) => <button key={k} className="btn sm" onClick={() => setEditing(defaults(k))}><Plus size={12} />{KIND_LABEL[k]}</button>)}</div>}>
             <table className="table">
               <thead><tr><th>Sortie</th><th>Type</th><th>État</th><th>Statistiques (mesurées)</th><th /></tr></thead>
               <tbody>
@@ -191,7 +192,7 @@ export function OutputPage() {
                   const real = c.kind !== 'virtual';
                   return (
                     <tr key={c.id} data-testid={`output-${c.kind}`}>
-                      <td><b>{c.name}</b><div className="small dim">{c.kind === 'artnet' ? `→ ${c.host}` : c.kind === 'sacn' ? (c.mode === 'unicast' ? `→ ${c.host}` : 'multicast') : c.kind === 'enttec-pro' ? c.path || 'port non choisi' : `univers ${c.universes.join(', ')}`}</div></td>
+                      <td><b>{c.name}</b><div className="small dim">{c.kind === 'artnet' ? `→ ${c.host}` : c.kind === 'sacn' ? (c.mode === 'unicast' ? `→ ${c.host}` : 'multicast') : c.kind === 'enttec-pro' || c.kind === 'open-dmx' ? c.path || 'port non choisi' : `univers ${c.universes.join(', ')}`}</div></td>
                       <td>{KIND_LABEL[c.kind]} {real ? <span className="badge warn">réelle</span> : <span className="badge">simulée</span>}</td>
                       <td>
                         <span className="row"><span className={`led ${s?.state === 'ready' ? 'ok' : s?.state === 'error' ? 'err' : s?.state === 'connecting' ? 'warn' : ''}`} />{s ? ({ ready: 'Prête', error: 'Erreur', connecting: 'Connexion…', disarmed: 'Désarmée', disabled: 'Désactivée' })[s.state] : '–'}</span>
@@ -218,7 +219,7 @@ export function OutputPage() {
             {ports.error ? <p className="small" style={{ color: '#f59e0b', margin: 0 }}>{ports.error}</p> : ports.ports.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucun port série détecté.</p> : (
               <table className="table small"><tbody>{ports.ports.map((p) => <tr key={p.path}><td className="mono">{p.path}</td><td>{p.manufacturer ?? '—'}</td><td>{p.ftdi ? <span className="badge cyan">puce FTDI (compatible Enttec possible)</span> : <span className="badge">autre</span>}</td></tr>)}</tbody></table>
             )}
-            <p className="small dim" style={{ marginBottom: 0 }}>Pilote implémenté : Enttec DMX USB Pro (protocole « label 6 »). Non vérifié sur matériel dans ce dépôt. Les interfaces « Open DMX » sans microcontrôleur ne sont pas prises en charge.</p>
+            <p className="small dim" style={{ marginBottom: 0 }}>Pilotes implémentés : Enttec DMX USB Pro (protocole « label 6 ») et interfaces « Open DMX » FTDI sans microcontrôleur (break généré par le logiciel, 250 kbaud 8N2, cadence conseillée ≤ 30 i/s). Non vérifiés sur matériel dans ce dépôt ; le timing Open DMX dépend du système et du pilote FTDI.</p>
           </Panel>
         </div>
       )}

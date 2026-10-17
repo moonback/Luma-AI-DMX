@@ -81,7 +81,7 @@ function ProposalView({ ex, onChange }: { ex: Exchange; onChange: (e: Exchange) 
     <div className="bubble col" data-testid="proposal">
       <div className="row">
         <Bot size={16} />
-        {p.provider === 'local' ? <span className="badge cyan" title="Règles et modèles déterministes — aucun modèle de langage n’est utilisé">Mode local déterministe</span> : <span className="badge violet">Claude · {p.model}</span>}
+        {p.provider === 'local' ? <span className="badge cyan" title="Règles et modèles déterministes — aucun modèle de langage n’est utilisé">Mode local déterministe</span> : <span className="badge violet">OpenRouter · {p.model}</span>}
         <span className="grow" />
         <span className="small dim">{new Date(p.createdAt).toLocaleTimeString()}</span>
       </div>
@@ -138,7 +138,7 @@ export function AiDirector() {
   };
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <PageHead title="AI Lighting Director" subtitle={rt?.ai.provider === 'anthropic' && rt.ai.hasKey ? `Fournisseur : Claude (${rt.ai.model}) — repli local si indisponible` : 'Mode local déterministe : règles et modèles intégrés, sans modèle de langage (configurable dans Paramètres › IA)'}>
+      <PageHead title="AI Lighting Director" subtitle={rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? `Fournisseur : OpenRouter (${rt.ai.model}) — repli local si indisponible` : 'Mode local déterministe : règles et modèles intégrés, sans modèle de langage (configurable dans Paramètres › IA)'}>
         <button className="btn" onClick={() => void act({ type: 'ai.release' })} disabled={!rt?.engine.aiActive && !rt?.engine.effects.some((e) => e.owner === 'ai')} title="Retire la couche IA et arrête les effets lancés par l’IA"><RotateCcw size={14} />Relâcher l’IA</button>
       </PageHead>
       <div className="split" style={{ flex: 1, minHeight: 0 }}>

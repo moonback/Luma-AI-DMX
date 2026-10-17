@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /* Output configuration & status types. Kept free of Node imports so the renderer can validate forms. */
 
-export const OUTPUT_KINDS = ['virtual', 'artnet', 'sacn', 'enttec-pro'] as const;
+export const OUTPUT_KINDS = ['virtual', 'artnet', 'sacn', 'enttec-pro', 'open-dmx'] as const;
 export type OutputKind = (typeof OUTPUT_KINDS)[number];
 
 const ipv4 = z
@@ -38,6 +38,8 @@ export const outputConfigSchema = z.discriminatedUnion('kind', [
     universeMap: z.array(z.object({ local: localUniverse, remote: z.number().int().min(1).max(63999) })).min(1),
   }).refine((c) => c.mode === 'multicast' || c.host !== '', { message: 'Adresse de destination requise en unicast', path: ['host'] }),
   z.object({ ...base, kind: z.literal('enttec-pro'), path: z.string().min(1).max(200), universe: localUniverse }),
+  /** FTDI interface without microcontroller: the host generates BREAK + 250 kbaud frame itself. */
+  z.object({ ...base, kind: z.literal('open-dmx'), maxFps: z.number().int().min(1).max(40).default(30), path: z.string().min(1).max(200), universe: localUniverse }),
 ]);
 export type OutputConfig = z.infer<typeof outputConfigSchema>;
 
