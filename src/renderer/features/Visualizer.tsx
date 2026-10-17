@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Armchair, Boxes, Crosshair, ExternalLink, LayoutTemplate, Library, MapPin, Monitor, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
+import { Armchair, Boxes, Copy, Crosshair, ExternalLink, LayoutTemplate, Library, MapPin, Monitor, Move, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { NumberInput, PageHead, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import { Stage3D } from './Stage3D';
-import type { FixtureValues, Performer, Project, StageMarker, StageProp, StageScreen, Truss } from '../../core/model/schemas';
-import { DARK_LEVEL, performerLight, toHex } from '../../core/visualizer/lighting';
+import type { Fixture, FixtureMount, FixtureValues, Performer, Project, StageMarker, StageProp, StageScreen, Truss } from '../../core/model/schemas';
+import { DARK_LEVEL, floorAt, performerLight, performerSpot, toHex } from '../../core/visualizer/lighting';
 import { setScreenVideo, screenVideo } from '../screenMedia';
 import { JUNCTION_ARMS, nearestOnTruss, snapToTrusses, snapTrussEnds, trussSegments, trussSupports } from '../../core/visualizer/truss';
 import { LIBRARY, LIBRARY_GROUPS, PROP_KIND_LABEL, TRUSS_LENGTH_LABEL, TRUSS_SHAPE_LABEL, type LibraryGroup, type LibraryItem } from '../../core/visualizer/library';
 import { SCENE_LABEL, canAdd, findElement, withPatched, type SceneKind, type SceneRef } from '../../core/visualizer/sceneEdit';
-import { LIBRARY_MIME, acceptLibraryDrag, addSceneElement, dropLibraryItem, equipRig, removeSceneElement, useSceneShortcuts } from '../sceneActions';
+import { LIBRARY_MIME, acceptLibraryDrag, addSceneElement, dropLibraryItem, duplicateSceneElement, equipRig, hangFixture, removeSceneElement, useSceneShortcuts } from '../sceneActions';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../core/visualizer/templates';
 
 interface View { scale: number; ox: number; oy: number }
@@ -201,7 +201,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     // Performers: disc tinted by the light on their face, red ring when in the dark.
     for (const pf of vis.performers) {
       const q = toScreen(performerPos(pf).x, performerPos(pf).y);
-      const l = performerLight({ ...pf, ...performerPos(pf), markerId: null }, vis.markers, model);
+      const l = performerLight({ ...pf, ...performerPos(pf), markerId: null }, vis.markers, model, vis.props);
       g.beginPath();
       g.arc(q.x, q.y, 8, 0, Math.PI * 2);
       g.fillStyle = l.level < DARK_LEVEL ? '#1b1f29' : toHex({ r: 0.15 + l.r * 0.85, g: 0.15 + l.g * 0.85, b: 0.15 + l.b * 0.85 });
@@ -470,15 +470,20 @@ function NameInput({ value, label, onChange }: { value: string; label: string; o
   );
 }
 
-/** Element card; clicking or focusing it selects the element (Ctrl+D, Suppr, Ctrl+C apply to it). */
-function Card({ testId, sel, head, children }: { testId: string; sel: SceneRef; head: ReactNode; children?: ReactNode }) {
+/** Stage point a card frames on double-click (3D camera). */
+type At = { x: number; y: number; height: number };
+/** Double-click on a card (not on one of its fields) frames the element in the 3D view. */
+const frameOnDoubleClick = (at: At) => (e: React.MouseEvent) => { if (!(e.target as HTMLElement).closest('input,select,button,label')) useStore.getState().frameOn(at); };
+
+/** Element card; clicking or focusing it selects the element (Ctrl+D, Suppr, Ctrl+C apply to it), double-click frames it in 3D. */
+function Card({ testId, sel, at, head, children }: { testId: string; sel: SceneRef; at: At; head: ReactNode; children?: ReactNode }) {
   const selected = useStore((s) => s.sceneSel?.id === sel.id);
   const el = useRef<HTMLDivElement>(null);
   // Selected from the 2D / 3D view: bring the card into sight.
   useEffect(() => { if (selected && !el.current?.contains(document.activeElement)) el.current?.scrollIntoView({ block: 'nearest' }); }, [selected]);
   const select = () => { if (!selected) useStore.getState().setSceneSel(sel); };
   return (
-    <div ref={el} className={`scene-card ${selected ? 'on' : ''}`} data-testid={testId} onPointerDown={select} onFocus={select}>
+    <div ref={el} className={`scene-card ${selected ? 'on' : ''}`} data-testid={testId} onPointerDown={select} onFocus={select} onDoubleClick={frameOnDoubleClick(at)}>
       <div className="row" style={{ gap: 6 }}>{head}</div>
       {children && <div className="scene-card-grid">{children}</div>}
     </div>
@@ -525,17 +530,24 @@ function TemplatePicker({ vis }: { vis: Vis }) {
   );
 }
 
-/** Scene builder shared by the 2D and 3D views: template, stage, points, trusses, performers, screens. */
-function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
+/** Side panel shared by the 2D and 3D views: build the scene (template, library, elements) or inspect the selection. */
+function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
+  const tab = useStore((s) => s.scenePanel) ?? 'build';
+  const setTab = useStore((s) => s.setScenePanel);
+  const count = useStore((s) => (s.sceneSel ? 1 : s.selection.length));
   const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
-  const setMarker = (id: string, patch: Partial<StageMarker>) => update({ markers: vis.markers.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
   return (
-    <aside className="scene-panel" data-testid="stage-settings" aria-label="Construction de la scène">
+    <aside className="scene-panel" aria-label="Panneau de la scène">
       <div className="scene-panel-head">
-        <Settings2 size={14} className="dim" /><b className="grow">Construire la scène</b>
-        <button className="btn ghost sm icon" onClick={onClose} title="Fermer le panneau" aria-label="Fermer le panneau"><X size={14} /></button>
+        <div className="chips grow" role="tablist" aria-label="Panneau">
+          <button role="tab" aria-selected={tab === 'build'} className={`chip ${tab === 'build' ? 'on' : ''}`} onClick={() => setTab('build')} data-testid="panel-build"><Settings2 size={12} />Construire</button>
+          <button role="tab" aria-selected={tab === 'selection'} className={`chip ${tab === 'selection' ? 'on' : ''}`} onClick={() => setTab('selection')} data-testid="panel-selection">Sélection{count ? ` (${count})` : ''}</button>
+        </div>
+        <button className="btn ghost sm icon" onClick={() => useStore.getState().setHelp('stage')} title="Assistant : plateau, modèle, patch et équipement pas à pas" aria-label="Assistant de scène" data-testid="stage-wizard-open"><Wand2 size={14} /></button>
+        <button className="btn ghost sm icon" onClick={() => setTab(null)} title="Fermer le panneau" aria-label="Fermer le panneau"><X size={14} /></button>
       </div>
-      <div className="scene-panel-body">
+      {tab === 'selection' ? <div className="scene-panel-body" data-testid="stage-selection"><SelectionTab vis={vis} mode={mode} /></div> : (
+      <div className="scene-panel-body" data-testid="stage-settings">
         <Section icon={<LayoutTemplate size={13} />} title="Partir d’un modèle" open={!hasSceneContent(vis)}>
           <TemplatePicker vis={vis} />
         </Section>
@@ -561,13 +573,7 @@ function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
           </div>
         </Section>
         <Section icon={<MapPin size={13} />} title="Points de scène" count={vis.markers.length}>
-          {vis.markers.map((m) => (
-            <Card key={m.id} testId="marker-row" sel={{ kind: 'marker', id: m.id }} head={<><NameInput value={m.name} label="Nom du point" onChange={(name) => setMarker(m.id, { name })} /><DeleteBtn name={m.name} sel={{ kind: 'marker', id: m.id }} /></>}>
-              <Num label="X" title="Jardin ↔ cour (m)" value={m.x} min={-100} max={100} step={0.1} onChange={(v) => setMarker(m.id, { x: v })} />
-              <Num label="Y" title="Profondeur (m)" value={m.y} min={-100} max={100} step={0.1} onChange={(v) => setMarker(m.id, { y: v })} />
-              <Num label="H visée" title="Hauteur de visée (m)" value={m.height} min={0} max={10} step={0.1} onChange={(v) => setMarker(m.id, { height: v })} />
-            </Card>
-          ))}
+          {vis.markers.map((m) => <MarkerCard key={m.id} m={m} vis={vis} />)}
           <AddBtn kind="marker" label="Point de scène" testId="marker-add" />
           <p className="scene-hint">Repères « chanteur », « batteur »… déplaçables en 2D (Positionner).</p>
         </Section>
@@ -576,6 +582,7 @@ function ScenePanel({ vis, onClose }: { vis: Vis; onClose: () => void }) {
         <PerformerSettings vis={vis} />
         <ScreenSettings vis={vis} />
       </div>
+      )}
     </aside>
   );
 }
@@ -636,126 +643,10 @@ function LibraryPicker() {
 }
 
 const PROP_KINDS = Object.entries(PROP_KIND_LABEL) as [StageProp['kind'], string][];
-
-/** Set pieces (risers, stairs, speakers, monitors, mic stands, tables, drapes, boxes, columns). */
-function PropSettings({ vis }: { vis: Vis }) {
-  const set = (id: string, patch: Partial<StageProp>) => void act({ type: 'project.update', visualizer: withPatched(vis, { kind: 'prop', id }, patch) });
-  return (
-    <Section icon={<Armchair size={13} />} title="Décor" count={vis.props.length}>
-      {vis.props.map((p) => (
-        <Card key={p.id} testId="prop-row" sel={{ kind: 'prop', id: p.id }} head={<>
-          <NameInput value={p.name} label="Nom de l’élément" onChange={(name) => set(p.id, { name })} />
-          <select className="select" style={{ width: 110 }} value={p.kind} aria-label="Type" onChange={(e) => set(p.id, { kind: e.target.value as StageProp['kind'] })}>
-            {PROP_KINDS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
-          <DeleteBtn name={p.name} sel={{ kind: 'prop', id: p.id }} />
-        </>}>
-          <Num label="X" title="Centre, jardin ↔ cour (m)" value={p.x} min={-100} max={100} onChange={(v) => set(p.id, { x: v })} />
-          <Num label="Y" title="Centre, profondeur (m)" value={p.y} min={-100} max={100} onChange={(v) => set(p.id, { y: v })} />
-          <Num label="Rotation" title="Rotation (°)" value={p.rotation} min={-360} max={360} step={15} onChange={(v) => set(p.id, { rotation: v })} />
-          <Num label="Largeur" title="Largeur (m)" value={p.width} min={0.05} max={40} step={0.1} onChange={(v) => set(p.id, { width: v })} />
-          <Num label="Profondeur" title="Profondeur (m)" value={p.depth} min={0.05} max={40} step={0.1} onChange={(v) => set(p.id, { depth: v })} />
-          <Num label="Hauteur" title="Hauteur (m)" value={p.height} min={0.05} max={20} step={0.1} onChange={(v) => set(p.id, { height: v })} />
-          <Num label="Élévation" title="Posé à cette hauteur (empilement sur un praticable…)" value={p.elevation} min={0} max={20} step={0.1} onChange={(v) => set(p.id, { elevation: v })} />
-          <label className="scene-num"><span>Couleur</span>
-            <input type="color" value={p.color} aria-label="Couleur" onChange={(e) => set(p.id, { color: e.target.value })} className="scene-color" />
-          </label>
-        </Card>
-      ))}
-      <AddBtn kind="prop" label="Décor" testId="prop-add" />
-      <p className="scene-hint">Plus de modèles dans la bibliothèque (onglet Décor) ; en mode Positionner, glisser pour déplacer.</p>
-    </Section>
-  );
-}
-
 const TRUSS_SHAPES = Object.entries(TRUSS_SHAPE_LABEL) as [Truss['shape'], string][];
-
-/** Explicit trusses: hung fixtures follow them (handled by the main process when a truss changes). */
-function TrussSettings({ vis }: { vis: Vis }) {
-  const save = (trusses: Truss[]) => void act({ type: 'project.update', visualizer: { trusses } });
-  const set = (id: string, patch: Partial<Truss>) => save(vis.trusses.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  const { fixtures } = useResolved();
-  const selection = useStore((s) => s.selection);
-  return (
-    <Section icon={<Boxes size={13} />} title="Structures (truss)" count={vis.trusses.length}>
-      {vis.trusses.length > 0 && fixtures.length > 0 && (
-        <button className="btn sm primary" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
-          title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
-          <Wand2 size={12} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
-        </button>
-      )}
-      {vis.trusses.map((t) => (
-        <Card key={t.id} testId="truss-row" sel={{ kind: 'truss', id: t.id }} head={<>
-          <NameInput value={t.name} label="Nom de la structure" onChange={(name) => set(t.id, { name })} />
-          <select className="select" style={{ width: 104 }} value={t.shape} aria-label="Forme" onChange={(e) => set(t.id, { shape: e.target.value as Truss['shape'] })}>
-            {TRUSS_SHAPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
-          <DeleteBtn name={t.name} title={`Supprimer « ${t.name} » (les projecteurs restent en place, décrochés)`} sel={{ kind: 'truss', id: t.id }} />
-        </>}>
-          {/* Field order L, X, Y, H, ° is relied upon by the end-to-end tests. */}
-          {t.shape !== 'totem' && <Num label={TRUSS_LENGTH_LABEL[t.shape]} title="Taille (m)" value={t.length} min={0.5} max={60} step={0.5} onChange={(v) => set(t.id, { length: v })} />}
-          <Num label="X" title="Centre, jardin ↔ cour (m)" value={t.x} min={-100} max={100} onChange={(v) => set(t.id, { x: v })} />
-          <Num label="Y" title="Centre, profondeur (m)" value={t.y} min={-100} max={100} onChange={(v) => set(t.id, { y: v })} />
-          <Num label="Hauteur" title="Hauteur de la structure (m)" value={t.height} min={0.5} max={30} onChange={(v) => set(t.id, { height: v })} />
-          <Num label="Rotation" title="Rotation (°)" value={t.rotation} min={-360} max={360} step={15} onChange={(v) => set(t.id, { rotation: v })} />
-          <label className="scene-num"><span>Support</span>
-            <select className="select" value={t.support} aria-label="Support" onChange={(e) => set(t.id, { support: e.target.value as Truss['support'] })}>
-              <option value="towers">Sur pieds</option>
-              <option value="hung">Suspendue</option>
-              <option value="none">Posée (assemblage)</option>
-            </select>
-          </label>
-        </Card>
-      ))}
-      <AddBtn kind="truss" label="Structure" testId="truss-add" />
-      <p className="scene-hint">Les projecteurs accrochés suivent la structure ; aimantation au dépôt.</p>
-    </Section>
-  );
-}
-
 const PERFORMER_KINDS: { id: Performer['kind']; label: string }[] = [
   { id: 'standing', label: 'Debout' }, { id: 'seated', label: 'Assis' }, { id: 'drums', label: 'Batterie' }, { id: 'keys', label: 'Clavier' }, { id: 'lectern', label: 'Pupitre' },
 ];
-
-/** Performer and instrument silhouettes; their face shows the light received (2D disc, 3D tint). */
-function PerformerSettings({ vis }: { vis: Vis }) {
-  const save = (performers: Performer[]) => void act({ type: 'project.update', visualizer: { performers } });
-  const set = (id: string, patch: Partial<Performer>) => save(vis.performers.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  return (
-    <Section icon={<UserRound size={13} />} title="Interprètes et instruments" count={vis.performers.length}>
-      {vis.performers.map((pf) => (
-        <Card key={pf.id} testId="performer-row" sel={{ kind: 'performer', id: pf.id }} head={<>
-          <NameInput value={pf.name} label="Nom de l’interprète" onChange={(name) => set(pf.id, { name })} />
-          {/* The silhouette must stay the first select of the card (end-to-end tests). */}
-          <select className="select" style={{ width: 92 }} value={pf.kind} aria-label="Silhouette" onChange={(e) => set(pf.id, { kind: e.target.value as Performer['kind'] })}>
-            {PERFORMER_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
-          </select>
-          <DeleteBtn name={pf.name} sel={{ kind: 'performer', id: pf.id }} />
-        </>}>
-          <label className="scene-num span2"><span>Position</span>
-            <select className="select" value={pf.markerId ?? ''} aria-label="Point de scène" data-testid="performer-marker" onChange={(e) => {
-              const m = vis.markers.find((x) => x.id === e.target.value);
-              set(pf.id, m ? { markerId: m.id, x: m.x, y: m.y } : { markerId: null });
-            }}>
-              <option value="">Position libre</option>
-              {vis.markers.map((m) => <option key={m.id} value={m.id}>Sur « {m.name} »</option>)}
-            </select>
-          </label>
-          <Num label="Orientation" title="Orientation (0° = face au public)" value={pf.rotation} min={-360} max={360} step={15} onChange={(v) => set(pf.id, { rotation: v })} />
-          {!pf.markerId && (
-            <>
-              <Num label="X" title="Jardin ↔ cour (m)" value={pf.x} min={-100} max={100} onChange={(v) => set(pf.id, { x: v })} />
-              <Num label="Y" title="Profondeur (m)" value={pf.y} min={-100} max={100} onChange={(v) => set(pf.id, { y: v })} />
-            </>
-          )}
-        </Card>
-      ))}
-      <AddBtn kind="performer" label="Interprète" testId="performer-add" />
-      <p className="scene-hint">Lâché sur un point de scène en 2D, l’interprète s’y pose et le suit.</p>
-    </Section>
-  );
-}
-
 const SCREEN_SOURCES: { id: StageScreen['source']; label: string }[] = [
   { id: 'color', label: 'Couleur' }, { id: 'image', label: 'Image' }, { id: 'video', label: 'Vidéo' }, { id: 'pixels', label: 'Pixel mapping' },
 ];
@@ -778,52 +669,296 @@ function shrinkImage(file: File): Promise<string> {
   });
 }
 
-/** LED screens / video surfaces with a light spill on their surroundings. */
-function ScreenSettings({ vis }: { vis: Vis }) {
+/* ---------- Cards, shared by the build tab and the inspector ---------- */
+
+/** Changes fields of one stage element (any kind). */
+const patchEl = (vis: Vis, ref: SceneRef, patch: Record<string, unknown>) => void act({ type: 'project.update', visualizer: withPatched(vis, ref, patch) });
+
+function MarkerCard({ m, vis }: { m: StageMarker; vis: Vis }) {
+  const sel: SceneRef = { kind: 'marker', id: m.id };
+  const set = (patch: Partial<StageMarker>) => patchEl(vis, sel, patch);
+  return (
+    <Card testId="marker-row" sel={sel} at={{ x: m.x, y: m.y, height: m.height }} head={<><NameInput value={m.name} label="Nom du point" onChange={(name) => set({ name })} /><DeleteBtn name={m.name} sel={sel} /></>}>
+      <Num label="X" title="Jardin ↔ cour (m)" value={m.x} min={-100} max={100} step={0.1} onChange={(v) => set({ x: v })} />
+      <Num label="Y" title="Profondeur (m)" value={m.y} min={-100} max={100} step={0.1} onChange={(v) => set({ y: v })} />
+      <Num label="H visée" title="Hauteur de visée (m)" value={m.height} min={0} max={10} step={0.1} onChange={(v) => set({ height: v })} />
+    </Card>
+  );
+}
+
+function PropCard({ p, vis }: { p: StageProp; vis: Vis }) {
+  const sel: SceneRef = { kind: 'prop', id: p.id };
+  const set = (patch: Partial<StageProp>) => patchEl(vis, sel, patch);
+  return (
+    <Card testId="prop-row" sel={sel} at={{ x: p.x, y: p.y, height: p.elevation + p.height / 2 }} head={<>
+      <NameInput value={p.name} label="Nom de l’élément" onChange={(name) => set({ name })} />
+      <select className="select" style={{ width: 110 }} value={p.kind} aria-label="Type" onChange={(e) => set({ kind: e.target.value as StageProp['kind'] })}>
+        {PROP_KINDS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
+      <DeleteBtn name={p.name} sel={sel} />
+    </>}>
+      <Num label="X" title="Centre, jardin ↔ cour (m)" value={p.x} min={-100} max={100} onChange={(v) => set({ x: v })} />
+      <Num label="Y" title="Centre, profondeur (m)" value={p.y} min={-100} max={100} onChange={(v) => set({ y: v })} />
+      <Num label="Rotation" title="Rotation (°)" value={p.rotation} min={-360} max={360} step={15} onChange={(v) => set({ rotation: v })} />
+      <Num label="Largeur" title="Largeur (m)" value={p.width} min={0.05} max={40} step={0.1} onChange={(v) => set({ width: v })} />
+      <Num label="Profondeur" title="Profondeur (m)" value={p.depth} min={0.05} max={40} step={0.1} onChange={(v) => set({ depth: v })} />
+      <Num label="Hauteur" title="Hauteur (m)" value={p.height} min={0.05} max={20} step={0.1} onChange={(v) => set({ height: v })} />
+      <Num label="Élévation" title="Posé à cette hauteur (empilement sur un praticable…)" value={p.elevation} min={0} max={20} step={0.1} onChange={(v) => set({ elevation: v })} />
+      <label className="scene-num"><span>Couleur</span>
+        <input type="color" value={p.color} aria-label="Couleur" onChange={(e) => set({ color: e.target.value })} className="scene-color" />
+      </label>
+    </Card>
+  );
+}
+
+function TrussCard({ t, vis }: { t: Truss; vis: Vis }) {
+  const sel: SceneRef = { kind: 'truss', id: t.id };
+  const set = (patch: Partial<Truss>) => patchEl(vis, sel, patch);
+  return (
+    <Card testId="truss-row" sel={sel} at={{ x: t.x, y: t.y, height: t.height }} head={<>
+      <NameInput value={t.name} label="Nom de la structure" onChange={(name) => set({ name })} />
+      <select className="select" style={{ width: 104 }} value={t.shape} aria-label="Forme" onChange={(e) => set({ shape: e.target.value as Truss['shape'] })}>
+        {TRUSS_SHAPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
+      <DeleteBtn name={t.name} title={`Supprimer « ${t.name} » (les projecteurs restent en place, décrochés)`} sel={sel} />
+    </>}>
+      {/* Field order L, X, Y, H, ° is relied upon by the end-to-end tests. */}
+      {t.shape !== 'totem' && <Num label={TRUSS_LENGTH_LABEL[t.shape]} title="Taille (m)" value={t.length} min={0.5} max={60} step={0.5} onChange={(v) => set({ length: v })} />}
+      <Num label="X" title="Centre, jardin ↔ cour (m)" value={t.x} min={-100} max={100} onChange={(v) => set({ x: v })} />
+      <Num label="Y" title="Centre, profondeur (m)" value={t.y} min={-100} max={100} onChange={(v) => set({ y: v })} />
+      <Num label="Hauteur" title="Hauteur de la structure (m)" value={t.height} min={0.5} max={30} onChange={(v) => set({ height: v })} />
+      <Num label="Rotation" title="Rotation (°)" value={t.rotation} min={-360} max={360} step={15} onChange={(v) => set({ rotation: v })} />
+      <label className="scene-num"><span>Support</span>
+        <select className="select" value={t.support} aria-label="Support" onChange={(e) => set({ support: e.target.value as Truss['support'] })}>
+          <option value="towers">Sur pieds</option>
+          <option value="hung">Suspendue</option>
+          <option value="none">Posée (assemblage)</option>
+        </select>
+      </label>
+    </Card>
+  );
+}
+
+function PerformerCard({ pf, vis }: { pf: Performer; vis: Vis }) {
+  const sel: SceneRef = { kind: 'performer', id: pf.id };
+  const set = (patch: Partial<Performer>) => patchEl(vis, sel, patch);
+  const spot = performerSpot(pf, vis.markers);
+  return (
+    <Card testId="performer-row" sel={sel} at={{ ...spot, height: floorAt(spot.x, spot.y, vis.props) + 1 }} head={<>
+      <NameInput value={pf.name} label="Nom de l’interprète" onChange={(name) => set({ name })} />
+      {/* The silhouette must stay the first select of the card (end-to-end tests). */}
+      <select className="select" style={{ width: 92 }} value={pf.kind} aria-label="Silhouette" onChange={(e) => set({ kind: e.target.value as Performer['kind'] })}>
+        {PERFORMER_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+      </select>
+      <DeleteBtn name={pf.name} sel={sel} />
+    </>}>
+      <label className="scene-num span2"><span>Position</span>
+        <select className="select" value={pf.markerId ?? ''} aria-label="Point de scène" data-testid="performer-marker" onChange={(e) => {
+          const m = vis.markers.find((x) => x.id === e.target.value);
+          set(m ? { markerId: m.id, x: m.x, y: m.y } : { markerId: null });
+        }}>
+          <option value="">Position libre</option>
+          {vis.markers.map((m) => <option key={m.id} value={m.id}>Sur « {m.name} »</option>)}
+        </select>
+      </label>
+      <Num label="Orientation" title="Orientation (0° = face au public)" value={pf.rotation} min={-360} max={360} step={15} onChange={(v) => set({ rotation: v })} />
+      {!pf.markerId && (
+        <>
+          <Num label="X" title="Jardin ↔ cour (m)" value={pf.x} min={-100} max={100} onChange={(v) => set({ x: v })} />
+          <Num label="Y" title="Profondeur (m)" value={pf.y} min={-100} max={100} onChange={(v) => set({ y: v })} />
+        </>
+      )}
+    </Card>
+  );
+}
+
+function ScreenCard({ sc, vis }: { sc: StageScreen; vis: Vis }) {
   const [, rerender] = useState(0);
   const toast = useStore((s) => s.toast);
-  const save = (screens: StageScreen[]) => void act({ type: 'project.update', visualizer: { screens } });
-  const set = (id: string, patch: Partial<StageScreen>) => save(vis.screens.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const sel: SceneRef = { kind: 'screen', id: sc.id };
+  const set = (patch: Partial<StageScreen>) => patchEl(vis, sel, patch);
   return (
-    <Section icon={<Monitor size={13} />} title="Écrans LED" count={vis.screens.length}>
-      {vis.screens.map((sc) => (
-        <Card key={sc.id} testId="screen-row" sel={{ kind: 'screen', id: sc.id }} head={<>
-          <NameInput value={sc.name} label="Nom de l’écran" onChange={(name) => set(sc.id, { name })} />
-          <DeleteBtn name={sc.name} sel={{ kind: 'screen', id: sc.id }} />
-        </>}>
-          <label className="scene-num span2"><span>Contenu</span>
-            <select className="select" value={sc.source} aria-label="Contenu" data-testid="screen-source" onChange={(e) => set(sc.id, { source: e.target.value as StageScreen['source'] })}>
-              {SCREEN_SOURCES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+    <Card testId="screen-row" sel={sel} at={{ x: sc.x, y: sc.y, height: sc.elevation + sc.height / 2 }} head={<>
+      <NameInput value={sc.name} label="Nom de l’écran" onChange={(name) => set({ name })} />
+      <DeleteBtn name={sc.name} sel={sel} />
+    </>}>
+      <label className="scene-num span2"><span>Contenu</span>
+        <select className="select" value={sc.source} aria-label="Contenu" data-testid="screen-source" onChange={(e) => set({ source: e.target.value as StageScreen['source'] })}>
+          {SCREEN_SOURCES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+        </select>
+      </label>
+      <div className="scene-num">
+        <span>&nbsp;</span>
+        {sc.source === 'color' && <input type="color" value={sc.color} aria-label="Couleur de l’écran" onChange={(e) => set({ color: e.target.value })} className="scene-color" />}
+        {sc.source === 'image' && (
+          <label className="btn sm" title="Image (réduite à 512 px et enregistrée dans le projet)">{sc.image ? 'Changer' : 'Image…'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) shrinkImage(file).then((image) => set({ image })).catch((err: Error) => toast({ kind: 'error', title: 'Image', detail: err.message }));
+            }} />
+          </label>
+        )}
+        {sc.source === 'video' && (
+          <label className="btn sm" title="Vidéo lue pendant cette session uniquement : le fichier n’est pas copié dans le projet">{screenVideo(sc.id) ? 'Changer' : 'Vidéo…'}
+            <input type="file" accept="video/*" hidden onChange={(e) => { setScreenVideo(sc.id, e.target.files?.[0] ?? null); rerender((n) => n + 1); }} />
+          </label>
+        )}
+      </div>
+      <Num label="X" title="Centre, jardin ↔ cour (m)" value={sc.x} min={-100} max={100} onChange={(v) => set({ x: v })} />
+      <Num label="Y" title="Profondeur (m)" value={sc.y} min={-100} max={100} onChange={(v) => set({ y: v })} />
+      <Num label="Bas à" title="Hauteur du bas de l’écran (m)" value={sc.elevation} min={0} max={30} onChange={(v) => set({ elevation: v })} />
+      <Num label="Largeur" title="Largeur (m)" value={sc.width} min={0.2} max={60} onChange={(v) => set({ width: v })} />
+      <Num label="Hauteur" title="Hauteur (m)" value={sc.height} min={0.2} max={30} onChange={(v) => set({ height: v })} />
+      <Num label="Rotation" title="Rotation (0° = face au public)" value={sc.rotation} min={-360} max={360} step={15} onChange={(v) => set({ rotation: v })} />
+      <label className="scene-num span3" title="Lumière diffusée sur le plateau et la brume"><span>Halo {Math.round(sc.glow * 100)} %</span>
+        <input type="range" min={0} max={100} value={Math.round(sc.glow * 100)} onChange={(e) => set({ glow: Number(e.target.value) / 100 })} />
+      </label>
+    </Card>
+  );
+}
+
+/** Card of any stage element. */
+function ElementCard({ sel, vis }: { sel: SceneRef; vis: Vis }) {
+  const el = findElement(vis, sel);
+  if (!el) return null;
+  switch (sel.kind) {
+    case 'marker': return <MarkerCard m={el as StageMarker} vis={vis} />;
+    case 'truss': return <TrussCard t={el as Truss} vis={vis} />;
+    case 'prop': return <PropCard p={el as StageProp} vis={vis} />;
+    case 'performer': return <PerformerCard pf={el as Performer} vis={vis} />;
+    default: return <ScreenCard sc={el as StageScreen} vis={vis} />;
+  }
+}
+
+const MOUNTS: { id: FixtureMount; label: string }[] = [
+  { id: 'auto', label: 'Auto (hauteur)' }, { id: 'hanging', label: 'Suspendu' }, { id: 'floor', label: 'Posé au sol' }, { id: 'wall', label: 'Mural' },
+];
+
+/** Selected fixture: live state, placement, mounting, truss, and the beam's-eye view in 3D. */
+function FixtureCard({ f, fixture, trusses, beamView }: { f: VisualFixture; fixture: Fixture | undefined; trusses: readonly Truss[]; beamView: boolean }) {
+  const following = useStore((s) => s.beamView === f.id);
+  const update = (patch: Record<string, unknown>) => void act({ type: 'fixture.update', id: f.id, patch });
+  return (
+    <div className="scene-card on" data-testid="stage3d-info" onDoubleClick={frameOnDoubleClick({ x: f.x, y: f.y, height: f.height })}>
+      <div className="row between"><b>{f.name}</b><span className="badge">{f.type}</span></div>
+      <div className="row small"><span className="swatch-btn" style={{ width: 16, height: 16, background: f.color }} />{f.color.toUpperCase()} · {Math.round(f.intensity * 100)} %</div>
+      {f.movable && <div className="small muted">Pan {f.panDeg.toFixed(0)}° · Tilt {f.tiltDeg.toFixed(0)}°</div>}
+      <div className="small muted">Faisceau {f.beamAngle.toFixed(0)}°{f.strobeHz ? ` · strobe ≈ ${f.strobeHz.toFixed(1)} Hz` : ''}{f.gobo ? ` · gobo ${f.gobo}` : ''}{f.prism ? ' · prisme' : ''}{f.cells.length ? ` · ${f.cells.length} cellules` : ''}</div>
+      {fixture && (
+        <div className="scene-card-grid">
+          <Num label="X" title="Jardin ↔ cour (m)" value={fixture.position.x} min={-100} max={100} step={0.1} onChange={(v) => update({ position: { ...fixture.position, x: v } })} />
+          <Num label="Y" title="Profondeur (m)" value={fixture.position.y} min={-100} max={100} step={0.1} onChange={(v) => update({ position: { ...fixture.position, y: v } })} />
+          <Num label="Hauteur" title="Hauteur (m)" value={fixture.height} min={0} max={50} step={0.1} onChange={(v) => update({ height: v })} />
+          <Num label="Rotation" title="Rotation (°)" value={fixture.rotation} min={-360} max={360} step={15} onChange={(v) => update({ rotation: v })} />
+          <label className="scene-num"><span>Accroche</span>
+            <select className="select" value={fixture.mount ?? 'auto'} onChange={(e) => update({ mount: e.target.value as FixtureMount })} data-testid="mount">
+              {MOUNTS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </label>
-          <div className="scene-num">
-            <span>&nbsp;</span>
-            {sc.source === 'color' && <input type="color" value={sc.color} aria-label="Couleur de l’écran" onChange={(e) => set(sc.id, { color: e.target.value })} className="scene-color" />}
-            {sc.source === 'image' && (
-              <label className="btn sm" title="Image (réduite à 512 px et enregistrée dans le projet)">{sc.image ? 'Changer' : 'Image…'}
-                <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) shrinkImage(file).then((image) => set(sc.id, { image })).catch((err: Error) => toast({ kind: 'error', title: 'Image', detail: err.message }));
-                }} />
-              </label>
-            )}
-            {sc.source === 'video' && (
-              <label className="btn sm" title="Vidéo lue pendant cette session uniquement : le fichier n’est pas copié dans le projet">{screenVideo(sc.id) ? 'Changer' : 'Vidéo…'}
-                <input type="file" accept="video/*" hidden onChange={(e) => { setScreenVideo(sc.id, e.target.files?.[0] ?? null); rerender((n) => n + 1); }} />
-              </label>
-            )}
-          </div>
-          <Num label="X" title="Centre, jardin ↔ cour (m)" value={sc.x} min={-100} max={100} onChange={(v) => set(sc.id, { x: v })} />
-          <Num label="Y" title="Profondeur (m)" value={sc.y} min={-100} max={100} onChange={(v) => set(sc.id, { y: v })} />
-          <Num label="Bas à" title="Hauteur du bas de l’écran (m)" value={sc.elevation} min={0} max={30} onChange={(v) => set(sc.id, { elevation: v })} />
-          <Num label="Largeur" title="Largeur (m)" value={sc.width} min={0.2} max={60} onChange={(v) => set(sc.id, { width: v })} />
-          <Num label="Hauteur" title="Hauteur (m)" value={sc.height} min={0.2} max={30} onChange={(v) => set(sc.id, { height: v })} />
-          <Num label="Rotation" title="Rotation (0° = face au public)" value={sc.rotation} min={-360} max={360} step={15} onChange={(v) => set(sc.id, { rotation: v })} />
-          <label className="scene-num span3" title="Lumière diffusée sur le plateau et la brume"><span>Halo {Math.round(sc.glow * 100)} %</span>
-            <input type="range" min={0} max={100} value={Math.round(sc.glow * 100)} onChange={(e) => set(sc.id, { glow: Number(e.target.value) / 100 })} />
+          <Num label="Inclinaison" title="Inclinaison de l’accroche vers la salle (mural : vers le bas), en degrés" value={fixture.mountTilt ?? 0} min={-90} max={90} step={5} onChange={(v) => update({ mountTilt: v })} />
+          <label className="scene-num span3"><span>Structure</span>
+            <select className="select" value={fixture.trussId ?? ''} data-testid="fixture-truss" onChange={(e) => {
+              const t = trusses.find((x) => x.id === e.target.value);
+              if (t) hangFixture(fixture, t);
+              else update({ trussId: null });
+            }}>
+              <option value="">{trusses.length ? 'Aucune (position libre)' : 'Aucune structure définie'}</option>
+              {trusses.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
           </label>
-        </Card>
-      ))}
+        </div>
+      )}
+      <span className="small dim">{f.mount === 'floor' ? 'Posé au sol (faisceau vers le haut)' : f.mount === 'wall' ? 'Mural (faisceau vers l’avant)' : 'Suspendu (faisceau vers le bas)'}{(fixture?.mount ?? 'auto') === 'auto' ? ' — auto : au sol sous 1 m' : ''}</span>
+      {beamView && (
+        <button className={`btn sm ${following ? 'on' : ''}`} onClick={() => useStore.getState().setBeamView(following ? null : f.id)} data-testid="beam-view" title="Placer la caméra dans l’axe du faisceau pour régler un focus">
+          <Crosshair size={12} />{following ? 'Quitter la vue projecteur' : 'Vue projecteur'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** At most this many fixture cards in the inspector (a whole rig selected stays readable). */
+const MAX_FIXTURE_CARDS = 12;
+
+/** Inspector tab: the cards of what is selected in the 2D / 3D view. */
+function SelectionTab({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
+  const selection = useStore((s) => s.selection);
+  const sceneSel = useStore((s) => s.sceneSel);
+  const values = useStore((s) => s.preview?.values ?? s.values);
+  const patch = useStore((s) => s.project!.project.patch);
+  const { fixtures } = useResolved();
+  const model = useMemo(() => buildVisualModel(fixtures.filter((f) => selection.includes(f.fixture.id)), values), [fixtures, selection, values]);
+  if (sceneSel && findElement(vis, sceneSel)) {
+    return (
+      <div className="col" style={{ gap: 8 }} data-testid="selection-element">
+        <ElementCard sel={sceneSel} vis={vis} />
+        <div className="row" style={{ gap: 6 }}>
+          <button className="btn sm" onClick={() => duplicateSceneElement(sceneSel)} title="Dupliquer (Ctrl+D)"><Copy size={12} />Dupliquer</button>
+          <button className="btn sm" onClick={() => removeSceneElement(sceneSel)} title="Supprimer (Suppr)"><Trash2 size={12} />Supprimer</button>
+        </div>
+        <p className="scene-hint">Double-clic sur la carte : cadrer la vue 3D.</p>
+      </div>
+    );
+  }
+  if (!model.length) return <p className="scene-hint" data-testid="selection-empty">Cliquez un projecteur ou un élément de scène dans la vue (Ctrl / Maj : plusieurs projecteurs).</p>;
+  return (
+    <div className="col" style={{ gap: 8 }}>
+      {model.slice(0, MAX_FIXTURE_CARDS).map((f) => <FixtureCard key={f.id} f={f} fixture={patch.find((x) => x.id === f.id)} trusses={vis.trusses} beamView={mode === '3d'} />)}
+      {model.length > MAX_FIXTURE_CARDS && <p className="scene-hint">… et {model.length - MAX_FIXTURE_CARDS} autre(s) projecteur(s).</p>}
+      <p className="scene-hint">Double-clic sur une carte : cadrer la vue 3D.</p>
+    </div>
+  );
+}
+
+/* ---------- Build tab sections ---------- */
+
+/** Set pieces (risers, stairs, speakers, monitors, mic stands, tables, drapes, boxes, columns). */
+function PropSettings({ vis }: { vis: Vis }) {
+  return (
+    <Section icon={<Armchair size={13} />} title="Décor" count={vis.props.length}>
+      {vis.props.map((p) => <PropCard key={p.id} p={p} vis={vis} />)}
+      <AddBtn kind="prop" label="Décor" testId="prop-add" />
+      <p className="scene-hint">Plus de modèles dans la bibliothèque (onglet Décor) ; en mode Positionner, glisser pour déplacer.</p>
+    </Section>
+  );
+}
+
+/** Explicit trusses: hung fixtures follow them (handled by the main process when a truss changes). */
+function TrussSettings({ vis }: { vis: Vis }) {
+  const { fixtures } = useResolved();
+  const selection = useStore((s) => s.selection);
+  return (
+    <Section icon={<Boxes size={13} />} title="Structures (truss)" count={vis.trusses.length}>
+      {vis.trusses.length > 0 && fixtures.length > 0 && (
+        <button className="btn sm primary" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
+          title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
+          <Wand2 size={12} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
+        </button>
+      )}
+      {vis.trusses.map((t) => <TrussCard key={t.id} t={t} vis={vis} />)}
+      <AddBtn kind="truss" label="Structure" testId="truss-add" />
+      <p className="scene-hint">Les projecteurs accrochés suivent la structure ; aimantation au dépôt.</p>
+    </Section>
+  );
+}
+
+/** Performer and instrument silhouettes; their face shows the light received (2D disc, 3D tint). */
+function PerformerSettings({ vis }: { vis: Vis }) {
+  return (
+    <Section icon={<UserRound size={13} />} title="Interprètes et instruments" count={vis.performers.length}>
+      {vis.performers.map((pf) => <PerformerCard key={pf.id} pf={pf} vis={vis} />)}
+      <AddBtn kind="performer" label="Interprète" testId="performer-add" />
+      <p className="scene-hint">Lâché sur un point de scène en 2D, l’interprète s’y pose et le suit ; sur un praticable, il monte dessus.</p>
+    </Section>
+  );
+}
+
+/** LED screens / video surfaces with a light spill on their surroundings. */
+function ScreenSettings({ vis }: { vis: Vis }) {
+  return (
+    <Section icon={<Monitor size={13} />} title="Écrans LED" count={vis.screens.length}>
+      {vis.screens.map((sc) => <ScreenCard key={sc.id} sc={sc} vis={vis} />)}
       <AddBtn kind="screen" label="Écran" testId="screen-add" />
       <p className="scene-hint">Couleur, image, vidéo (non enregistrée) ou pixel mapping des barres LED.</p>
     </Section>
@@ -857,14 +992,15 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
   const preview = useStore((s) => s.preview);
   const setPreview = useStore((s) => s.setPreview);
   const [edit, setEdit] = useState(false);
-  const [settings, setSettings] = useState(false);
+  const panel = useStore((s) => s.scenePanel);
+  const setPanel = useStore((s) => s.setScenePanel);
   const [group, setGroup] = useState<string | null>(null);
   const placing = useStore((s) => s.placing);
   useSceneShortcuts();
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
       <PageHead title={mode === '3d' ? 'Stage 3D' : 'Stage Visualizer'} subtitle={mode === '3d' ? 'Aperçu 3D approximatif de la scène et des faisceaux' : 'Plan de dessus synchronisé avec le moteur'}>
-        <button className={`btn ${settings ? 'on' : ''}`} onClick={() => setSettings(!settings)} title="Modèles, plateau, points de scène, structures, interprètes et écrans" data-testid="stage-settings-toggle"><Settings2 size={14} />Scène</button>
+        <button className={`btn ${panel === 'build' ? 'on' : ''}`} onClick={() => setPanel(panel === 'build' ? null : 'build')} title="Construire la scène : modèles, plateau, points de scène, structures, interprètes et écrans" data-testid="stage-settings-toggle"><Settings2 size={14} />Scène</button>
         {mode === '2d' && <button className={`btn ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title="Déplacer projecteurs, points et interprètes sur la scène (enregistré dans le projet)"><Move size={14} />Positionner</button>}
         <SceneHistory />
         <select className="select" style={{ width: 160 }} value={group ?? ''} onChange={(e) => setGroup(e.target.value || null)} aria-label="Filtrer par groupe">
@@ -881,7 +1017,7 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
         </div>
       )}
       <div className="stage-layout">
-        {settings && <ScenePanel vis={project.visualizer} onClose={() => setSettings(false)} />}
+        {panel && <ScenePanel vis={project.visualizer} mode={mode} />}
         <div className="stage-view">
           {mode === '3d' ? <Stage3D values={preview?.values} groupFilter={group} /> : <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />}
           {placing && (
@@ -895,7 +1031,7 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
             <div className="stage-empty">
               <Theater size={18} className="dim" />
               <span className="grow">Aucun projecteur : ajoutez-en dans le Patch. Vous pouvez déjà construire le décor.</span>
-              {!settings && <button className="btn sm" onClick={() => setSettings(true)}><Settings2 size={12} />Construire la scène</button>}
+              {panel !== 'build' && <button className="btn sm" onClick={() => setPanel('build')}><Settings2 size={12} />Construire la scène</button>}
             </div>
           )}
         </div>

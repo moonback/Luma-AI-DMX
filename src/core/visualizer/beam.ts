@@ -1,3 +1,4 @@
+import type { StageProp } from '../model/schemas';
 import type { VisualFixture, VisualMount } from './model';
 
 /**
@@ -15,6 +16,8 @@ export interface StageGeometry {
   thrust?: { width: number; depth: number } | null;
   /** Audience all around the deck (no cyclorama). */
   arena?: boolean;
+  /** Set pieces: beams stop on their bounding box. */
+  props?: readonly StageProp[];
 }
 
 const DEG = Math.PI / 180;
@@ -57,13 +60,38 @@ export function rotateY(d: Vec3, angle: number): Vec3 {
 }
 
 export interface BeamHit {
-  surface: 'floor' | 'wall';
+  surface: 'floor' | 'wall' | 'prop';
   point: Vec3;
   normal: Vec3;
   distance: number;
 }
 
-/** First surface hit by the beam axis: the floor (deck + audience area) or the back wall. */
+/**
+ * Ray against a set piece's box (rotated around the vertical like the 3D group), slab test in the box frame.
+ * shortcut: every kind is its bounding box (a mic stand blocks like a 5 cm column), upgrade to per-kind shapes if it shows.
+ */
+function propHit(origin: Vec3, dir: Vec3, p: StageProp): BeamHit | null {
+  const a = p.rotation * DEG;
+  const c = { x: p.x, y: p.elevation + p.height / 2, z: -p.y };
+  const o = ry({ x: origin.x - c.x, y: origin.y - c.y, z: origin.z - c.z }, -a);
+  const d = ry(dir, -a);
+  const half = [p.width / 2, p.height / 2, p.depth / 2];
+  const oo = [o.x, o.y, o.z], dd = [d.x, d.y, d.z];
+  let tin = -Infinity, tout = Infinity, axis = 0, sign = 1;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(dd[i]!) < 1e-9) { if (Math.abs(oo[i]!) > half[i]!) return null; continue; }
+    let t1 = (-half[i]! - oo[i]!) / dd[i]!, t2 = (half[i]! - oo[i]!) / dd[i]!;
+    const s = t1 > t2 ? 1 : -1; // face entered: the -half side when travelling +, else the +half side
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    if (t1 > tin) { tin = t1; axis = i; sign = s; }
+    tout = Math.min(tout, t2);
+  }
+  if (tin > tout || tin <= 0.05) return null; // missed, or the fixture sits inside / on the piece
+  const n = ry({ x: axis === 0 ? sign : 0, y: axis === 1 ? sign : 0, z: axis === 2 ? sign : 0 }, a);
+  return { surface: 'prop', point: { x: origin.x + dir.x * tin, y: origin.y + dir.y * tin, z: origin.z + dir.z * tin }, normal: n, distance: tin };
+}
+
+/** First surface hit by the beam axis: a set piece, the floor (deck + audience area) or the back wall. */
 export function beamHit(origin: Vec3, dir: Vec3, stage: StageGeometry): BeamHit | null {
   const hits: BeamHit[] = [];
   if (dir.y < -1e-3) {
@@ -76,6 +104,7 @@ export function beamHit(origin: Vec3, dir: Vec3, stage: StageGeometry): BeamHit 
     const p = { x: origin.x + dir.x * t, y: origin.y + dir.y * t, z: -stage.depth };
     if (t > 0.05 && p.y >= 0 && p.y <= stage.wallHeight && Math.abs(p.x) <= stage.width / 2 + 2) hits.push({ surface: 'wall', point: p, normal: { x: 0, y: 0, z: 1 }, distance: t });
   }
+  for (const p of stage.props ?? []) { const h = propHit(origin, dir, p); if (h) hits.push(h); }
   hits.sort((a, b) => a.distance - b.distance);
   return hits[0] ?? null;
 }

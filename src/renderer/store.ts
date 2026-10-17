@@ -81,9 +81,18 @@ interface State {
   placing: PlaceSpec | null;
   setSceneSel(r: SceneRef | null): void;
   setPlacing(p: PlaceSpec | null): void;
+  /** Side panel of the stage pages: closed, building the scene, or inspecting the selection. */
+  scenePanel: 'build' | 'selection' | null;
+  setScenePanel(p: State['scenePanel']): void;
+  /** Request to frame the 3D camera on a stage point (meters; `seq` makes repeated requests distinct). */
+  frame: { x: number; y: number; height: number; seq: number } | null;
+  frameOn(at: { x: number; y: number; height: number }): void;
+  /** Fixture whose beam the 3D camera rides (beam's-eye view), or null. */
+  beamView: string | null;
+  setBeamView(id: string | null): void;
   /** Onboarding state from the settings (null until loaded) and the open help surface. */
   onboarding: { completed: boolean; checklistHidden: boolean } | null;
-  help: 'welcome' | 'tour' | 'demos' | null;
+  help: 'welcome' | 'tour' | 'demos' | 'stage' | null;
   setHelp(h: State['help']): void;
   setPage(p: PageId): void;
   toggleCollapsed(): void;
@@ -116,8 +125,14 @@ export const useStore = create<State>((set, get) => ({
   preview: null,
   sceneSel: null,
   placing: null,
-  setSceneSel: (sceneSel) => set(sceneSel ? { sceneSel, selection: [] } : { sceneSel }),
+  setSceneSel: (sceneSel) => set(sceneSel ? { sceneSel, selection: [], scenePanel: get().scenePanel === 'build' ? 'build' : 'selection' } : { sceneSel }),
   setPlacing: (placing) => set({ placing }),
+  scenePanel: null,
+  setScenePanel: (scenePanel) => set({ scenePanel }),
+  frame: null,
+  frameOn: (at) => set({ frame: { ...at, seq: (get().frame?.seq ?? 0) + 1 } }),
+  beamView: null,
+  setBeamView: (beamView) => set({ beamView }),
   onboarding: null,
   help: null,
   setHelp: (help) => set({ help }),
@@ -131,7 +146,8 @@ export const useStore = create<State>((set, get) => ({
     savePrefs({ page: get().page, collapsed });
   },
   // One selection at a time: picking fixtures clears the stage element and vice versa (the latest wins).
-  setSelection: (selection) => set(selection.length ? { selection, sceneSel: null } : { selection }),
+  // A new selection shows the inspector (fixtures have no card in the build tab; a stage element keeps it, scrolled to).
+  setSelection: (selection) => set(selection.length ? { selection, sceneSel: null, scenePanel: 'selection' } : { selection }),
   setCueList: (cueListId) => set({ cueListId }),
   toggleDiag: () => set({ diagOpen: !get().diagOpen }),
   toast: (t) => {

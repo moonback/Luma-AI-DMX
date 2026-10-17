@@ -187,7 +187,7 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
 
   // Stage layout and stage point from the 2D settings panel.
   await nav('visualizer');
-  await page.getByTestId('stage-settings-toggle').click();
+  await openScenePanel();
   await page.getByTestId('shape-thrust').click();
   await page.getByTestId('marker-add').click();
   await expect(page.getByTestId('marker-row')).toHaveCount(1);
@@ -257,7 +257,7 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
 
   // A straight truss from the scene panel (10 m, 4 m upstage, 6 m high).
   await nav('visualizer');
-  await page.getByTestId('stage-settings-toggle').click();
+  await openScenePanel();
   await page.getByTestId('truss-add').click();
   await expect(page.getByTestId('truss-row')).toHaveCount(1);
 
@@ -276,7 +276,7 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
 
   // Moving the truss carries the fixture; undo / redo walk it back and forth.
   await nav('visualizer');
-  await page.getByTestId('stage-settings-toggle').click();
+  await openScenePanel();
   const yField = page.getByTestId('truss-row').locator('input.mono').nth(2); // L, X, Y, H, rotation
   await yField.fill('5');
   await yField.press('Enter');
@@ -330,7 +330,7 @@ test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol'
 
   // Two performers (one on the stage point), a drum kit and a pixel-mapped LED screen, from the scene panel.
   await nav('visualizer');
-  await page.getByTestId('stage-settings-toggle').click();
+  await openScenePanel();
   await page.getByTestId('performer-add').click();
   await page.getByTestId('performer-add').click();
   await expect(page.getByTestId('performer-row')).toHaveCount(2);
@@ -388,7 +388,7 @@ test('création rapide : équiper les structures, poser au clic, dupliquer, supp
   const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
   const patch = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch;
   await nav('visualizer');
-  await page.getByTestId('stage-settings-toggle').click();
+  await openScenePanel();
 
   // Equip without a selection (a click on an empty corner clears it): the hung fixtures spread over the trusses,
   // floor-standing ones stay put; one undoable step.

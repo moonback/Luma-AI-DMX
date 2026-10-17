@@ -263,6 +263,8 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .stage3d-status .badge { pointer-events: auto; }
 .stage3d-sep { width: 1px; height: 18px; background: var(--border); }
 .stage3d-pop { position: absolute; top: calc(100% + 6px); right: 0; width: 290px; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.96); border: 1px solid var(--border-strong); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); z-index: 4; }
+.stage3d-ctx { top: auto; right: auto; width: 200px; gap: 2px; padding: 8px; z-index: 6; }
+.stage3d-ctx .btn { justify-content: flex-start; }
 
 /* Stage page: scene builder panel beside the 2D / 3D view */
 .stage-layout { flex: 1; min-height: 320px; display: flex; gap: 10px; }

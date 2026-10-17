@@ -18,6 +18,7 @@ export function stageGeometry(vis: Project['visualizer'], fixtures: readonly Vis
     wall: vis.cyclo && vis.shape !== 'arena',
     thrust: vis.shape === 'thrust' ? vis.thrust : null,
     arena: vis.shape === 'arena',
+    props: vis.props,
   };
 }
 

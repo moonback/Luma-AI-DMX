@@ -12,6 +12,8 @@ export const HANG_OFFSET = 0.2;
 /** Horizontal distance under which a dropped fixture snaps onto a truss. */
 export const SNAP_DISTANCE = 0.6;
 const CIRCLE_SEGMENTS = 24;
+/** Offset of a fixture clamped on a totem from its axis (outside the 30 cm tower). */
+export const TOTEM_CLAMP = 0.25;
 
 export const hangHeight = (t: Pick<Truss, 'height'>) => Math.max(0, t.height - HANG_OFFSET);
 
@@ -88,6 +90,8 @@ export function trussSupports(t: Truss): P2[] {
 
 /** Closest point of the truss outline to (x, y), with its horizontal distance. */
 export function nearestOnTruss(t: Truss, x: number, y: number): P2 & { dist: number } {
+  // Totem: fixtures clamp on its front face (towards the audience at rotation 0), just under the top.
+  if (t.shape === 'totem') { const r = rotate({ x: 0, y: -TOTEM_CLAMP }, t.rotation); const p = { x: t.x + r.x, y: t.y + r.y }; return { ...p, dist: Math.hypot(p.x - x, p.y - y) }; }
   let best = { x: t.x, y: t.y, dist: Infinity };
   for (const [a, b] of trussSegments(t)) {
     const dx = b.x - a.x, dy = b.y - a.y;

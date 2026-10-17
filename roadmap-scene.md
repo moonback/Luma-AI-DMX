@@ -32,6 +32,7 @@ Légende effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaine
 ### Lot A — Construire la scène (modèle et édition)
 
 #### 1. Décor et praticables · M
+> **Livré (17/10/2026)** : `visualizer.props[]`, rendu 2D et 3D (voir 1.5 de roadmap-stage3d) ; `beamHit()` teste la boîte orientée de chaque pièce, la tache se pose sur la face touchée ; interprètes surélevés sur les pièces praticables. Limite : chaque pièce arrête la lumière comme sa boîte englobante (un pied de micro bloque comme une colonne fine).
 - Nouveau tableau `visualizer.props[]` dans le schéma projet : boîte, cylindre, escalier, praticable, pendrillon, avec position, taille, rotation, couleur, nom.
 - Rendu en 3D (`environment.ts`) et en 2D (contour coté).
 - `beamHit()` étendu aux boîtes alignées : les faisceaux s'arrêtent sur le décor et la tache s'y dessine.

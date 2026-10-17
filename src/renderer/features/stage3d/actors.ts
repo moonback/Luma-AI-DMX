@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { Performer, StageMarker, StageScreen } from '../../../core/model/schemas';
+import type { Performer, StageMarker, StageProp, StageScreen } from '../../../core/model/schemas';
 import type { VisualFixture } from '../../../core/visualizer/model';
-import { performerLight, performerSpot } from '../../../core/visualizer/lighting';
+import { floorAt, performerLight, performerSpot } from '../../../core/visualizer/lighting';
 import { textures } from './textures';
 import { labelSprite } from './rig';
 import { screenVideo } from '../../screenMedia';
@@ -81,14 +81,14 @@ export function buildPerformer(p: Performer): PerformerRig {
  * Pose and tint. In the fast mode (no real lights) the received light is shown as emissive colour; with real lights
  * the scene lights do it and the emissive stays black.
  */
-export function updatePerformer(r: PerformerRig, p: Performer, markers: readonly StageMarker[], fixtures: readonly VisualFixture[], o: { realLights: boolean; labels: boolean }): void {
+export function updatePerformer(r: PerformerRig, p: Performer, markers: readonly StageMarker[], fixtures: readonly VisualFixture[], o: { realLights: boolean; labels: boolean }, props: readonly StageProp[] = []): void {
   const s = performerSpot(p, markers);
-  r.group.position.set(s.x, 0, -s.y);
+  r.group.position.set(s.x, floorAt(s.x, s.y, props), -s.y);
   r.group.rotation.y = p.rotation * DEG;
   const tag = r.group.getObjectByName('tag');
   if (tag) tag.visible = o.labels;
   if (o.realLights) { r.skin.emissive.setRGB(0, 0, 0); r.gear.emissive.setRGB(0, 0, 0); return; }
-  const l = performerLight(p, markers, fixtures);
+  const l = performerLight(p, markers, fixtures, props);
   r.skin.emissive.setRGB(l.r * 0.85, l.g * 0.85, l.b * 0.85);
   r.gear.emissive.setRGB(l.r * 0.45, l.g * 0.45, l.b * 0.45);
 }

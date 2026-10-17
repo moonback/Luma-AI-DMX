@@ -3,8 +3,8 @@ import { act, newId } from './api';
 import { useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
-import { snapTrussEnds, type P2 } from '../core/visualizer/truss';
-import type { Truss } from '../core/model/schemas';
+import { hangHeight, nearestOnTruss, snapTrussEnds, type P2 } from '../core/visualizer/truss';
+import type { Fixture, Truss } from '../core/model/schemas';
 import { libraryItem } from '../core/visualizer/library';
 import {
   SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
@@ -32,6 +32,16 @@ export function addSceneElement(kind: SceneKind, at?: P2, preset?: Record<string
   const snap = kind === 'truss' ? snapTrussEnds(el as Truss, v.trusses) : null;
   if (snap) Object.assign(el, { x: snap.x, y: snap.y, height: snap.height });
   void act({ type: 'project.update', visualizer: withElement(v, kind, el) }).then((r) => r && st.setSceneSel({ kind, id: el.id }));
+}
+
+/** Hangs a fixture on a truss at the closest point of the truss to its current position (floor / wall: re-hung). */
+export function hangFixture(fixture: Fixture, t: Truss): void {
+  const p = nearestOnTruss(t, fixture.position.x, fixture.position.y);
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  void act({
+    type: 'fixture.update', id: fixture.id,
+    patch: { trussId: t.id, position: { x: r2(p.x), y: r2(p.y) }, height: r2(hangHeight(t)), ...(fixture.mount === 'floor' || fixture.mount === 'wall' ? { mount: 'hanging' as const } : {}) },
+  });
 }
 
 export function removeSceneElement(ref: SceneRef): void {

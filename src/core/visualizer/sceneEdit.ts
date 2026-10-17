@@ -1,5 +1,5 @@
 import { performerSchema, propSchema, screenSchema, stageMarkerSchema, trussSchema, type Performer, type Project, type StageMarker, type StageProp, type StageScreen, type Truss } from '../model/schemas';
-import { hangHeight, trussSegments, type P2 } from './truss';
+import { hangHeight, nearestOnTruss, trussSegments, type P2 } from './truss';
 
 /**
  * Scene-element editing shared by the 2D plan, the 3D view and the scene panel: creation at a free spot,
@@ -101,12 +101,19 @@ export function parseElement(text: string): { kind: SceneKind; el: Element } | n
 
 /* ---------- Equip: hang fixtures evenly on the trusses ---------- */
 
+/** Share of a totem in the spread (as many fixtures as 1 m of straight truss), and spacing of stacked fixtures. */
+const TOTEM_SHARE = 1, TOTEM_STEP = 0.5;
+
 export interface EquipFixture { id: string; movable: boolean }
 export interface Placement { id: string; position: P2; height: number; trussId: string }
 
 /** `n` points evenly spread along the outline of `trusses` (taken end to end), with the truss they lie on. */
 function spread(trusses: readonly Truss[], n: number): { p: P2; t: Truss }[] {
-  const segs = trusses.flatMap((t) => trussSegments(t).map(([a, b]) => ({ a, b, t, len: Math.hypot(b.x - a.x, b.y - a.y) })));
+  const segs = trusses.flatMap((t) => {
+    // A totem takes a 1 m share of the fixtures, all on its clamp point.
+    if (t.shape === 'totem') { const c = nearestOnTruss(t, t.x, t.y); return [{ a: c, b: c, t, len: TOTEM_SHARE }]; }
+    return trussSegments(t).map(([a, b]) => ({ a, b, t, len: Math.hypot(b.x - a.x, b.y - a.y) }));
+  });
   const total = segs.reduce((s, x) => s + x.len, 0);
   const out: { p: P2; t: Truss }[] = [];
   for (let i = 0; i < n; i++) {
@@ -127,8 +134,7 @@ function spread(trusses: readonly Truss[], n: number): { p: P2; t: Truss }[] {
  * the downstage half (front light); with a single truss, or when one family is missing, everything shares all trusses.
  */
 export function equipTrusses(fixtures: readonly EquipFixture[], trusses: readonly Truss[]): Placement[] {
-  // Totems have no horizontal span to hang on.
-  const usable = trusses.filter((t) => trussSegments(t).length);
+  const usable = trusses.filter((t) => t.shape === 'totem' || trussSegments(t).length);
   if (!usable.length || !fixtures.length) return [];
   const byDepth = [...usable].sort((a, b) => a.y - b.y);
   const half = Math.ceil(byDepth.length / 2);
@@ -136,7 +142,13 @@ export function equipTrusses(fixtures: readonly EquipFixture[], trusses: readonl
   const back = byDepth.length > 1 ? byDepth.slice(half) : byDepth;
   const movers = fixtures.filter((f) => f.movable), fixed = fixtures.filter((f) => !f.movable);
   const groups = movers.length && fixed.length ? [{ fx: movers, on: back }, { fx: fixed, on: front }] : [{ fx: fixtures, on: byDepth }];
-  return groups.flatMap(({ fx, on }) => spread(on, fx.length).map(({ p, t }, i) => ({ id: fx[i]!.id, position: p, height: r2(hangHeight(t)), trussId: t.id })));
+  const onTotem = new Map<string, number>();
+  return groups.flatMap(({ fx, on }) => spread(on, fx.length).map(({ p, t }, i) => {
+    // Several fixtures on one totem are stacked downwards from the top, never below 0.5 m.
+    const k = t.shape === 'totem' ? onTotem.get(t.id) ?? 0 : 0;
+    if (t.shape === 'totem') onTotem.set(t.id, k + 1);
+    return { id: fx[i]!.id, position: p, height: r2(Math.max(Math.min(0.5, hangHeight(t)), hangHeight(t) - k * TOTEM_STEP)), trussId: t.id };
+  }));
 }
 
 /** Visualizer patch that changes fields of one element (moves, resizes). */

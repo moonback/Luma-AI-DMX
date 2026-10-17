@@ -1,4 +1,4 @@
-import type { Performer, StageMarker } from '../model/schemas';
+import type { Performer, StageMarker, StageProp } from '../model/schemas';
 import type { VisualFixture } from './model';
 import { beamDirection, type Vec3 } from './beam';
 
@@ -49,10 +49,26 @@ export function performerSpot(p: Performer, markers: readonly StageMarker[]): { 
   return m ? { x: m.x, y: m.y } : { x: p.x, y: p.y };
 }
 
-/** Light received on the performer's face. */
-export function performerLight(p: Performer, markers: readonly StageMarker[], fixtures: readonly VisualFixture[]): Received {
+/** Set pieces a performer can stand on. */
+const WALKABLE: ReadonlySet<StageProp['kind']> = new Set(['riser', 'stairs', 'box', 'table']);
+
+/** Height of the floor at stage point (x, y): top of the highest walkable piece under it, else 0. */
+export function floorAt(x: number, y: number, props: readonly StageProp[]): number {
+  let top = 0;
+  for (const p of props) {
+    if (!WALKABLE.has(p.kind)) continue;
+    // Into the piece frame (same rotation as the 3D group: world z = -y).
+    const a = (p.rotation * Math.PI) / 180, dx = x - p.x, dz = p.y - y;
+    const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
+    if (Math.abs(lx) <= p.width / 2 && Math.abs(lz) <= p.depth / 2) top = Math.max(top, p.elevation + p.height);
+  }
+  return top;
+}
+
+/** Light received on the performer's face (raised when standing on a riser). */
+export function performerLight(p: Performer, markers: readonly StageMarker[], fixtures: readonly VisualFixture[], props: readonly StageProp[] = []): Received {
   const s = performerSpot(p, markers);
-  return lightAt({ x: s.x, y: FACE_HEIGHT[p.kind], z: -s.y }, fixtures);
+  return lightAt({ x: s.x, y: floorAt(s.x, s.y, props) + FACE_HEIGHT[p.kind], z: -s.y }, fixtures);
 }
 
 export const toHex = (c: Pick<Received, 'r' | 'g' | 'b'>) => `#${[c.r, c.g, c.b].map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('')}`;

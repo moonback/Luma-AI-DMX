@@ -2,13 +2,13 @@ import * as THREE from 'three';
 import { audienceGlare, beamDirection, beamHit, flickerOn, mountSign, onStage, poolShape, rigAngles, rotateY, beamLength } from '../../src/core/visualizer/beam';
 import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, snapTrussEnds, trussEnds, trussSegments, trussSupports } from '../../src/core/visualizer/truss';
 import { LIBRARY } from '../../src/core/visualizer/library';
-import type { Performer, StageMarker, Truss } from '../../src/core/model/schemas';
+import type { Performer, StageMarker, StageProp, Truss } from '../../src/core/model/schemas';
 import { buildVisualModel, goboIndex, mountOf, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
 import { createProject, parseProject } from '../../src/core/project/format';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../src/core/visualizer/templates';
 import { cloneElement, equipTrusses, newElement, parseElement, serializeElement, withElement, withoutElement } from '../../src/core/visualizer/sceneEdit';
 import { projectSchema } from '../../src/core/model/schemas';
-import { DARK_LEVEL, FACE_HEIGHT, lightAt, performerLight, performerSpot, toHex } from '../../src/core/visualizer/lighting';
+import { DARK_LEVEL, FACE_HEIGHT, floorAt, lightAt, performerLight, performerSpot, toHex } from '../../src/core/visualizer/lighting';
 import { commandSchema } from '../../src/shared/commands';
 import { ProjectIndex } from '../../src/core/engine/resolve';
 import { ProfileLibrary, coarseChannel } from '../../src/core/fixtures/profiles';
@@ -391,7 +391,12 @@ describe('bibliothèque : pièces de truss, décor', () => {
     const snap = snapTrussEnds(piece({ id: 'd', x: 1.1, y: 0.2 }), [totem]);
     expect(snap).toMatchObject({ x: 1, y: 0, height: 2.5 });
     expect(snapTrussEnds(piece({ id: 'd', x: 2 }), [totem])).toBeNull();
-    expect(equipTrusses([{ id: 'a', movable: false }], [totem])).toEqual([]);
+    // Equip on totems alone: clamped on the front face, stacked every 50 cm from under the top.
+    const out = equipTrusses([{ id: 'a', movable: false }, { id: 'b', movable: false }], [totem]);
+    expect(out).toEqual([
+      { id: 'a', position: { x: 0, y: -0.25 }, height: 2.3, trussId: 'tot' },
+      { id: 'b', position: { x: 0, y: -0.25 }, height: 1.8, trussId: 'tot' },
+    ]);
   });
 
   it('chaque élément de la bibliothèque donne un projet valide', () => {
@@ -404,5 +409,47 @@ describe('bibliothèque : pièces de truss, décor', () => {
     expect(parsed.visualizer.props).toHaveLength(LIBRARY.filter((x) => x.kind === 'prop').length);
     expect(parsed.visualizer.trusses.find((t) => t.shape === 'totem')).toMatchObject({ name: expect.stringMatching(/^Totem 1 m/), x: 1, y: 2 });
     expect(() => newElement(v, 'prop', id, undefined, { width: -1 })).toThrow();
+  });
+});
+
+describe('set pieces in the light', () => {
+  const riser: StageProp = { id: 'r1', name: 'Praticable', kind: 'riser', x: 0, y: 3, width: 2, depth: 1, height: 0.4, elevation: 0, rotation: 0, color: '#2a2f3a' };
+
+  it('stops a beam on the top of a riser, with an upward normal', () => {
+    const hit = beamHit({ x: 0, y: 6, z: -3 }, { x: 0, y: -1, z: 0 }, { ...stage, props: [riser] })!;
+    expect(hit.surface).toBe('prop');
+    close(hit.point, { x: 0, y: 0.4, z: -3 });
+    close(hit.normal, { x: 0, y: 1, z: 0 });
+    expect(hit.distance).toBeCloseTo(5.6, 5);
+    // Beside the riser the floor is hit as before.
+    expect(beamHit({ x: 3, y: 6, z: -3 }, { x: 0, y: -1, z: 0 }, { ...stage, props: [riser] })!.surface).toBe('floor');
+  });
+
+  it('hits the side of a rotated piece facing the beam', () => {
+    const turned = { ...riser, rotation: 90 }; // 1 m wide along x, 2 m along z once turned
+    const hit = beamHit({ x: -5, y: 0.2, z: -3 }, { x: 1, y: 0, z: 0 }, { ...stage, wall: false, props: [turned] })!;
+    expect(hit.surface).toBe('prop');
+    expect(hit.point.x).toBeCloseTo(-0.5, 5);
+    close(hit.normal, { x: -1, y: 0, z: 0 });
+  });
+
+  it('raises a performer standing on a riser', () => {
+    expect(floorAt(0.5, 3.2, [riser])).toBeCloseTo(0.4);
+    expect(floorAt(0, 4, [riser])).toBe(0);
+    expect(floorAt(0, 3, [{ ...riser, kind: 'speaker' }])).toBe(0); // not walkable
+    expect(floorAt(0, 3, [riser, { ...riser, id: 'r2', elevation: 0.4 }])).toBeCloseTo(0.8); // stacked
+    const pf: Performer = { id: 'p1', name: 'Chant', kind: 'standing', x: 0, y: 3, rotation: 0 };
+    // Horizontal 10° beam at 2 m towards the audience: it reaches the face only once raised (0.4 + 1.6 m).
+    const spot = { x: 0, height: 2, y: 5, movable: true, mount: 'hanging', rotation: 0, panDeg: 0, tiltDeg: 90, intensity: 1, color: '#ffffff', beamAngle: 10 } as unknown as VisualFixture;
+    expect(performerLight(pf, [], [spot], [riser]).level).toBeGreaterThan(DARK_LEVEL);
+    expect(performerLight(pf, [], [spot]).level).toBeLessThan(DARK_LEVEL);
+  });
+
+  it('hangs a fixture on the front face of a totem', () => {
+    const totem: Truss = { id: 't1', name: 'Totem', shape: 'totem', x: 2, y: 1, height: 3, length: 0.5, rotation: 0, support: 'towers' };
+    const snap = snapToTrusses([totem], 2.1, 0.8)!;
+    expect(snap.truss.id).toBe('t1');
+    expect(snap).toMatchObject({ x: 2, y: 0.75, height: hangHeight(totem) });
+    expect(snapToTrusses([totem], 4, 4)).toBeNull();
   });
 });

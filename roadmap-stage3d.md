@@ -79,7 +79,7 @@ Effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaines et plus
 >
 > Les anciens projets s'ouvrent avec `props: []`. Le modèle « Concert » reçoit enceintes, retour et pied de micro.
 >
-> **Reste** : les faisceaux ne s'arrêtent pas encore sur le décor (`beamHit`, fonctionnalité 1 de roadmap-scene) ; les interprètes ne montent pas sur un praticable (pas d'élévation) ; pas encore d'accroche de projecteur sur un totem.
+> **Complété (17/10/2026)** : les faisceaux s'arrêtent sur le décor et la tache se dessine sur la face touchée (`beamHit`, boîte englobante de chaque pièce) ; un interprète posé sur un praticable, un escalier, un cube ou une table monte à son sommet (rendu 3D et éclairement estimé) ; un projecteur s'accroche sur la face avant d'un totem, juste sous le sommet, y compris avec « Équiper les structures » (projecteurs empilés tous les 50 cm).
 
 ### Étape 2 — Une seule façon d'éditer (priorité haute)
 
