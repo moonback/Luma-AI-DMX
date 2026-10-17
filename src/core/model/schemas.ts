@@ -107,6 +107,9 @@ export type FixtureProfile = z.infer<typeof profileSchema>;
 /* Patch, groups, palettes                                             */
 /* ------------------------------------------------------------------ */
 
+export const fixtureMountSchema = z.enum(['auto', 'hanging', 'floor', 'wall']);
+export type FixtureMount = z.infer<typeof fixtureMountSchema>;
+
 export const fixtureSchema = z.object({
   id: idSchema,
   name: nameSchema,
@@ -121,6 +124,12 @@ export const fixtureSchema = z.object({
   rotation: z.number().min(-360).max(360).default(0),
   /** Mounting height in meters (3D visualizer). */
   height: z.number().min(0).max(50).default(4),
+  /** Mounting: absent or 'auto' = hanging, or standing on the floor below 1 m (rule of older projects). */
+  mount: fixtureMountSchema.optional(),
+  /** Tilt of the mounting axis in degrees: leans towards the audience (wall mount: downwards). */
+  mountTilt: z.number().min(-90).max(90).optional(),
+  /** Truss the fixture hangs from: it follows the truss when the truss moves. */
+  trussId: idSchema.nullable().optional(),
   notes: z.string().max(500).default(''),
 });
 export type Fixture = z.infer<typeof fixtureSchema>;
@@ -412,6 +421,23 @@ export type StageMarker = z.infer<typeof stageMarkerSchema>;
 const vec3Schema = z.object({ x: z.number().min(-500).max(500), y: z.number().min(-500).max(500), z: z.number().min(-500).max(500) });
 /** Saved 3D camera (world coordinates of the visualizer). */
 export const stageViewSchema = z.object({ id: idSchema, name: nameSchema, pos: vec3Schema, target: vec3Schema });
+/**
+ * Explicit truss. Position = centre (meters, y upstage), `height` = height of the truss axis, `length` = length of a
+ * straight truss, diameter of a circle or side of a square. Rotation in degrees around the vertical (counter-clockwise
+ * seen from above, 0 = parallel to the stage lip). Supported by towers on the floor or hung from motors.
+ */
+export const trussSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  shape: z.enum(['line', 'circle', 'square']),
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  height: z.number().min(0.5).max(30),
+  length: z.number().min(0.5).max(60),
+  rotation: z.number().min(-360).max(360),
+  support: z.enum(['towers', 'hung']),
+});
+export type Truss = z.infer<typeof trussSchema>;
 export type StageView = z.infer<typeof stageViewSchema>;
 
 export const PROJECT_FORMAT_VERSION = 3;
@@ -448,8 +474,9 @@ export const projectSchema = z.object({
       cyclo: z.boolean().default(true),
       markers: z.array(stageMarkerSchema).max(64).default([]),
       views: z.array(stageViewSchema).max(20).default([]),
+      trusses: z.array(trussSchema).max(64).default([]),
     })
-    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [] }),
+    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [] }),
   ai: z
     .object({ notes: z.string().max(2000).default(''), recentPrompts: z.array(z.string().max(500)).max(20).default([]) })
     .default({ notes: '', recentPrompts: [] }),

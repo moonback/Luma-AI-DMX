@@ -23,8 +23,12 @@ export interface VisualFixture {
   beamAngle: number;
   /** Mounting height in meters. */
   height: number;
-  /** Hung from a truss (beam points down) or standing on the floor (beam points up). */
-  mount: 'hanging' | 'floor';
+  /** Hung (beam points down), standing on the floor (beam points up) or on a wall (beam points out, along `rotation`). */
+  mount: VisualMount;
+  /** Tilt of the mounting axis in degrees (towards the audience; wall mount: downwards). */
+  mountTilt: number;
+  /** Explicit truss the fixture hangs from, null otherwise (older projects draw implicit trusses). */
+  trussId: string | null;
   /** Per-cell colours for multi-cell fixtures (left to right), already scaled by intensity. */
   cells: string[];
   /** Estimated strobe frequency in Hz from the strobe/shutter channel, 0 when not strobing. */
@@ -35,8 +39,15 @@ export interface VisualFixture {
   prism: boolean;
 }
 
-/** Floor-standing below this height. */
+export type VisualMount = 'hanging' | 'floor' | 'wall';
+/** Floor-standing below this height when the mounting is automatic. */
 export const FLOOR_MOUNT_MAX_HEIGHT = 1;
+
+/** Effective mounting: the explicit choice, or the height rule of older projects ('auto' / absent). */
+export function mountOf(f: Pick<Fixture, 'mount' | 'height'>): VisualMount {
+  if (f.mount && f.mount !== 'auto') return f.mount;
+  return f.height < FLOOR_MOUNT_MAX_HEIGHT ? 'floor' : 'hanging';
+}
 const MIN_STROBE_HZ = 1;
 const MAX_STROBE_HZ = 20;
 
@@ -91,7 +102,9 @@ export function buildVisualModel(
       tiltDeg: movable ? ((v.tilt ?? 0.5) - 0.5) * rf.profile.physical.tiltRange : 0,
       beamAngle: zoomedAngle(rf.profile.physical.beamAngle, rf.attributes.includes('zoom') ? v.zoom : undefined),
       height: rf.fixture.height,
-      mount: rf.fixture.height < FLOOR_MOUNT_MAX_HEIGHT ? 'floor' : 'hanging',
+      mount: mountOf(rf.fixture),
+      mountTilt: rf.fixture.mountTilt ?? 0,
+      trussId: rf.fixture.trussId ?? null,
       cells: cellColors(rf, v).map((c) => rgbToHex(c.color)),
       strobeHz: strobe,
       gobo: goboIndex(coarseChannel(rf.mode, 'gobo'), v.gobo),

@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { projectSchema, type FixtureValues, type Project } from '../model/schemas';
+import { projectSchema, type Fixture, type FixtureValues, type Project } from '../model/schemas';
 import { ProjectIndex } from '../engine/resolve';
 import { Engine, type EngineSettings } from '../engine/Engine';
 import { OutputManager, createAdapter, type AdapterFactory } from '../protocols/OutputManager';
@@ -27,6 +27,7 @@ import type { AiProposal } from '../ai/actions';
 import { buildProposal, executeProposal, guardProposalFlashes, interpreterContext, proposeLocally } from '../ai/director';
 import { FlashDetector, stageLight, type FlashStatus } from '../safety/flashGuard';
 import { buildVisualModel } from '../visualizer/model';
+import { followTruss } from '../visualizer/truss';
 import { OscServer, type OscMessage } from '../control/osc';
 import { RemoteServer, type RemoteState } from '../control/remote';
 import { ArtNetRdm } from '../protocols/rdm';
@@ -63,6 +64,12 @@ export interface AppServiceOptions {
 
 export class UserError extends Error {}
 
+/** Fixture fields that make up the scene layout (undone/redone together with the visualizer settings). */
+const SCENE_FIELDS = ['position', 'height', 'rotation', 'mount', 'mountTilt', 'trussId'] as const;
+type SceneFields = Pick<Fixture, (typeof SCENE_FIELDS)[number]>;
+interface SceneSnapshot { visualizer: Project['visualizer']; fixtures: Record<string, SceneFields> }
+const SCENE_HISTORY_MAX = 100;
+
 const OPENROUTER_KEY = 'openrouter-api-key';
 
 /**
@@ -79,6 +86,9 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   private projectPath: string | null = null;
   private revision = 0;
   private savedRevision = 0;
+  /** Scene-layout history: positions/mounting of the fixtures and the visualizer settings before each scene edit. */
+  private sceneUndo: SceneSnapshot[] = [];
+  private sceneRedo: SceneSnapshot[] = [];
   private settings: Settings = defaultSettings();
   private readonly proposals = new Map<string, AiProposal>();
   private aiBusy = false;
@@ -192,7 +202,10 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   /* ------------------------------------------------------------------ */
 
   projectState(): ProjectState {
-    return { project: this.project, path: this.projectPath, dirty: this.dirty, revision: this.revision, issues: validatePatch(this.index.lib, this.project.patch) };
+    return {
+      project: this.project, path: this.projectPath, dirty: this.dirty, revision: this.revision, issues: validatePatch(this.index.lib, this.project.patch),
+      sceneHistory: { undo: this.sceneUndo.length, redo: this.sceneRedo.length },
+    };
   }
 
   runtimeState(): RuntimeState {
@@ -278,6 +291,8 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.project = p;
     this.index = new ProjectIndex(p);
     if (reset) {
+      this.sceneUndo = [];
+      this.sceneRedo = [];
       this.engine.stopAllPlaybacks();
       this.engine.stopAllEffects();
       this.engine.timelineStop();
@@ -290,6 +305,42 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.revision++;
     if (reset) this.savedRevision = this.revision;
     this.emitProject();
+  }
+
+  private sceneSnapshot(): SceneSnapshot {
+    const fixtures: SceneSnapshot['fixtures'] = {};
+    for (const f of this.project.patch) fixtures[f.id] = structuredClone(Object.fromEntries(SCENE_FIELDS.map((k) => [k, f[k]])) as SceneFields);
+    return { visualizer: structuredClone(this.project.visualizer), fixtures };
+  }
+
+  /** Mutation recorded in the scene history (undoable); the history is untouched when the mutation is refused. */
+  private sceneMutate(fn: (draft: Project) => void): void {
+    const undo = this.sceneUndo, redo = this.sceneRedo;
+    this.sceneUndo = [...undo, this.sceneSnapshot()].slice(-SCENE_HISTORY_MAX);
+    this.sceneRedo = [];
+    try {
+      this.mutate(fn);
+    } catch (err) {
+      this.sceneUndo = undo;
+      this.sceneRedo = redo;
+      throw err;
+    }
+  }
+
+  /** Restores a scene snapshot; fixtures added since keep their placement, removed ones are ignored. */
+  private restoreScene(snap: SceneSnapshot): void {
+    this.mutate((d) => {
+      d.visualizer = structuredClone(snap.visualizer);
+      for (const f of d.patch) {
+        const prev = snap.fixtures[f.id];
+        if (!prev) continue;
+        for (const k of SCENE_FIELDS) {
+          if (prev[k] === undefined) delete f[k];
+          else Object.assign(f, { [k]: structuredClone(prev[k]) });
+        }
+        if (f.trussId && !d.visualizer.trusses.some((t) => t.id === f.trussId)) f.trussId = null;
+      }
+    });
   }
 
   getProject(): Project {
@@ -360,8 +411,30 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         this.emitProject();
         return { path: file };
       }
+      case 'scene.undo':
+      case 'scene.redo': {
+        const from = cmd.type === 'scene.undo' ? this.sceneUndo : this.sceneRedo;
+        const to = cmd.type === 'scene.undo' ? this.sceneRedo : this.sceneUndo;
+        const snap = from.pop();
+        if (!snap) return ok;
+        to.push(this.sceneSnapshot());
+        this.restoreScene(snap);
+        return ok;
+      }
       case 'project.update':
-        this.mutate((d) => {
+        (cmd.visualizer ? this.sceneMutate.bind(this) : this.mutate.bind(this))((d) => {
+          if (cmd.visualizer?.trusses) {
+            // Hung fixtures follow their truss; fixtures of a removed truss stay in place, detached.
+            const next = new Map(cmd.visualizer.trusses.map((t) => [t.id, t]));
+            for (const before of d.visualizer.trusses) {
+              const after = next.get(before.id);
+              for (const f of d.patch) {
+                if (f.trussId !== before.id) continue;
+                if (!after) f.trussId = null;
+                else Object.assign(f, followTruss(before, after, f));
+              }
+            }
+          }
           if (cmd.meta) Object.assign(d.meta, Object.fromEntries(Object.entries(cmd.meta).filter(([, v]) => v !== undefined)));
           if (cmd.show) Object.assign(d.show, Object.fromEntries(Object.entries(cmd.show).filter(([, v]) => v !== undefined)));
           if (cmd.visualizer) Object.assign(d.visualizer, Object.fromEntries(Object.entries(cmd.visualizer).filter(([, v]) => v !== undefined)));
@@ -495,10 +568,11 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         return { ids };
       }
       case 'fixture.update':
-        this.mutate((d) => {
+        (SCENE_FIELDS.some((k) => cmd.patch[k] !== undefined) ? this.sceneMutate.bind(this) : this.mutate.bind(this))((d) => {
           const f = d.patch.find((x) => x.id === cmd.id);
           if (!f) throw new UserError('Projecteur introuvable');
           Object.assign(f, Object.fromEntries(Object.entries(cmd.patch).filter(([, v]) => v !== undefined)));
+          if (f.trussId && !d.visualizer.trusses.some((t) => t.id === f.trussId)) throw new UserError('Structure introuvable');
           const profile = this.index.lib.get(f.profileId);
           if (!profile || !profile.modes.some((m) => m.name === f.mode)) throw new UserError('Profil ou mode invalide');
           const issues = validatePatch(this.index.lib, d.patch).filter((i) => i.fixtureIds.includes(f.id));

@@ -1,5 +1,8 @@
-import { audienceGlare, beamDirection, beamHit, flickerOn, onStage, poolShape, rotateY, beamLength } from '../../src/core/visualizer/beam';
-import { buildVisualModel, goboIndex, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
+import * as THREE from 'three';
+import { audienceGlare, beamDirection, beamHit, flickerOn, mountSign, onStage, poolShape, rigAngles, rotateY, beamLength } from '../../src/core/visualizer/beam';
+import { followTruss, hangHeight, nearestOnTruss, snapToTrusses, trussSegments, trussSupports } from '../../src/core/visualizer/truss';
+import type { Truss } from '../../src/core/model/schemas';
+import { buildVisualModel, goboIndex, mountOf, strobeFrequency, zoomedAngle, type VisualFixture } from '../../src/core/visualizer/model';
 import { parseProject } from '../../src/core/project/format';
 import { commandSchema } from '../../src/shared/commands';
 import { ProjectIndex } from '../../src/core/engine/resolve';
@@ -134,7 +137,7 @@ describe('forme de plateau, points de scène et éblouissement', () => {
   it('un ancien projet reçoit les valeurs par défaut, une mise à jour partielle ne remet rien à zéro', async () => {
     const old = { ...demoProject(), visualizer: { stageWidth: 10, stageDepth: 6 } };
     const { project } = parseProject(JSON.stringify(old));
-    expect(project.visualizer).toEqual({ stageWidth: 10, stageDepth: 6, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [] });
+    expect(project.visualizer).toEqual({ stageWidth: 10, stageDepth: 6, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [] });
 
     const { svc } = makeService();
     await svc.init();
@@ -144,5 +147,107 @@ describe('forme de plateau, points de scène et éblouissement', () => {
     await svc.execute(commandSchema.parse({ type: 'project.update', visualizer: { stageWidth: 14 } }) as never);
     expect(svc.projectState().project.visualizer).toMatchObject({ stageWidth: 14, shape: 'thrust', markers });
     expect(() => commandSchema.parse({ type: 'project.update', visualizer: { markers: [{ id: 'x', name: '', x: 0, y: 0, height: 1 }] } })).toThrow();
+  });
+});
+
+describe('structures, accroches et historique de scène', () => {
+  const truss = (o: Partial<Truss> = {}): Truss => ({ id: 't1', name: 'Face', shape: 'line', x: 0, y: 4, height: 6, length: 8, rotation: 0, support: 'towers', ...o });
+
+  it('géométrie des truss : segments, appuis, point le plus proche, aimantation', () => {
+    expect(trussSegments(truss())).toHaveLength(1);
+    expect(trussSegments(truss({ shape: 'square' }))).toHaveLength(4);
+    expect(trussSegments(truss({ shape: 'circle' }))).toHaveLength(24);
+    expect(trussSupports(truss())).toEqual([{ x: -4, y: 4 }, { x: 4, y: 4 }]);
+    // Rotation counter-clockwise seen from above: a 90° line runs upstage.
+    const [a, b] = trussSegments(truss({ rotation: 90 }))[0]!;
+    expect(a.x).toBeCloseTo(0); expect(a.y).toBeCloseTo(0); expect(b.y).toBeCloseTo(8);
+    expect(nearestOnTruss(truss(), 1, 4.3)).toMatchObject({ x: 1, y: 4 });
+    expect(nearestOnTruss(truss(), 1, 4.3).dist).toBeCloseTo(0.3);
+    expect(snapToTrusses([truss()], 9, 4)).toBeNull(); // beyond the end
+    expect(snapToTrusses([truss(), truss({ id: 't2', y: 4.5, height: 8 })], 2, 4.4)).toMatchObject({ truss: { id: 't2' }, x: 2, y: 4.5, height: 7.8 });
+    expect(hangHeight(truss())).toBeCloseTo(5.8);
+  });
+
+  it('un projecteur accroché suit sa structure (translation, rotation, hauteur)', () => {
+    const before = truss();
+    const f = { position: { x: 2, y: 4 }, height: 5.8, rotation: 10 };
+    expect(followTruss(before, { ...before, x: 1, y: 5, height: 7 }, f)).toEqual({ position: { x: 3, y: 5 }, height: 6.8, rotation: 10 });
+    const turned = followTruss(before, { ...before, rotation: 90 }, f);
+    expect(turned.position.x).toBeCloseTo(0);
+    expect(turned.position.y).toBeCloseTo(6);
+    expect(turned.rotation).toBe(100);
+  });
+
+  it('accroche explicite, murale et inclinée ; même direction que la hiérarchie three.js', () => {
+    expect(mountOf({ height: 0.5 })).toBe('floor');
+    expect(mountOf({ height: 0.5, mount: 'auto' })).toBe('floor');
+    expect(mountOf({ height: 0.5, mount: 'hanging' })).toBe('hanging');
+    expect(mountOf({ height: 5, mount: 'wall' })).toBe('wall');
+    const fixed = { ...mover, movable: false };
+    close(beamDirection({ ...fixed, mount: 'wall' }), { x: 0, y: 0, z: 1 }); // out of the wall, towards the audience
+    expect(beamDirection({ ...fixed, mount: 'wall', mountTilt: 30 }).y).toBeCloseTo(-0.5);
+    close(beamDirection({ ...mover, mountTilt: 90 }), { x: 0, y: 0, z: 1 }); // hung, base tilted towards the audience
+
+    // The rig applies root (yaw, then mount tilt) → yoke (pan) → head (tilt) to a lens along s·Y.
+    for (const f of [
+      { ...mover, rotation: 30, panDeg: 40, tiltDeg: 25, mountTilt: 20 },
+      { ...mover, mount: 'floor' as const, rotation: -60, panDeg: 10, tiltDeg: -35, mountTilt: -15 },
+      { ...mover, mount: 'wall' as const, rotation: 45, panDeg: -20, tiltDeg: 30, mountTilt: 10 },
+    ]) {
+      const a = rigAngles(f);
+      const root = new THREE.Object3D(); root.rotation.order = 'YXZ'; root.rotation.set(a.tilt, a.yaw, 0);
+      const yoke = new THREE.Object3D(); yoke.rotation.y = a.pan; root.add(yoke);
+      const head = new THREE.Object3D(); head.rotation.x = a.head; yoke.add(head);
+      root.updateMatrixWorld(true);
+      const q = head.getWorldQuaternion(new THREE.Quaternion());
+      const d = new THREE.Vector3(0, mountSign(f.mount), 0).applyQuaternion(q);
+      close(beamDirection(f), { x: d.x, y: d.y, z: d.z });
+    }
+  });
+
+  it('service : suivi des truss, détachement, validation et annuler / rétablir de la scène', async () => {
+    const { svc } = makeService();
+    await svc.init();
+    await svc.execute({ type: 'project.new', name: 'Structures' });
+    const { ids } = await svc.execute({ type: 'fixture.add', profileId: 'demo-spot', mode: '13ch étendu', universe: 1, address: null, count: 2, namePrefix: 'Lyre', tags: [] });
+    const [a, b] = ids as [string, string];
+    const fx = (id: string) => svc.projectState().project.patch.find((f) => f.id === id)!;
+    const update = (cmd: unknown) => svc.execute(commandSchema.parse(cmd) as never);
+
+    await update({ type: 'project.update', visualizer: { trusses: [truss()] } });
+    await update({ type: 'fixture.update', id: a, patch: { trussId: 't1', position: { x: 2, y: 4 }, height: 5.8 } });
+    await expect(update({ type: 'fixture.update', id: b, patch: { trussId: 'absente' } })).rejects.toThrow('Structure introuvable');
+    // Partial update: the other fixture fields are not reset by the new optional ones.
+    await update({ type: 'fixture.update', id: a, patch: { mount: 'hanging', mountTilt: 10 } });
+    expect(fx(a)).toMatchObject({ trussId: 't1', mount: 'hanging', mountTilt: 10, height: 5.8 });
+
+    const bBefore = structuredClone(fx(b).position);
+    await update({ type: 'project.update', visualizer: { trusses: [truss({ x: 1, height: 7 })] } });
+    expect(fx(a)).toMatchObject({ position: { x: 3, y: 4 }, height: 6.8 });
+    expect(fx(b).position).toEqual(bBefore); // not attached: untouched
+
+    // Undo / redo walk the scene layout back and forth; a rename in between is kept.
+    const h0 = svc.projectState().sceneHistory.undo;
+    await update({ type: 'fixture.update', id: a, patch: { name: 'Lyre jardin' } });
+    expect(svc.projectState().sceneHistory.undo).toBe(h0); // not a scene edit
+    await update({ type: 'scene.undo' });
+    expect(fx(a)).toMatchObject({ position: { x: 2, y: 4 }, height: 5.8, name: 'Lyre jardin' });
+    expect(svc.projectState().project.visualizer.trusses[0]!.x).toBe(0);
+    await update({ type: 'scene.redo' });
+    expect(fx(a)).toMatchObject({ position: { x: 3, y: 4 }, height: 6.8 });
+    expect(svc.projectState().sceneHistory).toEqual({ undo: h0, redo: 0 });
+
+    // Removing the truss detaches its fixtures, which stay in place.
+    await update({ type: 'project.update', visualizer: { trusses: [] } });
+    expect(fx(a)).toMatchObject({ trussId: null, position: { x: 3, y: 4 } });
+    await update({ type: 'scene.undo' });
+    expect(fx(a).trussId).toBe('t1');
+
+    // A refused edit leaves the history untouched; a new project clears it.
+    const h1 = svc.projectState().sceneHistory;
+    await expect(update({ type: 'fixture.update', id: 'inconnu', patch: { height: 3 } })).rejects.toThrow();
+    expect(svc.projectState().sceneHistory).toEqual(h1);
+    await svc.execute({ type: 'project.new', name: 'Autre' });
+    expect(svc.projectState().sceneHistory).toEqual({ undo: 0, redo: 0 });
   });
 });

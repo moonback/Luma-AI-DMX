@@ -246,6 +246,73 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
   await inv({ type: 'programmer.release', fixtureIds: lyres });
 });
 
+test('structures : accroche, suivi, annuler / rétablir, édition directe au gizmo', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  type Fx = { id: string; name: string; position: { x: number; y: number }; height: number; trussId?: string | null };
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const lyre1 = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch.find((f) => f.name === 'Lyre 1')!;
+
+  // A straight truss from the scene panel (10 m, 4 m upstage, 6 m high).
+  await nav('visualizer');
+  await page.getByTestId('stage-settings-toggle').click();
+  await page.getByTestId('truss-add').click();
+  await expect(page.getByTestId('truss-row')).toHaveCount(1);
+
+  // Hang Lyre 1 on it from the 3D info panel.
+  await nav('stage3d');
+  if (!(await page.getByTestId('stage3d-info').isVisible())) {
+    await nav('console');
+    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await nav('stage3d');
+  }
+  await page.getByTestId('fixture-truss').selectOption({ label: 'Structure 1' });
+  await expect.poll(async () => (await lyre1()).trussId).toBeTruthy();
+  const hung = await lyre1();
+  expect(hung.position.y).toBe(4);
+  expect(hung.height).toBeCloseTo(5.8);
+
+  // Moving the truss carries the fixture; undo / redo walk it back and forth.
+  await nav('visualizer');
+  await page.getByTestId('stage-settings-toggle').click();
+  const yField = page.getByTestId('truss-row').locator('input.mono').nth(2); // L, X, Y, H, rotation
+  await yField.fill('5');
+  await yField.press('Enter');
+  await expect.poll(async () => (await lyre1()).position.y).toBe(5);
+  await page.screenshot({ path: `${shots}/18-structures-2d.png` });
+  await page.getByTestId('scene-undo').click();
+  await expect.poll(async () => (await lyre1()).position.y).toBe(4);
+  await page.getByTestId('scene-redo').click();
+  await expect.poll(async () => (await lyre1()).position.y).toBe(5);
+
+  // Direct editing: top view, drag the gizmo centre of Lyre 1 sideways along its truss.
+  await nav('stage3d');
+  await page.getByTestId('edit3d').click();
+  await page.getByTestId('grid').selectOption('0.25');
+  await page.getByTestId('cam-top').click();
+  await page.waitForTimeout(1000);
+  const box = (await page.getByTestId('stage-3d').locator('canvas').boundingBox())!;
+  const before = await lyre1();
+  // Top camera (see viewPose): above the centre of deck + 4 m thrust, fov 48°.
+  const camH = 12 * 1.6, tz = 4 - 6, k = Math.tan((24 * Math.PI) / 180) * (camH - before.height);
+  const toPx = (x: number, z: number) => ({ x: box.x + box.width / 2 + (x / (k * (box.width / box.height))) * (box.width / 2), y: box.y + box.height / 2 - ((tz - z) / k) * (box.height / 2) });
+  const c = toPx(before.position.x, -before.position.y);
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 40, c.y, { steps: 5 });
+  await page.mouse.move(c.x + 80, c.y, { steps: 5 });
+  await expect(page.getByTestId('dims')).toContainText('accroche : Structure 1');
+  await page.screenshot({ path: `${shots}/18b-structures-gizmo.png` });
+  await page.mouse.up();
+  await expect.poll(async () => (await lyre1()).position.x).toBeGreaterThan(before.position.x + 0.5);
+  const moved = await lyre1();
+  expect(moved).toMatchObject({ trussId: before.trussId, position: { y: 5 } });
+  expect(Number.isInteger(moved.position.x * 4)).toBe(true); // 0,25 m grid
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => (await lyre1()).position.x).toBe(before.position.x);
+  await page.getByTestId('edit3d').click();
+  await page.getByTestId('cam-foh').click();
+});
+
 test('raccourci reconfiguré : Blackout sur K', async () => {
   await nav('settings');
   await page.getByRole('tab', { name: 'Raccourcis' }).click();

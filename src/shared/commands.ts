@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   addressSchema, attributeSchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
-  stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema,
+  stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -38,6 +38,10 @@ const fixturePatchSchema = z.object({
   rotation: z.number().min(-360).max(360).optional(),
   height: z.number().min(0).max(50).optional(),
   notes: z.string().max(500).optional(),
+  mount: fixtureMountSchema.optional(),
+  mountTilt: z.number().min(-90).max(90).optional(),
+  /** null detaches the fixture from its truss. */
+  trussId: idSchema.nullable().optional(),
 });
 
 export const commandSchema = z.discriminatedUnion('type', [
@@ -61,8 +65,12 @@ export const commandSchema = z.discriminatedUnion('type', [
       cyclo: z.boolean().optional(),
       markers: z.array(stageMarkerSchema).max(64).optional(),
       views: z.array(stageViewSchema).max(20).optional(),
+      trusses: z.array(trussSchema).max(64).optional(),
     }).optional(),
   }),
+  /** Scene-layout history (positions, mounting, trusses, stage settings): independent from the other edits. */
+  empty('scene.undo'),
+  empty('scene.redo'),
   empty('project.listRecovery'),
   z.object({ type: z.literal('project.openRecovery'), file: z.string().min(1).max(1000) }),
   /** Opens one of the built-in fictional demonstration projects (unsaved copy). */
@@ -216,6 +224,8 @@ export interface ProjectState {
   dirty: boolean;
   revision: number;
   issues: PatchIssue[];
+  /** Number of scene-layout steps that can be undone / redone. */
+  sceneHistory: { undo: number; redo: number };
 }
 
 export interface Alert {
@@ -260,6 +270,8 @@ export interface CommandResults {
   'project.saveAs': { path: string | null };
   'project.export': { path: string | null };
   'project.update': Void;
+  'scene.undo': Void;
+  'scene.redo': Void;
   'project.listRecovery': RecoveryEntry[];
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
   'project.openDemo': Void;

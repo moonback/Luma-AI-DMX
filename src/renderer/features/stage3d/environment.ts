@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { VisualFixture } from '../../../core/visualizer/model';
 import type { StageGeometry } from '../../../core/visualizer/beam';
-import type { Project, StageMarker } from '../../../core/model/schemas';
+import type { Project, StageMarker, Truss } from '../../../core/model/schemas';
+import { trussSupports } from '../../../core/visualizer/truss';
 import { labelSprite } from './rig';
 
 /**
@@ -46,7 +47,68 @@ function boxTruss(length: number, mat: THREE.Material, lattice: THREE.Material):
   return g;
 }
 
-export function buildEnvironment(stage: StageGeometry, fixtures: readonly VisualFixture[], markers: readonly StageMarker[] = []): THREE.Group {
+/** Name of the 3D group of an explicit truss (picked and moved by the editor). */
+export const trussObjectName = (id: string) => `truss:${id}`;
+
+/** One explicit truss, built around its centre at the truss height; every mesh carries `userData.trussId` for picking. */
+function buildTruss(t: Truss, selected: boolean): THREE.Group {
+  const g = new THREE.Group();
+  g.name = trussObjectName(t.id);
+  g.position.set(t.x, t.height, -t.y);
+  g.rotation.y = THREE.MathUtils.degToRad(t.rotation);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x9aa3b5, metalness: 0.85, roughness: 0.3, emissive: selected ? 0x3b1f8a : 0x000000 });
+  const lattice = new THREE.LineBasicMaterial({ color: selected ? 0xa78bfa : 0x6b7385 });
+  const r = t.length / 2;
+  const add = (o: THREE.Object3D, x: number, z: number, rotY: number) => { o.position.set(x, 0, z); o.rotation.y = rotY; g.add(o); };
+  if (t.shape === 'line') add(boxTruss(t.length, mat, lattice), 0, 0, 0);
+  else if (t.shape === 'square') {
+    add(boxTruss(t.length, mat, lattice), 0, r, 0);
+    add(boxTruss(t.length, mat, lattice), 0, -r, 0);
+    add(boxTruss(t.length, mat, lattice), r, 0, Math.PI / 2);
+    add(boxTruss(t.length, mat, lattice), -r, 0, Math.PI / 2);
+  } else {
+    const n = 16;
+    const chord = 2 * r * Math.sin(Math.PI / n);
+    for (let i = 0; i < n; i++) {
+      const a = ((i + 0.5) * 2 * Math.PI) / n;
+      const mid = r * Math.cos(Math.PI / n);
+      // Local x of the segment along the tangent of the circle.
+      add(boxTruss(chord + 0.05, mat, lattice), mid * Math.cos(a), mid * Math.sin(a), -(a + Math.PI / 2));
+    }
+  }
+  // Supports in the truss frame (trussSupports gives stage coordinates: undo the placement).
+  const inv = new THREE.Matrix4().compose(g.position, new THREE.Quaternion().setFromEuler(g.rotation), new THREE.Vector3(1, 1, 1)).invert();
+  for (const p of trussSupports(t)) {
+    const local = new THREE.Vector3(p.x, t.height, -p.y).applyMatrix4(inv);
+    if (t.support === 'towers') {
+      const tower = boxTruss(t.height + 0.35, mat, lattice);
+      tower.rotation.z = Math.PI / 2;
+      tower.position.set(local.x, (0.35 - t.height) / 2, local.z);
+      g.add(tower);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.03, 0.7), mat);
+      foot.position.set(local.x, 0.015 - t.height, local.z);
+      g.add(foot);
+    } else {
+      // Chain hoist: motor body and chain up to the grid.
+      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 3, 6), mat);
+      chain.position.set(local.x, 1.7, local.z);
+      g.add(chain);
+      const motor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.32, 0.22), mat);
+      motor.position.set(local.x, 0.45, local.z);
+      g.add(motor);
+    }
+  }
+  g.traverse((o) => { o.userData.trussId = t.id; });
+  return g;
+}
+
+export function buildEnvironment(
+  stage: StageGeometry,
+  fixtures: readonly VisualFixture[],
+  markers: readonly StageMarker[] = [],
+  trusses: readonly Truss[] = [],
+  selectedTruss: string | null = null,
+): THREE.Group {
   const env = new THREE.Group();
   const { width: W, depth: D, wallHeight: H } = stage;
 
@@ -118,12 +180,14 @@ export function buildEnvironment(stage: StageGeometry, fixtures: readonly Visual
     env.add(tag);
   }
 
-  // Trusses: one per row (height, depth) of hanging fixtures.
+  for (const t of trusses) env.add(buildTruss(t, t.id === selectedTruss));
+
+  // Implicit trusses (older projects): one per row (height, depth) of hung fixtures not attached to an explicit truss.
   const trussMat = new THREE.MeshStandardMaterial({ color: 0x9aa3b5, metalness: 0.85, roughness: 0.3 });
   const lattice = new THREE.LineBasicMaterial({ color: 0x6b7385 });
   const rows = new Map<string, VisualFixture[]>();
   for (const f of fixtures) {
-    if (f.mount !== 'hanging') continue;
+    if (f.mount !== 'hanging' || f.trussId) continue;
     const k = `${Math.round(f.height * 2) / 2}|${Math.round(f.y)}`;
     rows.set(k, [...(rows.get(k) ?? []), f]);
   }

@@ -258,5 +258,6 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .stage3d-toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: var(--radius); background: rgba(11, 13, 18, 0.72); border: 1px solid var(--border); backdrop-filter: blur(6px); z-index: 2; }
 .stage3d-panel { position: absolute; right: 10px; bottom: 34px; width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.92); border: 1px solid var(--border-strong); z-index: 2; }
 .stage3d-tip { position: absolute; pointer-events: none; display: flex; flex-direction: column; padding: 6px 9px; border-radius: 6px; background: rgba(18, 22, 32, 0.95); border: 1px solid var(--border-strong); z-index: 3; white-space: nowrap; }
+.stage3d-dims { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); pointer-events: none; padding: 5px 10px; border-radius: 6px; background: rgba(18, 22, 32, 0.95); border: 1px solid var(--violet); color: var(--text); z-index: 3; white-space: nowrap; }
 .stage3d-hint { position: absolute; left: 12px; bottom: 8px; z-index: 2; }
 .stage3d:fullscreen { border-radius: 0; }

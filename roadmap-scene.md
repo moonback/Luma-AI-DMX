@@ -44,12 +44,14 @@ Légende effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaine
 - **Critères** : les 5 caméras se recadrent automatiquement selon l'emprise.
 
 #### 3. Structures et accroches explicites · M
+> **Livré (17/10/2026)** : truss droites, cercles et carrés (longueur, hauteur, rotation, sur pieds ou suspendues), éditées dans le panneau « Scène » et dessinées en 2D et 3D ; accroche par `trussId` avec suivi automatique (déplacement, rotation, hauteur) et décrochage à la suppression ; aimantation au dépôt en 2D et en 3D ; accroche auto / suspendue / posée / murale et inclinaison. Les truss implicites restent dessinées pour les projecteurs non accrochés.
 - Les truss deviennent des objets (`visualizer.trusses[]`) : droite, cercle, carré, longueur, hauteur, pieds ou suspendue.
 - Un projecteur peut être **accroché** à une truss (`fixture.trussId`) : il suit ses déplacements, aimantation au placement.
 - Orientation de montage complète (`mountTilt`, accroche suspendue / posée / murale) au lieu de la règle « hauteur < 1 m ».
 - Les truss implicites actuelles restent le comportement par défaut pour les anciens projets.
 
 #### 4. Édition directe dans la 3D · M
+> **Livré (17/10/2026)** : mode « Éditer » avec gizmo pour déplacer, monter et pivoter projecteurs et truss (les projecteurs accrochés suivent pendant le glisser) ; grille libre / 0,25 / 0,5 / 1 m et rotations par 15° ; cotes affichées pendant le déplacement ; annuler / rétablir de la scène (boutons, Ctrl+Z, Ctrl+Y), indépendant des autres modifications. Reste : les décors, qui attendent la fonctionnalité 1.
 - `TransformControls` (déjà présent dans `three/examples`) : déplacer, monter, pivoter projecteurs, décors et truss dans la vue 3D.
 - Aimantation à une grille (0,25 / 0,5 / 1 m), affichage des cotes pendant le déplacement.
 - **Annuler / rétablir global** des modifications de scène, basé sur les commandes `act()` existantes.

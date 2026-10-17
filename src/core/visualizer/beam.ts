@@ -1,4 +1,4 @@
-import type { VisualFixture } from './model';
+import type { VisualFixture, VisualMount } from './model';
 
 /**
  * Pure beam geometry shared by the 3D view and the tests. World axes: x = stage left/right, y = up,
@@ -19,23 +19,35 @@ export interface StageGeometry {
 
 const DEG = Math.PI / 180;
 /** Fixed aim of non-moving fixtures, in degrees from their mounting axis (floor fixtures wash the back wall). */
-export const FIXED_AIM = { hanging: 35, floor: -20 } as const;
+export const FIXED_AIM = { hanging: 35, floor: -20, wall: 0 } as const;
 
-type Aimable = Pick<VisualFixture, 'movable' | 'panDeg' | 'tiltDeg' | 'rotation' | 'mount'>;
+type Aimable = Pick<VisualFixture, 'movable' | 'panDeg' | 'tiltDeg' | 'rotation' | 'mount'> & { mountTilt?: number };
 
-/** Angles driving the 3D rig: ψ around the vertical axis, φ away from the mounting axis (down when hanging, up on the floor). */
-export function aimAngles(f: Aimable): { psi: number; phi: number } {
+/** Direction of the mounting axis in the fixture base: −Y hung (and on a wall, before the 90° tilt), +Y on the floor. */
+export const mountSign = (m: VisualMount): 1 | -1 => (m === 'floor' ? 1 : -1);
+
+/**
+ * Rig angles in radians, applied as root (yaw, then tilt around the local x axis) → yoke (pan) → head (tilt).
+ * A wall mount is a hung base tilted by 90° so the beam leaves the wall along `rotation`; its mount tilt aims down.
+ */
+export function rigAngles(f: Aimable): { yaw: number; tilt: number; pan: number; head: number } {
+  const s = mountSign(f.mount);
+  const mountTilt = f.mountTilt ?? 0;
   return {
-    psi: (f.rotation + (f.movable ? f.panDeg : 0)) * DEG,
-    phi: (f.movable ? f.tiltDeg : FIXED_AIM[f.mount]) * DEG,
+    yaw: f.rotation * DEG,
+    tilt: s * (f.mount === 'wall' ? 90 - mountTilt : mountTilt) * DEG,
+    pan: (f.movable ? f.panDeg : 0) * DEG,
+    head: s * (f.movable ? f.tiltDeg : FIXED_AIM[f.mount]) * DEG,
   };
 }
 
-/** Unit beam direction for the aim angles (consistent with the rig: yoke.rotation.y = ψ, head.rotation.x = ∓φ). */
+const rx = (v: Vec3, a: number): Vec3 => { const c = Math.cos(a), s = Math.sin(a); return { x: v.x, y: v.y * c - v.z * s, z: v.y * s + v.z * c }; };
+const ry = (v: Vec3, a: number): Vec3 => { const c = Math.cos(a), s = Math.sin(a); return { x: v.x * c + v.z * s, y: v.y, z: -v.x * s + v.z * c }; };
+
+/** Unit beam direction, identical to the 3D rig: Ry(yaw)·Rx(tilt)·Ry(pan)·Rx(head)·(0, s, 0). */
 export function beamDirection(f: Aimable): Vec3 {
-  const { psi, phi } = aimAngles(f);
-  const vertical = f.mount === 'hanging' ? -Math.cos(phi) : Math.cos(phi);
-  return { x: Math.sin(phi) * Math.sin(psi), y: vertical, z: Math.sin(phi) * Math.cos(psi) };
+  const a = rigAngles(f);
+  return ry(rx(ry(rx({ x: 0, y: mountSign(f.mount), z: 0 }, a.head), a.pan), a.tilt), a.yaw);
 }
 
 /** Rotates a direction around the vertical axis (used to fan out prism facets). */

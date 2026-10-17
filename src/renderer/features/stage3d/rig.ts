@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import type { VisualFixture } from '../../../core/visualizer/model';
-import { aimAngles, beamHit, beamLength, flickerOn, poolShape, type StageGeometry } from '../../../core/visualizer/beam';
+import { beamHit, mountSign, rigAngles, beamLength, flickerOn, poolShape, type StageGeometry } from '../../../core/visualizer/beam';
 import { textures } from './textures';
 
 /**
- * Articulated fixture rigs. Hierarchy: root (mount position) → yoke (pan, around vertical) → head (tilt) → lens.
- * The lens points along s·Y in head space (s = −1 hanging, +1 floor) so the world beam matches `beamDirection()`.
+ * Articulated fixture rigs. Hierarchy: root (mount position, yaw then mount tilt) → yoke (pan) → head (tilt) → lens.
+ * The lens points along s·Y in head space (s = −1 hung or on a wall, +1 floor) so the world beam matches `beamDirection()`.
  */
 
 /* ------------------------------------------------------------------ */
@@ -150,8 +150,9 @@ export function labelSprite(text: string): THREE.Sprite {
 
 export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
   const g = geometries();
-  const s = f.mount === 'hanging' ? -1 : 1;
+  const s = mountSign(f.mount);
   const root = new THREE.Group();
+  root.rotation.order = 'YXZ'; // matches beamDirection(): Ry(yaw)·Rx(mount tilt)
   const yoke = new THREE.Group();
   const head = new THREE.Group();
   root.add(yoke);
@@ -270,11 +271,12 @@ function colorOf(hex: string): { color: THREE.Color; level: number } {
 
 /** Per-frame update: pose, beam colours/lengths, light pools on floor and back wall, strobe flashes. */
 export function updateRig(r: Rig, f: VisualFixture, o: FrameOptions): void {
-  const s = f.mount === 'hanging' ? -1 : 1;
   r.root.position.set(f.x, f.height, -f.y);
-  const { psi, phi } = aimAngles(f);
-  r.yoke.rotation.y = psi;
-  r.head.rotation.x = s < 0 ? -phi : phi;
+  const a = rigAngles(f);
+  r.root.rotation.y = a.yaw;
+  r.root.rotation.x = a.tilt;
+  r.yoke.rotation.y = a.pan;
+  r.head.rotation.x = a.head;
   r.root.updateMatrixWorld(true);
   r.ring.visible = o.selected;
   r.label.visible = o.labels || o.selected;

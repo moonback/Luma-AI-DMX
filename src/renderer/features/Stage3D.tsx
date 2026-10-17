@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { Camera, CircleStop, Cloud, Crosshair, Expand, Eye, ImageDown, Plus, Sparkles, Tag, Sun, TriangleAlert, Video, X } from 'lucide-react';
+import { Camera, CircleStop, Cloud, Crosshair, Expand, Eye, ImageDown, Move3d, Plus, Rotate3d, Sparkles, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
 import { useStore } from '../store';
-import { act, newId } from '../api';
+import { act, call, newId } from '../api';
 import { NumberInput, useResolved } from '../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
-import type { FixtureValues } from '../../core/model/schemas';
+import type { Fixture, FixtureMount, FixtureValues, Truss } from '../../core/model/schemas';
+import { followTruss, hangHeight, nearestOnTruss, snapToTrusses } from '../../core/visualizer/truss';
 import { audienceGlare, beamDirection, type StageGeometry } from '../../core/visualizer/beam';
 import { buildRig, disposeRig, rigKey, updateRig, type Rig } from './stage3d/rig';
-import { buildEnvironment, buildLowFog, disposeGroup, setLowFog, stageGeometry } from './stage3d/environment';
+import { buildEnvironment, buildLowFog, disposeGroup, setLowFog, stageGeometry, trussObjectName } from './stage3d/environment';
 import { disposeTextures } from './stage3d/textures';
 
 /**
@@ -28,8 +30,23 @@ const VIEWS: { id: ViewId; label: string }[] = [
 ];
 
 /** `view`: a built-in camera id or the id of a view saved in the project. */
-interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string }
-const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh' };
+interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number }
+const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25 };
+/** Editor grid steps in meters (0 = free); rotations snap to 15° whenever a grid is on. */
+const GRIDS = [0, 0.25, 0.5, 1];
+const ROTATION_SNAP_DEG = 15;
+/** A fixture dropped this close (vertically) to a truss' hanging height snaps onto it. */
+const SNAP_HEIGHT = 1;
+
+type Placement = { x: number; y: number; height: number; rotation: number };
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+/** Degrees in [-180, 180]. */
+const wrapDeg = (d: number) => r2(((((d + 180) % 360) + 360) % 360) - 180);
+/** Stage placement of a 3D object (world z points to the audience, stage y upstage). */
+const placementOf = (o: THREE.Object3D): Placement => ({
+  x: r2(clamp(o.position.x, -100, 100)), y: r2(clamp(-o.position.z, -100, 100)), height: r2(o.position.y), rotation: wrapDeg(THREE.MathUtils.radToDeg(o.rotation.y)),
+});
 function loadPrefs(): Prefs {
   try {
     return { ...DEFAULT_PREFS, ...(JSON.parse(localStorage.getItem('luma.stage3d') ?? '{}') as Partial<Prefs>) };
@@ -70,7 +87,58 @@ function download(url: string, name: string): void {
 }
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
 
-function InfoPanel({ f, following, onFollow }: { f: VisualFixture; following: boolean; onFollow: () => void }) {
+const MOUNTS: { id: FixtureMount; label: string }[] = [
+  { id: 'auto', label: 'Auto (hauteur)' }, { id: 'hanging', label: 'Suspendu' }, { id: 'floor', label: 'Posé au sol' }, { id: 'wall', label: 'Mural' },
+];
+
+/** Hangs a fixture on a truss at the closest point of the truss to its current position. */
+function hangOn(fixture: Fixture, t: Truss): void {
+  const p = nearestOnTruss(t, fixture.position.x, fixture.position.y);
+  void act({
+    type: 'fixture.update', id: fixture.id,
+    patch: { trussId: t.id, position: { x: r2(p.x), y: r2(p.y) }, height: r2(hangHeight(t)), ...(fixture.mount === 'floor' || fixture.mount === 'wall' ? { mount: 'hanging' as const } : {}) },
+  });
+}
+
+function MountFields({ fixture, trusses }: { fixture: Fixture; trusses: readonly Truss[] }) {
+  const update = (patch: Partial<Pick<Fixture, 'mount' | 'mountTilt' | 'trussId'>>) => void act({ type: 'fixture.update', id: fixture.id, patch });
+  return (
+    <div className="grid g2" style={{ gap: 6 }}>
+      <label className="field"><span className="small muted">Accroche</span>
+        <select className="select" value={fixture.mount ?? 'auto'} onChange={(e) => update({ mount: e.target.value as FixtureMount })} data-testid="mount">
+          {MOUNTS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+      </label>
+      <label className="field" title="Inclinaison de l’accroche : vers la salle (mural : vers le bas)"><span className="small muted">Inclinaison (°)</span>
+        <NumberInput value={fixture.mountTilt ?? 0} min={-90} max={90} onChange={(v) => update({ mountTilt: v })} />
+      </label>
+      <label className="field" style={{ gridColumn: 'span 2' }}><span className="small muted">Structure</span>
+        <select className="select" value={fixture.trussId ?? ''} data-testid="fixture-truss" onChange={(e) => {
+          const t = trusses.find((x) => x.id === e.target.value);
+          if (t) hangOn(fixture, t);
+          else update({ trussId: null });
+        }}>
+          <option value="">{trusses.length ? 'Aucune (position libre)' : 'Aucune structure définie'}</option>
+          {trusses.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function TrussPanel({ t, trusses }: { t: Truss; trusses: readonly Truss[] }) {
+  const shape = t.shape === 'line' ? 'Droite' : t.shape === 'circle' ? 'Cercle' : 'Carré';
+  return (
+    <div className="stage3d-panel" data-testid="stage3d-truss">
+      <div className="row between"><b>{t.name}</b><span className="badge">{shape}</span></div>
+      <div className="small muted">X {t.x.toFixed(2)} m · Y {t.y.toFixed(2)} m · H {t.height.toFixed(2)} m · {t.rotation.toFixed(0)}°</div>
+      <div className="small muted">{t.shape === 'circle' ? 'Diamètre' : t.shape === 'square' ? 'Côté' : 'Longueur'} {t.length} m · {t.support === 'towers' ? 'sur pieds' : 'suspendue (moteurs)'}</div>
+      <button className="btn sm" title="Supprimer la structure (les projecteurs restent en place, décrochés)" onClick={() => void act({ type: 'project.update', visualizer: { trusses: trusses.filter((x) => x.id !== t.id) } })}><Trash2 size={12} />Supprimer</button>
+    </div>
+  );
+}
+
+function InfoPanel({ f, fixture, trusses, following, onFollow }: { f: VisualFixture; fixture: Fixture | undefined; trusses: readonly Truss[]; following: boolean; onFollow: () => void }) {
   return (
     <div className="stage3d-panel" data-testid="stage3d-info">
       <div className="row between"><b>{f.name}</b><span className="badge">{f.type}</span></div>
@@ -81,7 +149,8 @@ function InfoPanel({ f, following, onFollow }: { f: VisualFixture; following: bo
         <label className="field"><span className="small muted">Hauteur (m)</span><NumberInput value={f.height} min={0} max={50} step={0.1} onChange={(v) => void act({ type: 'fixture.update', id: f.id, patch: { height: v } })} /></label>
         <label className="field"><span className="small muted">Rotation (°)</span><NumberInput value={f.rotation} min={-360} max={360} onChange={(v) => void act({ type: 'fixture.update', id: f.id, patch: { rotation: v } })} /></label>
       </div>
-      <span className="small dim">{f.mount === 'floor' ? 'Posé au sol (faisceau vers le haut)' : 'Accroché (faisceau vers le bas)'} — seuil 1 m</span>
+      {fixture && <MountFields fixture={fixture} trusses={trusses} />}
+      <span className="small dim">{f.mount === 'floor' ? 'Posé au sol (faisceau vers le haut)' : f.mount === 'wall' ? 'Mural (faisceau vers l’avant)' : 'Suspendu (faisceau vers le bas)'}{(fixture?.mount ?? 'auto') === 'auto' ? ' — auto : au sol sous 1 m' : ''}</span>
       <button className={`btn sm ${following ? 'on' : ''}`} onClick={onFollow} data-testid="beam-view" title="Placer la caméra dans l’axe du faisceau pour régler un focus"><Crosshair size={12} />{following ? 'Quitter la vue projecteur' : 'Vue projecteur'}</button>
     </div>
   );
@@ -106,8 +175,12 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const glare = useMemo(() => audienceGlare(model, stage), [model, stage]);
   const [follow, setFollow] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
-  const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow });
-  latest.current = { model, selection, groupFilter, prefs, stage, vis, follow };
+  const [edit, setEdit] = useState(false);
+  const [tool, setTool] = useState<'translate' | 'rotate'>('translate');
+  const [selTruss, setSelTruss] = useState<string | null>(null);
+  const [dims, setDims] = useState<string | null>(null);
+  const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selTruss });
+  latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selTruss };
   const api = useRef<{
     goTo: (v: string) => void;
     pose: () => { pos: THREE.Vector3; target: THREE.Vector3 };
@@ -144,6 +217,87 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.minDistance = 1.5;
     controls.maxDistance = 120;
+
+    // Direct editing: a gizmo on the selected fixture (through a proxy, the rig follows the model) or truss group.
+    const tc = new TransformControls(camera, renderer.domElement);
+    tc.setSpace('world');
+    tc.size = 0.8;
+    scene.add(tc.getHelper());
+    const proxy = new THREE.Object3D();
+    scene.add(proxy);
+    /** Placements shown while dragging and until the main process confirms the edit. */
+    const overrides = new Map<string, Placement>();
+    let attached = '';
+    let gizmoCfg = '';
+    let dragging = false;
+    const describe = (p: Placement, extra = '') => `X ${p.x.toFixed(2)} m · Y ${p.y.toFixed(2)} m · H ${p.height.toFixed(2)} m · ${p.rotation.toFixed(0)}°${extra}`;
+    /** Truss a fixture would hang on if dropped here (close horizontally and near the hanging height). */
+    const trussSnap = (p: Placement) => {
+      const snap = snapToTrusses(latest.current.vis.trusses, p.x, p.y);
+      return snap && Math.abs(p.height - snap.height) <= SNAP_HEIGHT ? snap : null;
+    };
+    const editedTruss = (): { before: Truss; after: Truss } | null => {
+      const id = attached.startsWith('truss:') ? attached.split(':')[1]! : null;
+      const before = id ? latest.current.vis.trusses.find((t) => t.id === id) : undefined;
+      const obj = tc.object;
+      if (!before || !obj) return null;
+      const p = placementOf(obj);
+      return { before, after: { ...before, x: p.x, y: p.y, height: r2(clamp(p.height, 0.5, 30)), rotation: p.rotation } };
+    };
+    const onChange = () => {
+      const obj = tc.object;
+      if (!obj || !dragging) return;
+      const p = placementOf(obj);
+      if (obj === proxy) {
+        const id = attached.split(':')[1]!;
+        overrides.set(id, p);
+        const snap = latest.current.tool === 'translate' ? trussSnap(p) : null;
+        setDims(describe(p, snap ? ` · accroche : ${snap.truss.name}` : ''));
+      } else {
+        const tr = editedTruss();
+        if (!tr) return;
+        // Hung fixtures ride along with the truss while it moves.
+        for (const f of useStore.getState().project?.project.patch ?? []) {
+          if (f.trussId !== tr.before.id) continue;
+          const n = followTruss(tr.before, tr.after, f);
+          overrides.set(f.id, { x: n.position.x, y: n.position.y, height: n.height, rotation: n.rotation });
+        }
+        setDims(describe({ ...p, height: tr.after.height }));
+      }
+    };
+    const commit = () => {
+      const obj = tc.object;
+      setDims(null);
+      if (!obj) return;
+      if (obj === proxy) {
+        const id = attached.split(':')[1]!;
+        const fixture = useStore.getState().project?.project.patch.find((f) => f.id === id);
+        if (!fixture) { overrides.delete(id); return; }
+        const p = placementOf(proxy);
+        const patch: { position: { x: number; y: number }; height: number; rotation: number; trussId?: string | null } = {
+          position: { x: p.x, y: p.y }, height: r2(clamp(p.height, 0, 50)), rotation: p.rotation,
+        };
+        if (latest.current.tool === 'translate') {
+          const snap = trussSnap(p);
+          if (snap) Object.assign(patch, { position: { x: snap.x, y: snap.y }, height: snap.height, trussId: snap.truss.id });
+          else if (fixture.trussId) patch.trussId = null;
+        }
+        overrides.set(id, { x: patch.position.x, y: patch.position.y, height: patch.height, rotation: p.rotation });
+        void act({ type: 'fixture.update', id, patch }).finally(() => overrides.delete(id));
+      } else {
+        const tr = editedTruss();
+        if (!tr) return;
+        const trusses = latest.current.vis.trusses.map((t) => (t.id === tr.before.id ? tr.after : t));
+        void call({ type: 'project.update', visualizer: { trusses } })
+          .catch(() => { envKey = ''; }) // refused: rebuild the set at its saved place
+          .finally(() => overrides.clear());
+      }
+    };
+    tc.addEventListener('dragging-changed', (e) => {
+      dragging = !!e.value;
+      if (!dragging) commit();
+    });
+    tc.addEventListener('objectChange', onChange);
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
@@ -198,11 +352,21 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     let downAt = { x: 0, y: 0 };
     let lastHover = 0;
     const onDown = (e: PointerEvent) => { downAt = { x: e.clientX, y: e.clientY }; };
+    const pickTruss = (cx: number, cy: number): string | undefined => {
+      if (!env) return undefined;
+      const r = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+      return ray.intersectObject(env, true).find((h) => h.object.userData.trussId)?.object.userData.trussId as string | undefined;
+    };
     const onUp = (e: PointerEvent) => {
       if (e.button !== 0 || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 4) return;
+      if (tc.axis !== null || dragging) return; // click on the gizmo
       const id = pick(e.clientX, e.clientY);
       const st = useStore.getState();
-      if (!id) st.setSelection([]);
+      const trussId = !id && latest.current.edit ? pickTruss(e.clientX, e.clientY) : undefined;
+      setSelTruss(trussId ?? null);
+      if (trussId) st.setSelection([]);
+      else if (!id) st.setSelection([]);
       else if (e.ctrlKey || e.shiftKey) st.setSelection(st.selection.includes(id) ? st.selection.filter((x) => x !== id) : [...st.selection, id]);
       else st.setSelection([id]);
     };
@@ -249,13 +413,13 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     const t0 = performance.now();
     const loop = () => {
       const now = performance.now();
-      const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st, vis: cfg, follow: fid } = latest.current;
-      // Environment follows the stage layout, stage points and truss rows.
-      const k = `${JSON.stringify(st)}|${JSON.stringify(cfg.markers)}|${m.filter((f) => f.mount === 'hanging').map((f) => `${f.x.toFixed(1)},${f.y.toFixed(1)},${f.height.toFixed(1)}`).join(';')}`;
+      const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st, vis: cfg, follow: fid, edit: editing, tool: tl, selTruss: selT } = latest.current;
+      // Environment follows the stage layout, stage points, explicit trusses and the rows of unattached hung fixtures.
+      const k = `${JSON.stringify(st)}|${JSON.stringify(cfg.markers)}|${JSON.stringify(cfg.trusses)}|${editing ? selT : ''}|${m.filter((f) => f.mount === 'hanging' && !f.trussId).map((f) => `${f.x.toFixed(1)},${f.y.toFixed(1)},${f.height.toFixed(1)}`).join(';')}`;
       if (k !== envKey) {
         if (env) { scene.remove(env); disposeGroup(env); }
         if (fog) { scene.remove(fog); disposeGroup(fog); }
-        env = buildEnvironment(st, m, cfg.markers);
+        env = buildEnvironment(st, m, cfg.markers, cfg.trusses, editing ? selT : null);
         fog = buildLowFog(st);
         scene.add(env, fog);
         envKey = k;
@@ -271,7 +435,8 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           r = buildRig(f, scene);
           rigs.set(f.id, r);
         }
-        updateRig(r, f, { time: (now - t0) / 1000, haze: p.haze, pools: p.pools, labels: p.labels, selected: sel.includes(f.id), dimmed: !!group && !group.fixtureIds.includes(f.id), stage: st });
+        const o = overrides.get(f.id);
+        updateRig(r, o ? { ...f, ...o } : f, { time: (now - t0) / 1000, haze: p.haze, pools: p.pools, labels: p.labels, selected: sel.includes(f.id), dimmed: !!group && !group.fixtureIds.includes(f.id), stage: st });
       }
       if (anim) {
         const k2 = Math.min(1, (now - anim.start) / 700);
@@ -280,9 +445,33 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         controls.target.lerpVectors(anim.tFrom, anim.tTo, e);
         if (k2 >= 1) anim = null;
       }
+      // Gizmo target: the selected truss, else the single selected fixture (edit mode only).
+      const target = !editing || fid ? '' : selT ? `truss:${selT}:${env?.uuid}` : sel.length === 1 && m.some((f) => f.id === sel[0]) ? `fixture:${sel[0]}` : '';
+      if (target !== attached && !dragging) {
+        attached = target;
+        const obj = target.startsWith('truss:') ? env?.getObjectByName(trussObjectName(selT!)) : target ? proxy : undefined;
+        if (obj) tc.attach(obj);
+        else tc.detach();
+      }
+      if (attached.startsWith('fixture:') && !dragging) {
+        const f = m.find((x) => x.id === attached.split(':')[1]);
+        const o = f && (overrides.get(f.id) ?? f);
+        if (o) {
+          proxy.position.set(o.x, o.height, -o.y);
+          proxy.rotation.set(0, THREE.MathUtils.degToRad(o.rotation), 0);
+        }
+      }
+      const cfgKey = `${tl}|${p.grid}`;
+      if (cfgKey !== gizmoCfg) {
+        gizmoCfg = cfgKey;
+        tc.setMode(tl);
+        tc.showX = tc.showZ = tl === 'translate';
+        tc.setTranslationSnap(p.grid || null);
+        tc.setRotationSnap(p.grid ? THREE.MathUtils.degToRad(ROTATION_SNAP_DEG) : null);
+      }
       // Beam's-eye view: the camera rides just ahead of the lens along the beam axis (orbit disabled meanwhile).
       const followed = fid ? m.find((f) => f.id === fid) : undefined;
-      controls.enabled = !followed;
+      controls.enabled = !followed && !dragging;
       if (followed) {
         const d = beamDirection(followed);
         const dir = new THREE.Vector3(d.x, d.y, d.z);
@@ -311,6 +500,8 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       cancelAnimationFrame(raf);
       if (recorder?.state === 'recording') recorder.stop();
       ro.disconnect();
+      tc.detach();
+      tc.dispose();
       controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
@@ -330,6 +521,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   useEffect(() => api.current?.setBloom(prefs.glow), [prefs.glow]);
 
   const selected = selection.length === 1 ? model.find((f) => f.id === selection[0]) : undefined;
+  const selectedTruss = edit && selTruss ? vis.trusses.find((t) => t.id === selTruss) : undefined;
   const pickView = (id: string) => { setFollow(null); setPrefs({ view: id }); api.current?.goTo(id); };
   const saveView = () => {
     const pose = api.current?.pose();
@@ -380,6 +572,20 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title="Taches de lumière et gobos au sol et sur le cyclorama"><Eye size={12} /> Taches</button>
         <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title="Fumée lourde au sol" data-testid="smoke"><Cloud size={12} /> Fumée</button>
         <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title="Noms des projecteurs"><Tag size={12} /> Noms</button>
+        <button className={`chip ${edit ? 'on' : ''}`} onClick={() => { setEdit(!edit); setSelTruss(null); }} title="Édition directe : déplacer et pivoter projecteurs et structures" data-testid="edit3d"><Move3d size={12} /> Éditer</button>
+        {edit && (
+          <>
+            <div className="chips" role="group" aria-label="Outil">
+              <button className={`chip ${tool === 'translate' ? 'on' : ''}`} onClick={() => setTool('translate')} title="Déplacer (et monter / descendre)" data-testid="tool-move"><Move3d size={12} /></button>
+              <button className={`chip ${tool === 'rotate' ? 'on' : ''}`} onClick={() => setTool('rotate')} title="Pivoter autour de la verticale" data-testid="tool-rotate"><Rotate3d size={12} /></button>
+            </div>
+            <label className="row small" title="Aimantation à la grille (et rotations par 15°)">Grille
+              <select className="select" style={{ width: 82, height: 26 }} value={prefs.grid} onChange={(e) => setPrefs({ grid: Number(e.target.value) })} data-testid="grid">
+                {GRIDS.map((g) => <option key={g} value={g}>{g ? `${String(g).replace('.', ',')} m` : 'Libre'}</option>)}
+              </select>
+            </label>
+          </>
+        )}
         <button className="chip" onClick={() => api.current?.capture()} title="Capture d’image (PNG)" data-testid="capture"><ImageDown size={12} /></button>
         <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
         <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)"><Expand size={12} /></button>
@@ -391,8 +597,12 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           <span className="small muted">{Math.round(hover.f.intensity * 100)} % · {hover.f.color.toUpperCase()}{hover.f.movable ? ` · P ${hover.f.panDeg.toFixed(0)}° T ${hover.f.tiltDeg.toFixed(0)}°` : ''}</span>
         </div>
       )}
-      {selected && <InfoPanel f={selected} following={follow === selected.id} onFollow={() => setFollow(follow === selected.id ? null : selected.id)} />}
-      <div className="stage3d-hint small dim">Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique</div>
+      {dims && <div className="stage3d-dims mono small" data-testid="dims">{dims}</div>}
+      {selectedTruss && <TrussPanel t={selectedTruss} trusses={vis.trusses} />}
+      {selected && !selectedTruss && (
+        <InfoPanel f={selected} fixture={project.patch.find((x) => x.id === selected.id)} trusses={vis.trusses} following={follow === selected.id} onFollow={() => setFollow(follow === selected.id ? null : selected.id)} />
+      )}
+      <div className="stage3d-hint small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}</div>
     </div>
   );
 }
