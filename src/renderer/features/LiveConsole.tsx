@@ -3,14 +3,13 @@ import { Eraser, Save, SlidersHorizontal } from 'lucide-react';
 import { useStore, confirmAction, EMPTY_OBJ } from '../store';
 import { act } from '../api';
 import { Empty, Modal, Field, PageHead, Panel, pct, useResolved, useThrottled } from '../components/ui';
-import { attributeClass, attributeLabel } from '../../core/fixtures/attributes';
+import { attributeClass, attributeLabel, EMITTER_ATTRIBUTES } from '../../core/fixtures/attributes';
 import { cellColors, colorCapability, colorCells, displayColor } from '../../core/fixtures/color';
 import { channelKey, coarseChannel, type ResolvedFixture } from '../../core/fixtures/profiles';
 import { rgbToHex } from '../../core/util/math';
 import type { Channel } from '../../core/model/schemas';
 
 const QUICK_COLORS = ['#FFFFFF', '#FF0000', '#FF7000', '#FFD000', '#00FF40', '#00E5FF', '#0040FF', '#8B00FF', '#FF00C8', '#FFB000'];
-const EMITTERS = ['red', 'green', 'blue', 'white', 'amber', 'uv'];
 
 export function FixtureTiles({ onPick }: { onPick?: () => void }) {
   const { fixtures } = useResolved();
@@ -142,7 +141,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
   const has = (a: string) => attrs.includes(a);
   const channelFor = (a: string) => selected.map((rf) => coarseChannel(rf.mode, a)).find((c) => c);
   const colorCaps = new Set(selected.map(colorCapability));
-  const emitters = EMITTERS.filter(has);
+  const emitters = EMITTER_ATTRIBUTES.filter(has);
   const beam = attrs.filter((a) => attributeClass(a) === 'beam' || attributeClass(a) === 'special');
   const sendColor = useThrottled((hex: string) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: hex }), 40);
   const d = displayColor(first, values[first.fixture.id] ?? {});

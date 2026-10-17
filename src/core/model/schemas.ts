@@ -19,9 +19,10 @@ export const addressSchema = z.number().int().min(1).max(512);
 
 export const BUILTIN_ATTRIBUTES = [
   'dimmer', 'red', 'green', 'blue', 'white', 'amber', 'uv', 'cyan', 'magenta', 'yellow', 'cto', 'colorWheel',
-  'pan', 'tilt', 'panTiltSpeed',
-  'shutter', 'strobe', 'gobo', 'goboRotation', 'prism', 'focus', 'zoom', 'iris', 'frost',
-  'speed', 'macro', 'control',
+  'warmWhite', 'coldWhite', 'lime', 'indigo', 'colorTemperature', 'colorMacro', 'colorMacroFade',
+  'pan', 'tilt', 'panTiltSpeed', 'panTiltMode',
+  'shutter', 'strobe', 'gobo', 'goboRotation', 'prism', 'focus', 'zoom', 'iris', 'frost', 'effectWheel', 'zoomMode',
+  'speed', 'macro', 'control', 'macroSpeed', 'fog', 'fan',
 ] as const;
 export type BuiltinAttribute = (typeof BUILTIN_ATTRIBUTES)[number];
 export const attributeSchema = z.union([

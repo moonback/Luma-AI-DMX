@@ -70,7 +70,7 @@ const hex = (c: string | undefined) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c.toUpp
 const caps = (c: OflChan): OflCap[] => (c.capabilities ?? (c.capability ? [c.capability] : []));
 
 const COLOR_ATTR: Record<string, string> = {
-  Red: 'red', Green: 'green', Blue: 'blue', White: 'white', 'Warm White': 'white', 'Cold White': 'white', Amber: 'amber', UV: 'uv',
+  Red: 'red', Green: 'green', Blue: 'blue', White: 'white', 'Warm White': 'warmWhite', 'Cold White': 'coldWhite', Amber: 'amber', UV: 'uv', Lime: 'lime', Indigo: 'indigo',
   Cyan: 'cyan', Magenta: 'magenta', Yellow: 'yellow',
 };
 const STROBE_EFFECTS = new Set(['Strobe', 'Pulse', 'RampUp', 'RampDown', 'RampUpDown', 'Lightning', 'Spikes', 'Burst']);

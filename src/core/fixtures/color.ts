@@ -3,10 +3,13 @@ import { clamp01, hexToRgb, type Rgb } from '../util/math';
 import { baseAttribute, cellKey, cellOf } from './attributes';
 import { coarseChannel, rangeAt, type ResolvedFixture } from './profiles';
 
+/** 'rgbw' covers RGB plus any white emitter (white, warmWhite, coldWhite). */
 export type ColorCapability = 'rgb' | 'rgbw' | 'cmy' | 'wheel' | 'none';
 
+const WHITES = ['white', 'warmWhite', 'coldWhite'] as const;
+
 const capabilityOf = (attrs: Set<string>): ColorCapability => {
-  if (attrs.has('red') && attrs.has('green') && attrs.has('blue')) return attrs.has('white') ? 'rgbw' : 'rgb';
+  if (attrs.has('red') && attrs.has('green') && attrs.has('blue')) return WHITES.some((w) => attrs.has(w)) ? 'rgbw' : 'rgb';
   if (attrs.has('cyan') && attrs.has('magenta') && attrs.has('yellow')) return 'cmy';
   if (attrs.has('colorWheel')) return 'wheel';
   return 'none';
@@ -45,7 +48,11 @@ function groupColor(rf: ResolvedFixture, cap: ColorCapability, cell: number | un
   switch (cap) {
     case 'rgbw': {
       const w = Math.min(r, g, b);
-      return { [k('red')]: r - w, [k('green')]: g - w, [k('blue')]: b - w, [k('white')]: w };
+      const out: AttributeValues = { [k('red')]: r - w, [k('green')]: g - w, [k('blue')]: b - w };
+      // A plain white wins; otherwise warm + cold together give a neutral white.
+      const whites = rf.attributes.includes(k('white')) ? ['white'] : WHITES.filter((a) => rf.attributes.includes(k(a)));
+      for (const a of whites) out[k(a)] = w;
+      return out;
     }
     case 'rgb':
       return { [k('red')]: r, [k('green')]: g, [k('blue')]: b };
@@ -88,8 +95,12 @@ const WARM_WHITE: Rgb = { r: 1, g: 0.9, b: 0.75 };
 function groupDisplay(rf: ResolvedFixture, cap: ColorCapability, cell: number | undefined, v: AttributeValues): Rgb {
   const g = (a: string) => v[cellKey(a, cell)] ?? 0;
   if (cap === 'rgb' || cap === 'rgbw') {
-    const w = g('white'), am = g('amber'), uv = g('uv');
-    return { r: clamp01(g('red') + w + am + uv * 0.4), g: clamp01(g('green') + w + am * 0.6), b: clamp01(g('blue') + w + uv * 0.9) };
+    const w = g('white'), ww = g('warmWhite'), cw = g('coldWhite'), am = g('amber'), uv = g('uv'), li = g('lime'), ind = g('indigo');
+    return {
+      r: clamp01(g('red') + w + ww + cw * 0.85 + am + uv * 0.4 + li * 0.6 + ind * 0.3),
+      g: clamp01(g('green') + w + ww * 0.85 + cw * 0.9 + am * 0.6 + li),
+      b: clamp01(g('blue') + w + ww * 0.6 + cw + uv * 0.9 + ind),
+    };
   }
   if (cap === 'cmy') return { r: 1 - g('cyan'), g: 1 - g('magenta'), b: 1 - g('yellow') };
   if (cap === 'wheel') {

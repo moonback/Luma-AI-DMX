@@ -67,6 +67,19 @@ describe('Open Fixture Library', () => {
     expect(u1(engine)[21]).toBe(0);
   });
 
+  it('convertit un RGBWW : blancs chaud/froid et lime en attributs dédiés, pas en génériques', () => {
+    const r = convertOflFixture(ofl('synthetic-rgbww-par'), { manufacturer: 'Test', key: 'rgbww' });
+    expect(r.warnings).toEqual([]);
+    const p = r.profile!;
+    expect(p.modes[0]!.channels.map((c) => c.attribute)).toEqual(['dimmer', 'red', 'green', 'blue', 'warmWhite', 'coldWhite', 'lime']);
+    expect(validateProfile(p).ok).toBe(true);
+    const lib = new ProfileLibrary([p]);
+    const rf = resolveFixture(lib, fixture({ profileId: p.id, mode: '7-channel' }))!;
+    // White extraction goes to both whites (neutral mix), lime untouched.
+    expect(colorToAttributes(rf, { r: 1, g: 1, b: 0.5 })).toEqual({ red: 0.5, green: 0.5, blue: 0, warmWhite: 0.5, coldWhite: 0.5 });
+    expect(displayColor(rf, { warmWhite: 1 }).color.b).toBeLessThan(displayColor(rf, { coldWhite: 1 }).color.b);
+  });
+
   it('refuse un fichier qui n’est pas au format OFL', () => {
     const r = convertOflFixture({ hello: 'world' }, { manufacturer: 'X', key: 'y' });
     expect(r.profile).toBeNull();
