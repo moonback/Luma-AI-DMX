@@ -24,6 +24,11 @@ describe('projets de démonstration', () => {
       for (const e of c.effectIds) expect(effects.has(e)).toBe(true);
     }
     for (const t of p.timelines) for (const e of t.events) expect(e.kind === 'scene' ? scenes.has(e.refId!) : effects.has(e.refId!)).toBe(true);
+    // Stage set: every demo has trusses carrying the hung fixtures, and decor.
+    expect(p.visualizer.trusses.length).toBeGreaterThan(0);
+    expect(p.visualizer.props.length).toBeGreaterThan(0);
+    const trusses = new Set(p.visualizer.trusses.map((t) => t.id));
+    for (const f of p.patch) if (f.height >= 3) expect(trusses.has(f.trussId!)).toBe(true);
     // Deterministic: the same demo always yields the same patch.
     expect(buildDemo(id).patch).toEqual(p.patch);
   });

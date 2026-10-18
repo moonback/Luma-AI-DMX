@@ -1,9 +1,10 @@
 import { createProject } from '../project/format';
-import { projectSchema, effectParamsSchema, type Project, type FixtureValues } from '../model/schemas';
+import { projectSchema, effectParamsSchema, type Project, type FixtureValues, type Truss } from '../model/schemas';
 import { ProjectIndex } from '../engine/resolve';
 import { channelCount } from '../fixtures/profiles';
 import { colorCapability, colorCells, colorToAttributes } from '../fixtures/color';
 import { hexToRgb } from '../util/math';
+import { HANG_OFFSET } from '../visualizer/truss';
 import { DEMOS, type DemoSpec } from './catalog';
 
 /** Builds a complete, schema-validated project from a demo spec (deterministic ids: reproducible and testable). */
@@ -25,10 +26,26 @@ function build(spec: DemoSpec): Project {
   p.cueLists = [];
   const pid = (s: string) => `${spec.id}-${slug(s)}`.slice(0, 64);
 
-  // Patch: consecutive addresses per universe, positions spread across (or along) the stage.
+  // Patch: consecutive addresses per universe, positions spread across (or along) the stage. Rigs at 3 m or more hang
+  // on a truss sized to the rig (rigs on the same row share it), so the fixtures follow it.
   const next = new Map<number, number>();
   const rigIds = new Map<string, string[]>();
+  const trusses: Truss[] = [];
+  const trussFor = (rig: DemoSpec['rigs'][number]) => {
+    if (rig.height < 3) return null;
+    const along = !!rig.alongDepth, rotation = along ? 90 : 0;
+    const x = along ? Math.round((rig.span ?? 0) * W * 10) / 10 : 0, y = along ? D / 2 : rig.y;
+    const length = Math.max(1, along ? D : Math.round(W * (rig.span ?? 0.9) + 1));
+    const height = Math.round((rig.height + HANG_OFFSET) * 10) / 10;
+    let t = trusses.find((o) => o.x === x && o.y === y && o.height === height && o.rotation === rotation);
+    if (!t) {
+      t = { id: pid(`truss-${trusses.length + 1}`), name: `Structure ${rig.label}`.slice(0, 60), shape: 'line', x, y, height, length, rotation, support: 'hung' };
+      trusses.push(t);
+    } else t.length = Math.max(t.length, length);
+    return t.id;
+  };
   for (const rig of spec.rigs) {
+    const trussId = trussFor(rig);
     const u = rig.universe ?? 1;
     const ch = channelCount(new ProjectIndex(p).lib.get(rig.profile)!, rig.mode);
     const ids: string[] = [];
@@ -42,12 +59,14 @@ function build(spec: DemoSpec): Project {
         : { x: (t - 0.5) * W * (rig.span ?? 0.9), y: rig.y };
       const id = pid(`${rig.prefix}-${i + 1}`);
       ids.push(id);
-      p.patch.push({ id, name: `${rig.label} ${i + 1}`, profileId: rig.profile, mode: rig.mode, universe: u, address, tags: [rig.prefix.toLowerCase()], position: { x: Math.round(position.x * 10) / 10, y: Math.round(position.y * 10) / 10 }, rotation: 0, height: rig.height, notes: '' });
+      p.patch.push({ id, name: `${rig.label} ${i + 1}`, profileId: rig.profile, mode: rig.mode, universe: u, address, tags: [rig.prefix.toLowerCase()], position: { x: Math.round(position.x * 10) / 10, y: Math.round(position.y * 10) / 10 }, rotation: 0, height: rig.height, notes: '', ...(trussId ? { trussId } : {}) });
     }
     rigIds.set(rig.prefix, ids);
     p.groups.push({ id: pid(`g-${rig.prefix}`), name: rig.label, color: rig.color, fixtureIds: ids });
   }
   p.show.universes = Math.max(1, ...next.keys());
+  p.visualizer.trusses = trusses;
+  p.visualizer.props = spec.decor.map((d, i) => ({ elevation: 0, rotation: 0, color: '#15171C', ...d, id: pid(`decor-${i + 1}`) }));
 
   // Scenes: per-fixture colours from the real colour capabilities of each profile.
   const index = new ProjectIndex(p);

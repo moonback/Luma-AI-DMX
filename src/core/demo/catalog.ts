@@ -1,4 +1,4 @@
-import type { EffectParams, EffectType } from '../model/schemas';
+import type { EffectParams, EffectType, StageProp } from '../model/schemas';
 
 /**
  * Ten fictional demonstration projects, described as plain data (importable by the renderer for the gallery) and
@@ -21,6 +21,8 @@ export interface DemoRig {
   alongDepth?: boolean;
   color: string;
 }
+/** Set piece: a StageProp without id; elevation, rotation and colour are optional. */
+export type DemoProp = Omit<StageProp, 'id' | 'elevation' | 'rotation' | 'color'> & Partial<Pick<StageProp, 'elevation' | 'rotation' | 'color'>>;
 export interface DemoLookPart { rigs: string[]; colors: string[]; level: number; pan?: number; tilt?: number }
 export interface DemoLook { name: string; parts: DemoLookPart[] }
 export interface DemoEffect { name: string; type: EffectType; rigs: string[]; params: Partial<EffectParams>; blend?: 'override' | 'scale' }
@@ -35,7 +37,9 @@ export interface DemoSpec {
   highlights: string[];
   bpm: number;
   stage: [number, number];
+  /** Rigs mounted at 3 m or more hang on a generated truss. */
   rigs: DemoRig[];
+  decor: DemoProp[];
   looks: DemoLook[];
   effects: DemoEffect[];
   cueLists: { name: string; loop?: boolean; cues: DemoCue[] }[];
@@ -58,6 +62,13 @@ const club: DemoSpec = {
     { prefix: 'PAR', label: 'PAR contre', profile: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', count: 8, y: 5.5, height: 4.5, color: '#22D3EE' },
     { prefix: 'BAR', label: 'Barres LED sol', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 4, y: 1, height: 0.2, color: '#F472B6' },
     { prefix: 'STR', label: 'Strobes', profile: 'demo-strobe', mode: '2ch', count: 2, y: 3, height: 5, span: 0.6, color: '#FACC15' },
+  ],
+  decor: [
+    { name: 'Praticable DJ', kind: 'riser', x: 0, y: 2.5, width: 3, depth: 2, height: 0.4 },
+    { name: 'Cabine DJ', kind: 'table', x: 0, y: 2.3, width: 2.4, depth: 0.8, height: 1, elevation: 0.4 },
+    { name: 'Enceinte jardin', kind: 'speaker', x: -4.4, y: 0.6, width: 0.8, depth: 0.8, height: 1.8 },
+    { name: 'Enceinte cour', kind: 'speaker', x: 4.4, y: 0.6, width: 0.8, depth: 0.8, height: 1.8 },
+    { name: 'Rideau de fond', kind: 'drape', x: 0, y: 5.9, width: 10, depth: 0.1, height: 5 },
   ],
   looks: [
     { name: 'Warm-up', parts: [{ rigs: ['PAR'], colors: [C.violet, C.blue], level: 0.45 }, { rigs: ['BAR'], colors: [C.violet], level: 0.3 }] },
@@ -99,6 +110,15 @@ const pop: DemoSpec = {
     { prefix: 'PAR', label: 'PAR latéraux', profile: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', count: 12, y: 4, height: 5, color: '#22D3EE' },
     { prefix: 'BAR', label: 'Barres décor', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 4, y: 7.8, height: 0.3, color: '#F472B6' },
   ],
+  decor: [
+    { name: 'Praticable batterie', kind: 'riser', x: 0, y: 5.5, width: 3, depth: 2.5, height: 0.6 },
+    { name: 'Enceinte jardin', kind: 'speaker', x: -5.5, y: 0.6, width: 0.6, depth: 0.6, height: 1.2 },
+    { name: 'Enceinte cour', kind: 'speaker', x: 5.5, y: 0.6, width: 0.6, depth: 0.6, height: 1.2 },
+    { name: 'Retour chant', kind: 'monitor', x: 0, y: 1.2, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
+    { name: 'Micro chant', kind: 'mic', x: 0, y: 2.3, width: 0.3, depth: 0.3, height: 1.6 },
+    { name: 'Micro guitare', kind: 'mic', x: -3.5, y: 3, width: 0.3, depth: 0.3, height: 1.6 },
+    { name: 'Micro basse', kind: 'mic', x: 3.5, y: 3, width: 0.3, depth: 0.3, height: 1.6 },
+  ],
   looks: [
     { name: 'Intro', parts: [{ rigs: ['SPOT'], colors: [C.blue], level: 0.5, tilt: 0.6 }, { rigs: ['BAR'], colors: [C.navy], level: 0.4 }] },
     { name: 'Couplet', parts: [{ rigs: ['WASH'], colors: [C.warm], level: 0.6 }, { rigs: ['PAR'], colors: [C.amber, C.orange], level: 0.5 }, { rigs: ['BAR'], colors: [C.amber], level: 0.3 }] },
@@ -136,6 +156,14 @@ const theatre: DemoSpec = {
     { prefix: 'DECOUPE', label: 'Découpes (lyres)', profile: 'demo-spot', mode: '13ch étendu', count: 4, y: 3, height: 7.5, color: '#A78BFA' },
     { prefix: 'CYCLO', label: 'Cyclorama', profile: 'demo-led-bar-4', mode: '4ch DRGB global', count: 6, y: 8.8, height: 0.2, color: '#34D399' },
   ],
+  decor: [
+    { name: 'Pendrillon jardin 1', kind: 'drape', x: -4.4, y: 3, width: 1.2, depth: 0.1, height: 7 },
+    { name: 'Pendrillon cour 1', kind: 'drape', x: 4.4, y: 3, width: 1.2, depth: 0.1, height: 7 },
+    { name: 'Pendrillon jardin 2', kind: 'drape', x: -4.4, y: 6, width: 1.2, depth: 0.1, height: 7 },
+    { name: 'Pendrillon cour 2', kind: 'drape', x: 4.4, y: 6, width: 1.2, depth: 0.1, height: 7 },
+    { name: 'Table du salon', kind: 'table', x: 1, y: 4, width: 1.4, depth: 0.8, height: 0.75, color: '#6B4226' },
+    { name: 'Fauteuil', kind: 'box', x: -0.2, y: 4, width: 0.6, depth: 0.6, height: 0.9, color: '#7F1D1D' },
+  ],
   looks: [
     { name: 'Entrée public', parts: [{ rigs: ['CYCLO'], colors: [C.navy], level: 0.3 }] },
     { name: 'Salon — jour', parts: [{ rigs: ['FACE'], colors: [C.warm], level: 0.75 }, { rigs: ['CONTRE'], colors: [C.warm], level: 0.5 }, { rigs: ['CYCLO'], colors: ['#87CEEB'], level: 0.6 }] },
@@ -170,6 +198,15 @@ const wedding: DemoSpec = {
     { prefix: 'BAR', label: 'Table d’honneur', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 2, y: 2, height: 0.5, span: 0.3, color: '#FBBF24' },
     { prefix: 'WASH', label: 'Piste de danse', profile: 'demo-wash', mode: '13ch', count: 4, y: 6, height: 4, span: 0.5, color: '#8B5CF6' },
   ],
+  decor: [
+    { name: 'Table d’honneur', kind: 'table', x: 0, y: 2, width: 6, depth: 0.9, height: 0.75, color: '#F5F0E6' },
+    { name: 'Table 1', kind: 'table', x: -6, y: 5, width: 1.6, depth: 1.6, height: 0.75, color: '#F5F0E6' },
+    { name: 'Table 2', kind: 'table', x: 6, y: 5, width: 1.6, depth: 1.6, height: 0.75, color: '#F5F0E6' },
+    { name: 'Table 3', kind: 'table', x: -6, y: 9, width: 1.6, depth: 1.6, height: 0.75, color: '#F5F0E6' },
+    { name: 'Table 4', kind: 'table', x: 6, y: 9, width: 1.6, depth: 1.6, height: 0.75, color: '#F5F0E6' },
+    { name: 'Enceinte jardin', kind: 'speaker', x: -7.5, y: 11, width: 0.6, depth: 0.6, height: 1.2 },
+    { name: 'Enceinte cour', kind: 'speaker', x: 7.5, y: 11, width: 0.6, depth: 0.6, height: 1.2 },
+  ],
   looks: [
     { name: 'Cocktail', parts: [{ rigs: ['UP'], colors: [C.amber], level: 0.6 }, { rigs: ['BAR'], colors: [C.warm], level: 0.5 }] },
     { name: 'Dîner', parts: [{ rigs: ['UP'], colors: [C.amber, C.pink], level: 0.4 }, { rigs: ['BAR'], colors: [C.warm], level: 0.7 }] },
@@ -201,6 +238,13 @@ const conference: DemoSpec = {
     { prefix: 'CONTRE', label: 'Contre marque', profile: 'demo-wash', mode: '13ch', count: 4, y: 5, height: 5, color: '#14B8A6' },
     { prefix: 'BAR', label: 'Pupitre et logo', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 4, y: 2, height: 1, span: 0.5, color: '#3B82F6' },
   ],
+  decor: [
+    { name: 'Pupitre', kind: 'box', x: 3, y: 2, width: 0.6, depth: 0.5, height: 1.1, color: '#1E3A8A' },
+    { name: 'Table ronde', kind: 'table', x: -2, y: 2.5, width: 3, depth: 0.7, height: 0.75 },
+    { name: 'Enceinte jardin', kind: 'speaker', x: -5.5, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
+    { name: 'Enceinte cour', kind: 'speaker', x: 5.5, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
+    { name: 'Rideau de fond', kind: 'drape', x: 0, y: 5.9, width: 12, depth: 0.1, height: 4, color: '#1A237E' },
+  ],
   looks: [
     { name: 'Accueil', parts: [{ rigs: ['CONTRE'], colors: [C.teal], level: 0.6, tilt: 0.55 }, { rigs: ['BAR'], colors: [C.blue], level: 0.6 }] },
     { name: 'Keynote', parts: [{ rigs: ['FACE'], colors: [C.white], level: 0.85 }, { rigs: ['CONTRE'], colors: [C.blue], level: 0.5, tilt: 0.6 }, { rigs: ['BAR'], colors: [C.blue], level: 0.5 }] },
@@ -229,6 +273,12 @@ const jazz: DemoSpec = {
     { prefix: 'PAR', label: 'PAR', profile: 'demo-par-rgb', mode: '3ch RGB', count: 6, y: 2, height: 3.5, color: '#F59E0B' },
     { prefix: 'SOLO', label: 'Lyres solo', profile: 'demo-spot', mode: '13ch étendu', count: 2, y: 1, height: 3.8, span: 0.5, color: '#60A5FA' },
   ],
+  decor: [
+    { name: 'Praticable batterie', kind: 'riser', x: 1.5, y: 3, width: 2, depth: 1.6, height: 0.3 },
+    { name: 'Piano', kind: 'box', x: -1.8, y: 2.8, width: 1.5, depth: 1.4, height: 1, color: '#0B0B0B' },
+    { name: 'Micro', kind: 'mic', x: 0, y: 1, width: 0.3, depth: 0.3, height: 1.6 },
+    { name: 'Rideau de velours', kind: 'drape', x: 0, y: 3.95, width: 6, depth: 0.1, height: 3, color: '#3B0D0D' },
+  ],
   looks: [
     { name: 'Ambre', parts: [{ rigs: ['PAR'], colors: [C.amber, C.orange], level: 0.6 }] },
     { name: 'Bleu nuit', parts: [{ rigs: ['PAR'], colors: [C.navy, C.violet], level: 0.5 }] },
@@ -256,6 +306,16 @@ const festival: DemoSpec = {
     { prefix: 'PAR', label: 'PAR sol', profile: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', count: 14, y: 11.5, height: 0.4, color: '#22D3EE' },
     { prefix: 'BAR', label: 'Barres', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 8, universe: 2, y: 11.8, height: 2, color: '#F472B6' },
     { prefix: 'STR', label: 'Strobes', profile: 'demo-strobe', mode: '2ch', count: 4, universe: 2, y: 7, height: 10, span: 0.7, color: '#FACC15' },
+  ],
+  decor: [
+    { name: 'Praticable batterie', kind: 'riser', x: 0, y: 7, width: 4, depth: 3, height: 0.8 },
+    { name: 'Praticable claviers', kind: 'riser', x: -5, y: 7, width: 3, depth: 2, height: 0.6 },
+    { name: 'Line array jardin', kind: 'speaker', x: -9.8, y: 1, width: 1.2, depth: 1.2, height: 4 },
+    { name: 'Line array cour', kind: 'speaker', x: 9.8, y: 1, width: 1.2, depth: 1.2, height: 4 },
+    { name: 'Retour jardin', kind: 'monitor', x: -4, y: 1.5, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
+    { name: 'Retour centre', kind: 'monitor', x: 0, y: 1.5, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
+    { name: 'Retour cour', kind: 'monitor', x: 4, y: 1.5, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
+    { name: 'Escalier coulisses', kind: 'stairs', x: 8.5, y: 11, width: 1.2, depth: 2, height: 1 },
   ],
   looks: [
     { name: 'Attente', parts: [{ rigs: ['PAR'], colors: [C.blue], level: 0.4 }, { rigs: ['BAR'], colors: [C.navy], level: 0.4 }] },
@@ -297,6 +357,11 @@ const runway: DemoSpec = {
     { prefix: 'POSE', label: 'Lyres de pose', profile: 'demo-spot', mode: '13ch étendu', count: 4, y: 1, height: 6, span: 0.8, color: '#A78BFA' },
     { prefix: 'FOND', label: 'Fond de scène', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 4, y: 19.5, height: 0.5, span: 0.9, color: '#F472B6' },
   ],
+  decor: [
+    { name: 'Podium', kind: 'riser', x: 0, y: 10, width: 2.4, depth: 20, height: 0.6, color: '#F8FAFC' },
+    { name: 'Estrade photographes', kind: 'riser', x: 0, y: -1.5, width: 4, depth: 1.2, height: 0.5 },
+    { name: 'Rideau de fond', kind: 'drape', x: 0, y: 19.9, width: 6, depth: 0.1, height: 4 },
+  ],
   looks: [
     { name: 'Entrée public', parts: [{ rigs: ['FOND'], colors: [C.violet], level: 0.4 }] },
     { name: 'Ouverture', parts: [{ rigs: ['FOND'], colors: [C.white], level: 1 }, { rigs: ['POSE'], colors: [C.white], level: 0.8, tilt: 0.7 }] },
@@ -325,6 +390,15 @@ const gospel: DemoSpec = {
     { prefix: 'PILIER', label: 'Piliers', profile: 'demo-par-rgb', mode: '5ch DRGB+Strobe', count: 8, y: 7, height: 0.3, color: '#A78BFA' },
     { prefix: 'VOUTE', label: 'Voûte', profile: 'demo-wash', mode: '13ch', count: 2, y: 12, height: 1, span: 0.4, color: '#60A5FA' },
   ],
+  decor: [
+    { name: 'Gradin 1', kind: 'riser', x: 0, y: 9, width: 8, depth: 1.2, height: 0.4 },
+    { name: 'Gradin 2', kind: 'riser', x: 0, y: 10.2, width: 8, depth: 1.2, height: 0.8 },
+    { name: 'Gradin 3', kind: 'riser', x: 0, y: 11.4, width: 8, depth: 1.2, height: 1.2 },
+    { name: 'Autel', kind: 'table', x: 0, y: 13, width: 2, depth: 0.8, height: 1, color: '#E7E5E4' },
+    { name: 'Colonne jardin', kind: 'column', x: -4.8, y: 7, width: 0.8, depth: 0.8, height: 10, color: '#9CA3AF' },
+    { name: 'Colonne cour', kind: 'column', x: 4.8, y: 7, width: 0.8, depth: 0.8, height: 10, color: '#9CA3AF' },
+    { name: 'Micro soliste', kind: 'mic', x: 0, y: 1.5, width: 0.3, depth: 0.3, height: 1.6 },
+  ],
   looks: [
     { name: 'Recueillement', parts: [{ rigs: ['PILIER'], colors: [C.navy, C.violet], level: 0.4 }, { rigs: ['VOUTE'], colors: [C.blue], level: 0.4, tilt: 0.2 }] },
     { name: 'Chœur', parts: [{ rigs: ['CHOEUR'], colors: [C.warm], level: 0.7 }, { rigs: ['PILIER'], colors: [C.amber], level: 0.5 }] },
@@ -351,6 +425,13 @@ const gala: DemoSpec = {
     { prefix: 'FACE', label: 'Face', profile: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', count: 6, y: -2, height: 5, color: '#FBBF24' },
     { prefix: 'CONTRE', label: 'Contre', profile: 'demo-par-rgb', mode: '5ch DRGB+Strobe', count: 6, y: 6, height: 5, color: '#60A5FA' },
     { prefix: 'POURSUITE', label: 'Poursuite', profile: 'demo-spot', mode: '13ch étendu', count: 1, y: -4, height: 6, span: 0, color: '#F8FAFC' },
+  ],
+  decor: [
+    { name: 'Pendrillon jardin', kind: 'drape', x: -4.6, y: 2.5, width: 1, depth: 0.1, height: 5 },
+    { name: 'Pendrillon cour', kind: 'drape', x: 4.6, y: 2.5, width: 1, depth: 0.1, height: 5 },
+    { name: 'Barre de danse', kind: 'box', x: -2.5, y: 6, width: 3, depth: 0.1, height: 1.1, color: '#A16207' },
+    { name: 'Enceinte jardin', kind: 'speaker', x: -4.8, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
+    { name: 'Enceinte cour', kind: 'speaker', x: 4.8, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
   ],
   looks: [
     { name: 'Classique', parts: [{ rigs: ['FACE'], colors: ['#E0E8FF'], level: 0.7 }, { rigs: ['CONTRE'], colors: [C.blue], level: 0.6 }] },
