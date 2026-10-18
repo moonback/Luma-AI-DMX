@@ -11,7 +11,7 @@
   "src/renderer/features/Fixtures.tsx": 82,
   "src/renderer/features/LiveConsole.tsx": 3,
   "src/renderer/features/Music.tsx": 2,
-  "src/renderer/features/Onboarding.tsx": 61,
+  "src/renderer/features/Onboarding.tsx": 60,
   "src/renderer/features/Output.tsx": 111,
   "src/renderer/features/Programmer.tsx": 3,
   "src/renderer/features/Settings.tsx": 15,
