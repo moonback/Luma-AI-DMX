@@ -371,9 +371,19 @@ describe('édition de scène : ajout, copie, presse-papiers, équipement', () =>
     expect(new Set(xs).size).toBe(6);
     const gaps = xs.slice(1).map((x, i) => x - xs[i]!);
     for (const g of gaps) expect(g).toBeCloseTo(gaps[0]!, 1);
-    // Families alternate along the truss instead of being bunched by patch order.
+    // Families interleave along the truss, mirrored around the centre, instead of being bunched by patch order.
     const order = [...out].sort((a, b) => a.position.x - b.position.x).map((p) => p.id[0]).join('');
-    expect(order).toBe('lplplp');
+    expect(order).toBe('lplppl');
+  });
+
+  it('équiper : les types se mélangent en miroir autour du centre (8 barres + 4 strobes)', () => {
+    const fx = [...Array.from({ length: 8 }, (_, i) => ({ id: `b${i}`, movable: false, type: 'bar' })),
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `s${i}`, movable: false, type: 'strobe' }))];
+    const order = (out: ReturnType<typeof equipTrusses>) => [...out].sort((a, b) => a.position.x - b.position.x).map((p) => p.id[0]).join('');
+    expect(order(equipTrusses(fx, [line({ id: 'face', length: 12 })]))).toBe('bsbbsbbsbbsb');
+    // Two trusses: each gets its share of both types, mirrored on its own.
+    const two = equipTrusses(fx, [line({ id: 'a', y: 1 }), line({ id: 'b', y: 2 })]);
+    for (const id of ['a', 'b']) expect(order(two.filter((p) => p.trussId === id))).toBe('bsbbsb');
   });
 
   it('équiper plusieurs structures : chacune a un pas régulier et centré, les jonctions restent libres', () => {

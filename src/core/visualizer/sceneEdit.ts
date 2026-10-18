@@ -104,7 +104,7 @@ export function parseElement(text: string): { kind: SceneKind; el: Element } | n
 /** Share of a totem in the spread (as many fixtures as 1 m of straight truss), and spacing of stacked fixtures. */
 const TOTEM_SHARE = 1, TOTEM_STEP = 0.5;
 
-export interface EquipFixture { id: string; movable: boolean }
+export interface EquipFixture { id: string; movable: boolean; type?: string }
 export interface Placement { id: string; position: P2; height: number; trussId: string }
 
 const segmentsOf = (t: Truss) => {
@@ -149,6 +149,19 @@ function spreadOne(truss: Truss, n: number): { p: P2; t: Truss }[] {
 }
 
 /**
+ * Interleaves fixture types along a line: each fixture sits at its rank within its type ((2i+1)/2n, symmetric around
+ * the middle), ties break one way on the left half and the other way on the right, so the mix mirrors around the centre.
+ */
+function mix(fx: readonly EquipFixture[]): EquipFixture[] {
+  const kind = (f: EquipFixture) => f.type ?? String(f.movable);
+  const ranked = [...new Set(fx.map(kind))].flatMap((ty, t) => {
+    const of = fx.filter((f) => kind(f) === ty);
+    return of.map((f, i) => ({ f, t, n: 2 * i + 1, d: 2 * of.length }));
+  });
+  return ranked.sort((a, b) => a.n * b.d - b.n * a.d || (a.t - b.t) * (2 * a.n > a.d ? -1 : 1)).map((x) => x.f);
+}
+
+/**
  * Hangs fixtures evenly on the trusses: moving heads on the upstage half of the trusses (back light), the others on
  * the downstage half (front light); with a single truss, or when one family is missing, everything shares all trusses.
  */
@@ -158,20 +171,26 @@ export function equipTrusses(fixtures: readonly EquipFixture[], trusses: readonl
   const byDepth = [...usable].sort((a, b) => a.y - b.y);
   const half = Math.ceil(byDepth.length / 2);
   const movers = fixtures.filter((f) => f.movable), fixed = fixtures.filter((f) => !f.movable);
-  // Single truss: both families share it in one spread (two spreads would land on the same points), interleaved
-  // evenly by their rank in their own family.
-  const rank = (fx: EquipFixture[]) => fx.map((f, i) => ({ f, k: (i + 0.5) / fx.length }));
-  const mixed = [...rank(movers), ...rank(fixed)].sort((a, b) => a.k - b.k).map((x) => x.f);
+  // Single truss: both families share it in one spread (two spreads would land on the same points).
   const groups = movers.length && fixed.length && byDepth.length > 1
     ? [{ fx: movers, on: byDepth.slice(half) }, { fx: fixed, on: byDepth.slice(0, half) }]
-    : [{ fx: mixed, on: byDepth }];
+    : [{ fx: [...fixtures], on: byDepth }];
   const onTotem = new Map<string, number>();
-  return groups.flatMap(({ fx, on }) => spread(on, fx.length).map(({ p, t }, i) => {
+  return groups.flatMap(({ fx, on }) => {
+    const pts = spread(on, fx.length), all = mix(fx);
+    // Each truss takes its share of the overall mix, itself mixed symmetrically along that truss.
+    const order = pts.flatMap((x, i) => {
+      if (i && pts[i - 1]!.t === x.t) return [];
+      const run = pts.slice(i).findIndex((y) => y.t !== x.t);
+      return mix(all.splice(0, run < 0 ? pts.length - i : run));
+    });
+    return pts.map(({ p, t }, i) => ({ p, t, f: order[i]! }));
+  }).map(({ p, t, f }) => {
     // Several fixtures on one totem are stacked downwards from the top, never below 0.5 m.
     const k = t.shape === 'totem' ? onTotem.get(t.id) ?? 0 : 0;
     if (t.shape === 'totem') onTotem.set(t.id, k + 1);
-    return { id: fx[i]!.id, position: p, height: r2(Math.max(Math.min(0.5, hangHeight(t)), hangHeight(t) - k * TOTEM_STEP)), trussId: t.id };
-  }));
+    return { id: f.id, position: p, height: r2(Math.max(Math.min(0.5, hangHeight(t)), hangHeight(t) - k * TOTEM_STEP)), trussId: t.id };
+  });
 }
 
 /** Visualizer patch that changes fields of one element (moves, resizes). */
