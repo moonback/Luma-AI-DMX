@@ -1,5 +1,5 @@
 import { performerSchema, propSchema, screenSchema, stageMarkerSchema, trussSchema, type Performer, type Project, type StageMarker, type StageProp, type StageScreen, type Truss } from '../model/schemas';
-import { hangHeight, nearestOnTruss, trussSegments, type P2 } from './truss';
+import { hangHeight, JUNCTION_ARMS, nearestOnTruss, trussSegments, type P2 } from './truss';
 
 /**
  * Scene-element editing shared by the 2D plan, the 3D view and the scene panel: creation at a free spot,
@@ -107,13 +107,32 @@ const TOTEM_SHARE = 1, TOTEM_STEP = 0.5;
 export interface EquipFixture { id: string; movable: boolean }
 export interface Placement { id: string; position: P2; height: number; trussId: string }
 
-/** `n` points evenly spread along the outline of `trusses` (taken end to end), with the truss they lie on. */
+const segmentsOf = (t: Truss) => {
+  // A totem takes a 1 m share of the fixtures, all on its clamp point.
+  if (t.shape === 'totem') { const c = nearestOnTruss(t, t.x, t.y); return [{ a: c, b: c, t, len: TOTEM_SHARE }]; }
+  return trussSegments(t).map(([a, b]) => ({ a, b, t, len: Math.hypot(b.x - a.x, b.y - a.y) }));
+};
+const lengthOf = (t: Truss) => segmentsOf(t).reduce((s, x) => s + x.len, 0);
+
+/**
+ * `n` points on `trusses`: each truss gets a share proportional to its length (largest remainders), spread evenly
+ * and centred on it, so every truss has a regular, symmetric pitch. Junction pieces only carry fixtures when they
+ * are all there is (they are the joints of the straight trusses).
+ */
 function spread(trusses: readonly Truss[], n: number): { p: P2; t: Truss }[] {
-  const segs = trusses.flatMap((t) => {
-    // A totem takes a 1 m share of the fixtures, all on its clamp point.
-    if (t.shape === 'totem') { const c = nearestOnTruss(t, t.x, t.y); return [{ a: c, b: c, t, len: TOTEM_SHARE }]; }
-    return trussSegments(t).map(([a, b]) => ({ a, b, t, len: Math.hypot(b.x - a.x, b.y - a.y) }));
-  });
+  const plain = trusses.filter((t) => !JUNCTION_ARMS[t.shape]);
+  const on = (plain.length ? plain : [...trusses]).sort((a, b) => a.y - b.y || a.x - b.x);
+  const lens = on.map(lengthOf), total = lens.reduce((s, x) => s + x, 0);
+  const exact = lens.map((l) => (n * l) / total);
+  const counts = exact.map(Math.floor);
+  const byRemainder = exact.map((x, i) => ({ i, r: x - Math.floor(x) })).sort((a, b) => b.r - a.r || lens[b.i]! - lens[a.i]!);
+  for (let k = 0; k < n - counts.reduce((s, x) => s + x, 0); k++) counts[byRemainder[k]!.i]!++;
+  return on.flatMap((t, i) => spreadOne(t, counts[i]!));
+}
+
+/** `n` points evenly spread along the outline of one truss. */
+function spreadOne(truss: Truss, n: number): { p: P2; t: Truss }[] {
+  const segs = segmentsOf(truss);
   const total = segs.reduce((s, x) => s + x.len, 0);
   const out: { p: P2; t: Truss }[] = [];
   for (let i = 0; i < n; i++) {
@@ -138,10 +157,14 @@ export function equipTrusses(fixtures: readonly EquipFixture[], trusses: readonl
   if (!usable.length || !fixtures.length) return [];
   const byDepth = [...usable].sort((a, b) => a.y - b.y);
   const half = Math.ceil(byDepth.length / 2);
-  const front = byDepth.length > 1 ? byDepth.slice(0, half) : byDepth;
-  const back = byDepth.length > 1 ? byDepth.slice(half) : byDepth;
   const movers = fixtures.filter((f) => f.movable), fixed = fixtures.filter((f) => !f.movable);
-  const groups = movers.length && fixed.length ? [{ fx: movers, on: back }, { fx: fixed, on: front }] : [{ fx: fixtures, on: byDepth }];
+  // Single truss: both families share it in one spread (two spreads would land on the same points), interleaved
+  // evenly by their rank in their own family.
+  const rank = (fx: EquipFixture[]) => fx.map((f, i) => ({ f, k: (i + 0.5) / fx.length }));
+  const mixed = [...rank(movers), ...rank(fixed)].sort((a, b) => a.k - b.k).map((x) => x.f);
+  const groups = movers.length && fixed.length && byDepth.length > 1
+    ? [{ fx: movers, on: byDepth.slice(half) }, { fx: fixed, on: byDepth.slice(0, half) }]
+    : [{ fx: mixed, on: byDepth }];
   const onTotem = new Map<string, number>();
   return groups.flatMap(({ fx, on }) => spread(on, fx.length).map(({ p, t }, i) => {
     // Several fixtures on one totem are stacked downwards from the top, never below 0.5 m.

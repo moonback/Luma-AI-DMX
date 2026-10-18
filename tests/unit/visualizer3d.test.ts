@@ -364,6 +364,30 @@ describe('édition de scène : ajout, copie, presse-papiers, équipement', () =>
     expect(equipTrusses([{ id: 'a', movable: false }], [])).toEqual([]);
   });
 
+  it('équiper une seule structure : lyres et fixes partagent une répartition régulière, sans superposition', () => {
+    const fx = [...['l1', 'l2', 'l3'].map((id) => ({ id, movable: true })), ...['p1', 'p2', 'p3'].map((id) => ({ id, movable: false }))];
+    const out = equipTrusses(fx, [line({ id: 's', y: 5 })]);
+    const xs = out.map((p) => p.position.x).sort((a, b) => a - b);
+    expect(new Set(xs).size).toBe(6);
+    const gaps = xs.slice(1).map((x, i) => x - xs[i]!);
+    for (const g of gaps) expect(g).toBeCloseTo(gaps[0]!, 1);
+    // Families alternate along the truss instead of being bunched by patch order.
+    const order = [...out].sort((a, b) => a.position.x - b.position.x).map((p) => p.id[0]).join('');
+    expect(order).toBe('lplplp');
+  });
+
+  it('équiper plusieurs structures : chacune a un pas régulier et centré, les jonctions restent libres', () => {
+    // Two front trusses (10 m and 5 m) side by side, joined by a corner piece.
+    const a = line({ id: 'a', x: -5, y: 1, length: 10 }), b = line({ id: 'b', x: 7.5, y: 1, length: 5 });
+    const corner = { ...line({ id: 'c', x: 0, y: 1 }), shape: 'corner' as const, length: 1 };
+    const out = equipTrusses(Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, movable: false })), [a, corner, b]);
+    expect(out.some((p) => p.trussId === 'c')).toBe(false);
+    const on = (id: string) => out.filter((p) => p.trussId === id).map((p) => p.position.x).sort((x, y) => x - y);
+    // Shares proportional to length: 4 on the 10 m truss, 2 on the 5 m one, each centred with a constant pitch.
+    expect(on('a')).toEqual([-8.75, -6.25, -3.75, -1.25]);
+    expect(on('b')).toEqual([6.25, 8.75]);
+  });
+
   it('service : fixture.place pose tout en une seule étape annulable', async () => {
     const { svc } = makeService();
     await svc.init();
