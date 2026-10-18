@@ -26,7 +26,7 @@ import { Logger, type LogEntry } from '../log/logger';
 import { AudioReactive } from '../audio/reactive';
 import { hexToRgb } from '../util/math';
 import type { AiProposal } from '../ai/actions';
-import { buildProposal, executeProposal, guardProposalFlashes, interpreterContext, proposeLocally } from '../ai/director';
+import { buildProposal, executeProposal, guardProposalFlashes, interpreterContext, liveState, proposeLocally } from '../ai/director';
 import { FlashDetector, stageLight, type FlashStatus } from '../safety/flashGuard';
 import { buildVisualModel } from '../visualizer/model';
 import { followTruss } from '../visualizer/truss';
@@ -1306,7 +1306,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         try {
           const model = ai.model || DEFAULT_OPENROUTER_MODEL;
           const caps = (await this.openRouterModels().catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-          const r = await proposeWithOpenRouter(prompt, describeRig(this.index, ai.allowStrobe, this.engine.bpm), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps });
+          const r = await proposeWithOpenRouter(prompt, describeRig(this.index, ai.allowStrobe, this.engine.bpm, liveState(this.index, this.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps });
           proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx });
           this.aiLastError = null;
         } catch (err) {

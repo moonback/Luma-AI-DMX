@@ -53,8 +53,16 @@ export const aiActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('setColor'), target: aiTargetSchema, color: hexColorSchema.optional(), colors: z.array(hexColorSchema).min(1).max(16).optional(), fade })
     .refine((a) => a.color || a.colors, { message: 'color ou colors requis' }),
   z.object({ type: z.literal('setPosition'), target: aiTargetSchema, pan: unitSchema.optional(), tilt: unitSchema.optional(), fade }),
+  /** Beam attributes: gobo = slot number on the gobo wheel (0 = open), prism in/out, zoom 0 narrow..1 wide. */
+  z.object({
+    type: z.literal('setBeam'), target: aiTargetSchema,
+    gobo: z.number().int().min(0).max(32).optional(), prism: z.boolean().optional(),
+    zoom: unitSchema.optional(), focus: unitSchema.optional(), frost: unitSchema.optional(), iris: unitSchema.optional(), fade,
+  }),
   z.object({ type: z.literal('startEffect'), effect: aiEffectSpecSchema }),
   z.object({ type: z.literal('stopEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(EFFECT_TYPES).optional(), all: z.boolean().optional() }),
+  /** Speeds up (> 1) or slows down (< 1) running AI effects, all of them when no type/name is given. */
+  z.object({ type: z.literal('adjustEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(EFFECT_TYPES).optional(), speedFactor: z.number().min(0.1).max(10) }),
   z.object({ type: z.literal('createScene'), name: z.string().trim().min(1).max(80), look: z.array(lookPartSchema).min(1).max(64), apply: z.boolean().default(false), fade }),
   z.object({ type: z.literal('applyScene'), sceneName: z.string().trim().min(1).max(80), fade }),
   z.object({

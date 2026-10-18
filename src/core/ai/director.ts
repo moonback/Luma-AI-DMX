@@ -3,7 +3,7 @@ import type { Effect, FixtureValues, Project } from '../model/schemas';
 import { effectParamsSchema } from '../model/schemas';
 import { colorCapability, colorToAttributes, displayColor } from '../fixtures/color';
 import { findModule, moduleDimmerKeys } from '../fixtures/modules';
-import type { ResolvedFixture } from '../fixtures/profiles';
+import { coarseChannel, type ResolvedFixture } from '../fixtures/profiles';
 import type { Engine } from '../engine/Engine';
 import type { ProjectIndex } from '../engine/resolve';
 import { hexToRgb, rgbToHex } from '../util/math';
@@ -13,6 +13,7 @@ import {
 } from './actions';
 import { interpretLocally, normalize, type InterpreterContext } from './local/interpreter';
 import { effectFlashViolation } from '../safety/flashGuard';
+import type { LiveState } from './providers/openrouter';
 
 /* ------------------------------------------------------------------ */
 /* Target resolution & validation                                      */
@@ -68,6 +69,28 @@ function capable(index: ProjectIndex, ids: string[], test: (rf: ResolvedFixture)
 const hasColor = (rf: ResolvedFixture) => colorCapability(rf) !== 'none';
 const hasPosition = (rf: ResolvedFixture) => rf.attributes.includes('pan') || rf.attributes.includes('tilt');
 
+type BeamAction = Extract<AiAction, { type: 'setBeam' }>;
+const BEAM_KEYS = ['zoom', 'focus', 'frost', 'iris'] as const;
+const midRange = (r: { from: number; to: number }) => Math.round((r.from + r.to) / 2) / 255;
+
+/** Beam request -> normalized values for one fixture, using the gobo/prism slots of its profile; unsupported fields are left out. */
+export function beamToValues(rf: ResolvedFixture, a: Omit<BeamAction, 'type' | 'target' | 'fade'>): Record<string, number> {
+  const v: Record<string, number> = {};
+  const gobo = a.gobo !== undefined ? coarseChannel(rf.mode, 'gobo') : undefined;
+  if (gobo && a.gobo !== undefined) {
+    const r = a.gobo === 0 ? gobo.ranges.find((x) => x.kind === 'open') : gobo.ranges.filter((x) => x.kind === 'gobo')[a.gobo - 1];
+    if (r) v.gobo = midRange(r);
+    else if (a.gobo === 0) v.gobo = 0;
+  }
+  const prism = a.prism !== undefined ? coarseChannel(rf.mode, 'prism') : undefined;
+  if (prism && a.prism !== undefined) {
+    const r = prism.ranges.find((x) => (a.prism ? x.kind !== 'open' && x.kind !== 'closed' : x.kind === 'open'));
+    v.prism = r ? midRange(r) : a.prism ? 1 : 0;
+  }
+  for (const k of BEAM_KEYS) if (a[k] !== undefined && rf.attributes.includes(k)) v[k] = a[k];
+  return v;
+}
+
 function checkEffect(spec: AiEffectSpec, ctx: ValidationContext, messages: string[]): string[] | null {
   const { ids, problems } = resolveAiTarget(ctx.index, spec.target);
   messages.push(...problems);
@@ -109,6 +132,8 @@ function describe(a: AiAction): string {
     case 'setColor': return `Couleur ${a.color ?? a.colors?.join(' / ')} (fondu ${a.fade} s)`;
     case 'setPosition': return `Position pan ${a.pan !== undefined ? pct(a.pan) : '–'} / tilt ${a.tilt !== undefined ? pct(a.tilt) : '–'}`;
     case 'startEffect': return `Effet ${a.effect.effectType} « ${a.effect.name} »${a.effect.bpmSync ? ' (BPM)' : ''}`;
+    case 'setBeam': return `Faisceau ${[a.gobo !== undefined ? (a.gobo ? `gobo ${a.gobo}` : 'gobo ouvert') : '', a.prism !== undefined ? (a.prism ? 'prisme' : 'sans prisme') : '', ...BEAM_KEYS.map((k) => (a[k] !== undefined ? `${k} ${pct(a[k])}` : ''))].filter(Boolean).join(', ')} (fondu ${a.fade} s)`;
+    case 'adjustEffect': return `${a.speedFactor >= 1 ? 'Accélérer' : 'Ralentir'} les effets IA${a.effectType ? ` (${a.effectType})` : a.effectName ? ` « ${a.effectName} »` : ''} ×${a.speedFactor}`;
     case 'stopEffect': return `Arrêt d’effets IA${a.effectType ? ` (${a.effectType})` : a.effectName ? ` « ${a.effectName} »` : ''}`;
     case 'createScene': return `Créer la scène « ${a.name} »${a.apply ? ' et l’appliquer' : ''}`;
     case 'applyScene': return `Appliquer la scène « ${a.sceneName} »`;
@@ -161,6 +186,20 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
         ids = c.ok;
         break;
       }
+      case 'setBeam': {
+        const r = resolveAiTarget(ctx.index, a.target);
+        messages.push(...r.problems);
+        const { type: _t, target: _g, fade: _f, ...fields } = a;
+        if (!Object.keys(fields).length) { messages.push('Aucun paramètre de faisceau fourni'); rejected = true; }
+        const c = capable(ctx.index, r.ids, (rf) => Object.keys(beamToValues(rf, fields)).length > 0);
+        if (c.skipped.length) messages.push(`Sans ce réglage de faisceau (ignorés) : ${c.skipped.join(', ')}`);
+        if (a.gobo) {
+          const missing = r.ids.map((id) => ctx.index.fixtures.get(id)!).filter((rf) => rf.attributes.includes('gobo') && beamToValues(rf, { gobo: a.gobo }).gobo === undefined);
+          if (missing.length) messages.push(`Gobo ${a.gobo} absent de la roue : ${missing.map((rf) => rf.fixture.name).join(', ')}`);
+        }
+        ids = c.ok;
+        break;
+      }
       case 'startEffect': {
         const ok = checkEffect(a.effect, ctx, messages);
         if (!ok) rejected = true;
@@ -185,7 +224,7 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
       default:
         break;
     }
-    const needsFixtures = !['stopEffect', 'applyScene', 'createCue', 'setBpm', 'releaseAi'].includes(a.type);
+    const needsFixtures = !['stopEffect', 'adjustEffect', 'applyScene', 'createCue', 'setBpm', 'releaseAi'].includes(a.type);
     if (needsFixtures && !rejected && ids.length === 0) {
       messages.push('Aucun projecteur ciblé ne prend en charge cette action');
       rejected = true;
@@ -236,6 +275,14 @@ function immediateValues(index: ProjectIndex, a: AiAction, ids: string[], pendin
       pendingScenes.set(normalize(a.name), v);
       return a.apply ? v : null;
     }
+    case 'setBeam': {
+      const { type: _t, target: _g, fade: _f, ...fields } = a;
+      return Object.fromEntries(ids.flatMap((id) => {
+        const rf = index.fixtures.get(id);
+        const v = rf ? beamToValues(rf, fields) : {};
+        return Object.keys(v).length ? [[id, v]] : [];
+      }));
+    }
     case 'applyScene': {
       const pending = pendingScenes.get(normalize(a.sceneName));
       if (pending) return pending;
@@ -274,10 +321,20 @@ export function interpreterContext(index: ProjectIndex, engine: Engine, allowStr
   }
   return {
     fixtures: [...index.fixtures.values()].map((rf) => ({ id: rf.fixture.id, name: rf.fixture.name, type: rf.profile.type, attributes: rf.attributes, modules: rf.profile.modules.map((m) => m.name) })),
-    groups: [...index.groups.values()].map((g) => ({ name: g.name })),
+    groups: [...index.groups.values()].map((g) => ({ name: g.name, members: g.fixtureIds.map((id) => index.fixtures.get(id)?.fixture.name).filter((n): n is string => !!n) })),
+    scenes: [...index.scenes.values()].map((s) => s.name),
     current,
     allowStrobe,
   };
+}
+
+/** Current look and running AI effects, given to a remote model so relative requests (« plus chaud », « ralentis ») work. */
+export function liveState(index: ProjectIndex, engine: Engine): LiveState {
+  const aiEffects = engine.snapshot().effects.filter((e) => e.owner === 'ai').flatMap((e) => {
+    const d = index.effects.get(e.effectId);
+    return d ? [{ name: d.name, type: d.type, speed: d.params.speed, bpmSync: d.params.bpmSync, beatsPerCycle: d.params.beatsPerCycle }] : [];
+  });
+  return { current: interpreterContext(index, engine, false).current, aiEffects };
 }
 
 export function buildProposal(args: {
@@ -358,6 +415,12 @@ export function guardProposalFlashes(proposal: AiProposal, index: ProjectIndex, 
   return rejected;
 }
 
+function effectMatches(def: Effect, a: { effectType?: string; effectName?: string }): boolean {
+  if (a.effectType) return def.type === a.effectType;
+  if (a.effectName) return normalize(def.name) === normalize(a.effectName);
+  return true;
+}
+
 export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): AiExecutionReport {
   const report: AiExecutionReport = {
     proposalId: proposal.id, executed: [], skipped: [],
@@ -381,6 +444,7 @@ export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): Ai
         case 'setIntensity':
         case 'setColor':
         case 'setPosition':
+        case 'setBeam':
         case 'applyScene': {
           const vals = immediateValues(index, a, v.fixtureIds, pending);
           if (!vals) throw new Error('Rien à appliquer');
@@ -413,10 +477,24 @@ export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): Ai
           for (const e of engine.snapshot().effects) {
             if (e.owner !== 'ai') continue;
             const def = index.effects.get(e.effectId);
-            const match = a.all || (a.effectType && def?.type === a.effectType) || (a.effectName && def && normalize(def.name) === normalize(a.effectName)) || (!a.effectType && !a.effectName);
-            if (match) { engine.stopEffect(e.instanceId); n++; }
+            if (a.all || (def && effectMatches(def, a))) { engine.stopEffect(e.instanceId); n++; }
           }
           report.executed.push({ index: v.index, summary: v.summary, detail: `${n} effet(s) arrêté(s)` });
+          break;
+        }
+        case 'adjustEffect': {
+          const running = new Set(engine.snapshot().effects.filter((e) => e.owner === 'ai').map((e) => e.effectId));
+          const defs = [...index.effects.values()].filter((d) => running.has(d.id) && effectMatches(d, a));
+          if (!defs.length) throw new Error('Aucun effet IA correspondant en cours');
+          ctx.mutate((d) => {
+            for (const e of d.effects) {
+              if (!defs.some((x) => x.id === e.id)) continue;
+              // BPM-synced effects are timed in beats: fewer beats per cycle = faster.
+              if (e.params.bpmSync) e.params.beatsPerCycle = Math.min(64, Math.max(0.25, e.params.beatsPerCycle / a.speedFactor));
+              else e.params.speed = Math.min(e.type === 'strobe' ? ctx.maxStrobeHz : 30, Math.max(0.01, e.params.speed * a.speedFactor));
+            }
+          });
+          report.executed.push({ index: v.index, summary: v.summary, detail: `${defs.length} effet(s) ajusté(s)` });
           break;
         }
         case 'createCue': {

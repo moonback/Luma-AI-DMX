@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { EFFECT_TYPES, FIXTURE_TYPES, SHOW_EFFECTS, SHOW_MOVEMENTS, showSectionPlanSchema, type ShowSectionPlan } from '../../model/schemas';
 import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
+import { coarseChannel } from '../../fixtures/profiles';
 import { BRAND } from '../../../shared/brand';
 
 export const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
@@ -27,7 +28,7 @@ const effect = z.object({
   shape: z.enum(['circle', 'figure8', 'pan', 'tilt']).optional(),
 });
 const llmAction = z.object({
-  type: z.enum(['setIntensity', 'setColor', 'setPosition', 'startEffect', 'stopEffect', 'createScene', 'applyScene', 'createCue', 'createSequence', 'setBpm', 'releaseAi']),
+  type: z.enum(['setIntensity', 'setColor', 'setPosition', 'setBeam', 'startEffect', 'stopEffect', 'adjustEffect', 'createScene', 'applyScene', 'createCue', 'createSequence', 'setBpm', 'releaseAi']),
   target: target.optional(),
   level: z.number().optional(),
   color: z.string().optional(),
@@ -48,6 +49,13 @@ const llmAction = z.object({
   loop: z.boolean().optional(),
   cues: z.array(z.object({ name: z.string(), look: z.array(look), fade: z.number().optional(), hold: z.number().optional(), effects: z.array(effect).optional() })).optional(),
   bpm: z.number().optional(),
+  gobo: z.number().optional(),
+  prism: z.boolean().optional(),
+  zoom: z.number().optional(),
+  focus: z.number().optional(),
+  frost: z.number().optional(),
+  iris: z.number().optional(),
+  speedFactor: z.number().optional(),
 });
 export const llmPlanSchema = z.object({ understanding: z.string(), actions: z.array(llmAction) });
 const PLAN_JSON_SCHEMA = z.toJSONSchema(llmPlanSchema);
@@ -64,20 +72,36 @@ ${JSON.stringify(PLAN_JSON_SCHEMA)}
 - Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove) need pan/tilt. Colour effects need colour attributes.
 - Never touch reset, lamp or other special/control functions; they are not available to you.
 - Strobe effects are only allowed when the rig description says strobeAllowed: true.
+- setBeam changes beam attributes of fixtures that have them: gobo = slot number on the gobo wheel (0 = open, see "gobos" for the slot count), prism true/false, zoom 0 (narrow) .. 1 (wide), focus/frost/iris 0..1.
+- The rig description gives the current look ("now": colour and level of lit fixtures) and "runningAiEffects": use them for relative requests (warmer, dimmer, slower...). adjustEffect re-times running AI effects (speedFactor > 1 faster, < 1 slower; filter with effectType or effectName); stopEffect stops them.
+- To recall an existing scene use applyScene with its exact name from "scenes"; do not recreate it.
 - Use setIntensity/setColor/setPosition for immediate changes, createScene (apply true to show it) for a reusable look, createSequence for timed or multi-step shows (hold = seconds before auto-advancing, omit for manual GO), startEffect for dynamic effects.
 - "understanding" is one or two sentences in French describing what you will do and any limitation (e.g. you cannot hear the music).
 - Keep proposals small and focused; at most 20 actions. Omit optional fields you do not need.`;
 
-export function describeRig(index: ProjectIndex, allowStrobe: boolean, bpm: number): string {
+/** What is on stage right now: display colour/level per fixture id, and the AI effects running. */
+export interface LiveState {
+  current: Record<string, { color: string; level: number }>;
+  aiEffects: { name: string; type: string; speed: number; bpmSync: boolean; beatsPerCycle: number }[];
+}
+
+export function describeRig(index: ProjectIndex, allowStrobe: boolean, bpm: number, live?: LiveState): string {
   return JSON.stringify({
     strobeAllowed: allowStrobe,
     bpm,
-    fixtures: [...index.fixtures.values()].map((rf) => ({
-      name: rf.fixture.name,
-      type: rf.profile.type,
-      attributes: [...new Set(rf.attributes.map(baseAttribute))].filter((a) => a !== 'control' && a !== 'macro'),
-      ...(rf.profile.modules.length ? { modules: rf.profile.modules.map((m) => m.name) } : {}),
-    })),
+    fixtures: [...index.fixtures.values()].map((rf) => {
+      const now = live?.current[rf.fixture.id];
+      const gobos = coarseChannel(rf.mode, 'gobo')?.ranges.filter((r) => r.kind === 'gobo').length;
+      return {
+        name: rf.fixture.name,
+        type: rf.profile.type,
+        attributes: [...new Set(rf.attributes.map(baseAttribute))].filter((a) => a !== 'control' && a !== 'macro'),
+        ...(rf.profile.modules.length ? { modules: rf.profile.modules.map((m) => m.name) } : {}),
+        ...(gobos ? { gobos } : {}),
+        ...(now && now.level > 0.01 ? { now: { color: now.color, level: Math.round(now.level * 100) / 100 } } : {}),
+      };
+    }),
+    ...(live ? { runningAiEffects: live.aiEffects } : {}),
     groups: [...index.groups.values()].map((g) => ({ name: g.name, size: g.fixtureIds.length })),
     scenes: [...index.scenes.values()].map((s) => s.name),
     cueLists: [...index.cueLists.values()].map((c) => c.name),

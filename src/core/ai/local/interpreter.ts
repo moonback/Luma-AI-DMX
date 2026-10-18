@@ -10,7 +10,9 @@ import type { AiAction, AiEffectSpec, AiTarget, LookPart } from '../actions';
 
 export interface InterpreterContext {
   fixtures: { id: string; name: string; type: FixtureType; attributes: string[]; modules?: string[] }[];
-  groups: { name: string }[];
+  groups: { name: string; members?: string[] }[];
+  /** Names of the project's scenes, so « applique la scène X » recalls it instead of creating a new one. */
+  scenes?: string[];
   /** Current computed look per fixture (display colour + intensity). */
   current: Record<string, { color: string; level: number }>;
   allowStrobe: boolean;
@@ -107,9 +109,32 @@ function typeLabel(types: FixtureType[]): string {
   return l.join(' + ');
 }
 
+/** Fixture names a target designates in the interpreter's view of the rig (groups need their members). */
+function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
+  const explicit = new Set([...(t.fixtureNames ?? []), ...ctx.groups.filter((g) => t.groupNames?.includes(g.name)).flatMap((g) => g.members ?? [])]);
+  let pool = ctx.fixtures.filter((f) => !explicit.size || explicit.has(f.name));
+  if (t.fixtureTypes?.length) pool = pool.filter((f) => t.fixtureTypes!.includes(f.type));
+  if (t.module) pool = pool.filter((f) => f.modules?.some((m) => normalize(m) === normalize(t.module!)));
+  return pool.slice(0, t.limit ?? pool.length).map((f) => f.name);
+}
+
+/** « … sauf les lyres » / « sans toucher aux PAR » : splits off the exclusion clause so it never becomes the target. */
+const EXCLUDE_RE = /\b(sauf|excepte|hormis|a part|sans toucher(?: aux?| a la| a l| les?)?|except|but not)\b(.*)$/;
+
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const MOVING_TARGET: AiTarget = { fixtureTypes: MOVING };
+
+/** Words naming an effect family -> effect types it covers, for « coupe le strobe » or « ralentis le chase ». */
+const EFFECT_WORDS: [RegExp, AiEffectSpec['effectType'][], string][] = [
+  [/\b(chase\w*|chenillard\w*)\b/, ['chase'], 'chase'],
+  [/\b(strobe\w*|stroboscopique\w*|flash)\b/, ['strobe'], 'strobe'],
+  [/\b(mouvements?|movements?)\b/, ['panTilt', 'randomMove'], 'mouvement'],
+  [/\b(vagues?|wave|ondulation)\b/, ['dimmerWave'], 'vague'],
+  [/\b(arc[ -]en[ -]ciel|rainbow)\b/, ['rainbow'], 'arc-en-ciel'],
+  [/\b(pulse|pulsation\w*)\b/, ['pulse'], 'pulse'],
+  [/\b(cycle de couleurs?|color ?cycle)\b/, ['colorCycle'], 'cycle de couleurs'],
+];
 
 function effectSpec(name: string, effectType: AiEffectSpec['effectType'], target: AiTarget, extra: Partial<AiEffectSpec> = {}): AiEffectSpec {
   return { name, effectType, target, ...extra };
@@ -187,22 +212,52 @@ function averageLevel(ctx: InterpreterContext): number {
 /* ------------------------------------------------------------------ */
 
 export function interpretLocally(prompt: string, ctx: InterpreterContext): InterpretResult {
-  const text = normalize(prompt.trim());
+  const full = normalize(prompt.trim());
+  const exclusion = EXCLUDE_RE.exec(full);
+  // Everything below reads `text`; the excluded fixtures are removed from the target afterwards.
+  const text = exclusion ? full.slice(0, exclusion.index) : full;
   const actions: AiAction[] = [];
   const notices: string[] = [];
   const said: string[] = [];
   const duration = findDuration(text);
   const percent = findPercent(text);
   const colors = findColors(text);
-  const { target, label: targetLabel } = findTarget(text, ctx);
+  let { target, label: targetLabel } = findTarget(text, ctx);
+  if (exclusion?.[2]) {
+    const ex = findTarget(exclusion[2], ctx);
+    if (!ex.target.all) {
+      const excluded = new Set(namesOf(ex.target, ctx));
+      const kept = namesOf(target, ctx).filter((n) => !excluded.has(n));
+      if (!kept.length) return { understanding: `Rien à faire : une fois ${ex.label} exclu(s), il ne reste aucun projecteur.`, actions, notices, recognized: true };
+      target = { fixtureNames: kept, ...(target.module ? { module: target.module } : {}) };
+      targetLabel = `${targetLabel} sauf ${ex.label}`;
+    }
+  }
   const bpmSync = has(text, /\b(bpm|tempo|synchro\w*|au rythme|sur le rythme|beat)\b/);
   const fade = duration ?? (has(text, /\b(progressiv\w*|doucement|lentement)\b/) ? 5 : 2);
   const wantsCreate = has(text, /\b(cree|creer|creez|create|enregistre\w*|sauvegarde\w*|prepare\w*)\b/);
 
   // 1. Release AI
-  if (has(text, /\b(relache\w*|release|rends? la main|annule\w*|reprends? la main)\b/)) {
+  if (has(text, /\b(relache\w*|release|rends? la main|annule\w*|reprends? la main|(arrete|stoppe?) tout|stop (all|everything))\b/)) {
     actions.push({ type: 'releaseAi' });
     return { understanding: 'Relâcher la couche IA : le contrôle revient aux playbacks et au manuel.', actions, notices, recognized: true };
+  }
+
+  // 1b. Recall an existing scene
+  const recall = has(text, /\b(applique\w*|rappel\w*|recall|apply)\b/);
+  const sceneVerb = recall || has(text, /\b(charge\w*|remets?|mets|lance\w*|joue\w*|load)\b/);
+  const scene = [...(ctx.scenes ?? [])].sort((a, b) => b.length - a.length).find((n) => normalize(n).trim() && new RegExp(`\\b${escapeRe(normalize(n).trim())}\\b`).test(text));
+  if (scene && (sceneVerb || has(text, /\bscene\b/))) {
+    actions.push({ type: 'applyScene', sceneName: scene, fade });
+    return { understanding: `Appliquer la scène existante « ${scene} » en ${fade} s.`, actions, notices, recognized: true };
+  }
+  if (recall && has(text, /\bscene\b/)) {
+    const known = ctx.scenes ?? [];
+    return {
+      understanding: 'Appliquer une scène existante.', actions,
+      notices: [known.length ? `Scène introuvable. Scènes du projet : ${known.slice(0, 15).join(', ')}${known.length > 15 ? '…' : ''}.` : 'Le projet ne contient encore aucune scène.'],
+      recognized: false,
+    };
   }
 
   // 2. Show generation
@@ -293,14 +348,26 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
     return { understanding: `Ajuster l’état actuel : ${said.join(', ')}.`, actions, notices, recognized: true };
   }
 
-  // 6. Stop effects
-  if (has(text, /\b(arrete\w*|stoppe?\w*|coupe\w*)\b/) && has(text, /\b(effets?|chase|strobe|mouvements?|vagues?|rainbow|arc)\b/)) {
-    actions.push({ type: 'stopEffect', all: true });
-    return { understanding: 'Arrêter les effets lancés par l’IA.', actions, notices, recognized: true };
+  // 6. Stop or re-time running AI effects
+  const fxWords = EFFECT_WORDS.filter(([re]) => re.test(text));
+  const fxLabel = fxWords.length ? `les effets IA de type ${fxWords.map(([, , l]) => l).join(', ')}` : 'tous les effets IA en cours';
+  if (has(text, /\b(arrete\w*|stoppe?\w*|coupe\w*|enleve\w*|retire\w*)\b/) && (fxWords.length || has(text, /\beffets?\b/))) {
+    if (fxWords.length) actions.push(...fxWords.flatMap(([, types]) => types.map((effectType) => ({ type: 'stopEffect' as const, effectType }))));
+    else actions.push({ type: 'stopEffect', all: true });
+    return { understanding: `Arrêter ${fxLabel}.`, actions, notices, recognized: true };
+  }
+  const slower = has(text, /\b(ralenti\w*|plus lent\w*|moins vite|moins rapide|slower|slow down)\b/);
+  const faster = has(text, /\b(accelere\w*|plus vite|plus rapide|speed up|faster)\b/);
+  if (slower || faster) {
+    const speedFactor = (has(text, /\bun peu\b/) ? 1.5 : 2) ** (slower ? -1 : 1);
+    const rounded = Math.round(speedFactor * 100) / 100;
+    if (fxWords.length) actions.push(...fxWords.flatMap(([, types]) => types.map((effectType) => ({ type: 'adjustEffect' as const, effectType, speedFactor: rounded }))));
+    else actions.push({ type: 'adjustEffect', speedFactor: rounded });
+    return { understanding: `${slower ? 'Ralentir' : 'Accélérer'} ${fxLabel} (vitesse ×${rounded}).`, actions, notices, recognized: true };
   }
 
   // 7. Blackout-like
-  if (has(text, /\b(eteins?|eteint|eteindre|noir|blackout|off|extinction)\b/)) {
+  if (has(text, /\b(eteins?|eteint|eteindre|noir|blackout|off|extinction|coupe (tout|la lumiere))\b/)) {
     actions.push({ type: 'setIntensity', target, level: 0, fade: duration ?? 1 });
     return { understanding: `Éteindre ${targetLabel} en ${duration ?? 1} s (couche IA, le blackout général reste disponible dans la barre supérieure).`, actions, notices, recognized: true };
   }
@@ -314,7 +381,9 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   if (has(text, /\b(pulse|pulsation\w*|battement\w*|pulsant\w*)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · pulse', 'pulse', fxTarget(ALL), { speed: 2, ...bpmExtra }) }); said.push('pulse'); }
   if (has(text, /\b(cycle de couleurs?|color ?cycle|change\w* de couleur)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · cycle couleurs', 'colorCycle', fxTarget(ALL), { speed: 0.1, colors: colors.length ? colors.map((c) => c.hex) : undefined, ...(bpmSync ? { bpmSync: true, beatsPerCycle: 4 } : {}) }) }); said.push('cycle de couleurs'); }
   if (has(text, /\b(strobe|stroboscopique|flash)\b/) && !has(text, /\bstroboscopes\b/)) {
-    if (ctx.allowStrobe) { actions.push({ type: 'startEffect', effect: effectSpec('IA · strobe', 'strobe', fxTarget(ALL), { speed: 6 }) }); said.push('strobe'); }
+    const hz = /(\d+(?:[.,]\d+)?)\s*hz\b/.exec(text);
+    const speed = hz?.[1] ? Math.min(30, Math.max(0.5, toNumber(hz[1]))) : 6;
+    if (ctx.allowStrobe) { actions.push({ type: 'startEffect', effect: effectSpec('IA · strobe', 'strobe', fxTarget(ALL), { speed }) }); said.push(`strobe ${speed} Hz`); }
     else notices.push('Effet strobe refusé : il est désactivé dans Paramètres › Sécurité (protection photosensible).');
   }
   if (has(text, /\b(mouvements?|bouge\w*|balaya\w*|movement|cercles?|en huit|aleatoire\w*|random)\b/)) {
@@ -325,12 +394,30 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   }
   if (said.length && bpmSync) said.push('synchronisé(s) au BPM');
 
+  // 8b. Beam: gobo, prism, zoom, frost, focus, iris
+  let percentUsed = false;
+  const beam: { gobo?: number; prism?: boolean; zoom?: number; frost?: number; focus?: number; iris?: number } = {};
+  const removal = /\b(sans|enleve\w*|retire\w*|ote\w*)\b/;
+  const goboMatch = new RegExp(`\\bgobos?(?:\\s+(?:n|numero))?(?:\\s+${NUM})?\\b`).exec(text);
+  if (goboMatch) beam.gobo = has(text, removal) || has(text, /\bgobo ouvert\b/) ? 0 : goboMatch[1] ? Math.min(32, Math.max(1, Math.round(toNumber(goboMatch[1])))) : 1;
+  if (has(text, /\bprism\w*/)) beam.prism = !has(text, removal);
+  if (has(text, /\b(zoom|faisceau)\b/)) {
+    const z = has(text, /\b(large|ouvert|ouvre|wide|out)\b/) ? 1 : has(text, /\b(serre\w*|etroit\w*|ferme\w*|narrow|in|fin|fine)\b/) ? 0 : percent;
+    if (z !== null) { beam.zoom = z; percentUsed ||= z === percent; }
+  }
+  if (has(text, /\b(frost|diffus\w*|flou)\b/)) { beam.frost = has(text, removal) ? 0 : percent ?? 1; percentUsed ||= percent !== null; }
+  for (const k of ['focus', 'iris'] as const) if (percent !== null && has(text, new RegExp(`\\b${k}\\b`))) { beam[k] = percent; percentUsed = true; }
+  if (Object.keys(beam).length) {
+    actions.push({ type: 'setBeam', target: target.all ? MOVING_TARGET : target, ...beam, fade });
+    said.push(`faisceau (${Object.entries(beam).map(([k, v]) => (typeof v === 'boolean' ? (v ? 'prisme' : 'sans prisme') : k === 'gobo' ? (v ? `gobo ${v}` : 'gobo ouvert') : `${k} ${Math.round(v * 100)} %`)).join(', ')})`);
+  }
+
   // 9. Look: templates and colours
   const lounge = has(text, /\b(lounge|chill|cosy|cozy|tamise\w*)\b/);
   const party = has(text, /\b(club|fete|party|dancefloor|boite)\b/);
   const romantic = has(text, /\b(romanti\w*|diner|intime)\b/);
   let lookColors = colors.map((c) => c.hex);
-  let level: number | null = percent;
+  let level: number | null = percentUsed ? null : percent;
   const template = lounge ? 'lounge' : party ? 'club' : romantic ? 'intime' : null;
   if (!lookColors.length && template) lookColors = lounge ? ['#8B00FF', '#0040FF'] : party ? ['#FF00C8', '#00E5FF'] : ['#FFB000', '#FF4FA0'];
   if (!lookColors.length && has(text, /\b(chaud|chaude|warm)\b/)) lookColors = ['#FF9A3C'];
@@ -360,7 +447,10 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   }
 
   // 10. Position words for moving heads
-  if (!actions.some((a) => a.type === 'startEffect' && ['panTilt', 'randomMove'].includes(a.effect.effectType))) {
+  // Position words only steer the heads when the request is about them (« la salle en bleu » is a colour request).
+  const namesHeads = !target.all && namesOf(target, ctx).some((n) => MOVING.includes(ctx.fixtures.find((f) => f.name === n)!.type));
+  const aboutHeads = namesHeads || !actions.length || has(text, /\b(pointe\w*|vise\w*|oriente\w*|dirige\w*|braque\w*|tourne\w*|aim|point)\b/);
+  if (aboutHeads && !actions.some((a) => a.type === 'startEffect' && ['panTilt', 'randomMove'].includes(a.effect.effectType))) {
     let pan: number | undefined, tilt: number | undefined;
     if (has(text, /\b(centre|center|milieu)\b/)) { pan = 0.5; tilt = 0.5; }
     if (has(text, /\b(public|audience|salle)\b/)) tilt = 0.7;
@@ -387,7 +477,7 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
       actions,
       notices: [
         ...notices,
-        'Exemples compris : « ambiance lounge violette et bleue », « monte l’intensité sur 8 secondes », « chase sur les quatre lyres », « mouvements synchronisés au BPM », « prépare un drop », « show de 2 minutes électro », « 3 variantes », « plus chaud et moins agressif », « relâche ».',
+        'Exemples compris : « ambiance lounge violette et bleue », « monte l’intensité sur 8 secondes », « chase sur les quatre lyres », « mouvements synchronisés au BPM », « prépare un drop », « show de 2 minutes électro », « 3 variantes », « plus chaud et moins agressif », « violet partout sauf les lyres », « gobo 2 et prisme sur les lyres », « zoom large », « ralentis le chase », « coupe le strobe », « applique la scène <nom> », « relâche ».',
       ],
       recognized: false,
     };

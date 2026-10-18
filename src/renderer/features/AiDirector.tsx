@@ -15,6 +15,9 @@ const EXAMPLES = [
   'Rends l’ambiance plus chaude et moins agressive.',
   'Fais des mouvements synchronisés au BPM.',
   'Crée trois variantes de cette scène.',
+  'Tout en violet sauf les lyres.',
+  'Mets le gobo 2 et le prisme sur les lyres.',
+  'Ralentis le chase.',
 ];
 
 interface Exchange {
