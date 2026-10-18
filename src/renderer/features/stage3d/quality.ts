@@ -92,17 +92,22 @@ export const AMBIENCES: Record<AmbienceId, Ambience> = {
   theatre: { label: 'Théâtre', bg: 0x110b07, fog: [30, 80], sky: 0xffc89a, ground: 0x100a06, hemi: 0.45, key: 0.25, keyColor: 0xffd2a8 },
 };
 
-export function applyAmbience(id: AmbienceId, scene: THREE.Scene, hemi: THREE.HemisphereLight, key: THREE.DirectionalLight): void {
+/** Applies an ambience; `room` (0–1) blends it toward the work light, so the set reads clearly without overexposing the beams. */
+export function applyAmbience(id: AmbienceId, scene: THREE.Scene, hemi: THREE.HemisphereLight, key: THREE.DirectionalLight, room = 0): void {
   const a = AMBIENCES[id] ?? AMBIENCES.black;
-  (scene.background as THREE.Color).set(a.bg);
+  const w = AMBIENCES.work;
+  const r = Math.min(1, Math.max(0, room));
+  const mix = (from: number, to: number) => new THREE.Color(from).lerp(new THREE.Color(to), r);
+  (scene.background as THREE.Color).copy(mix(a.bg, w.bg));
   const fog = scene.fog as THREE.Fog;
-  fog.color.set(a.bg);
-  [fog.near, fog.far] = a.fog;
-  hemi.color.set(a.sky);
-  hemi.groundColor.set(a.ground);
-  hemi.intensity = a.hemi;
-  key.color.set(a.keyColor);
-  key.intensity = a.key;
+  fog.color.copy(mix(a.bg, w.bg));
+  fog.near = a.fog[0] + (w.fog[0] - a.fog[0]) * r;
+  fog.far = a.fog[1] + (w.fog[1] - a.fog[1]) * r;
+  hemi.color.copy(mix(a.sky, w.sky));
+  hemi.groundColor.copy(mix(a.ground, w.ground));
+  hemi.intensity = a.hemi + (w.hemi - a.hemi) * r;
+  key.color.copy(mix(a.keyColor, w.keyColor));
+  key.intensity = a.key + (w.key - a.key) * r;
 }
 
 export type FloorId = 'matte' | 'lacquer' | 'wet';

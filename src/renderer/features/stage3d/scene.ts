@@ -32,8 +32,8 @@ export const VIEWS: { id: ViewId; label: string }[] = [
 ];
 
 /** `view`: a built-in camera id or the id of a view saved in the project. */
-export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number }
-const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte', exposure: 1 };
+export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number; room: number }
+const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte', exposure: 1, room: 0 };
 /** Editor grid steps in meters (0 = free); rotations snap to 15° whenever a grid is on. */
 export const GRIDS = [0, 0.25, 0.5, 1];
 const ROTATION_SNAP_DEG = 15;
@@ -156,6 +156,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const real = new RealLights(scene, renderer.capabilities.maxTextures);
   let ambienceKey = '';
+  let lightKey = '';
   let floorGroup: THREE.Group | null = null;
   const performers = new Map<string, PerformerRig>();
   const screens = new Map<string, ScreenRig>();
@@ -435,9 +436,10 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       ambienceKey = ''; // the floor mirror follows the stage outline
     }
     const ak = `${p.ambience}|${p.floor}|${envKey}`;
+    const lk = `${p.ambience}|${p.room}`;
+    if (lk !== lightKey) { lightKey = lk; applyAmbience(p.ambience, scene, hemi, key, p.room); }
     if (ak !== ambienceKey) {
       ambienceKey = ak;
-      applyAmbience(p.ambience, scene, hemi, key);
       if (floorGroup) { scene.remove(floorGroup); disposeReflector(floorGroup); }
       floorGroup = buildFloorReflector(p.floor, st, renderer.getDrawingBufferSize(new THREE.Vector2()));
       if (floorGroup) scene.add(floorGroup);
