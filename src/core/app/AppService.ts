@@ -15,6 +15,7 @@ import { Logger, type LogEntry } from '../log/logger';
 import { FileLogSink } from '../log/fileSink';
 import type { AppInfo } from '../log/diagnostic';
 import type { Updater } from './updates';
+import { UsageStats } from '../telemetry/usage';
 import { AudioReactive } from '../audio/reactive';
 import type { AiProposal } from '../ai/actions';
 import { interpreterContext } from '../ai/director';
@@ -25,14 +26,9 @@ import type { Sequence } from '../vision/locate';
 import { interpretLocally } from '../ai/local/interpreter';
 import type { OpenRouterModel } from '../ai/providers/openrouter';
 import { OPENROUTER_KEY, SCENE_FIELDS, SCENE_HISTORY_MAX, UserError, type SceneFields, type SceneSnapshot } from './shared';
-import { handleProject } from './handlers/project';
-import { handleFixtures } from './handlers/fixtures';
-import { handleProgramming } from './handlers/programming';
-import { handleMusic } from './handlers/music';
-import { handleLocate, endLocate, onLocatePhoto } from './handlers/locate';
-import { handleOutput } from './handlers/output';
-import { handleAi } from './handlers/ai';
-import { configureUpdates, handleSystem } from './handlers/system';
+import { endLocate, onLocatePhoto } from './handlers/locate';
+import { configureUpdates } from './handlers/system';
+import { ROUTES, UNCOUNTED, type CommandDomain } from './routes';
 import { applyControl, onOsc, remoteState } from './control';
 import { onFrame, onOutputStatus } from './monitor';
 import { autosave } from './files';
@@ -44,6 +40,7 @@ export interface Dialogs {
   openProfile(): Promise<string | null>;
   saveDiagnostic?(defaultName: string): Promise<string | null>;
   savePatchSheet?(defaultName: string, format: 'csv' | 'pdf'): Promise<string | null>;
+  saveFeedback?(defaultName: string): Promise<string | null>;
 }
 
 export interface SecretStore {
@@ -71,23 +68,7 @@ export interface AppServiceOptions {
 }
 
 export { UserError };
-
-type Prefix<T> = T extends `${infer P}.${string}` ? P : never;
-/** Part of a command type before the dot (`project`, `fixture`, `cue`…): one handler per domain. */
-export type CommandDomain = Prefix<CommandType>;
-export type CommandIn<D extends CommandDomain> = Extract<Command, { type: `${D}.${string}` }>;
-
-/** Exhaustive at compile time: a new command prefix without a handler does not build. */
-const ROUTES: { [D in CommandDomain]: (app: AppService, cmd: CommandIn<D>) => unknown } = {
-  project: handleProject, onboarding: handleProject,
-  profile: handleFixtures, ofl: handleFixtures, fixture: handleFixtures, patch: handleFixtures,
-  group: handleProgramming, palette: handleProgramming, programmer: handleProgramming, scene: handleProgramming,
-  cue: handleProgramming, cueList: handleProgramming, effect: handleProgramming, timeline: handleProgramming,
-  music: handleMusic, locate: handleLocate,
-  engine: handleOutput, output: handleOutput, rdm: handleOutput,
-  ai: handleAi,
-  audio: handleSystem, settings: handleSystem, logs: handleSystem, diagnostic: handleSystem, app: handleSystem,
-};
+export type { CommandDomain, CommandIn } from './routes';
 
 /**
  * Application service: owns the project document, the engine, the outputs, AI and audio.
@@ -135,9 +116,11 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   remoteConfig = '';
   timecodeAt = 0;
   logSink: FileLogSink | null = null;
+  readonly usage: UsageStats;
 
   constructor(readonly opts: AppServiceOptions) {
     super();
+    this.usage = new UsageStats(path.join(opts.dataDir, 'usage.json'));
     this.project = createProject('Nouveau projet');
     this.index = new ProjectIndex(this.project);
     this.outputs = new OutputManager(opts.adapterFactory ?? ((c) => createAdapter(c, this.settings.sacn?.cid)));
@@ -145,6 +128,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.audio = new AudioReactive(this.engine, () => this.index, () => this.project.audio, () => this.settings.engine.priorities.audio);
     this.audio.onDropFired = (id) => this.logger.info('Audio', `Drop prédit : GO sur « ${this.project.cueLists.find((l) => l.id === id)?.name ?? id} » (désarmé)`);
     this.logger.on('entry', (e) => {
+      if (e.level === 'error') this.usage.error(e.source);
       if (e.level === 'warn' || e.level === 'error') {
         this.alerts.push({ id: e.id, t: e.t, level: e.level, message: `${e.source} : ${e.message}` });
         if (this.alerts.length > 30) this.alerts.shift();
@@ -196,6 +180,10 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     await applyControl(this);
     if (this.opts.autoStart !== false) this.engine.start();
     this.timers.push(setInterval(() => void autosave(this), 15000));
+    await this.usage.load();
+    this.usage.enabled = this.settings.telemetry.usage;
+    this.usage.session();
+    this.timers.push(setInterval(() => void this.usage.flush().catch(() => undefined), 60_000));
     this.logger.info('Application', 'Démarrage terminé — sorties réelles désarmées par défaut');
     this.emitProject();
   }
@@ -207,6 +195,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     await this.osc.stop();
     await this.remote.stop();
     await this.outputs.closeAll();
+    await this.usage.flush().catch(() => undefined);
   }
 
   get dirty(): boolean {
@@ -221,7 +210,6 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   async persistSettings(): Promise<void> {
     await writeFileAtomic(this.settingsFile, JSON.stringify(this.settings, null, 2), false);
   }
-
 
   getSettings(): Settings {
     return structuredClone(this.settings);
@@ -256,9 +244,6 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   emitProject(): void {
     this.emit('project', this.projectState());
   }
-
-
-
 
   /* ------------------------------------------------------------------ */
   /* Project mutation                                                    */
@@ -344,41 +329,24 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   /** Routes a command to the handler of its domain (the part of the type before the dot). */
   async handle(cmd: Command): Promise<unknown> {
+    if (!UNCOUNTED.has(cmd.type)) this.usage.command(cmd.type);
     const domain = cmd.type.slice(0, cmd.type.indexOf('.')) as CommandDomain;
     return (ROUTES[domain] as (app: AppService, c: Command) => unknown)(this, cmd);
   }
-
 
   /* ------------------------------------------------------------------ */
   /* Music (Song-to-Show)                                                */
   /* ------------------------------------------------------------------ */
 
-
-
-
-
   /* ------------------------------------------------------------------ */
   /* External control (OSC)                                              */
   /* ------------------------------------------------------------------ */
-
-
-
-
-
-
-
-
 
   /* ------------------------------------------------------------------ */
   /* AI                                                                  */
   /* ------------------------------------------------------------------ */
 
   modelCache: { at: number; models: Promise<OpenRouterModel[]> } | null = null;
-
-
-
-
-
 
   /** Exposed for tests: local interpretation without storing a proposal. */
   interpretForTest(prompt: string) {
@@ -388,8 +356,5 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   /* ------------------------------------------------------------------ */
   /* Files                                                               */
   /* ------------------------------------------------------------------ */
-
-
-
 
 }

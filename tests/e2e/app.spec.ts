@@ -191,6 +191,20 @@ test('sortie réelle armée → STOP OUTPUT coupe les émissions', async () => {
   });
 });
 
+test('paramètres : version, mises à jour, retour et statistiques opt-in', async () => {
+  await nav('settings');
+  await expect(page.getByTestId('app-version')).not.toHaveText('…');
+  await expect(page.getByTestId('update-state')).toContainText('Indisponible'); // not a packaged build
+  await page.getByRole('tab', { name: 'Logs, diagnostic et retours' }).click();
+  await expect(page.getByTestId('usage-enabled')).not.toBeChecked();
+  await expect(page.getByTestId('feedback-save')).toBeDisabled();
+  await page.getByTestId('feedback-message').fill('Essai');
+  await expect(page.getByTestId('feedback-save')).toBeEnabled();
+  await page.screenshot({ path: `${shots}/22-retours.png` });
+  await page.getByTestId('feedback-message').fill('');
+  await page.getByRole('tab', { name: 'Général' }).click();
+});
+
 test('captures des autres espaces', async () => {
   for (const [id, n] of [['cues', '10'], ['effects', '11'], ['timeline', '12'], ['audio', '13'], ['settings', '14'], ['dashboard', '15']] as const) {
     await nav(id);

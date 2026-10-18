@@ -7,7 +7,7 @@ import { DISABLED_UPDATES } from '../updates';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Audio input, settings, logs and the diagnostic export. */
-export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app'>): Promise<unknown> {
+export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app' | 'usage' | 'feedback'>): Promise<unknown> {
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'audio.features':
@@ -31,6 +31,7 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
       if (outputsChanged) await app.outputs.configure(app.settings.outputs);
       await applyControl(app);
       configureUpdates(app);
+      app.usage.enabled = app.settings.telemetry.usage;
       app.logger.info('Paramètres', 'Paramètres enregistrés');
       return ok;
     }
@@ -46,6 +47,25 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
     case 'app.info': {
       const info = app.opts.appInfo;
       return { name: info?.name ?? 'Luma AI DMX', version: info?.version ?? 'dev', updates: app.opts.updater?.status() ?? DISABLED_UPDATES };
+    }
+    case 'usage.get': return { enabled: app.usage.enabled, data: app.usage.snapshot() };
+    case 'usage.clear':
+      await app.usage.clear();
+      app.logger.info('Statistiques', 'Statistiques d’usage effacées');
+      return ok;
+    case 'feedback.export': {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/gu, '-');
+      const file = cmd.path ?? (await app.opts.dialogs.saveFeedback?.(`luma-retour-${stamp}.json`)) ?? null;
+      if (!file) return { path: null };
+      const bundle = {
+        format: 'luma-feedback', version: 1, createdAt: new Date().toISOString(),
+        kind: cmd.kind, message: cmd.message, contact: cmd.contact,
+        diagnostic: cmd.includeDiagnostic ? diagnostic(app) : null,
+        usage: cmd.includeUsage && app.usage.enabled ? app.usage.snapshot() : null,
+      };
+      await writeFileAtomic(file, JSON.stringify(bundle, null, 2), false);
+      app.logger.info('Retour', `Retour enregistré : ${path.basename(file)} (à envoyer à l’équipe)`);
+      return { path: file };
     }
     case 'app.checkUpdates':
       return app.opts.updater ? app.opts.updater.check() : DISABLED_UPDATES;

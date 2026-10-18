@@ -19,6 +19,7 @@ import type { RecoveryEntry } from '../core/project/store';
 import type { LogEntry } from '../core/log/logger';
 import type { Settings } from '../core/settings/settings';
 import type { UpdateStatus } from '../core/app/updates';
+import type { UsageData } from '../core/telemetry/usage';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 
 /**
@@ -229,6 +230,18 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('diagnostic.export'), path: optPath }),
   /** Patch sheet for the crew: CSV (spreadsheet) or PDF (print). */
   z.object({ type: z.literal('patch.exportSheet'), format: z.enum(['csv', 'pdf']), path: optPath }),
+  // Beta programme: local usage statistics and feedback files
+  empty('usage.get'),
+  empty('usage.clear'),
+  z.object({
+    type: z.literal('feedback.export'),
+    kind: z.enum(['bug', 'idea', 'show-report', 'other']),
+    message: z.string().trim().min(1).max(5000),
+    contact: z.string().trim().max(200).default(''),
+    includeDiagnostic: z.boolean().default(true),
+    includeUsage: z.boolean().default(true),
+    path: optPath,
+  }),
   // Application
   empty('app.info'),
   empty('app.checkUpdates'),
@@ -383,6 +396,9 @@ export interface CommandResults {
   'logs.recent': LogEntry[];
   'diagnostic.export': { path: string | null };
   'patch.exportSheet': { path: string | null };
+  'usage.get': { enabled: boolean; data: UsageData };
+  'usage.clear': Void;
+  'feedback.export': { path: string | null };
   'app.info': { name: string; version: string; updates: UpdateStatus };
   'app.checkUpdates': UpdateStatus;
 }

@@ -124,6 +124,8 @@ export const settingsSchema = z.object({
     })
     .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
+  /** Opt-in, local usage statistics (command types and error counts only). Off until the user turns it on. */
+  telemetry: z.object({ usage: z.boolean().default(false) }).default({ usage: false }),
   /** Overrides of the default shortcuts, by action id. */
   shortcuts: z.record(z.string().max(40), z.string().max(40)).default({}),
 });

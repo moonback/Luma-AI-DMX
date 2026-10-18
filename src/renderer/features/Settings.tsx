@@ -10,11 +10,12 @@ import type { OpenRouterModel } from '../../core/ai/providers/openrouter';
 import { externalControl } from '../control';
 import { audioEngine } from '../audioEngine';
 import type { UpdateStatus } from '../../core/app/updates';
+import { FeedbackPanel, UsagePanel } from './settings/BetaPanel';
 
 const TABS = [
   { id: 'general', label: 'Général' }, { id: 'appearance', label: 'Apparence' }, { id: 'engine', label: 'Moteur & sécurité' },
   { id: 'network', label: 'Réseau / DMX' }, { id: 'ai', label: 'IA et fournisseurs' }, { id: 'audio', label: 'Audio' },
-  { id: 'shortcuts', label: 'Raccourcis' }, { id: 'control', label: 'Contrôle externe' }, { id: 'logs', label: 'Logs & diagnostics' }, { id: 'backups', label: 'Sauvegardes' },
+  { id: 'shortcuts', label: 'Raccourcis' }, { id: 'control', label: 'Contrôle externe' }, { id: 'logs', label: 'Logs, diagnostic et retours' }, { id: 'backups', label: 'Sauvegardes' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -400,6 +401,8 @@ export function SettingsPage() {
             <div className="row"><button className="btn" onClick={() => void act({ type: 'diagnostic.export' })}>Exporter un diagnostic…</button></div>
           </Panel>
         )}
+        {tab === 'logs' && <FeedbackPanel />}
+        {tab === 'logs' && <UsagePanel enabled={s.telemetry.usage} onChange={(usage) => set('telemetry', { usage })} />}
         {tab === 'backups' && (
           <Panel title="Sauvegardes et récupération">
             <p className="small muted" style={{ marginTop: 0 }}>Chaque enregistrement conserve la version précédente (.bak). La sauvegarde automatique écrit une copie de récupération séparée.</p>

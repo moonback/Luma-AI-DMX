@@ -80,6 +80,10 @@ async function createService(): Promise<AppService> {
         const r = await dialog.showSaveDialog(win!, { title: 'Exporter la feuille de patch', defaultPath: name, filters: [format === 'csv' ? { name: 'Tableur (CSV)', extensions: ['csv'] } : { name: 'PDF', extensions: ['pdf'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
+      saveFeedback: async (name) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Enregistrer le retour', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Retour', extensions: ['json'] }] });
+        return r.canceled ? null : r.filePath ?? null;
+      },
       saveDiagnostic: async (name) => {
         const r = await dialog.showSaveDialog(win!, { title: 'Exporter un diagnostic', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Diagnostic', extensions: ['json'] }] });
         return r.canceled ? null : r.filePath ?? null;
