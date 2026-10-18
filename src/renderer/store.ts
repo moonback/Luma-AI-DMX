@@ -70,6 +70,8 @@ interface State {
   newProjectOpen: boolean;
   /** User overrides of keyboard shortcuts (from settings). */
   shortcuts: Record<string, string>;
+  /** Interface language (Settings › Apparence); catalogues in ./i18n. */
+  language: 'fr' | 'en';
   /** True while the Settings page records a new shortcut (global handler paused). */
   capturingShortcut: boolean;
   toasts: Toast[];
@@ -119,6 +121,7 @@ export const useStore = create<State>((set, get) => ({
   diagOpen: false,
   newProjectOpen: false,
   shortcuts: {},
+  language: 'fr',
   capturingShortcut: false,
   toasts: [],
   confirm: null,

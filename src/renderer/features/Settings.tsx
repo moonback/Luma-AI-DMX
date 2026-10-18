@@ -276,7 +276,7 @@ export function SettingsPage() {
   if (!s) return <div className="page">Chargement…</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
-  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
+  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts, language: s.appearance.language }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
 
   return (
     <div className="page">
@@ -303,6 +303,11 @@ export function SettingsPage() {
             <div className="grid g2">
               <label className="check"><input type="checkbox" checked={s.appearance.reducedMotion} onChange={(e) => set('appearance', { reducedMotion: e.target.checked })} />Réduire les animations</label>
               <Field label="Échelle de l’interface"><NumberInput value={s.appearance.uiScale} min={0.8} max={1.4} step={0.05} onChange={(v) => set('appearance', { uiScale: v })} /></Field>
+              <Field label="Langue / Language" hint="Traduction anglaise en cours : la navigation, la barre supérieure et la barre d’état sont traduites, les écrans le seront au fur et à mesure.">
+                <select className="select" data-testid="language" value={s.appearance.language} onChange={(e) => set('appearance', { language: e.target.value as Settings['appearance']['language'] })}>
+                  <option value="fr">Français</option><option value="en">English</option>
+                </select>
+              </Field>
             </div>
           </Panel>
         )}

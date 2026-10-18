@@ -25,5 +25,8 @@
 2. `npm version x.y.z` (met à jour `package.json` et crée le tag `vx.y.z`).
 3. `git push --follow-tags` : le workflow `release.yml` construit, signe (si les secrets `WIN_CSC_LINK` et `WIN_CSC_KEY_PASSWORD` existent) et publie la release GitHub, lue par la mise à jour automatique. Une version `x.y.z-beta.n` part sur le canal bêta.
 
+## Textes de l'interface
+Tout nouveau texte visible passe par `src/renderer/i18n` : la clé dans `fr.ts`, sa traduction dans `en.ts` (le typage refuse une clé manquante), puis `useT()` dans un composant ou `t()` ailleurs. `node scripts/check-i18n.mjs` (lancé par `npm run lint`) refuse qu'un fichier gagne des textes en dur ; après une extraction, `node scripts/check-i18n.mjs --update` abaisse la référence.
+
 ## Règles de conception
 Voir `docs/ARCHITECTURE.md` et les décisions dans `docs/adr/`. En particulier : `src/core` ne dépend ni d'Electron ni de React ; l'IA ne produit jamais de DMX ; aucun fichier source ne dépasse 600 lignes.

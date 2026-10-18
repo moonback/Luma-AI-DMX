@@ -219,6 +219,15 @@ test('paramètres : version, mises à jour, retour et statistiques opt-in', asyn
   await expect(page.getByTestId('feedback-save')).toBeEnabled();
   await page.screenshot({ path: `${shots}/22-retours.png` });
   await page.getByTestId('feedback-message').fill('');
+  // Interface language: the shell switches at once after saving, and back.
+  await page.getByRole('tab', { name: 'Apparence' }).click();
+  await page.getByTestId('language').selectOption('en');
+  await page.getByTestId('settings-save').click();
+  await expect(page.getByTestId('nav-music')).toContainText('Music');
+  await expect(page.getByTestId('stop-output')).toHaveAttribute('title', /Shift\+Esc/);
+  await page.getByTestId('language').selectOption('fr');
+  await page.getByTestId('settings-save').click();
+  await expect(page.getByTestId('nav-music')).toContainText('Musique');
   await page.getByRole('tab', { name: 'Général' }).click();
 });
 

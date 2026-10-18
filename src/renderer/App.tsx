@@ -24,6 +24,7 @@ import { OutputPage } from './features/Output';
 import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
 import { HelpButton, OnboardingHost } from './features/Onboarding';
+import { t, useT } from './i18n';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
@@ -40,7 +41,7 @@ export function newProjectFlow(): void {
 
 async function guardUnsaved(): Promise<boolean> {
   if (!useStore.getState().project?.dirty) return true;
-  return confirmAction({ title: 'Modifications non enregistrées', message: 'Le projet actuel contient des modifications non enregistrées. Continuer sans enregistrer ?', confirmLabel: 'Continuer sans enregistrer' });
+  return confirmAction({ title: t('project.unsavedTitle'), message: t('project.unsavedMessage'), confirmLabel: t('project.unsavedConfirm') });
 }
 
 export async function openProject(): Promise<void> {
@@ -48,19 +49,21 @@ export async function openProject(): Promise<void> {
 }
 
 function NewProjectDialog({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState('Nouveau show');
+  const tr = useT();
+  const [name, setName] = useState(() => t('project.defaultName'));
   const create = async () => {
     if (!(await guardUnsaved())) return;
-    if (await act({ type: 'project.new', name: name.trim() || 'Nouveau show' })) onClose();
+    if (await act({ type: 'project.new', name: name.trim() || t('project.defaultName') })) onClose();
   };
   return (
-    <Modal title="Nouveau projet" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Annuler</button><button className="btn primary" onClick={() => void create()}>Créer</button></>}>
-      <Field label="Nom du projet"><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} /></Field>
+    <Modal title={tr('project.new')} onClose={onClose} footer={<><button className="btn" onClick={onClose}>{tr('common.cancel')}</button><button className="btn primary" onClick={() => void create()}>{tr('common.create')}</button></>}>
+      <Field label={tr('project.name')}><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} /></Field>
     </Modal>
   );
 }
 
 function TopBar() {
+  const tr = useT();
   const project = useStore((s) => s.project);
   const rt = useStore((s) => s.runtime);
   const toggleDiag = useStore((s) => s.toggleDiag);
@@ -94,48 +97,48 @@ function TopBar() {
   return (
     <header className="topbar">
       <div className="brand"><div className="brand-mark" />{BRAND.productName}</div>
-      <div className="top-project" title={project?.path ?? 'Projet non enregistré'}>
+      <div className="top-project" title={project?.path ?? tr('project.unsaved')}>
         <b>{project?.project.meta.name ?? '…'}{project?.dirty ? ' •' : ''}</b>
-        <span className="small muted">{project?.project.meta.show || (pb ? `Cue : ${pb.cueName ?? '–'}` : 'Aucun cue actif')}</span>
+        <span className="small muted">{project?.project.meta.show || (pb ? tr('project.cue', { name: pb.cueName ?? '–' }) : tr('project.noCue'))}</span>
       </div>
       <div className="row">
-        <button className="btn ghost icon" title="Nouveau projet (Ctrl+N)" onClick={() => setShowNew(true)}><FilePlus size={16} /></button>
-        <button className="btn ghost icon" title="Ouvrir (Ctrl+O)" onClick={() => void openProject()}><FolderOpen size={16} /></button>
-        <button className="btn ghost icon" title="Enregistrer (Ctrl+S)" data-testid="save" onClick={() => void act({ type: 'project.save' })}><Save size={16} /></button>
+        <button className="btn ghost icon" title={tr('project.newShortcut')} onClick={() => setShowNew(true)}><FilePlus size={16} /></button>
+        <button className="btn ghost icon" title={tr('project.openShortcut')} onClick={() => void openProject()}><FolderOpen size={16} /></button>
+        <button className="btn ghost icon" title={tr('project.saveShortcut')} data-testid="save" onClick={() => void act({ type: 'project.save' })}><Save size={16} /></button>
       </div>
       <div className="top-sep" />
-      <span className={`mode-badge ${live ? 'live' : ''}`} data-testid="mode" title={live ? 'Au moins une sortie réelle est armée' : 'Aucune sortie réelle armée : rien n’est envoyé au matériel'}>{live ? 'LIVE' : 'SIMULATION'}</span>
+      <span className={`mode-badge ${live ? 'live' : ''}`} data-testid="mode" title={live ? tr('top.liveTitle') : tr('top.simulationTitle')}>{live ? 'LIVE' : 'SIMULATION'}</span>
       <div className="stat" title={outputs.map((o) => `${o.name} : ${o.state}`).join('\n')}>
-        <span className="k">Sortie DMX</span>
-        <span className="v row" style={{ gap: 6 }}><span className={`led ${errors ? 'err' : !transmitting ? 'warn' : ready ? 'ok' : ''}`} />{errors ? `${errors} erreur(s)` : !transmitting ? 'Arrêtée' : `${ready} active(s)`}</span>
+        <span className="k">{tr('top.output')}</span>
+        <span className="v row" style={{ gap: 6 }}><span className={`led ${errors ? 'err' : !transmitting ? 'warn' : ready ? 'ok' : ''}`} />{errors ? tr('top.outputErrors', { n: errors }) : !transmitting ? tr('top.outputStopped') : tr('top.outputActive', { n: ready })}</span>
       </div>
-      <div className="stat" title={`Tick moyen ${rt?.engine.metrics.avgTickMs ?? 0} ms · gigue ${rt?.engine.metrics.jitterMs ?? 0} ms`}>
-        <span className="k">Moteur</span>
+      <div className="stat" title={tr('top.engineTitle', { tick: rt?.engine.metrics.avgTickMs ?? 0, jitter: rt?.engine.metrics.jitterMs ?? 0 })}>
+        <span className="k">{tr('top.engine')}</span>
         <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.engine.running ? 'ok' : 'err'}`} />{rt ? `${rt.engine.metrics.measuredHz} Hz` : '–'}</span>
       </div>
-      <button className="stat btn ghost" style={{ height: 'auto', padding: '2px 6px', alignItems: 'flex-start' }} onClick={tap} title="Tapez 3 fois ou plus pour définir le BPM (tap tempo)">
+      <button className="stat btn ghost" style={{ height: 'auto', padding: '2px 6px', alignItems: 'flex-start' }} onClick={tap} title={tr('top.tapTitle')}>
         <span className="k">BPM {rt?.engine.bpmSource === 'audio' ? '· audio' : ''}</span>
         <span className="v">{rt ? rt.engine.bpm.toFixed(0) : '–'}</span>
       </button>
       <div className="stat" title={rt?.ai.lastError ?? ''}>
-        <span className="k">Assistant IA</span>
-        <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />{rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? 'OpenRouter' : 'Local'}</span>
+        <span className="k">{tr('top.ai')}</span>
+        <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />{rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? 'OpenRouter' : tr('top.aiLocal')}</span>
       </div>
       <div className="grow" />
       <HelpButton />
-      <button className="btn ghost icon" title={`${alerts} alerte(s) — ouvrir la console de diagnostic`} onClick={toggleDiag} style={{ position: 'relative' }}>
+      <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
         <Bell size={16} />
         {alerts > 0 && <span className="badge err" style={{ position: 'absolute', top: -4, right: -8, height: 16, padding: '0 4px' }}>{alerts}</span>}
       </button>
-      <button className={`btn ${rt?.engine.blackout ? 'danger solid' : ''}`} data-testid="blackout" title="Blackout (B) — politique configurable dans Paramètres" onClick={() => void act({ type: 'engine.blackout', on: !rt?.engine.blackout })}>
-        <Moon size={15} />Blackout
+      <button className={`btn ${rt?.engine.blackout ? 'danger solid' : ''}`} data-testid="blackout" title={tr('top.blackoutTitle')} onClick={() => void act({ type: 'engine.blackout', on: !rt?.engine.blackout })}>
+        <Moon size={15} />{tr('top.blackout')}
       </button>
       {transmitting ? (
-        <button className="btn danger solid lg" data-testid="stop-output" title="STOP OUTPUT (Maj+Échap) : arrête immédiatement toute émission DMX réelle" onClick={() => void act({ type: 'output.transmit', on: false })}>
+        <button className="btn danger solid lg" data-testid="stop-output" title={tr('top.stopTitle')} onClick={() => void act({ type: 'output.transmit', on: false })}>
           <OctagonX size={18} />STOP
         </button>
       ) : (
-        <button className="btn accent lg" title="Reprendre les émissions" onClick={() => void act({ type: 'output.transmit', on: true })}><Play size={16} />Reprendre</button>
+        <button className="btn accent lg" title={tr('top.resumeTitle')} onClick={() => void act({ type: 'output.transmit', on: true })}><Play size={16} />{tr('top.resume')}</button>
       )}
       {showNew && <NewProjectDialog onClose={() => setShowNew(false)} />}
     </header>
@@ -143,51 +146,56 @@ function TopBar() {
 }
 
 function Sidebar() {
+  const tr = useT();
   const page = useStore((s) => s.page);
   const setPage = useStore((s) => s.setPage);
   const collapsed = useStore((s) => s.collapsed);
   const toggle = useStore((s) => s.toggleCollapsed);
   const keys = resolveShortcuts(useStore((s) => s.shortcuts));
   return (
-    <nav className="sidebar" aria-label="Espaces de travail">
+    <nav className="sidebar" aria-label={tr('nav.aria')}>
       {PAGES.map((p) => {
         const Icon = ICONS[p.id];
         const k = keys[`page:${p.id}` as ShortcutAction];
+        const label = tr(`nav.${p.id}`);
         return (
-          <button key={p.id} className={`nav-item ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)} title={`${p.label}${k ? ` (${k})` : ''}`} data-testid={`nav-${p.id}`}>
-            <Icon size={17} /><span>{p.label}</span>{k && <span className="kbd">{k.replace('Ctrl+', '^')}</span>}
+          <button key={p.id} className={`nav-item ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)} title={`${label}${k ? ` (${k})` : ''}`} data-testid={`nav-${p.id}`}>
+            <Icon size={17} /><span>{label}</span>{k && <span className="kbd">{k.replace('Ctrl+', '^')}</span>}
           </button>
         );
       })}
       <div className="grow" />
-      <button className="nav-item" onClick={toggle} title={collapsed ? 'Déplier' : 'Replier'}>
-        {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}<span>Replier</span>
+      <button className="nav-item" onClick={toggle} title={collapsed ? tr('nav.expand') : tr('nav.collapse')}>
+        {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}<span>{tr('nav.collapse')}</span>
       </button>
     </nav>
   );
 }
 
 function StatusBar() {
+  const tr = useT();
   const rt = useStore((s) => s.runtime);
   const project = useStore((s) => s.project);
   const toggleDiag = useStore((s) => s.toggleDiag);
   const m = rt?.engine.metrics;
   return (
     <footer className="statusbar">
-      <span className="item"><Activity size={12} />{m ? `${m.measuredHz}/${m.rateHz} Hz · tick ${m.avgTickMs.toFixed(2)} ms · charge ${(m.load * 100).toFixed(1)} %` : 'Moteur…'}</span>
-      <span className="item">{project?.project.patch.length ?? 0} projecteurs · {project?.project.show.universes ?? 0} univers</span>
-      <span className="item">Programmeur : {rt?.engine.programmerCount ?? 0}</span>
-      {rt?.engine.aiActive && <span className="item"><span className="led violet" />Couche IA active</span>}
-      {rt?.safety.violation && <span className="item" data-testid="flash-alert" title={rt.safety.reason ?? ''}><span className="led warn" />Flashs dangereux{rt.safety.flashGuard === 'limit' ? ' · limités' : ''}</span>}
-      {rt?.audio.active && <span className="item"><AudioLines size={12} />Audio {rt.audio.source === 'simulated' ? '(simulé)' : ''}</span>}
+      <span className="item"><Activity size={12} />{m ? tr('status.engine', { measured: m.measuredHz, rate: m.rateHz, tick: m.avgTickMs.toFixed(2), load: (m.load * 100).toFixed(1) }) : tr('status.engineLoading')}</span>
+      <span className="item">{tr('status.rig', { fixtures: project?.project.patch.length ?? 0, universes: project?.project.show.universes ?? 0 })}</span>
+      <span className="item">{tr('status.programmer', { n: rt?.engine.programmerCount ?? 0 })}</span>
+      {rt?.engine.aiActive && <span className="item"><span className="led violet" />{tr('status.aiLayer')}</span>}
+      {rt?.testPattern && <span className="item"><span className="led warn" />{tr('status.testPattern')}</span>}
+      {rt?.safety.violation && <span className="item" data-testid="flash-alert" title={rt.safety.reason ?? ''}><span className="led warn" />{tr('status.flashes')}{rt.safety.flashGuard === 'limit' ? tr('status.flashesLimited') : ''}</span>}
+      {rt?.audio.active && <span className="item"><AudioLines size={12} />{tr('status.audio')} {rt.audio.source === 'simulated' ? tr('status.audioSimulated') : ''}</span>}
       <div className="grow" />
       <span className="item">Master {Math.round((rt?.engine.master ?? 1) * 100)} %</span>
-      <button className="btn ghost sm" onClick={toggleDiag} title="Console de diagnostic (Ctrl+`)"><Terminal size={12} />Diagnostic</button>
+      <button className="btn ghost sm" onClick={toggleDiag} title={tr('status.diagnosticsTitle')}><Terminal size={12} />{tr('status.diagnostics')}</button>
     </footer>
   );
 }
 
 function DiagnosticsDrawer() {
+  const tr = useT();
   const open = useStore((s) => s.diagOpen);
   const logs = useStore((s) => s.logs);
   const toggle = useStore((s) => s.toggleDiag);
@@ -199,16 +207,16 @@ function DiagnosticsDrawer() {
   return (
     <div className="drawer" data-testid="diagnostics">
       <div className="panel-head">
-        <h2>Console de diagnostic</h2>
+        <h2>{tr('diag.title')}</h2>
         <div className="chips">
-          <button className={`chip ${level === 'all' ? 'on' : ''}`} onClick={() => setLevel('all')}>Tout</button>
-          <button className={`chip ${level === 'warn' ? 'on' : ''}`} onClick={() => setLevel('warn')}>Alertes</button>
+          <button className={`chip ${level === 'all' ? 'on' : ''}`} onClick={() => setLevel('all')}>{tr('diag.all')}</button>
+          <button className={`chip ${level === 'warn' ? 'on' : ''}`} onClick={() => setLevel('warn')}>{tr('diag.alerts')}</button>
         </div>
         <div className="grow" />
-        <button className="btn ghost sm icon" onClick={toggle} title="Fermer"><X size={14} /></button>
+        <button className="btn ghost sm icon" onClick={toggle} title={tr('common.close')}><X size={14} /></button>
       </div>
       <div style={{ overflow: 'auto', flex: 1, padding: '6px 0' }}>
-        {shown.length === 0 && <div className="empty small">Aucun événement.</div>}
+        {shown.length === 0 && <div className="empty small">{tr('diag.empty')}</div>}
         {shown.map((l) => (
           <div key={l.id} className={`log-line ${l.level}`}>
             <span className="dim">{l.t.slice(11, 19)}</span><span>{l.level.toUpperCase()}</span><span className="muted">{l.source}</span><span>{l.message}</span>
@@ -286,6 +294,7 @@ function useShortcuts() {
 }
 
 export function App() {
+  const tr = useT();
   const page = useStore((s) => s.page);
   const collapsed = useStore((s) => s.collapsed);
   const ready = useStore((s) => !!s.project);
@@ -295,7 +304,7 @@ export function App() {
     <div className={`app ${collapsed ? 'collapsed' : ''}`}>
       <TopBar />
       <Sidebar />
-      <main className="main">{ready ? <View key={page} /> : <div className="empty">Connexion au moteur…</div>}</main>
+      <main className="main">{ready ? <View key={page} /> : <div className="empty">{tr('app.connecting')}</div>}</main>
       <StatusBar />
       <DiagnosticsDrawer />
       <Toasts />
@@ -309,7 +318,7 @@ export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
   document.documentElement.style.zoom = String(settings.appearance.uiScale);
-  useStore.setState({ shortcuts: settings.shortcuts, onboarding: settings.onboarding, help: settings.onboarding.completed ? null : 'welcome' });
+  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: settings.onboarding.completed ? null : 'welcome' });
   void externalControl.configure(settings.control);
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }
