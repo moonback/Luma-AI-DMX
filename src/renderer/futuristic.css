@@ -1,0 +1,155 @@
+/* ------------------------------------------------------------------ */
+/* Futuristic premium layer — loaded after styles.css, overrides only  */
+/* Motion stays slow and transform/opacity-only (GPU) so the 3D stage  */
+/* and DMX output keep their frame budget.                             */
+/* ------------------------------------------------------------------ */
+:root {
+  --bg: #07080d;
+  --glass: linear-gradient(180deg, rgba(26, 31, 46, 0.74), rgba(15, 18, 27, 0.86));
+  --hairline: linear-gradient(140deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 38%, rgba(139, 92, 246, 0.28) 75%, rgba(34, 211, 238, 0.32));
+  --glow-violet: 0 0 0 1px rgba(139, 92, 246, 0.35), 0 8px 28px -8px rgba(139, 92, 246, 0.55);
+  --glow-cyan: 0 0 18px rgba(34, 211, 238, 0.35);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur: 180ms;
+  --enter: 520ms;
+}
+@media (prefers-reduced-motion: reduce) { :root { --enter: 0ms; } }
+.reduced-motion { --enter: 0ms; }
+.reduced-motion *, .reduced-motion *::before, .reduced-motion *::after { animation-duration: 0ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; }
+}
+
+/* Ambient aurora behind the whole shell */
+.app { position: relative; isolation: isolate; }
+.app::before, .app::after { content: ''; position: fixed; z-index: -1; pointer-events: none; }
+.app::before {
+  inset: -20%;
+  background:
+    radial-gradient(38% 32% at 18% 22%, rgba(139, 92, 246, 0.16), transparent 70%),
+    radial-gradient(34% 30% at 82% 78%, rgba(34, 211, 238, 0.12), transparent 70%),
+    radial-gradient(28% 26% at 70% 12%, rgba(244, 114, 182, 0.07), transparent 70%);
+  animation: aurora 38s ease-in-out infinite alternate;
+}
+/* Fine tech grid, faded toward the edges */
+.app::after {
+  inset: 0;
+  background: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px) 0 0 / 44px 44px;
+  mask-image: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 75%);
+}
+@keyframes aurora {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(4%, -3%, 0) rotate(8deg) scale(1.08); }
+  100% { transform: translate3d(-3%, 4%, 0) rotate(-6deg) scale(1.02); }
+}
+
+/* Shell chrome: translucent glass */
+.topbar, .sidebar, .statusbar { background: rgba(12, 14, 21, 0.72); border-color: rgba(255, 255, 255, 0.06); }
+.topbar { position: relative; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 30px -18px rgba(0, 0, 0, 0.8); }
+.topbar::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--violet) 30%, var(--cyan) 70%, transparent) 0 0 / 200% 100%;
+  opacity: 0.55; animation: scan-line 9s linear infinite;
+}
+@keyframes scan-line { to { background-position: -200% 0; } }
+
+.brand { letter-spacing: 0.6px; }
+.brand-mark { position: relative; overflow: hidden; box-shadow: 0 0 18px rgba(139, 92, 246, 0.45); }
+.brand-mark::before {
+  content: ''; position: absolute; inset: -30%;
+  background: conic-gradient(from 0deg, var(--violet), var(--cyan), #f472b6, var(--violet));
+  animation: spin 7s linear infinite;
+}
+.brand-mark::after { position: relative; z-index: 1; animation: breathe 3.2s ease-in-out infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+@keyframes breathe { 50% { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22), 0 0 12px rgba(34, 211, 238, 0.6); } }
+
+.led.ok { animation: led-breathe 2.4s ease-in-out infinite; }
+.led.err { animation: led-breathe 1s ease-in-out infinite; }
+@keyframes led-breathe { 50% { opacity: 0.55; } }
+
+/* Navigation */
+.nav-item { border-radius: 7px; transition: background var(--dur), color var(--dur), transform var(--dur) var(--ease-out); }
+.nav-item:hover { background: rgba(255, 255, 255, 0.04); transform: translateX(2px); }
+.nav-item.active { background: linear-gradient(90deg, rgba(139, 92, 246, 0.22), rgba(34, 211, 238, 0.04)); box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.25); }
+.nav-item.active::before { background: linear-gradient(180deg, var(--violet), var(--cyan)); box-shadow: 0 0 10px var(--violet); }
+.nav-item.active svg { color: var(--cyan); filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.6)); }
+
+/* Page entrance: header then blocks, staggered. Only a `from` frame, so no
+   transform lingers afterwards (fixed modals inside pages stay positioned). */
+.page > * { animation: rise var(--enter) var(--ease-out) backwards; }
+.page > :nth-child(2) { animation-delay: 60ms; }
+.page > :nth-child(3) { animation-delay: 120ms; }
+.page > :nth-child(n + 4) { animation-delay: 180ms; }
+.grid > .panel { animation: rise var(--enter) var(--ease-out) backwards; }
+.grid > .panel:nth-child(2) { animation-delay: 70ms; }
+.grid > .panel:nth-child(3) { animation-delay: 140ms; }
+.grid > .panel:nth-child(n + 4) { animation-delay: 210ms; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+
+.page-head h1 {
+  font-size: 20px; letter-spacing: 0.2px;
+  background: linear-gradient(90deg, #fff, #c9d2e3 60%, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* Panels: glass + hairline gradient border */
+.panel {
+  border: 1px solid transparent; border-radius: 12px;
+  background: var(--glass) padding-box, var(--hairline) border-box;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+  transition: box-shadow 260ms var(--ease-out), transform 260ms var(--ease-out);
+}
+.panel:hover { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 22px 50px -24px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(139, 92, 246, 0.12); }
+.panel.fam { box-shadow: inset 0 2px 0 var(--fam), 0 18px 40px -24px rgba(0, 0, 0, 0.9); }
+.panel-head { border-bottom-color: rgba(255, 255, 255, 0.06); }
+.panel-head h2 { letter-spacing: 1.4px; font-size: 11px; }
+.table th { background: #10131c; }
+.kpi .v { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+
+/* Buttons */
+.btn { border-radius: 7px; transition: background var(--dur), border-color var(--dur), box-shadow var(--dur), transform var(--dur) var(--ease-out); }
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+.btn.primary { position: relative; overflow: hidden; background: linear-gradient(135deg, #7c3aed, #8b5cf6 45%, #22d3ee 140%); border-color: rgba(167, 139, 250, 0.6); box-shadow: var(--glow-violet); }
+.btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, #8b5cf6, #a78bfa 45%, #22d3ee 130%); box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.5), 0 10px 34px -6px rgba(139, 92, 246, 0.75); }
+.btn.primary::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+  transform: translateX(-120%);
+}
+.btn.primary:hover:not(:disabled)::after { animation: sheen 900ms var(--ease-out); }
+@keyframes sheen { to { transform: translateX(120%); } }
+.btn.accent:hover:not(:disabled) { box-shadow: var(--glow-cyan); }
+.btn.on, .chip.on { box-shadow: 0 0 14px -2px rgba(139, 92, 246, 0.55); }
+.go-btn { background: linear-gradient(135deg, #10b981, #34d399 60%, #a7f3d0); box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.5), 0 10px 34px -8px rgba(52, 211, 153, 0.7); animation: go-glow 2.6s ease-in-out infinite; }
+@keyframes go-glow { 50% { box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.7), 0 10px 44px -4px rgba(52, 211, 153, 0.9); } }
+
+/* Inputs */
+.input, .select, .textarea { background: rgba(5, 6, 10, 0.7); border-color: rgba(255, 255, 255, 0.08); border-radius: 7px; transition: border-color var(--dur), box-shadow var(--dur); }
+.input:focus, .select:focus, .textarea:focus { box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18); }
+
+/* Tabs: glowing underline */
+.tab { transition: color var(--dur); }
+.tab.active { border-bottom-color: transparent; background: linear-gradient(90deg, var(--violet), var(--cyan)) bottom / 100% 2px no-repeat; text-shadow: 0 0 12px rgba(139, 92, 246, 0.6); }
+
+/* Tiles & cards */
+.fx-tile, .start-choice, .scene-template, .scene-lib-item, .scene-add-main { transition: border-color var(--dur), background var(--dur), box-shadow var(--dur), transform var(--dur) var(--ease-out); }
+.fx-tile:hover, .start-choice:hover, .scene-template:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -14px rgba(139, 92, 246, 0.8); }
+.fx-tile.sel { box-shadow: var(--glow-violet); }
+
+/* Meters & progress */
+.progress > div { background: linear-gradient(90deg, var(--violet), var(--cyan), var(--violet)) 0 0 / 200% 100%; animation: flow 2.4s linear infinite; box-shadow: 0 0 10px rgba(34, 211, 238, 0.5); }
+@keyframes flow { to { background-position: -200% 0; } }
+.dmx-cell .bar { box-shadow: 0 0 8px rgba(34, 211, 238, 0.35); }
+
+/* Overlays */
+.overlay { background: rgba(3, 4, 8, 0.6); backdrop-filter: blur(8px) saturate(1.2); }
+.modal { border: 1px solid transparent; border-radius: 14px; background: linear-gradient(180deg, #161b28, #0f121b) padding-box, var(--hairline) border-box; box-shadow: 0 40px 90px -20px rgba(0, 0, 0, 0.8), 0 0 60px -30px rgba(139, 92, 246, 0.6); animation: pop 280ms var(--ease-out); }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
+.toast { background: rgba(22, 27, 40, 0.92); backdrop-filter: blur(10px); border-radius: 10px; animation: slide-in 320ms var(--ease-out); }
+@keyframes slide-in { from { opacity: 0; transform: translateX(24px); } }
+.drawer { background: rgba(12, 14, 21, 0.94); backdrop-filter: blur(12px); animation: drawer-up 300ms var(--ease-out); }
+@keyframes drawer-up { from { transform: translateY(24px); opacity: 0; } }
+
+::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(139, 92, 246, 0.45), rgba(34, 211, 238, 0.35)); border-color: var(--bg); }
