@@ -43,6 +43,7 @@ export interface Dialogs {
   saveProject(defaultName: string): Promise<string | null>;
   openProfile(): Promise<string | null>;
   saveDiagnostic?(defaultName: string): Promise<string | null>;
+  savePatchSheet?(defaultName: string, format: 'csv' | 'pdf'): Promise<string | null>;
 }
 
 export interface SecretStore {
@@ -65,6 +66,8 @@ export interface AppServiceOptions {
   crashDir?: string;
   appInfo?: AppInfo;
   updater?: Updater;
+  /** HTML → PDF (Electron's printToPDF); absent in tests, where only the CSV export is available. */
+  renderPdf?(html: string): Promise<Uint8Array>;
 }
 
 export { UserError };
@@ -77,7 +80,7 @@ export type CommandIn<D extends CommandDomain> = Extract<Command, { type: `${D}.
 /** Exhaustive at compile time: a new command prefix without a handler does not build. */
 const ROUTES: { [D in CommandDomain]: (app: AppService, cmd: CommandIn<D>) => unknown } = {
   project: handleProject, onboarding: handleProject,
-  profile: handleFixtures, ofl: handleFixtures, fixture: handleFixtures,
+  profile: handleFixtures, ofl: handleFixtures, fixture: handleFixtures, patch: handleFixtures,
   group: handleProgramming, palette: handleProgramming, programmer: handleProgramming, scene: handleProgramming,
   cue: handleProgramming, cueList: handleProgramming, effect: handleProgramming, timeline: handleProgramming,
   music: handleMusic, locate: handleLocate,

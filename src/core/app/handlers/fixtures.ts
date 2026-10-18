@@ -8,10 +8,11 @@ import { BUILTIN_PROFILES } from '../../fixtures/builtinProfiles';
 import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../../fixtures/ofl';
 import { findFreeAddress, validatePatch } from '../../fixtures/patch';
 import { SCENE_FIELDS, UserError } from '../shared';
+import { patchSheetCsv, patchSheetHtml } from '../../fixtures/patchSheet';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Fixture profiles (Luma, grandMA2, Open Fixture Library) and the patch. */
-export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' | 'ofl' | 'fixture'>): Promise<unknown> {
+export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' | 'ofl' | 'fixture' | 'patch'>): Promise<unknown> {
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'profile.import': {
@@ -189,6 +190,18 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         }
       });
       return { ids: out };
+    }
+    case 'patch.exportSheet': {
+      const base = `${app.project.meta.name} - patch`.replace(/[\\/:*?"<>|]/gu, '_');
+      const file = cmd.path ?? (await app.opts.dialogs.savePatchSheet?.(`${base}.${cmd.format}`, cmd.format)) ?? null;
+      if (!file) return { path: null };
+      if (cmd.format === 'csv') await fs.writeFile(file, patchSheetCsv(app.project), 'utf8');
+      else {
+        if (!app.opts.renderPdf) throw new UserError('Export PDF indisponible ici : exportez en CSV.');
+        await fs.writeFile(file, await app.opts.renderPdf(patchSheetHtml(app.project)));
+      }
+      app.logger.info('Patch', `Feuille de patch exportée : ${path.basename(file)}`);
+      return { path: file };
     }
   }
 }

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -152,6 +152,15 @@ test('programmeur → scène → liste de cues → GO', async () => {
   await expect(channel(1)).toHaveAttribute('data-v', '200', { timeout: 10_000 });
   await nav('cues');
   await page.getByRole('button', { name: /Stop/ }).click();
+});
+
+test('feuille de patch exportée en PDF et CSV', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'luma-patch-'));
+  const run = (format: 'pdf' | 'csv') => page.evaluate(async ([f, p]) => (window as unknown as { luma: { invoke: (c: unknown) => Promise<{ ok: boolean; data?: { path: string } }> } }).luma.invoke({ type: 'patch.exportSheet', format: f, path: p }), [format, path.join(dir, `patch.${format}`)] as const);
+  expect((await run('pdf')).ok).toBe(true);
+  expect(readFileSync(path.join(dir, 'patch.pdf')).subarray(0, 5).toString()).toBe('%PDF-');
+  expect((await run('csv')).ok).toBe(true);
+  expect(readFileSync(path.join(dir, 'patch.csv'), 'utf8')).toContain('Demo PAR RGBW 1');
 });
 
 test('sortie réelle armée → STOP OUTPUT coupe les émissions', async () => {

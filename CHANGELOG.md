@@ -12,6 +12,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 - Banc d'évaluation IA porté de 32 à 175 cas (dont 33 adverses) ; seuils relevés à 98 % (mesuré : reconnaissance 99,3 %, intention 99,2 %, validité 100 %, 0 violation de sécurité).
 - Interpréteur local : 13 ambiances nommées (rock, théâtre, mystère, coucher de soleil, sous-marine, glaciale, feu de camp, mariage, Halloween, Noël…), « ambiance … » crée une scène, lavande/lilas, « tempo 140 », « stop les effets », « fade to black », « respirer » / « clignoter doucement » (pulse lent, jamais de strobe), effet fade, « intensité minimale », « divise par deux ».
 - Parcours e2e « programmeur → scène → liste de cues → GO » et « sortie réelle armée → STOP OUTPUT ».
+- Feuille de patch exportable (écran Fixtures) : PDF A4 paysage par univers pour l'équipe, ou CSV « ; » UTF-8 pour Excel (protégé contre l'injection de formules).
 - Mises à jour automatiques (electron-updater, GitHub Releases) : canal stable ou bêta, téléchargement en arrière-plan, installation à la fermeture uniquement (jamais pendant un show) ; Paramètres › Général affiche la version et l'état.
 - Workflow de release sur tag `vX.Y.Z` / `vX.Y.Z-beta.N` : vérifie la version, teste, signe l'installateur si les secrets `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` sont définis, publie.
 - Journal persistant : `userData/logs/luma.log` (JSON lines, rotation 2 Mo × 5), survit à un plantage.

@@ -31,6 +31,17 @@ function isTrustedSender(url: string): boolean {
   return url.startsWith('file://');
 }
 
+/** Prints self-contained HTML to an A4 landscape PDF in a hidden, script-less window. */
+async function renderPdf(html: string): Promise<Uint8Array> {
+  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false } });
+  try {
+    await w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    return await w.webContents.printToPDF({ landscape: true, pageSize: 'A4', printBackground: true });
+  } finally {
+    w.destroy();
+  }
+}
+
 async function createService(): Promise<AppService> {
   const dataDir = app.getPath('userData');
   const svc: AppService = new AppService({
@@ -38,6 +49,7 @@ async function createService(): Promise<AppService> {
     crashDir: app.getPath('crashDumps'),
     // Read lazily: update events arrive after the service is constructed.
     updater: createUpdater((): Logger => svc.logger),
+    renderPdf,
     appInfo: {
       name: BRAND.productName,
       version: app.getVersion(),
@@ -63,6 +75,10 @@ async function createService(): Promise<AppService> {
           { name: 'GDTF / QLC+ (bientôt)', extensions: ['gdtf', 'qxf'] },
         ], properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
+      },
+      savePatchSheet: async (name, format) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Exporter la feuille de patch', defaultPath: name, filters: [format === 'csv' ? { name: 'Tableur (CSV)', extensions: ['csv'] } : { name: 'PDF', extensions: ['pdf'] }] });
+        return r.canceled ? null : r.filePath ?? null;
       },
       saveDiagnostic: async (name) => {
         const r = await dialog.showSaveDialog(win!, { title: 'Exporter un diagnostic', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Diagnostic', extensions: ['json'] }] });

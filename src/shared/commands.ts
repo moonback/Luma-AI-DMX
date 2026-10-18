@@ -227,6 +227,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('settings.update'), settings: settingsSchema }),
   empty('logs.recent'),
   z.object({ type: z.literal('diagnostic.export'), path: optPath }),
+  /** Patch sheet for the crew: CSV (spreadsheet) or PDF (print). */
+  z.object({ type: z.literal('patch.exportSheet'), format: z.enum(['csv', 'pdf']), path: optPath }),
   // Application
   empty('app.info'),
   empty('app.checkUpdates'),
@@ -380,6 +382,7 @@ export interface CommandResults {
   'settings.update': Void;
   'logs.recent': LogEntry[];
   'diagnostic.export': { path: string | null };
+  'patch.exportSheet': { path: string | null };
   'app.info': { name: string; version: string; updates: UpdateStatus };
   'app.checkUpdates': UpdateStatus;
 }
