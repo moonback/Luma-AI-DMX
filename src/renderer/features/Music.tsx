@@ -175,7 +175,7 @@ export function MusicPage() {
                       <td className="mono">{fmt(s.start)}</td>
                       <td style={{ width: 90 }}><div className="meter"><div style={{ width: `${s.energy * 100}%` }} /></div></td>
                       <td>
-                        {p ? (
+                        {p ? (<>
                           <span className="row" style={{ gap: 6 }}>
                             <span className="mono" title="Énergie du plan (0–5)">{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
                             {p.palette.map((c) => <span key={c} style={{ width: 12, height: 12, borderRadius: 3, background: c, display: 'inline-block' }} />)}
@@ -185,7 +185,8 @@ export function MusicPage() {
                             {p.extras.length > 0 && <span className="dim">· {p.extras.map((x) => EXTRA_NAMES[x]).join(', ')}</span>}
                             {p.note && <span className="badge">{p.note}</span>}
                           </span>
-                        ) : <span className="dim">—</span>}
+                          {p.why && <div className="small dim" style={{ marginTop: 2 }} data-testid="music-section-why">Pourquoi : {p.why}</div>}
+                        </>) : <span className="dim">—</span>}
                       </td>
                       <td style={{ width: 200 }}>
                         <input className="input" disabled={!p} placeholder="plus chaud, plus calme, en rouge, prisme…" value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />

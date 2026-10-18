@@ -14,7 +14,7 @@ import { demoProject, makeService } from '../helpers';
 
 vi.mock('../../src/core/ai/providers/openrouter', async (orig) => {
   const mod = await orig<typeof import('../../src/core/ai/providers/openrouter')>();
-  return { ...mod, listOpenRouterModels: vi.fn(async () => []), planShowWithOpenRouter: vi.fn() };
+  return { ...mod, listOpenRouterModels: vi.fn(async () => []), planShowWithOpenRouter: vi.fn(), planSectionWithOpenRouter: vi.fn() };
 });
 
 let analysis: SongAnalysis;
@@ -132,7 +132,7 @@ describe('Song-to-Show', () => {
     const plan = vi.mocked(openrouter.planShowWithOpenRouter);
     plan.mockResolvedValueOnce({
       summary: 'Show test', model: 'test/model', notices: [],
-      sections: analysis.sections.map((_, i) => ({ index: i, energy: 3, palette: ['#00FF00'], layers: { wash: true, moving: true, bars: false }, movement: 'slow' as const, effect: 'pulse' as const, beam: 'gobo' as const, effectBeats: 2, accents: false, groups: [], focus: null, extras: [], locked: false, note: '' })),
+      sections: analysis.sections.map((_, i) => ({ index: i, energy: 3, palette: ['#00FF00'], layers: { wash: true, moving: true, bars: false }, movement: 'slow' as const, effect: 'pulse' as const, beam: 'gobo' as const, effectBeats: 2, accents: false, groups: [], focus: null, extras: [], locked: false, note: '', why: '' })),
     });
     const ok = await svc.execute({ type: 'music.generate', trackId: id, intent: 'tout en vert', nextVariant: false });
     expect(ok.provider).toBe('openrouter');
@@ -140,11 +140,58 @@ describe('Song-to-Show', () => {
     const structure = plan.mock.calls[0]![1];
     expect(structure).toContain('BPM');
     expect(structure).not.toMatch(/sample|audio data/i);
+    // Same request again: answered from the cache, no new call, same plan.
+    const before = svc.getProject().music.tracks[0]!.plan;
+    const again = await svc.execute({ type: 'music.generate', trackId: id, intent: 'tout en vert', nextVariant: false });
+    expect(plan).toHaveBeenCalledTimes(1);
+    expect(again).toMatchObject({ provider: 'openrouter' });
+    expect(again.notices.join(' ')).toMatch(/cache/);
+    expect(svc.getProject().music.tracks[0]!.plan).toEqual(before);
+    // A new variant is a new request, and it tells the model which variant it is.
     plan.mockRejectedValueOnce(new Error('réseau indisponible'));
-    const fb = await svc.execute({ type: 'music.generate', trackId: id, intent: 'tout en vert', nextVariant: false });
+    const fb = await svc.execute({ type: 'music.generate', trackId: id, intent: 'tout en vert', nextVariant: true });
+    expect(plan).toHaveBeenCalledTimes(2);
+    expect(plan.mock.calls[1]![1]).toMatch(/Variant 1/);
     expect(fb.provider).toBe('local');
     expect(fb.notices.join(' ')).toMatch(/OpenRouter indisponible/);
     await svc.dispose();
+  });
+
+  it('OpenRouter : une section régénérée par le LLM avec ses voisines et la consigne, repli local sinon', async () => {
+    const { svc, secrets, id } = await setup();
+    await svc.execute({ type: 'music.generate', trackId: id, intent: 'concert pop', nextVariant: false });
+    secrets.set('openrouter-api-key', 'sk-or-v1-test');
+    await svc.execute({ type: 'settings.update', settings: { ...defaultSettings(), ai: { ...defaultSettings().ai, provider: 'openrouter' } } });
+    const ci = analysis.sections.findIndex((s) => s.label === 'chorus');
+    await svc.execute({ type: 'music.setSection', trackId: id, index: ci, locked: true });
+    const before = svc.getProject().music.tracks[0]!.plan!;
+    const section = vi.mocked(openrouter.planSectionWithOpenRouter);
+    section.mockResolvedValueOnce({ model: 'test/model', notices: [], section: { ...before.sections[ci]!, palette: ['#FF0000'], locked: false, note: 'en rouge', why: 'Rouge demandé' } });
+    await svc.execute({ type: 'music.regenerateSection', trackId: id, index: ci, instruction: 'en rouge' });
+    const req = section.mock.calls[0]![0];
+    expect(req).toMatchObject({ index: ci, instruction: 'en rouge', current: before.sections[ci], prev: before.sections[ci - 1], next: before.sections[ci + 1] });
+    expect(req.structure).toContain('BPM');
+    const after = svc.getProject().music.tracks[0]!.plan!;
+    expect(after.sections[ci]).toMatchObject({ palette: ['#FF0000'], locked: true, why: 'Rouge demandé' });
+    expect(after.sections.filter((_, i) => i !== ci)).toEqual(before.sections.filter((_, i) => i !== ci));
+    // Provider down: the local rules apply the instruction.
+    section.mockRejectedValueOnce(new Error('réseau indisponible'));
+    const fb = await svc.execute({ type: 'music.regenerateSection', trackId: id, index: ci, instruction: 'plus chaud' });
+    expect(fb.notices.join(' ')).toMatch(/OpenRouter indisponible/);
+    expect(svc.getProject().music.tracks[0]!.plan!.sections[ci]).toMatchObject({ palette: ['#FFB000'], note: 'plus chaud' });
+    await svc.dispose();
+  });
+
+  it('explique chaque look : énergie mesurée, répétition, retouche', () => {
+    const rig = { wash: 4, moving: 2, bars: 0, allowStrobe: false };
+    const plan = planLocally(analysis, 'sobre sur les couplets', rig);
+    const [c1, c2] = analysis.sections.map((s, i) => [s, i] as const).filter(([s]) => s.label === 'chorus').map(([, i]) => i);
+    const s = analysis.sections[c2!]!;
+    expect(plan.sections[c2!]!.why).toContain(`Refrain, énergie mesurée ${s.energy.toFixed(2).replace('.', ',')} → niveau ${plan.sections[c2!]!.energy}/5`);
+    expect(plan.sections[c2!]!.why).toContain(`même musique que la section ${c1! + 1} (refrain) → même palette`);
+    const verse = analysis.sections.findIndex((x) => x.label === 'verse');
+    expect(plan.sections[verse]!.why).toContain('couplets sobres demandés');
+    expect(adjustSection(plan.sections[verse]!, 'en rouge', rig).why).toMatch(/^Retouche « en rouge » ; Couplet/);
   });
 
   it('OpenRouter : un plan partiellement invalide est réparé section par section', async () => {

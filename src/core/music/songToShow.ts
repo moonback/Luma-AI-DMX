@@ -124,8 +124,32 @@ function sectionPlan(index: number, energy: number, palette: string[], rig: RigI
   return {
     index, energy, beam,
     palette: peak ? palette.slice(0, 2) : palette.slice(0, energy >= 3 ? 2 : 1),
-    layers, movement, effect, effectBeats, accents: energy >= 4, groups: [], focus, extras, locked: false, note: '',
+    layers, movement, effect, effectBeats, accents: energy >= 4, groups: [], focus, extras, locked: false, note: '', why: '',
   };
+}
+
+const dec = (x: number) => x.toFixed(2).replace('.', ',');
+const EXTRA_WHY: Record<ShowExtra, string> = {
+  ramp: 'section longue → montée progressive', blinder: 'temps fort → blinder à l’entrée', breathe: 'passage calme → zoom qui respire',
+  bassFollow: 'basses dominantes → suit les basses', colorFollow: 'couleur qui suit la brillance',
+};
+
+/** Why the local rules chose this look: measured energy, repeats, the intent, the rig choices. */
+function explain(analysis: SongAnalysis, i: number, p: ShowSectionPlan, intent: Intent, rig: RigInfo): string {
+  const s = analysis.sections[i]!;
+  const parts = [`${SECTION_NAMES[s.label]}, énergie mesurée ${dec(s.energy)} → niveau ${p.energy}/5`];
+  const first = analysis.sections.findIndex((x) => x.cluster === s.cluster);
+  if (first < i) parts.push(`même musique que la section ${first + 1} (${SECTION_NAMES[analysis.sections[first]!.label].toLowerCase()}) → même palette`);
+  const peak = s.label === 'chorus' || s.label === 'drop';
+  if (intent.verseShift && ['verse', 'intro', 'outro'].includes(s.label)) parts.push('couplets sobres demandés');
+  if (intent.peakShift && peak) parts.push('temps forts renforcés (intention)');
+  if (intent.globalShift) parts.push(intent.globalShift < 0 ? 'ambiance calme demandée' : 'ambiance énergique demandée');
+  if (intent.colors.length) parts.push('couleurs demandées');
+  if (p.groups.length) parts.push(`groupes demandés : ${p.groups.map((g) => rig.groups?.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}`);
+  if (p.focus === 'audience') parts.push('balayage du public');
+  else if (p.focus) parts.push(`douche sur ${rig.markers?.find((m) => m.id === p.focus)?.name ?? 'le repère'}`);
+  for (const x of p.extras) parts.push(EXTRA_WHY[x]);
+  return parts.join(' ; ').slice(0, 300);
 }
 
 export function planLocally(analysis: SongAnalysis, intentText: string, rig: RigInfo, variant = 0, previous?: ShowPlan | null): ShowPlan {
@@ -146,7 +170,8 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     const palette = [...base.slice(rot), ...base.slice(0, rot)];
     if ((label === 'chorus' || label === 'drop') && !intent.colors.length) palette.splice(1, 0, accent);
     const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare);
-    return { ...plan, groups: byLabel.get(label) ?? [] };
+    const out = { ...plan, groups: byLabel.get(label) ?? [] };
+    return { ...out, why: explain(analysis, i, out, intent, rig) };
   });
   const peaks = analysis.sections.filter((s) => s.label === 'chorus' || s.label === 'drop').length;
   return {
@@ -159,7 +184,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
 /** Local edit of one section from a short instruction ("plus chaud", "plus calme", "en rouge", "sans mouvement"…). */
 export function adjustSection(s: ShowSectionPlan, instruction: string, rig: RigInfo): ShowSectionPlan {
   const t = normalize(instruction);
-  const out: ShowSectionPlan = { ...s, palette: [...s.palette], layers: { ...s.layers }, groups: [...s.groups], extras: [...s.extras], note: instruction.slice(0, 200) };
+  const out: ShowSectionPlan = { ...s, palette: [...s.palette], layers: { ...s.layers }, groups: [...s.groups], extras: [...s.extras], note: instruction.slice(0, 200), why: `Retouche « ${instruction.slice(0, 80)} »${s.why ? ` ; ${s.why}` : ''}`.slice(0, 300) };
   if (has(t, /\bplus (calme|doux|sobre)|moins (fort|energique|intense)/)) out.energy = clampE(s.energy - 1);
   if (has(t, /\bplus (fort|energique|intense|puissant)|moins (calme|sobre)|explos/)) out.energy = clampE(s.energy + 1);
   if (has(t, /\bplus chaud|chaleureu/)) out.palette = WARM.slice(0, Math.max(1, s.palette.length));

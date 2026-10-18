@@ -9,7 +9,7 @@ import { effectParamsSchema, profileSchema, type Effect, type Project, type Song
 import type { ResolvedFixture } from '../../src/core/fixtures/profiles';
 import { demoSong, edmSong, synthSong } from '../music-synth';
 import { demoProject, makeEngine } from '../helpers';
-import { planShowWithOpenRouter } from '../../src/core/ai/providers/openrouter';
+import { planSectionWithOpenRouter, planShowWithOpenRouter } from '../../src/core/ai/providers/openrouter';
 
 let pop: SongAnalysis, edm: SongAnalysis, sung: SongAnalysis;
 const base = { kick: false, snare: false, hats: false, bass: false, chords: [57, 53, 48, 55], pad: 0, bright: false };
@@ -111,6 +111,24 @@ describe('Song-to-Show enrichi', () => {
     expect(r.sections[1]).toMatchObject({ groups: [], focus: 'audience', extras: fallback[1]!.extras });
     // Fields a model leaves out are not reported as repaired.
     expect(r.notices.join(' ')).not.toMatch(/groups|focus|extras/);
+  });
+
+  it('OpenRouter : une section refaite avec ses voisines, noms en clair pour le modèle', async () => {
+    const fallback = planLocally(pop, '', { wash: 3, moving: 2, bars: 0, allowStrobe: true }).sections;
+    const current = { ...fallback[1]!, groups: ['g-contres'], focus: 'm-singer', locked: true };
+    let sent = '';
+    const answer = { ...fallback[1], effect: 'strobe', groups: ['Contres'], focus: 'Chanteur', why: 'Plus de punch demandé' };
+    const fetchImpl = (async (_: string, init: { body: string }) => {
+      sent = (JSON.parse(init.body) as { messages: { content: string }[] }).messages.map((m) => m.content).join('\n');
+      return new Response(JSON.stringify({ model: 'm/x', choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(answer) } }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const refs = { groups: [{ id: 'g-contres', name: 'Contres' }], markers: [{ id: 'm-singer', name: 'Chanteur' }] };
+    const r = await planSectionWithOpenRouter({ intent: 'concert pop', instruction: 'plus de punch', structure: 'S', index: 1, current, prev: fallback[0], next: fallback[2] }, { apiKey: 'k', model: 'm/x', effort: 'low', timeoutMs: 1000, fetchImpl }, fallback[1]!, refs);
+    expect(sent).toContain('Instruction for section 1: plus de punch');
+    expect(sent).toMatch(/Section 1 now: .*"groups":\["Contres"\].*"focus":"Chanteur"/);
+    expect(sent).toContain('Previous section: {');
+    expect(r.section).toMatchObject({ groups: ['g-contres'], focus: 'm-singer', effect: 'chase', locked: true, note: 'plus de punch', why: 'Plus de punch demandé' });
+    expect(r.notices.join(' ')).toMatch(/strobe non demandé/);
   });
 
   it('visée : pan/tilt calculés pour un point, accroché ou posé au sol', () => {

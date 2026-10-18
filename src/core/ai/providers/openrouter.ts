@@ -297,9 +297,7 @@ export async function proposeWithOpenRouter(prompt: string, rig: string, opts: O
 /* Song-to-Show planning                                               */
 /* ------------------------------------------------------------------ */
 
-const llmShowSchema = z.object({
-  summary: z.string(),
-  sections: z.array(z.object({
+const llmSectionSchema = z.object({
     index: z.number(),
     energy: z.number(),
     palette: z.array(z.string()),
@@ -312,19 +310,18 @@ const llmShowSchema = z.object({
     groups: z.array(z.string()),
     focus: z.string().nullable(),
     extras: z.array(z.enum(SHOW_EXTRAS)),
-  })),
+    why: z.string(),
 });
+const llmShowSchema = z.object({ summary: z.string(), sections: z.array(llmSectionSchema) });
 /** What is actually parsed: sections are repaired field by field rather than rejected as a whole. */
 const looseShowSchema = z.object({ summary: z.string().catch(''), sections: z.array(z.record(z.string(), z.unknown())).min(1) });
 const SHOW_JSON_SCHEMA = z.toJSONSchema(llmShowSchema);
+const SECTION_JSON_SCHEMA = z.toJSONSchema(llmSectionSchema);
 
-const SHOW_SYSTEM = `You are the lighting designer assistant of a DMX console. You plan a light show for one song, section by section.
+const SHOW_INTRO = `You are the lighting designer assistant of a DMX console. You plan a light show for one song, section by section.
 You only see the song's symbolic structure (sections, durations, measured energy, tempo, key), never the audio.
-Answer with ONE JSON object only (no prose, no code fence) matching this JSON Schema:
-${JSON.stringify(SHOW_JSON_SCHEMA)}
-Rules:
-- Exactly one entry per section, same index as given, in order.
-- energy: integer 0 (almost dark) to 5 (maximum). Follow the operator's intent first, then the song's dynamics.
+Answer with ONE JSON object only (no prose, no code fence) matching this JSON Schema:`;
+const SECTION_RULES = `- energy: integer 0 (almost dark) to 5 (maximum). Follow the operator's intent first, then the song's dynamics.
 - palette: 1 to 4 colours "#RRGGBB". Sections that are repeats of the same music should share a palette.
 - layers: which fixture families are lit (only families present in the rig).
 - movement (moving heads only): none | slow | sweep | fast | fan (heads open and close like a fan) | ballyhoo (wide random sweeps).
@@ -335,15 +332,28 @@ Rules:
 - beam (moving heads with gobo/prism/frost): open | gobo | prism (gobo + prism, for peaks) | frost (soft, for calm parts).
 - effectBeats: effect cycle in beats (0.5 to 16). Use strobe ONLY if strobeAllowed is true AND the operator asked for it.
 - accents: flash on detected impacts (true only for high-energy sections).
+- why: one short sentence in French explaining this look (repeat of an earlier section, measured energy, intent).`;
+const SHOW_SYSTEM = `${SHOW_INTRO}
+${JSON.stringify(SHOW_JSON_SCHEMA)}
+Rules:
+- Exactly one entry per section, same index as given, in order.
+${SECTION_RULES}
 - "summary": one or two sentences in French describing the show.`;
+const SECTION_SYSTEM = `${SHOW_INTRO}
+${JSON.stringify(SECTION_JSON_SCHEMA)}
+You redo ONE section of an existing show, following the operator's instruction for it and staying coherent with the
+neighbouring sections (given as they are) unless the instruction asks otherwise.
+Rules:
+${SECTION_RULES}`;
+
+/** Newer fields an older or terse model may leave out: kept from the fallback without being reported as fixed. */
+const OPTIONAL_FIELDS = new Set(['groups', 'focus', 'extras', 'why']);
 
 /**
  * Repairs one LLM section: numbers are rounded/clamped, invalid colours dropped, and every field still missing or
- * invalid is taken from `fallback` (the local plan). Returns the names of the replaced fields.
+ * invalid is taken from `fallback` (the local plan). Returns the names of the replaced fields. The explanation is
+ * the model's own (never the fallback's, which describes another look).
  */
-/** Newer fields an older or terse model may leave out: kept from the fallback without being reported as fixed. */
-const OPTIONAL_FIELDS = new Set(['groups', 'focus', 'extras']);
-
 export function repairShowSection(raw: Record<string, unknown>, fallback: ShowSectionPlan, index: number): { section: ShowSectionPlan; fixed: string[] } {
   const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
   const energy = num(raw.energy), beats = num(raw.effectBeats);
@@ -360,7 +370,22 @@ export function repairShowSection(raw: Record<string, unknown>, fallback: ShowSe
     if (r?.success) section[key] = r.data;
     else if (r || !OPTIONAL_FIELDS.has(key)) fixed.push(key);
   }
+  section.why = typeof raw.why === 'string' ? raw.why.trim().slice(0, 300) : '';
   return { section: section as ShowSectionPlan, fixed };
+}
+
+export interface ShowRefs { groups: NamedRef[]; markers: NamedRef[] }
+const idOf = (list: NamedRef[], x: unknown) => (typeof x === 'string' ? list.find((r) => r.id === x || normalize(r.name).trim() === normalize(x).trim())?.id : undefined);
+/** The model names groups and markers; the plan stores their ids (unknown names are dropped). */
+function toIds(raw: Record<string, unknown>, refs: ShowRefs): void {
+  if (Array.isArray(raw.groups)) raw.groups = raw.groups.map((g) => idOf(refs.groups, g)).filter(Boolean);
+  if (typeof raw.focus === 'string' && raw.focus !== 'audience') raw.focus = idOf(refs.markers, raw.focus) ?? null;
+}
+/** A plan section as the model sees it: groups and markers by name, no editing state. */
+function forModel(s: ShowSectionPlan, refs: ShowRefs): Record<string, unknown> {
+  const { locked: _l, note: _n, ...rest } = s;
+  const name = (list: NamedRef[], id: string) => list.find((r) => r.id === id)?.name ?? id;
+  return { ...rest, groups: s.groups.map((g) => name(refs.groups, g)), focus: s.focus && s.focus !== 'audience' ? name(refs.markers, s.focus) : s.focus };
 }
 
 /**
@@ -368,9 +393,7 @@ export function repairShowSection(raw: Record<string, unknown>, fallback: ShowSe
  * section): missing sections and invalid fields come from it, a strobe the operator did not ask for is removed.
  * Only an unusable answer (no sections at all) throws.
  */
-export async function planShowWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions, fallback: ShowSectionPlan[], refs: { groups: NamedRef[]; markers: NamedRef[] } = { groups: [], markers: [] }): Promise<{ summary: string; sections: ShowSectionPlan[]; model: string; notices: string[] }> {
-  // The model names groups and markers; the plan stores their ids (unknown names are dropped).
-  const idOf = (list: NamedRef[], x: unknown) => (typeof x === 'string' ? list.find((r) => r.id === x || normalize(r.name).trim() === normalize(x).trim())?.id : undefined);
+export async function planShowWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions, fallback: ShowSectionPlan[], refs: ShowRefs = { groups: [], markers: [] }): Promise<{ summary: string; sections: ShowSectionPlan[]; model: string; notices: string[] }> {
   const r = await completeJson(SHOW_SYSTEM, `Operator intent: ${intent || '(none)'}\n\n${structure}`, 'show_plan', SHOW_JSON_SCHEMA, opts);
   const loose = looseShowSchema.safeParse(r.json);
   if (!loose.success) throw new OpenRouterError(`Plan IA non conforme : ${loose.error.issues[0]?.path.join('.')} ${loose.error.issues[0]?.message}`, null);
@@ -380,8 +403,7 @@ export async function planShowWithOpenRouter(intent: string, structure: string, 
   const sections = fallback.map((fb, i) => {
     const raw = loose.data.sections[i];
     if (!raw) return { ...fb, index: i, locked: false, note: '' };
-    if (Array.isArray(raw.groups)) raw.groups = raw.groups.map((g) => idOf(refs.groups, g)).filter(Boolean);
-    if (typeof raw.focus === 'string' && raw.focus !== 'audience') raw.focus = idOf(refs.markers, raw.focus) ?? null;
+    toIds(raw, refs);
     const { section, fixed } = repairShowSection(raw, fb, i);
     if (section.effect === 'strobe' && !strobeWanted) { section.effect = 'chase'; fixed.push('strobe non demandé → chase'); }
     if (fixed.length) fixedNotes.push(`${i + 1} (${fixed.join(', ')})`);
@@ -392,4 +414,32 @@ export async function planShowWithOpenRouter(intent: string, structure: string, 
   if (loose.data.sections.length > fallback.length) notices.push(`Plan IA : ${loose.data.sections.length - fallback.length} section(s) en trop ignorée(s)`);
   if (fixedNotes.length) notices.push(`Plan IA corrigé (champs invalides repris des règles locales) : section ${fixedNotes.join(' ; ')}`);
   return { summary: loose.data.summary.slice(0, 1000) || 'Plan IA', sections, model: r.model, notices };
+}
+
+/**
+ * Redoes one section with an LLM: the song structure, the section as it is, its neighbours and the operator's
+ * instruction are sent; the answer is repaired against `fallback` (the local edit of the section).
+ */
+export async function planSectionWithOpenRouter(
+  req: { intent: string; instruction: string; structure: string; index: number; current: ShowSectionPlan; prev?: ShowSectionPlan; next?: ShowSectionPlan },
+  opts: OpenRouterOptions, fallback: ShowSectionPlan, refs: ShowRefs,
+): Promise<{ section: ShowSectionPlan; model: string; notices: string[] }> {
+  const show = (s?: ShowSectionPlan) => (s ? JSON.stringify(forModel(s, refs)) : '(none)');
+  const user = [
+    `Operator intent for the whole show: ${req.intent || '(none)'}`,
+    `Instruction for section ${req.index}: ${req.instruction || 'propose a different look, same intent'}`,
+    '', req.structure, '',
+    `Section ${req.index} now: ${show(req.current)}`,
+    `Previous section: ${show(req.prev)}`,
+    `Next section: ${show(req.next)}`,
+  ].join('\n');
+  const r = await completeJson(SECTION_SYSTEM, user, 'show_section', SECTION_JSON_SCHEMA, opts);
+  if (!r.json || typeof r.json !== 'object' || Array.isArray(r.json)) throw new OpenRouterError('Section IA non conforme : objet JSON attendu', null);
+  const raw = r.json as Record<string, unknown>;
+  toIds(raw, refs);
+  const { section, fixed } = repairShowSection(raw, fallback, req.index);
+  if (section.effect === 'strobe' && parseIntent(`${req.intent} ${req.instruction}`).strobe !== 'want') { section.effect = 'chase'; fixed.push('strobe non demandé → chase'); }
+  const notices = [...r.notices];
+  if (fixed.length) notices.push(`Section IA corrigée (champs repris des règles locales) : ${fixed.join(', ')}`);
+  return { section: { ...section, locked: req.current.locked, note: req.instruction.slice(0, 200) }, model: r.model, notices };
 }

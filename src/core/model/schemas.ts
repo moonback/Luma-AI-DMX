@@ -433,9 +433,9 @@ export const showSectionPlanSchema = z.object({
   /** Where the moving heads aim: a stage marker id, the audience, or null (spread focus). */
   focus: z.union([z.literal('audience'), idSchema]).nullable().default(null),
   extras: z.array(z.enum(SHOW_EXTRAS)).max(SHOW_EXTRAS.length).default([]),
-  /** Locked sections are kept when the show is regenerated. */
-  locked: z.boolean().default(false),
+  locked: z.boolean().default(false), // kept when the show is regenerated
   note: z.string().max(200).default(''),
+  /** Why this look, shown to the operator (planner rules or the LLM's own words). */ why: z.string().max(300).default(''),
 });
 export type ShowSectionPlan = z.infer<typeof showSectionPlanSchema>;
 export type ShowExtra = (typeof SHOW_EXTRAS)[number];
