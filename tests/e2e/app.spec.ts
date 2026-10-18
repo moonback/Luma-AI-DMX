@@ -125,6 +125,63 @@ test('blackout et STOP OUTPUT', async () => {
   await page.getByRole('button', { name: 'Reprendre' }).first().click();
 });
 
+test('programmeur → scène → liste de cues → GO', async () => {
+  await nav('ai');
+  await page.getByRole('button', { name: /Relâcher l’IA/ }).click();
+  await nav('console');
+  await page.getByRole('button', { name: 'Aucun', exact: true }).click(); // selection left by the previous scenario
+  await page.getByTestId('fixture-tiles').locator('.fx-tile').first().click();
+  await page.getByTestId('dimmer-fader').fill('200');
+  await page.getByRole('button', { name: 'Enregistrer scène' }).click();
+  await page.locator('.modal input.input').first().fill('Scène e2e');
+  await page.locator('.modal').getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(page.locator('.modal')).toHaveCount(0);
+  await page.keyboard.press('Escape'); // release the programmer: only the cue drives the output now
+
+  await nav('cues');
+  await page.getByRole('button', { name: 'Liste', exact: true }).click();
+  await page.locator('.modal').getByRole('button', { name: 'Valider' }).click();
+  await page.getByRole('button', { name: 'Ajouter un cue' }).click();
+  await expect(page.getByTestId('cue-table').locator('tbody tr')).toHaveCount(1);
+  await page.getByTestId('cue-table').locator('tbody tr').first().locator('select').first().selectOption({ label: 'Scène e2e' });
+  await page.getByTestId('go').click();
+  await expect(page.getByTestId('cue-state')).toContainText('Cue 1');
+
+  await nav('output');
+  await page.getByRole('tab', { name: 'Moniteur 512 canaux' }).click();
+  await expect(channel(1)).toHaveAttribute('data-v', '200', { timeout: 10_000 });
+  await nav('cues');
+  await page.getByRole('button', { name: /Stop/ }).click();
+});
+
+test('sortie réelle armée → STOP OUTPUT coupe les émissions', async () => {
+  type Invoke = (c: unknown) => Promise<{ ok: boolean; data?: { outputs: unknown[] } }>;
+  // A real Art-Net output aimed at this machine (nothing leaves it), added like the Output form would.
+  await page.evaluate(async () => {
+    const invoke = (window as unknown as { luma: { invoke: Invoke } }).luma.invoke;
+    const s = await invoke({ type: 'settings.get' });
+    await invoke({ type: 'output.configure', outputs: [...s.data!.outputs, { kind: 'artnet', id: 'e2e-artnet', name: 'Art-Net local', host: '127.0.0.1', universeMap: [{ local: 1, remote: 0 }] }] });
+  });
+  await nav('output');
+  await page.getByRole('tab', { name: 'Sorties' }).click();
+  const row = page.getByTestId('output-artnet');
+  await expect(row).toContainText('Désarmée');
+  await row.getByTestId('arm').click();
+  await page.locator('.modal').getByRole('button', { name: 'Armer la sortie' }).click();
+  await expect(row).toContainText('Prête');
+  await expect(page.getByTestId('mode')).not.toHaveText('SIMULATION');
+  await page.getByTestId('stop-output').click();
+  await expect(page.locator('body')).toContainText('STOP — émissions réelles arrêtées');
+  await page.getByRole('button', { name: 'Reprendre' }).first().click();
+  await row.getByRole('button', { name: 'Désarmer' }).click();
+  await expect(row).toContainText('Désarmée');
+  await page.evaluate(async () => {
+    const invoke = (window as unknown as { luma: { invoke: Invoke } }).luma.invoke;
+    const s = await invoke({ type: 'settings.get' });
+    await invoke({ type: 'output.configure', outputs: (s.data!.outputs as { id: string }[]).filter((o) => o.id !== 'e2e-artnet') });
+  });
+});
+
 test('captures des autres espaces', async () => {
   for (const [id, n] of [['cues', '10'], ['effects', '11'], ['timeline', '12'], ['audio', '13'], ['settings', '14'], ['dashboard', '15']] as const) {
     await nav(id);

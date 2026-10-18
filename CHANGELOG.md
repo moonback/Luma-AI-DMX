@@ -7,6 +7,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ### Ajouté
 - Intégration continue GitHub Actions sur Windows : messages de commit, typecheck, lint, tests avec couverture de `src/core`, e2e Playwright et paquet.
 - `CONTRIBUTING.md`, modèle de PR et ce changelog.
+- Tests de composants des espaces Cues, Fixtures, DMX Output et AI Director, branchés sur un vrai `AppService` headless (même validation Zod que le process main).
+- Parcours e2e « programmeur → scène → liste de cues → GO » et « sortie réelle armée → STOP OUTPUT ».
 - Journal persistant : `userData/logs/luma.log` (JSON lines, rotation 2 Mo × 5), survit à un plantage.
 - `crashReporter` local (minidumps jamais envoyés) ; exceptions et rejets non gérés, arrêts des processus de rendu journalisés.
 - « Exporter un diagnostic… » (Paramètres › Logs) : version, paramètres, état des sorties, journal et minidumps, sans clé, jeton ni contenu du projet.
