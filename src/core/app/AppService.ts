@@ -1083,7 +1083,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       ].join('\n');
       const model = ai.model || DEFAULT_OPENROUTER_MODEL;
       const caps = (await this.openRouterModels().catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-      const r = await planShowWithOpenRouter(intent, structure, { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps }, a.sections.length);
+      const r = await planShowWithOpenRouter(intent, structure, { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps }, local.sections);
       this.aiLastError = null;
       // Locked sections are kept from the previous plan.
       const sections = r.sections.map((s, i) => (t.plan?.sections[i]?.locked && t.plan.sections.length === r.sections.length ? t.plan.sections[i]! : s));

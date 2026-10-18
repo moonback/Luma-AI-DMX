@@ -410,6 +410,8 @@ export type SongAnalysis = z.infer<typeof songAnalysisSchema>;
 
 export const SHOW_MOVEMENTS = ['none', 'slow', 'sweep', 'fast'] as const;
 export const SHOW_EFFECTS = ['none', 'wave', 'pulse', 'chase', 'rainbow', 'strobe'] as const;
+/** Beam look of the moving heads: open, a gobo, gobo + prism, or frost (soft edge). */
+export const SHOW_BEAMS = ['open', 'gobo', 'prism', 'frost'] as const;
 export const showSectionPlanSchema = z.object({
   index: z.number().int().min(0).max(300),
   /** 0 = almost dark, 5 = maximum. */
@@ -418,6 +420,7 @@ export const showSectionPlanSchema = z.object({
   layers: z.object({ wash: z.boolean(), moving: z.boolean(), bars: z.boolean() }),
   movement: z.enum(SHOW_MOVEMENTS),
   effect: z.enum(SHOW_EFFECTS),
+  beam: z.enum(SHOW_BEAMS).default('open'),
   /** Effect cycle in beats. */
   effectBeats: z.number().min(0.5).max(16),
   /** Flash on detected impacts inside the section. */

@@ -4,8 +4,12 @@ import { effectParamsSchema, type SectionLabel } from '../model/schemas';
 import type { ProjectIndex } from '../engine/resolve';
 import type { ResolvedFixture } from '../fixtures/profiles';
 import { colorCapability, colorCells, colorToAttributes } from '../fixtures/color';
+import { coarseChannel } from '../fixtures/profiles';
+import { moduleKeys } from '../fixtures/modules';
+import { attributeClass } from '../fixtures/attributes';
 import { hexToRgb } from '../util/math';
 import { COLORS, normalize } from '../ai/local/interpreter';
+import { beamToValues } from '../ai/director';
 import { effectFlashViolation } from '../safety/flashGuard';
 import { SECTION_NAMES } from './analyze';
 
@@ -89,8 +93,9 @@ function sectionPlan(index: number, energy: number, palette: string[], rig: RigI
   else if (energy >= 5) { effect = 'chase'; effectBeats = 1; }
   if (label === 'drop' && rig.allowStrobe && intent.strobe === 'want') effect = 'strobe';
   if (label === 'bridge' && energy >= 2) { effect = 'rainbow'; effectBeats = 16; }
+  const beam: ShowSectionPlan['beam'] = peak && energy >= 5 ? 'prism' : energy >= 3 ? 'gobo' : energy <= 1 ? 'frost' : 'open';
   return {
-    index, energy,
+    index, energy, beam,
     palette: peak ? palette.slice(0, 2) : palette.slice(0, energy >= 3 ? 2 : 1),
     layers: { wash: rig.wash > 0 || (rig.bars === 0 && rig.moving === 0), moving: rig.moving > 0 && (energy >= 2 || peak), bars: rig.bars > 0 && energy >= 2 },
     movement, effect, effectBeats, accents: energy >= 4, locked: false, note: '',
@@ -138,8 +143,12 @@ export function adjustSection(s: ShowSectionPlan, instruction: string, rig: RigI
   else if (has(t, /\bstrobe\b/) && rig.allowStrobe) out.effect = 'strobe';
   if (out.energy !== s.energy && !colors.length && out.effect !== 'strobe') {
     const fresh = sectionPlan(s.index, out.energy, out.palette, rig, parseIntent(''), 0, out.energy >= 4 ? 'chorus' : 'verse');
-    Object.assign(out, { effect: fresh.effect, effectBeats: fresh.effectBeats, accents: fresh.accents, layers: fresh.layers, movement: out.movement === 'none' && s.movement === 'none' ? 'none' : fresh.movement });
+    Object.assign(out, { effect: fresh.effect, effectBeats: fresh.effectBeats, accents: fresh.accents, layers: fresh.layers, beam: fresh.beam, movement: out.movement === 'none' && s.movement === 'none' ? 'none' : fresh.movement });
   }
+  if (has(t, /\b(sans|pas de) (gobos?|prismes?)\b|faisceau ouvert/)) out.beam = 'open';
+  else if (has(t, /\bprismes?\b/)) out.beam = 'prism';
+  else if (has(t, /\bgobos?\b/)) out.beam = 'gobo';
+  else if (has(t, /\b(frost|flou|diffus\w*)\b/)) out.beam = 'frost';
   return out;
 }
 
@@ -154,22 +163,39 @@ export interface CompileResult {
 
 const LEVEL = [0.12, 0.3, 0.5, 0.7, 0.85, 1];
 
-function sceneValues(index: ProjectIndex, s: ShowSectionPlan): FixtureValues {
+/** Every intensity key of the fixture: the main dimmer plus the cell dimmers of multi-head modules (ring, pixels…). */
+function dimmerKeys(rf: ResolvedFixture): string[] {
+  return [...new Set(['dimmer', ...moduleKeys(rf, 'dimmer')])];
+}
+
+function beamValues(rf: ResolvedFixture, beam: ShowSectionPlan['beam'], cluster: number): Record<string, number> {
+  const gobos = coarseChannel(rf.mode, 'gobo')?.ranges.filter((r) => r.kind === 'gobo').length ?? 0;
+  // Same music (cluster) → same gobo.
+  const gobo = beam === 'gobo' || beam === 'prism' ? (gobos ? 1 + (cluster % gobos) : 0) : 0;
+  return beamToValues(rf, { gobo, prism: beam === 'prism', frost: beam === 'frost' ? 1 : 0 });
+}
+
+function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number): FixtureValues {
   const v: FixtureValues = {};
   let i = 0;
   for (const rf of index.fixtures.values()) {
     const layer = fixtureLayer(rf);
     const on = s.layers[layer];
-    const out: Record<string, number> = { dimmer: on ? LEVEL[s.energy]! : 0 };
+    const out: Record<string, number> = {};
+    for (const k of dimmerKeys(rf)) out[k] = on ? LEVEL[s.energy]! : 0;
     if (colorCapability(rf) !== 'none') {
       const cells = colorCells(rf);
-      if (cells.length > 1) cells.forEach((c, k) => Object.assign(out, colorToAttributes(rf, hexToRgb(s.palette[(i + k) % s.palette.length]!), c)));
-      else Object.assign(out, colorToAttributes(rf, hexToRgb(s.palette[i % s.palette.length]!)));
+      const color = (k: number) => hexToRgb(s.palette[k % s.palette.length]!);
+      Object.assign(out, colorToAttributes(rf, color(i)));
+      // Bars: one colour per cell; multi-head fixtures: the secondary modules take the next palette colour.
+      const shift = rf.profile.modules.length > 1 ? 1 : 0;
+      if (cells.length > 1 || shift) cells.forEach((c, k) => Object.assign(out, colorToAttributes(rf, color(i + k + shift), c)));
     }
     if (layer === 'moving') {
       // Static focus spread across the stage; movement effects swing around it.
       if (rf.attributes.includes('pan')) out.pan = 0.5 + ((i % 3) - 1) * 0.12;
       if (rf.attributes.includes('tilt')) out.tilt = 0.62;
+      Object.assign(out, beamValues(rf, s.beam, cluster));
     }
     v[rf.fixture.id] = out;
     i++;
@@ -205,8 +231,19 @@ function moveFor(index: ProjectIndex, name: string, s: ShowSectionPlan): Effect 
   };
 }
 
+/** The parts of `e` outside [a, b); the part after the gap restarts without a fade (hard re-entry). */
+function splitAround(e: TimelineEvent, a: number, b: number): TimelineEvent[] {
+  const end = e.start + e.duration;
+  if (b <= e.start || a >= end) return [e];
+  const out: TimelineEvent[] = [];
+  if (a > e.start) out.push({ ...e, duration: a - e.start });
+  if (b < end) out.push({ ...e, id: randomUUID(), start: b, duration: end - b, fade: 0 });
+  return out;
+}
+
 export function compileShow(index: ProjectIndex, trackName: string, analysis: SongAnalysis, plan: ShowPlan, opts: { maxStrobeHz: number; allowStrobe: boolean }): CompileResult {
   const scenes: Scene[] = [];
+  const sectionScenes: Scene[] = [];
   const effects: Effect[] = [];
   const events: TimelineEvent[] = [];
   const notices: string[] = [];
@@ -225,8 +262,9 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     const p = plan.sections[i];
     if (!p) return;
     const label = `${String(i + 1).padStart(2, '0')} ${SECTION_NAMES[sec.label]}`;
-    const scene: Scene = { id: randomUUID(), name: `${short} · ${label}`.slice(0, 80), notes: plan.intent.slice(0, 500), values: sceneValues(index, p), origin: 'ai' };
+    const scene: Scene = { id: randomUUID(), name: `${short} · ${label}`.slice(0, 80), notes: plan.intent.slice(0, 500), values: sceneValues(index, p, sec.cluster), origin: 'ai' };
     scenes.push(scene);
+    sectionScenes[i] = scene;
     const nextFade = fades[i + 1] ?? 0;
     // Overlap with the next section by its fade: this scene holds while the next one fades in (crossfade).
     events.push(ev({ kind: 'scene', refId: scene.id, start: sec.start, duration: sec.end - sec.start + nextFade, fade: fades[i]!, fadeOut: 0, label }));
@@ -253,10 +291,31 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   const impacts = analysis.events.filter((e) => e.kind === 'impact' && analysis.sections.some((s, i) => plan.sections[i]?.accents && e.t >= s.start && e.t < s.end));
   if (impacts.length) {
     const accent: Scene = { id: randomUUID(), name: `${short} · accent`.slice(0, 80), notes: '', values: {}, origin: 'ai' };
-    for (const rf of index.fixtures.values()) accent.values[rf.fixture.id] = { dimmer: 1, ...(colorCapability(rf) !== 'none' ? colorToAttributes(rf, { r: 1, g: 1, b: 1 }) : {}) };
+    for (const rf of index.fixtures.values()) accent.values[rf.fixture.id] = { ...Object.fromEntries(dimmerKeys(rf).map((k) => [k, 1])), ...(colorCapability(rf) !== 'none' ? colorToAttributes(rf, { r: 1, g: 1, b: 1 }) : {}) };
     scenes.push(accent);
     for (const e of impacts) events.push(ev({ kind: 'scene', refId: accent.id, start: e.t, duration: beat, fade: 0, fadeOut: beat, label: 'Accent', lane: 2 }));
   }
-  const timeline: Timeline = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), duration: Math.max(1, Math.ceil(analysis.duration)), loop: false, events };
+
+  // Risers: the intensity of the coming section ramps up over the riser (dimmers only, so colours and positions
+  // stay those of the current section until the cut).
+  analysis.events.filter((e) => e.kind === 'riser' && e.duration > 0).forEach((r) => {
+    const k = analysis.sections.findIndex((s) => Math.abs(s.start - (r.t + r.duration)) < beat);
+    const target = sectionScenes[k];
+    if (k <= 0 || !target) return;
+    const ramp: Scene = { id: randomUUID(), name: `${short} · montée ${k + 1}`.slice(0, 80), notes: '', values: {}, origin: 'ai' };
+    for (const [fid, attrs] of Object.entries(target.values)) ramp.values[fid] = Object.fromEntries(Object.entries(attrs).filter(([a]) => attributeClass(a) === 'intensity'));
+    scenes.push(ramp);
+    events.push(ev({ kind: 'scene', refId: ramp.id, start: r.t, duration: analysis.sections[k]!.start - r.t, fade: analysis.sections[k]!.start - r.t, fadeOut: 0, label: 'Montée', lane: 2 }));
+  });
+
+  // Silences: scene events are cut around them (intensities merge HTP, so a dark scene on top would not darken).
+  const silences = analysis.events.filter((e) => e.kind === 'silence');
+  const cut: TimelineEvent[] = [];
+  for (const e of events) {
+    let pieces = [e];
+    if (e.kind === 'scene') for (const s of silences) pieces = pieces.flatMap((p) => splitAround(p, s.t, s.t + s.duration));
+    cut.push(...pieces.filter((p) => p.duration >= 0.05));
+  }
+  const timeline: Timeline = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), duration: Math.max(1, Math.ceil(analysis.duration)), loop: false, events: cut };
   return { scenes, effects, timeline, notices };
 }
