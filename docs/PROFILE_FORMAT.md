@@ -48,5 +48,16 @@ Pour importer des profils : *Fixtures › Importer des profils*. Le fichier JSON
 
 Les noms et fonctions des canaux proviennent toujours du profil chargé : l'application ne suppose aucune disposition commune.
 
+## GDTF
+*Fixtures › Importer* accepte les fichiers `.gdtf` (DIN SPEC 15800, GDTF 1.0 et 1.1) : `description.xml` est lu dans l'archive, et **tous** les modes DMX deviennent les modes d'un même profil (un second import du même appareil fusionne les modes). Correspondances :
+- `Offset="1,2"` → canal grossier + canal fin ; un 3e octet devient un canal générique ; les canaux virtuels (sans `Offset`) sont ignorés, les trous gardés pour que les adresses restent exactes.
+- Attributs GDTF (`Dimmer`, `Pan`, `ColorAdd_R`, `Color1`, `Gobo1`, `Prism1`, `Shutter1`, `Control1`…) → attributs Luma ; un attribut inconnu devient un canal générique (avertissement).
+- Plusieurs `ChannelFunction` → une plage chacune (strobe/pulse/aléatoire avec `PhysicalFrom/To` en Hz) ; une seule fonction → ses `ChannelSet` (emplacements de roue avec leur couleur CIE xyY convertie en RVB).
+- Canaux de contrôle : plages reset/lampe marquées dangereuses.
+- Géométries répétées (pixels, `GeometryReference`) → cellules.
+- Non pris en charge : DMX breaks multiples (seul le premier est importé), modèles 3D, macros DMX.
+
+Vérifiez toujours un profil importé contre le manuel avant un show.
+
 ## Open Fixture Library
 *Fixtures › Open Fixture Library* importe directement les fixtures OFL (licence MIT), soit depuis le catalogue en ligne (fabricant → modèle), soit depuis un fichier `.json` OFL. Le convertisseur gère les alias fins 16 bits, les roues de couleurs et de gobos, les shutters et strobes, les matrices de pixels (converties en cellules) et les canaux `Maintenance` (marqués dangereux). Tout canal non représentable devient un canal générique : les adresses restent exactes et un avertissement est affiché. Vérifiez toujours le profil importé avec le manuel du fabricant.

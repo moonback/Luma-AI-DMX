@@ -69,10 +69,11 @@ async function createService(): Promise<AppService> {
       },
       openProfile: async () => {
         const r = await dialog.showOpenDialog(win!, { title: 'Importer des profils', filters: [
-          { name: 'Profils (Luma, grandMA2)', extensions: ['json', 'xml', 'gdtf', 'qxf'] },
+          { name: 'Profils (Luma, GDTF, grandMA2)', extensions: ['json', 'gdtf', 'xml', 'qxf'] },
           { name: 'Profils Luma', extensions: ['json'] },
+          { name: 'GDTF', extensions: ['gdtf'] },
           { name: 'grandMA2', extensions: ['xml'] },
-          { name: 'GDTF / QLC+ (bientôt)', extensions: ['gdtf', 'qxf'] },
+          { name: 'QLC+ (bientôt)', extensions: ['qxf'] },
         ], properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
       },

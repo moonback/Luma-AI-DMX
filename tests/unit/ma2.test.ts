@@ -117,7 +117,7 @@ describe('import grandMA2', () => {
     expect(validateProfile(merged).ok).toBe(true);
   });
 
-  it('import via AppService : détection du XML, fusion des modes, GDTF refusé proprement', async () => {
+  it('import via AppService : détection du XML, fusion des modes, GDTF corrompu signalé proprement', async () => {
     const { svc } = makeService();
     await svc.init();
     const dir = mkdtempSync(path.join(tmpdir(), 'luma-ma2-'));
@@ -129,7 +129,9 @@ describe('import grandMA2', () => {
     expect(profiles.map((p) => [p.id, p.modes.map((m) => m.name)])).toEqual([['ma2-beamz-mhl1940', ['26Channels', 'Autre']]]);
     const gdtf = path.join(dir, 'x.gdtf');
     writeFileSync(gdtf, 'PK');
-    await expect(svc.execute({ type: 'profile.import', path: gdtf })).rejects.toThrow(/GDTF pas encore pris en charge/);
+    const bad = await svc.execute({ type: 'profile.import', path: gdtf });
+    expect(bad.imported).toEqual([]);
+    expect(bad.errors[0]).toMatch(/GDTF illisible/);
     await svc.dispose();
   });
 });

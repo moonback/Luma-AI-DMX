@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { FixtureProfile } from '../../model/schemas';
 import { convertMa2Fixture, mergeProfileModes } from '../../fixtures/ma2';
+import { convertGdtf } from '../../fixtures/gdtf';
 import { channelCount, parseProfileFile } from '../../fixtures/profiles';
 import { BUILTIN_PROFILES } from '../../fixtures/builtinProfiles';
 import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../../fixtures/ofl';
@@ -19,17 +20,24 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       const file = cmd.path ?? (await app.opts.dialogs.openProfile());
       if (!file) return { imported: [], errors: [], warnings: [] };
       const ext = path.extname(file).toLowerCase();
-      if (ext === '.gdtf') throw new UserError('Format GDTF pas encore pris en charge : importez l’export grandMA2 (.xml), un profil Luma (.json) ou passez par Open Fixture Library.');
       if (ext === '.qxf') throw new UserError('Format QLC+ (.qxf) pas encore pris en charge : importez l’export grandMA2 (.xml), un profil Luma (.json) ou passez par Open Fixture Library.');
-      let text: string;
+      let bytes: Buffer;
       try {
-        text = await fs.readFile(file, 'utf8');
+        bytes = await fs.readFile(file);
       } catch (err) {
         throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`);
       }
+      const text = ext === '.gdtf' ? '' : bytes.toString('utf8');
       let warnings: string[] = [];
       let parsed: { profiles: FixtureProfile[]; errors: string[] };
-      if (ext === '.xml' || text.trimStart().startsWith('<')) {
+      if (ext === '.gdtf') {
+        // GDTF: every DMX mode of the file, merged into the existing profile of the same fixture.
+        const r = convertGdtf(bytes);
+        warnings = r.warnings;
+        const existing = r.profile ? app.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
+        parsed = { profiles: r.profile ? [existing ? mergeProfileModes(existing, r.profile) : r.profile] : [], errors: r.errors };
+        for (const w of warnings) app.logger.warn('GDTF', `${path.basename(file)} : ${w}`);
+      } else if (ext === '.xml' || text.trimStart().startsWith('<')) {
         // grandMA2 export: one file = one mode, merged into the existing profile of the same fixture.
         const r = convertMa2Fixture(text);
         warnings = r.warnings;
