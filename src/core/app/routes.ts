@@ -24,7 +24,7 @@ export const ROUTES: { [D in CommandDomain]: (app: AppService, cmd: CommandIn<D>
   group: handleProgramming, palette: handleProgramming, programmer: handleProgramming, scene: handleProgramming,
   cue: handleProgramming, cueList: handleProgramming, effect: handleProgramming, timeline: handleProgramming,
   music: handleMusic, locate: handleLocate,
-  engine: handleOutput, output: handleOutput, rdm: handleOutput,
+  engine: handleOutput, output: handleOutput, rdm: handleOutput, hardware: handleOutput,
   ai: handleAi,
   audio: handleSystem, settings: handleSystem, logs: handleSystem, diagnostic: handleSystem, app: handleSystem,
   usage: handleSystem, feedback: handleSystem,

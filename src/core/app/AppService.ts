@@ -16,6 +16,7 @@ import { FileLogSink } from '../log/fileSink';
 import type { AppInfo } from '../log/diagnostic';
 import type { Updater } from './updates';
 import { UsageStats } from '../telemetry/usage';
+import { HardwareSession } from './hardware';
 import { AudioReactive } from '../audio/reactive';
 import type { AiProposal } from '../ai/actions';
 import { interpreterContext } from '../ai/director';
@@ -117,6 +118,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   timecodeAt = 0;
   logSink: FileLogSink | null = null;
   readonly usage: UsageStats;
+  readonly hardware = new HardwareSession();
 
   constructor(readonly opts: AppServiceOptions) {
     super();
@@ -238,6 +240,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       safety: { flashGuard: this.settings.engine.flashGuard, ...this.flash },
       locate: this.locate ? { active: true, frame: this.locate.frame, total: this.locate.seq.frames.length, label: this.locate.seq.frames[this.locate.frame]?.label ?? '', awaitingPhoto: this.locate.awaitingPhoto } : null,
       programmer: this.engine.getProgrammer(),
+      testPattern: this.engine.testPattern ? { kind: this.engine.testPattern.kind, universes: this.engine.testPattern.universes } : null,
     };
   }
 

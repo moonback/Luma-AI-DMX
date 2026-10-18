@@ -7,7 +7,7 @@ import { UserError } from '../shared';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Engine master/blackout/BPM, DMX outputs and RDM. */
-export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'output' | 'rdm'>): Promise<unknown> {
+export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'output' | 'rdm' | 'hardware'>): Promise<unknown> {
   const ok = { ok: true } as const;
   const e = app.engine;
   switch (cmd.type) {
@@ -85,6 +85,20 @@ export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'o
         return ok;
       });
     case 'output.interfaces': return localIpv4Addresses();
+    case 'output.testPattern': {
+      if (cmd.pattern === null) {
+        if (e.testPattern) app.logger.info('Mire', 'Mire de test arrêtée : retour au show');
+        e.testPattern = null;
+        return ok;
+      }
+      if (!cmd.confirmed) throw new UserError('Confirmation requise : la mire pilote tous les canaux, reset et lampe compris.');
+      e.testPattern = { kind: cmd.pattern, universes: [...new Set(cmd.universes)].sort((a, b) => a - b), startedAt: e.time };
+      app.hardware.notePattern(e.testPattern);
+      app.logger.warn('Mire', `Mire « ${cmd.pattern} » sur l’univers ${e.testPattern.universes.join(', ')} : le show est remplacé par des valeurs brutes`);
+      return ok;
+    }
+    case 'hardware.report':
+      return { markdown: app.hardware.report({ app: app.opts.appInfo ?? { name: 'Luma AI DMX', version: 'dev', platform: process.platform, arch: process.arch, versions: {} }, metrics: e.metrics(), outputs: app.outputs.status(), testPattern: e.testPattern }) };
   }
 }
 

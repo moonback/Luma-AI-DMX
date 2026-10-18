@@ -20,6 +20,7 @@ import type { LogEntry } from '../core/log/logger';
 import type { Settings } from '../core/settings/settings';
 import type { UpdateStatus } from '../core/app/updates';
 import type { UsageData } from '../core/telemetry/usage';
+import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 
 /**
@@ -228,6 +229,12 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('settings.update'), settings: settingsSchema }),
   empty('logs.recent'),
   z.object({ type: z.literal('diagnostic.export'), path: optPath }),
+  /**
+   * Raw test pattern on some universes (hardware validation with a DMX tester). Starting one needs `confirmed`:
+   * every channel is driven, reset and lamp channels included. `pattern: null` stops it.
+   */
+  z.object({ type: z.literal('output.testPattern'), pattern: z.enum(['signature', 'walk', 'ramp', 'zero']).nullable(), universes: z.array(universeSchema).min(1).max(64).default([1]), confirmed: z.boolean().default(false) }),
+  empty('hardware.report'),
   /** Patch sheet for the crew: CSV (spreadsheet) or PDF (print). */
   z.object({ type: z.literal('patch.exportSheet'), format: z.enum(['csv', 'pdf']), path: optPath }),
   // Beta programme: local usage statistics and feedback files
@@ -282,6 +289,8 @@ export interface RuntimeState {
   /** Photosensitive flash guard state (estimate from the computed state). */
   safety: { flashGuard: 'off' | 'warn' | 'limit'; flashesPerSecond: number; redFlashesPerSecond: number; violation: boolean; reason: string | null };
   programmer: Record<string, Record<string, number>>;
+  /** Raw DMX test pattern overriding some universes (hardware validation). */
+  testPattern: { kind: TestPatternKind; universes: number[] } | null;
 }
 
 export interface ValuesFrame {
@@ -396,6 +405,8 @@ export interface CommandResults {
   'logs.recent': LogEntry[];
   'diagnostic.export': { path: string | null };
   'patch.exportSheet': { path: string | null };
+  'output.testPattern': Void;
+  'hardware.report': { markdown: string };
   'usage.get': { enabled: boolean; data: UsageData };
   'usage.clear': Void;
   'feedback.export': { path: string | null };

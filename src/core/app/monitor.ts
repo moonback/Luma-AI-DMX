@@ -45,7 +45,8 @@ export function onOutputStatus(app: AppService): void {
     if (prev === s.state) continue;
     app.outputStates.set(s.id, s.state);
     if (s.state === 'error') app.logger.error(`Sortie ${s.name}`, `${s.detail} — reconnexion automatique programmée`);
-    else if (s.state === 'ready' && prev === 'error') app.logger.info(`Sortie ${s.name}`, 'Connexion rétablie');
+    const outage = app.hardware.onState(s, s.state, prev);
+    if (s.state === 'ready' && prev === 'error') app.logger.info(`Sortie ${s.name}`, `Connexion rétablie${outage !== null ? ` après ${outage} s` : ''}`);
     else if (s.state === 'ready' && s.real) app.logger.warn(`Sortie ${s.name}`, 'Sortie réelle ARMÉE : les valeurs DMX sont émises vers le matériel');
     else if (s.state === 'disarmed' && s.real && prev === 'ready') app.logger.info(`Sortie ${s.name}`, 'Sortie réelle désarmée');
   }

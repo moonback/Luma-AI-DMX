@@ -8,6 +8,7 @@ import type { UniverseView } from '../../shared/commands';
 import type { ChannelChange } from '../../core/protocols/virtual';
 import type { SerialPortInfo } from '../../core/protocols/enttec';
 import type { RdmDevice } from '../../core/protocols/rdm';
+import { HardwarePanel } from './output/HardwarePanel';
 
 const KIND_LABEL: Record<OutputKind, string> = { virtual: 'Virtuelle', artnet: 'Art-Net', sacn: 'sACN / E1.31', 'enttec-pro': 'USB-DMX (Enttec Pro)', 'open-dmx': 'USB-DMX (Open DMX / FTDI)' };
 
@@ -237,6 +238,7 @@ export function OutputPage() {
   return (
     <div className="page">
       <PageHead title="DMX Output" subtitle="Sorties Art-Net, sACN, USB-DMX et virtuelle. Les sorties réelles démarrent toujours désarmées.">
+        {rt?.testPattern && <span className="badge warn">Mire de test active</span>}
         {rt?.transmitting ? <span className="badge ok">Émission active</span> : <><span className="badge err">STOP — émissions réelles arrêtées</span><button className="btn accent" onClick={() => void act({ type: 'output.transmit', on: true })}>Reprendre</button></>}
       </PageHead>
       <Tabs tabs={[{ id: 'outputs', label: 'Sorties' }, { id: 'monitor', label: 'Moniteur 512 canaux' }, { id: 'history', label: 'Historique virtuel' }, { id: 'rdm', label: 'RDM' }, { id: 'diag', label: 'Diagnostics' }] as const} value={tab} onChange={setTab} />
@@ -299,6 +301,7 @@ export function OutputPage() {
             </tbody></table>
             <p className="small dim" style={{ marginBottom: 0 }}>Ces valeurs sont mesurées dans le processus principal ; elles n’incluent pas la latence réseau ni celle des interfaces.</p>
           </Panel>
+          <HardwarePanel />
           <Panel title="Tests de défaillance (sortie virtuelle)">
             <div className="row wrap">
               <button className="btn" onClick={() => void act({ type: 'output.inject', injection: { type: 'fail-next', count: 5 } })}><Zap size={13} />5 erreurs d’envoi</button>

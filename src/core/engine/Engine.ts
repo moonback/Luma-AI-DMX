@@ -9,6 +9,7 @@ import { finalizeFixture, renderFixture, type BlackoutPolicy } from './render';
 import type { ProjectIndex } from './resolve';
 import { TimelineTransport, type TimelineStatus } from './timeline';
 import { limitFlashes, type FlashGuardMode } from '../safety/flashGuard';
+import { fillTestPattern, type TestPattern } from './testPattern';
 
 export interface EngineSettings {
   rateHz: number;
@@ -371,6 +372,9 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
     }
   }
 
+  /** Raw test pattern replacing the computed frame of some universes (hardware validation), or null. */
+  testPattern: TestPattern | null = null;
+
   private readonly tickHooks: ((dtMs: number) => void)[] = [];
   /** Registers a callback run at the start of every tick (audio reactions, etc.). */
   onBeforeTick(fn: (dtMs: number) => void): void {
@@ -400,6 +404,14 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
       this.values = values;
       this.sources = sources;
       this.renderUniverses(values, this.universes);
+      if (this.testPattern) {
+        const tp = this.testPattern;
+        for (const u of tp.universes) {
+          let buf = this.universes.get(u);
+          if (!buf) this.universes.set(u, (buf = new Uint8Array(512)));
+          fillTestPattern(tp.kind, buf, this.timeMs - tp.startedAt);
+        }
+      }
       this.sink.sendFrames(this.universes);
       this.emit('frame');
     } catch (err) {

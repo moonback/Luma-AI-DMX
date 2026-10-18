@@ -191,6 +191,23 @@ test('sortie réelle armée → STOP OUTPUT coupe les émissions', async () => {
   });
 });
 
+test('campagne matériel : mire signature confirmée, visible au moniteur, rapport de session', async () => {
+  await nav('output');
+  await page.getByRole('tab', { name: 'Diagnostics' }).click();
+  await page.getByTestId('test-pattern-kind').selectOption('signature');
+  await page.getByTestId('test-pattern-start').click();
+  await page.locator('.modal').getByRole('button', { name: 'Lancer la mire' }).click();
+  await expect(page.getByTestId('test-pattern-active')).toContainText('signature');
+  await page.getByRole('tab', { name: 'Moniteur 512 canaux' }).click();
+  await expect(channel(300)).toHaveAttribute('data-v', '44');
+  await page.getByRole('tab', { name: 'Diagnostics' }).click();
+  await page.getByTestId('hardware-report').click();
+  await expect(page.getByTestId('hardware-report-text')).toHaveValue(/signature \(U1\)/);
+  await page.screenshot({ path: `${shots}/21-campagne-materiel.png` });
+  await page.getByRole('button', { name: 'Arrêter la mire' }).click();
+  await expect(page.getByTestId('test-pattern-active')).toHaveCount(0);
+});
+
 test('paramètres : version, mises à jour, retour et statistiques opt-in', async () => {
   await nav('settings');
   await expect(page.getByTestId('app-version')).not.toHaveText('…');
