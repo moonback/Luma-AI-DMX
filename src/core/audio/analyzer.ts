@@ -76,7 +76,10 @@ export class AudioAnalyzer {
     if (opts.bpmRange) this.tempo.setRange(opts.bpmRange);
   }
 
-  push(f: AudioFrame): AudioFeatures {
+  push(raw: AudioFrame): AudioFeatures {
+    // A single non-finite sample (Web Audio graphs can emit NaN/Infinity) would poison the 8 s tempo window.
+    const fin = (x: number | undefined) => (Number.isFinite(x) ? x! : 0);
+    const f = { t: raw.t, rms: fin(raw.rms), bass: fin(raw.bass), high: fin(raw.high) };
     const dt = this.lastT === null ? 1 / 60 : Math.max(1e-3, f.t - this.lastT);
     this.lastT = f.t;
     const level = Math.min(1, f.rms * this.opts.sensitivity * 2);

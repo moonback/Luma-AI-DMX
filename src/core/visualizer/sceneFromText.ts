@@ -115,18 +115,25 @@ export function editDistance(a: string, b: string): number {
 export function sceneFromText(text: string, profiles: readonly FixtureProfile[], id: () => string): TextScene {
   const lines: string[] = [], notices: string[] = [];
   const src = fold(text).replace(/m²/g, 'm2').replace(/(\d),(\d)/g, '$1.$2').replace(/(\d)\s*x\s*(\d)/g, '$1 sur $2')
+    .replace(/\b(?:environ|approximativement)\s+/g, '').replace(/\bde part et d['’]\s*autre\b/g, 'de chaque cote')
+    // "chacun surmonté d'une lyre": the fixture goes on every totem.
+    .replace(/\bchacune?s?\s+(?:surmonte|equipe|muni|dote|coiffe)e?s?\s+d(?:e\s+|['’]\s*)/g, ' chacun@ ')
+    // "équiper la structure de 4 lyres" = 4 lyres on the structures; "un praticable pour surélever la table" = also a table.
+    .replace(/\bequipe[rz]\s+(?:la|le|les)\s+\w+\s+(?:de|d['’])\s*/g, ', ').replace(/\bpour surelever\b/g, ',')
+    // A participle continues the clause it qualifies ("3 ponts de 10 m, positionnés à 7 m et répartis …").
+    .replace(/(?:,|\bet\b)\s*(?=(?:positionne|suspendu|accroche|situe|reparti)e?s?\b)/g, ' ')
     .replace(/\b(un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|quinze|vingt)\b/g, (w) => String(NUMBER_WORDS[w]))
     // A model name ends its clause ("4 mhl1942 pupitre" = 4 mhl1942, pupitre), unless a preposition follows.
     .replace(/\b([a-z]+\d+[a-z0-9]*)\s+(?!(?:sur|de|du|des|en|au|aux|a|avec|dessus?|pose\w*|m|m2|cm)\b)(?=[a-z]{3,})/g, '$1, ');
   // Clauses; "avec …" and "… dessus" refer to the previous structure.
-  const parts = src.split(/(\bavec\b)|[,;\n]|\.(?!\d)|\bet\b|\bpuis\b|\bplus\b|\bajout\w*|\bcre\w*|\bmet(?:s|tre|tez)?\b|\bplace[rsz]?\b/);
-  const clauses: { c: string; attached: boolean }[] = [];
-  let pending = false;
+  const parts = src.split(/(\bavec\b|\bchacun@)|[,;\n]|\.(?!\d)|\bet\b|\bpuis\b|\bplus\b|\bainsi qu['’e]?|\bajout\w*|\bcre\w*|\bmet(?:s|tre|tez)?\b|\bplace[rsz]?\b|\binstalle[rz]?\b|\bprevo(?:ir|yez)\b|\bconserve[rz]?\b/);
+  const clauses: { c: string; attached: boolean; each: boolean }[] = [];
+  let pending: string | null = null;
   for (const p of parts) {
     if (p === undefined) continue;
-    if (p === 'avec') { pending = true; continue; }
+    if (p === 'avec' || p === 'chacun@') { pending = p; continue; }
     const c = p.trim();
-    if (c) { clauses.push({ c, attached: pending || /\bdessus?\b/.test(c) }); pending = false; }
+    if (c) { clauses.push({ c, attached: !!pending || /\bdessus?\b/.test(c), each: pending === 'chacun@' }); pending = null; }
   }
 
   let stage: [number, number] | null = null;
@@ -140,11 +147,21 @@ export function sceneFromText(text: string, profiles: readonly FixtureProfile[],
   const rigs: TextRig[] = [];
   let last: 'totem' | 'truss' | null = null;
 
-  for (const { c, attached } of clauses) {
+  let layoutNote = false;
+  for (const { c, attached, each } of clauses) {
     const lead = /^(\d+)\s+(?=[a-z])/.exec(c);
     const count = clampN(lead ? Number(lead[1]) : 1, 1, 64);
     const rest = lead ? c.slice(lead[0].length) : c;
-    if (/\b(scene|plateau)\b/.test(rest) && nums(rest).length >= 2 && !/\b(grill|totem|pont)/.test(rest)) {
+    const dims = /\d+(?:\.\d+)?\s*(?:m\b|sur\b)/.test(rest);
+    // "une scène de concert", "une scène élégante pour un gala": the title of the description.
+    if (/^scenes?\b/.test(rest) && !dims) continue;
+    // Placement wishes ("une disposition symétrique", "un espace central dégagé") are what the automatic layout does.
+    if (/^(?:disposition|implantation|espace|repartition)\b/.test(rest)) {
+      if (!layoutNote) lines.push('Disposition automatique : symétrique, centre du plateau dégagé');
+      layoutNote = true;
+      continue;
+    }
+    if (/^(?:\w+\s+)?(?:scenes?|plateaux?)\b/.test(rest) && dims && nums(rest).length >= 2 && !/\b(grill|totem|pont)/.test(rest)) {
       const [w, d] = nums(rest) as [number, number];
       stage = [clampN(w, 2, 200), clampN(d, 2, 200)];
       lines.push(`Plateau ${stage[0]} × ${stage[1]} m`);
@@ -215,7 +232,7 @@ export function sceneFromText(text: string, profiles: readonly FixtureProfile[],
     const unknown = model || generic ? undefined : words.find((w) => /[a-z]/.test(w) && /\d/.test(w));
     const profile = model ?? profiles.find((p) => p.id === (generic?.[1] ?? (unknown ? 'demo-spot' : '')));
     if (!profile) { if (words.length) notices.push(`Non compris : « ${c} »`); continue; }
-    const total = target === 'totem' && !lead ? Math.max(1, totems.length) : count;
+    const total = target === 'totem' && (each || !lead) ? Math.max(1, totems.length) * (each ? count : 1) : count;
     if (unknown) notices.push(`Modèle « ${unknown} » introuvable dans la bibliothèque : remplacé par ${profile.name} (à changer dans Fixtures)`);
     rigs.push({ profileId: profile.id, mode: profile.modes[0]!.name, count: total, prefix: (model?.name ?? generic?.[2] ?? unknown!.toUpperCase()).slice(0, 40), movable: profile.type.startsWith('moving'), target });
     lines.push(`${total} × ${profile.manufacturer} ${profile.name}${target === 'totem' ? ' sur les totems' : ''}`);

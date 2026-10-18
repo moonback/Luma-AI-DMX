@@ -16,6 +16,12 @@ function run(frames: AudioFrame[], range?: { min: number; max: number }) {
 const mod = (x: number, m: number) => ((x % m) + m) % m;
 
 describe('suivi de tempo live', () => {
+  it('une trame non finie ne rend pas la confiance NaN', () => {
+    const frames = simulateFrames({ bpm: 128, seconds: 10 });
+    frames[300] = { t: frames[300]!.t, rms: NaN, bass: Infinity, high: NaN };
+    for (const f of run(frames)) expect(Number.isFinite(f.bpmConfidence)).toBe(true);
+  });
+
   it('verrouille 124 BPM en moins de 4 s', () => {
     const out = run(simulateFrames({ bpm: 124, seconds: 8, hats: true }));
     // Locked (flag raised, within ± 1.5 BPM) before 4.1 s; refined to ± 0.5 BPM with more history.

@@ -59,6 +59,43 @@ describe('scène depuis une description écrite', () => {
     }
   });
 
+  it('les exemples de l’accueil donnent exactement la scène décrite', () => {
+    const summary = (text: string) => {
+      const { layout: l, rigs } = sceneFromText(text, profiles, ids());
+      const count = <T,>(xs: T[], key: (x: T) => string) => xs.reduce<Record<string, number>>((m, x) => ({ ...m, [key(x)]: (m[key(x)] ?? 0) + 1 }), {});
+      return {
+        stage: [l.stageWidth, l.stageDepth],
+        trusses: l.trusses.map((t) => `${t.shape} ${t.length}@${t.height}`),
+        rigs: rigs.map((r) => `${r.count} ${r.profileId}${r.target === 'totem' ? ' totem' : ''}`),
+        props: count(l.props, (p) => p.kind),
+        people: count(l.performers, (p) => p.kind),
+        screens: l.screens.map((s) => [s.width, s.height]),
+      };
+    };
+    const grid = (w: number, d: number, h: number) => [`line ${w}@${h}`, `line ${w}@${h}`, `line ${d}@${h}`, `line ${d}@${h}`];
+    const [concert, conference, club, gala, theatre] = TEXT_SCENE_EXAMPLES.map((ex) => summary(ex.text));
+    expect(concert).toEqual({
+      stage: [12, 8], trusses: [...grid(10, 6, 4), 'totem 0.5@2.5', 'totem 0.5@2.5'], rigs: ['2 demo-spot totem'],
+      props: { riser: 1, speaker: 2, monitor: 3 }, people: {}, screens: [[6, 3.5]],
+    });
+    expect(conference).toEqual({
+      stage: [8, 5], trusses: ['line 8@5'], rigs: ['6 demo-par-rgbw'],
+      props: { table: 1, mic: 2, speaker: 2 }, people: { lectern: 1 }, screens: [[4, 2.25]],
+    });
+    expect(club).toEqual({
+      stage: [6, 4], trusses: grid(6, 4, 4), rigs: ['4 demo-spot', '4 demo-strobe', '2 demo-led-bar-4'],
+      props: { riser: 1, table: 1 }, people: {}, screens: [[5, 3]],
+    });
+    expect(gala).toEqual({
+      stage: [10, 6], trusses: ['line 8@4', ...Array(4).fill('totem 0.5@2.5')], rigs: ['8 demo-par-rgbw', '4 demo-spot totem'],
+      props: { mic: 1, drape: 1, column: 2 }, people: { lectern: 1 }, screens: [],
+    });
+    expect(theatre).toEqual({
+      stage: [10, 8], trusses: Array(3).fill('line 10@7'), rigs: ['12 demo-par-rgbw', '4 demo-spot'],
+      props: { drape: 1, stairs: 1 }, people: { standing: 2 }, screens: [],
+    });
+  });
+
   it('recherche de modèle tolérante aux fautes, chiffres exacts', () => {
     expect(matchProfile('ignite300', profiles)?.id).toBe('beamz-ignite300led');
     expect(matchProfile('ingite300', profiles)?.id).toBe('beamz-ignite300led');
