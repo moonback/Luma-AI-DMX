@@ -276,8 +276,29 @@ function focusPoint(index: ProjectIndex, s: ShowSectionPlan, i: number): Vec3 | 
   return m ? markerPoint(m) : null;
 }
 
-function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean): FixtureValues {
+/**
+ * Resting aim of the heads when nothing is focused, mirrored around the centre (`side`: stage x of the head):
+ * calm → beams crossing on the stage floor, mid → a V fanning out over the audience, peak → high aerial beams.
+ */
+function restingAim(energy: number, side: number): Vec3 {
+  if (energy <= 2) return stagePoint(-0.5 * side, 1, 0);
+  if (energy <= 4) return stagePoint(2 * side, -6, 2);
+  return stagePoint(1.5 * side, -6, 9);
+}
+
+const WHITE = { r: 1, g: 1, b: 1 };
+
+/** `ownColors`: the operator chose the colours, so the heads keep them on the peaks instead of turning white. */
+function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean, ownColors: boolean): FixtureValues {
   const v: FixtureValues = {};
+  const layerOf = (id: string) => fixtureLayer(index.fixtures.get(id)!);
+  // Colour roles: washes carry the base colour and the heads the second one when both are lit (contrast between
+  // layers); washes alone alternate the palette mirrored from the edges, so the look stays symmetric.
+  const washes = spatial(index, [...lit].filter((id) => layerOf(id) === 'wash'));
+  const layered = [...lit].some((id) => layerOf(id) === 'moving');
+  const washRole = (id: string) => { const r = washes.indexOf(id); return layered || r < 0 ? 0 : Math.min(r, washes.length - 1 - r); };
+  // Peaks: white beams on the heads cut through the haze over the coloured washes.
+  const whiteHeads = s.energy >= 5 && !ownColors;
   let i = 0;
   for (const rf of index.fixtures.values()) {
     if (isFog(rf)) {
@@ -291,20 +312,16 @@ function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, l
     for (const k of dimmerKeys(rf)) out[k] = on ? LEVEL[s.energy]! : 0;
     if (colorCapability(rf) !== 'none') {
       const cells = colorCells(rf);
-      const color = (k: number) => hexToRgb(s.palette[k % s.palette.length]!);
-      Object.assign(out, colorToAttributes(rf, color(i)));
+      const role = layer === 'moving' ? (layered && washes.length ? 1 : 0) : layer === 'wash' ? washRole(rf.fixture.id) : 0;
+      const color = (k: number) => (layer === 'moving' && whiteHeads ? WHITE : hexToRgb(s.palette[k % s.palette.length]!));
+      Object.assign(out, colorToAttributes(rf, color(role)));
       // Bars: one colour per cell; multi-head fixtures: the secondary modules take the next palette colour.
       const shift = rf.profile.modules.length > 1 ? 1 : 0;
-      if (cells.length > 1 || shift) cells.forEach((c, k) => Object.assign(out, colorToAttributes(rf, color(i + k + shift), c)));
+      if (cells.length > 1 || shift) cells.forEach((c, k) => Object.assign(out, colorToAttributes(rf, color(role + k + shift), c)));
     }
     if (layer === 'moving') {
-      const aim = focusPoint(index, s, i);
-      if (aim) Object.assign(out, aimAt(rf, aim));
-      else {
-        // Static focus spread across the stage; movement effects swing around it.
-        if (rf.attributes.includes('pan')) out.pan = 0.5 + ((i % 3) - 1) * 0.12;
-        if (rf.attributes.includes('tilt')) out.tilt = 0.62;
-      }
+      // Unfocused heads rest on a designed position; movement effects swing around it.
+      Object.assign(out, aimAt(rf, focusPoint(index, s, i) ?? restingAim(s.energy, rf.fixture.position.x || (i % 3) - 1)));
       Object.assign(out, beamValues(rf, s.beam, cluster));
     }
     v[rf.fixture.id] = out;
@@ -428,7 +445,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     const name = `${short} · ${label}`;
     const len = sec.end - sec.start;
     const lit = litIds(index, p);
-    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze);
+    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze, intent.colors.length > 0);
     const ramped = p.extras.includes('ramp');
     const scene: Scene = { id: randomUUID(), name: name.slice(0, 80), notes: plan.intent.slice(0, 500), values: ramped ? scaleIntensity(full, RAMP_FROM) : full, origin: 'ai' };
     scenes.push(scene);

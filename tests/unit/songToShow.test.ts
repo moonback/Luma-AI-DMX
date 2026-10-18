@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo } from '../../src/core/music/songToShow';
 import { effectFlashViolation } from '../../src/core/safety/flashGuard';
+import { colorToAttributes } from '../../src/core/fixtures/color';
+import { hexToRgb } from '../../src/core/util/math';
 import { ProjectIndex } from '../../src/core/engine/resolve';
 import { profileSchema, type Effect, type Fixture, type SongAnalysis } from '../../src/core/model/schemas';
 import * as openrouter from '../../src/core/ai/providers/openrouter';
@@ -335,5 +337,28 @@ describe('Song-to-Show', () => {
     const bar9 = analysis.downbeats.filter((d) => d > sec.start + 0.05)[7]!;
     expect(mains[1]!.start).toBe(bar9);
     expect(mains[0]!.start + mains[0]!.duration).toBeCloseTo(bar9);
+  });
+
+  it('looks : une couleur par couche, lyres blanches sur les pics, washs seuls en miroir, positions symétriques', () => {
+    const p = demoProject(); // PARs at x −2, 2, 0; heads at x −3 and 3
+    const index = new ProjectIndex(p);
+    const plan = planLocally(analysis, '', rigInfo(index, false));
+    const two = ['#FF0000', '#0000FF'];
+    const at = (energy: number, layers = { wash: true, moving: true, bars: false }) => ({ ...plan.sections[0]!, energy, palette: two, layers, focus: null, groups: [] });
+    plan.sections = [at(4), at(5), at(1), at(3, { wash: true, moving: false, bars: false }), ...plan.sections.slice(4)];
+    const c = compileShow(index, 'T', analysis, plan, { maxStrobeHz: 10, allowStrobe: false });
+    const col = (id: string, hex: string | null) => colorToAttributes(index.fixtures.get(id)!, hex ? hexToRgb(hex) : { r: 1, g: 1, b: 1 });
+    const [mid, peak, calm, washOnly] = c.scenes.slice(0, 4).map((s) => s.values);
+    // Washes take the base colour, heads the second one; on the peak the heads go white.
+    for (const id of ['par1', 'par2', 'rgbw']) expect(mid![id]).toMatchObject(col(id, '#FF0000'));
+    expect(mid!.spot1).toMatchObject(col('spot1', '#0000FF'));
+    expect(peak!.spot2).toMatchObject(col('spot2', null));
+    // Washes alone: edges in the first colour, the centre in the second.
+    expect(washOnly!.par1).toMatchObject(col('par1', '#FF0000'));
+    expect(washOnly!.par2).toMatchObject(col('par2', '#FF0000'));
+    expect(washOnly!.rgbw).toMatchObject(col('rgbw', '#0000FF'));
+    // Heads mirrored around the centre, a different position for calm, mid and peak.
+    for (const v of [mid!, peak!, calm!]) expect(v.spot1!.pan! + v.spot2!.pan!).toBeCloseTo(1, 1);
+    expect(new Set([mid!, peak!, calm!].map((v) => v.spot1!.tilt!.toFixed(2))).size).toBe(3);
   });
 });
