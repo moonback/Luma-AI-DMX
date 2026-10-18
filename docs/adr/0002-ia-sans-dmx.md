@@ -10,4 +10,4 @@ L'IA (locale ou OpenRouter) ne produit que des **actions typées** (`setIntensit
 
 ## Conséquences
 - Toute nouvelle capacité IA passe par une nouvelle action typée et son test dans le banc d'évaluation (`tests/eval`).
-- Le contrat d'actions doit être versionné avant d'en ajouter d'autres (rapport niveau 2, n° 14).
+- Le contrat d'actions est versionné (`AI_ACTIONS_VERSION`, `migrateAiActions` dans `core/ai/actions.ts`). Tout changement de `aiActionSchema` fait échouer `tests/unit/ai-contract.test.ts` tant que la version n'est pas incrémentée, la migration écrite et les échantillons de la nouvelle version figés dans `tests/fixtures/ai-contract/`.

@@ -1,0 +1,16 @@
+[
+  { "type": "setIntensity", "target": { "all": true }, "level": 0.8, "fade": 2 },
+  { "type": "setColor", "target": { "groupNames": ["Pars"] }, "color": "#8B5CF6" },
+  { "type": "setColor", "target": { "fixtureTypes": ["par"], "limit": 2 }, "colors": ["#FF0000", "#0000FF"], "fade": 1 },
+  { "type": "setPosition", "target": { "fixtureTypes": ["moving-head-spot"] }, "pan": 0.5, "tilt": 0.3 },
+  { "type": "setBeam", "target": { "fixtureNames": ["Spot 1"] }, "gobo": 2, "prism": true, "zoom": 0.4 },
+  { "type": "startEffect", "effect": { "name": "Vague bleue", "effectType": "wave", "target": { "all": true }, "bpmSync": true, "beatsPerCycle": 4, "colors": ["#0000FF"] } },
+  { "type": "stopEffect", "all": true },
+  { "type": "adjustEffect", "effectType": "wave", "speedFactor": 1.5 },
+  { "type": "createScene", "name": "Lounge", "look": [{ "target": { "all": true }, "level": 0.5, "color": "#8B5CF6" }], "apply": true },
+  { "type": "applyScene", "sceneName": "Lounge", "fade": 3 },
+  { "type": "createCue", "cueListName": "Show", "name": "Ouverture", "sceneName": "Lounge", "followAfter": null },
+  { "type": "createSequence", "name": "Intro", "loop": true, "cues": [{ "name": "A", "look": [{ "target": { "all": true }, "level": 1 }], "hold": 4, "effects": [] }] },
+  { "type": "setBpm", "bpm": 128 },
+  { "type": "releaseAi" }
+]

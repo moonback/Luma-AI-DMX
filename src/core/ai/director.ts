@@ -8,7 +8,7 @@ import type { Engine } from '../engine/Engine';
 import type { ProjectIndex } from '../engine/resolve';
 import { hexToRgb, rgbToHex } from '../util/math';
 import {
-  aiActionSchema, MAX_ACTIONS_PER_PROPOSAL,
+  aiActionSchema, AI_ACTIONS_VERSION, MAX_ACTIONS_PER_PROPOSAL, migrateAiActions,
   type AiAction, type AiEffectSpec, type AiExecutionReport, type AiProposal, type AiTarget, type LookPart, type ValidatedAction,
 } from './actions';
 import { interpretLocally, normalize, type InterpreterContext } from './local/interpreter';
@@ -339,12 +339,17 @@ export function liveState(index: ProjectIndex, engine: Engine): LiveState {
 
 export function buildProposal(args: {
   prompt: string; provider: AiProposal['provider']; model: string | null; understanding: string; notices: string[]; rawActions: unknown[]; ctx: ValidationContext;
+  /** Contract version the raw actions were written for (default: the current one). */
+  contractVersion?: number;
 }): AiProposal {
-  const actions = validateActions(args.rawActions, args.ctx);
   const notices = [...args.notices];
+  const migrated = migrateAiActions(args.rawActions, args.contractVersion ?? AI_ACTIONS_VERSION);
+  if (migrated.error) notices.push(migrated.error);
+  const actions = validateActions(migrated.actions, args.ctx);
   if (args.rawActions.length > MAX_ACTIONS_PER_PROPOSAL) notices.push(`Proposition tronquée à ${MAX_ACTIONS_PER_PROPOSAL} actions`);
   return {
     id: randomUUID(),
+    contractVersion: AI_ACTIONS_VERSION,
     prompt: args.prompt,
     provider: args.provider,
     model: args.model,

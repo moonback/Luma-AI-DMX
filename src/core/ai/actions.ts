@@ -99,6 +99,36 @@ export type AiActionType = AiAction['type'];
 
 export const MAX_ACTIONS_PER_PROPOSAL = 50;
 
+/**
+ * Version of the AI action contract (`aiActionSchema`). Any change to the schema bumps it, adds the step from the
+ * previous version to `AI_ACTION_MIGRATIONS` (identity when the change is additive) and freezes sample actions of the
+ * new version in `tests/fixtures/ai-contract/`. `tests/unit/ai-contract.test.ts` pins the schema to this number and
+ * checks that the samples of every past version still validate once migrated: a stored plan or a model prompted
+ * with an older contract keeps working.
+ */
+export const AI_ACTIONS_VERSION = 1;
+
+type RawAction = Record<string, unknown>;
+/** `AI_ACTION_MIGRATIONS[n]` turns a version-n action into a version n + 1 action (null drops it). */
+export const AI_ACTION_MIGRATIONS: Record<number, (a: RawAction) => RawAction | null> = {};
+
+/** Brings raw actions written for `fromVersion` to the current contract. Unknown future versions are refused. */
+export function migrateAiActions(raws: readonly unknown[], fromVersion: number): { actions: unknown[]; error: string | null } {
+  if (!Number.isInteger(fromVersion) || fromVersion < 1) return { actions: [], error: `Version de contrat IA invalide : ${fromVersion}` };
+  if (fromVersion > AI_ACTIONS_VERSION) return { actions: [], error: `Actions écrites pour le contrat IA v${fromVersion}, plus récent que celui de cette version (v${AI_ACTIONS_VERSION}) : mettez l’application à jour.` };
+  let actions = [...raws];
+  for (let v = fromVersion; v < AI_ACTIONS_VERSION; v++) {
+    const step = AI_ACTION_MIGRATIONS[v];
+    if (!step) return { actions: [], error: `Aucune migration du contrat IA depuis la v${v}` };
+    actions = actions.flatMap((a) => {
+      if (!a || typeof a !== 'object') return [a];
+      const next = step(a as RawAction);
+      return next ? [next] : [];
+    });
+  }
+  return { actions, error: null };
+}
+
 export const aiPlanSchema = z.object({
   understanding: z.string().max(2000),
   actions: z.array(z.unknown()).max(MAX_ACTIONS_PER_PROPOSAL),
@@ -119,6 +149,8 @@ export interface ValidatedAction {
 
 export interface AiProposal {
   id: string;
+  /** `AI_ACTIONS_VERSION` the actions were validated against. */
+  contractVersion: number;
   prompt: string;
   provider: 'local' | 'openrouter';
   model: string | null;

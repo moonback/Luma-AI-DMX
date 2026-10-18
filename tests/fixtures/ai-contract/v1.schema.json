@@ -1,0 +1,1138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "setIntensity"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "boolean"
+            },
+            "groupNames": {
+              "maxItems": 32,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureNames": {
+              "maxItems": 256,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureTypes": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "par",
+                  "moving-head-spot",
+                  "moving-head-wash",
+                  "strobe",
+                  "dimmer",
+                  "led-bar",
+                  "other"
+                ]
+              }
+            },
+            "tags": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            },
+            "module": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 48
+            }
+          }
+        },
+        "level": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fade": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "level"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "setColor"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "boolean"
+            },
+            "groupNames": {
+              "maxItems": 32,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureNames": {
+              "maxItems": 256,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureTypes": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "par",
+                  "moving-head-spot",
+                  "moving-head-wash",
+                  "strobe",
+                  "dimmer",
+                  "led-bar",
+                  "other"
+                ]
+              }
+            },
+            "tags": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            },
+            "module": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 48
+            }
+          }
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "colors": {
+          "minItems": 1,
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          }
+        },
+        "fade": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "type",
+        "target"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "setPosition"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "boolean"
+            },
+            "groupNames": {
+              "maxItems": 32,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureNames": {
+              "maxItems": 256,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureTypes": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "par",
+                  "moving-head-spot",
+                  "moving-head-wash",
+                  "strobe",
+                  "dimmer",
+                  "led-bar",
+                  "other"
+                ]
+              }
+            },
+            "tags": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            },
+            "module": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 48
+            }
+          }
+        },
+        "pan": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tilt": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fade": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "type",
+        "target"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "setBeam"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "boolean"
+            },
+            "groupNames": {
+              "maxItems": 32,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureNames": {
+              "maxItems": 256,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "fixtureTypes": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "par",
+                  "moving-head-spot",
+                  "moving-head-wash",
+                  "strobe",
+                  "dimmer",
+                  "led-bar",
+                  "other"
+                ]
+              }
+            },
+            "tags": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            },
+            "module": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 48
+            }
+          }
+        },
+        "gobo": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "prism": {
+          "type": "boolean"
+        },
+        "zoom": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "focus": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "frost": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "iris": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fade": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "type",
+        "target"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "startEffect"
+        },
+        "effect": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "effectType": {
+              "type": "string",
+              "enum": [
+                "fade",
+                "pulse",
+                "chase",
+                "wave",
+                "rainbow",
+                "strobe",
+                "dimmerWave",
+                "colorCycle",
+                "panTilt",
+                "randomMove"
+              ]
+            },
+            "target": {
+              "type": "object",
+              "properties": {
+                "all": {
+                  "type": "boolean"
+                },
+                "groupNames": {
+                  "maxItems": 32,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 80
+                  }
+                },
+                "fixtureNames": {
+                  "maxItems": 256,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 80
+                  }
+                },
+                "fixtureTypes": {
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "par",
+                      "moving-head-spot",
+                      "moving-head-wash",
+                      "strobe",
+                      "dimmer",
+                      "led-bar",
+                      "other"
+                    ]
+                  }
+                },
+                "tags": {
+                  "maxItems": 16,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 32
+                  }
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 512
+                },
+                "module": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48
+                }
+              }
+            },
+            "speed": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 30
+            },
+            "bpmSync": {
+              "type": "boolean"
+            },
+            "beatsPerCycle": {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 64
+            },
+            "amplitude": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "offset": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "phaseSpread": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "shape": {
+              "type": "string",
+              "enum": [
+                "circle",
+                "figure8",
+                "pan",
+                "tilt"
+              ]
+            },
+            "colors": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
+            },
+            "duration": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 86400
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "effectType",
+            "target"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "effect"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "stopEffect"
+        },
+        "effectName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "effectType": {
+          "type": "string",
+          "enum": [
+            "fade",
+            "pulse",
+            "chase",
+            "wave",
+            "rainbow",
+            "strobe",
+            "dimmerWave",
+            "colorCycle",
+            "panTilt",
+            "randomMove"
+          ]
+        },
+        "all": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "adjustEffect"
+        },
+        "effectName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "effectType": {
+          "type": "string",
+          "enum": [
+            "fade",
+            "pulse",
+            "chase",
+            "wave",
+            "rainbow",
+            "strobe",
+            "dimmerWave",
+            "colorCycle",
+            "panTilt",
+            "randomMove"
+          ]
+        },
+        "speedFactor": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "type",
+        "speedFactor"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "createScene"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "look": {
+          "minItems": 1,
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "object",
+                "properties": {
+                  "all": {
+                    "type": "boolean"
+                  },
+                  "groupNames": {
+                    "maxItems": 32,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 80
+                    }
+                  },
+                  "fixtureNames": {
+                    "maxItems": 256,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 80
+                    }
+                  },
+                  "fixtureTypes": {
+                    "maxItems": 8,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "par",
+                        "moving-head-spot",
+                        "moving-head-wash",
+                        "strobe",
+                        "dimmer",
+                        "led-bar",
+                        "other"
+                      ]
+                    }
+                  },
+                  "tags": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 32
+                    }
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 512
+                  },
+                  "module": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 48
+                  }
+                }
+              },
+              "level": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "color": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "colors": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                }
+              },
+              "pan": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "tilt": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "target"
+            ]
+          }
+        },
+        "apply": {
+          "default": false,
+          "type": "boolean"
+        },
+        "fade": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "look"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "applyScene"
+        },
+        "sceneName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "fade": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "type",
+        "sceneName"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "createCue"
+        },
+        "cueListName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "sceneName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "fade": {
+          "default": 2,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "followAfter": {
+          "default": null,
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3600
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "cueListName",
+        "name",
+        "sceneName"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "createSequence"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "loop": {
+          "default": false,
+          "type": "boolean"
+        },
+        "cues": {
+          "minItems": 1,
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "look": {
+                "minItems": 1,
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "object",
+                      "properties": {
+                        "all": {
+                          "type": "boolean"
+                        },
+                        "groupNames": {
+                          "maxItems": 32,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
+                        },
+                        "fixtureNames": {
+                          "maxItems": 256,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
+                        },
+                        "fixtureTypes": {
+                          "maxItems": 8,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "par",
+                              "moving-head-spot",
+                              "moving-head-wash",
+                              "strobe",
+                              "dimmer",
+                              "led-bar",
+                              "other"
+                            ]
+                          }
+                        },
+                        "tags": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 32
+                          }
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 512
+                        },
+                        "module": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 48
+                        }
+                      }
+                    },
+                    "level": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "colors": {
+                      "maxItems": 16,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^#[0-9a-fA-F]{6}$"
+                      }
+                    },
+                    "pan": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "tilt": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "target"
+                  ]
+                }
+              },
+              "fade": {
+                "default": 2,
+                "type": "number",
+                "minimum": 0,
+                "maximum": 600
+              },
+              "hold": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "effects": {
+                "default": [],
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "effectType": {
+                      "type": "string",
+                      "enum": [
+                        "fade",
+                        "pulse",
+                        "chase",
+                        "wave",
+                        "rainbow",
+                        "strobe",
+                        "dimmerWave",
+                        "colorCycle",
+                        "panTilt",
+                        "randomMove"
+                      ]
+                    },
+                    "target": {
+                      "type": "object",
+                      "properties": {
+                        "all": {
+                          "type": "boolean"
+                        },
+                        "groupNames": {
+                          "maxItems": 32,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
+                        },
+                        "fixtureNames": {
+                          "maxItems": 256,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
+                        },
+                        "fixtureTypes": {
+                          "maxItems": 8,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "par",
+                              "moving-head-spot",
+                              "moving-head-wash",
+                              "strobe",
+                              "dimmer",
+                              "led-bar",
+                              "other"
+                            ]
+                          }
+                        },
+                        "tags": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 32
+                          }
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 512
+                        },
+                        "module": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 48
+                        }
+                      }
+                    },
+                    "speed": {
+                      "type": "number",
+                      "minimum": 0.01,
+                      "maximum": 30
+                    },
+                    "bpmSync": {
+                      "type": "boolean"
+                    },
+                    "beatsPerCycle": {
+                      "type": "number",
+                      "minimum": 0.25,
+                      "maximum": 64
+                    },
+                    "amplitude": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "offset": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "phaseSpread": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "shape": {
+                      "type": "string",
+                      "enum": [
+                        "circle",
+                        "figure8",
+                        "pan",
+                        "tilt"
+                      ]
+                    },
+                    "colors": {
+                      "maxItems": 16,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^#[0-9a-fA-F]{6}$"
+                      }
+                    },
+                    "duration": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0.1,
+                          "maximum": 86400
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "effectType",
+                    "target"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "look"
+            ]
+          }
+        }
+      },
+      "required": [
+        "type",
+        "name",
+        "cues"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "setBpm"
+        },
+        "bpm": {
+          "type": "number",
+          "minimum": 20,
+          "maximum": 300
+        }
+      },
+      "required": [
+        "type",
+        "bpm"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "releaseAi"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    }
+  ]
+}
