@@ -22,7 +22,9 @@ src/
                  tempoTracker (tempo live), dropPredictor (drop / refrain), songToShow (plan + compilateur)
     project/     format (création, versions, migrations), store (écriture atomique, .bak, récupération)
     settings/    paramètres applicatifs ; log/ journal en mémoire ; visualizer/ modèle visuel 2D/3D
-    app/         AppService : orchestration + bus de commandes (injection des dialogues et secrets)
+    app/         AppService : état partagé, cycle de vie, routage des commandes (injection des dialogues et secrets)
+      handlers/  un module par domaine (project, fixtures, programming, music, locate, output, ai, system)
+      control.ts OSC et télécommande · monitor.ts trames et sorties · files.ts récents et autosave
   main/        Electron : fenêtre sécurisée, IPC validé, secrets chiffrés (safeStorage)
   preload/     contextBridge : { invoke, on }
   renderer/    React + Zustand : App (shell), features/* (12 espaces, Stage3D three.js), audioEngine (Web Audio), shortcuts
@@ -31,7 +33,7 @@ tests/         unit, integration (parcours complet), components (Testing Library
 
 ## Flux de données
 1. Le renderer envoie une commande typée `window.luma.invoke({ type, ... })`.
-2. Le processus principal vérifie l'origine, valide la commande avec `commandSchema` (Zod), puis appelle `AppService.execute`.
+2. Le processus principal vérifie l'origine, valide la commande avec `commandSchema` (Zod), puis appelle `AppService.execute`, qui route vers le handler du domaine (préfixe du type de commande, table `ROUTES` exhaustive à la compilation).
 3. Les mutations de projet sont appliquées à une copie, **revalidées entièrement** avec `projectSchema`, puis remplacent le document. Les mutations invalides sont refusées sans effet de bord. L'index du projet est reconstruit et transmis au moteur.
 4. Le moteur tourne dans le processus principal. Ordonnanceur à échéances : `setTimeout` jusqu'à l'échéance moins le retard maximal des timers observé sur les 64 derniers réveils, puis `setImmediate` (les E/S et l'IPC passent entre deux itérations) jusqu'à l'échéance. Un retard inférieur à une période est absorbé ; au-delà, resynchronisation sans rafale de rattrapage. À chaque tick :
    - avancement des playbacks, des effets et de la timeline ;

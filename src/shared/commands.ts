@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import {
-  addressSchema, attributeSchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
+  addressSchema, attributeKeySchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
+  stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema, propSchema,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -17,6 +18,9 @@ import type { RdmDevice } from '../core/protocols/rdm';
 import type { RecoveryEntry } from '../core/project/store';
 import type { LogEntry } from '../core/log/logger';
 import type { Settings } from '../core/settings/settings';
+import type { UpdateStatus } from '../core/app/updates';
+import type { UsageData } from '../core/telemetry/usage';
+import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 
 /**
@@ -37,6 +41,10 @@ const fixturePatchSchema = z.object({
   rotation: z.number().min(-360).max(360).optional(),
   height: z.number().min(0).max(50).optional(),
   notes: z.string().max(500).optional(),
+  mount: fixtureMountSchema.optional(),
+  mountTilt: z.number().min(-90).max(90).optional(),
+  /** null detaches the fixture from its truss. */
+  trussId: idSchema.nullable().optional(),
 });
 
 export const commandSchema = z.discriminatedUnion('type', [
@@ -47,12 +55,30 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('project.save'),
   z.object({ type: z.literal('project.saveAs'), path: optPath }),
   z.object({ type: z.literal('project.export'), path: optPath }),
+  /** Patch and positions as MVR (Capture, Vectorworks, grandMA3…). */
+  z.object({ type: z.literal('project.exportMvr'), path: optPath }),
   z.object({
     type: z.literal('project.update'),
     meta: z.object({ name: nameSchema.optional(), show: z.string().trim().max(80).optional(), notes: z.string().max(5000).optional() }).optional(),
     show: z.object({ bpm: z.number().min(20).max(300).optional(), universes: z.number().int().min(1).max(64).optional() }).optional(),
-    visualizer: z.object({ stageWidth: z.number().min(2).max(200).optional(), stageDepth: z.number().min(2).max(200).optional() }).optional(),
+    // No `.default()` here: absent fields must stay absent so a partial update never resets the others.
+    visualizer: z.object({
+      stageWidth: z.number().min(2).max(200).optional(),
+      stageDepth: z.number().min(2).max(200).optional(),
+      shape: stageShapeSchema.optional(),
+      thrust: thrustSchema.optional(),
+      cyclo: z.boolean().optional(),
+      markers: z.array(stageMarkerSchema).max(64).optional(),
+      views: z.array(stageViewSchema).max(20).optional(),
+      trusses: z.array(trussSchema).max(64).optional(),
+      performers: z.array(performerSchema).max(64).optional(),
+      screens: z.array(screenSchema).max(16).optional(),
+      props: z.array(propSchema).max(256).optional(),
+    }).optional(),
   }),
+  /** Scene-layout history (positions, mounting, trusses, stage settings): independent from the other edits. */
+  empty('scene.undo'),
+  empty('scene.redo'),
   empty('project.listRecovery'),
   z.object({ type: z.literal('project.openRecovery'), file: z.string().min(1).max(1000) }),
   /** Opens one of the built-in fictional demonstration projects (unsaved copy). */
@@ -84,6 +110,17 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('fixture.update'), id: idSchema, patch: fixturePatchSchema }),
   z.object({ type: z.literal('fixture.remove'), ids: z.array(idSchema).min(1) }),
   z.object({ type: z.literal('fixture.duplicate'), ids: z.array(idSchema).min(1) }),
+  /** Places several fixtures in one scene-history step (e.g. hanging the rig on its trusses). */
+  z.object({
+    type: z.literal('fixture.place'),
+    placements: z.array(z.object({
+      id: idSchema,
+      position: z.object({ x: z.number().min(-100).max(100), y: z.number().min(-100).max(100) }),
+      height: z.number().min(0).max(50),
+      trussId: idSchema.nullable(),
+      mount: fixtureMountSchema.optional(),
+    })).min(1).max(4096),
+  }),
   // Groups / palettes
   z.object({ type: z.literal('group.upsert'), group: groupSchema }),
   z.object({ type: z.literal('group.remove'), id: idSchema }),
@@ -93,9 +130,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('palette.apply'), id: idSchema, fixtureIds: z.array(idSchema).min(1) }),
   z.object({ type: z.literal('palette.recordFromProgrammer'), name: nameSchema, kind: z.enum(['color', 'position', 'intensity', 'beam']), fixtureId: idSchema }),
   // Programmer (manual)
-  z.object({ type: z.literal('programmer.set'), fixtureIds: z.array(idSchema).min(1).max(1024), values: z.record(attributeSchema, unitSchema), confirmSpecial: z.boolean().default(false) }),
-  z.object({ type: z.literal('programmer.setColor'), fixtureIds: z.array(idSchema).min(1).max(1024), color: z.string().regex(/^#[0-9a-fA-F]{6}$/), cell: z.number().int().min(1).max(512).optional() }),
-  z.object({ type: z.literal('programmer.release'), fixtureIds: z.array(idSchema).optional(), attributes: z.array(attributeSchema).optional() }),
+  z.object({ type: z.literal('programmer.set'), fixtureIds: z.array(idSchema).min(1).max(1024), values: z.record(attributeKeySchema, unitSchema), confirmSpecial: z.boolean().default(false) }),
+  z.object({ type: z.literal('programmer.setColor'), fixtureIds: z.array(idSchema).min(1).max(1024), color: z.string().regex(/^#[0-9a-fA-F]{6}$/), cell: z.number().int().min(1).max(512).optional(), module: z.string().trim().min(1).max(48).optional() }),
+  z.object({ type: z.literal('programmer.release'), fixtureIds: z.array(idSchema).optional(), attributes: z.array(attributeKeySchema).optional() }),
   // Scenes
   z.object({ type: z.literal('scene.record'), name: nameSchema, fixtureIds: z.array(idSchema).optional() }),
   z.object({ type: z.literal('scene.upsert'), scene: sceneSchema }),
@@ -193,6 +230,30 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('settings.get'),
   z.object({ type: z.literal('settings.update'), settings: settingsSchema }),
   empty('logs.recent'),
+  z.object({ type: z.literal('diagnostic.export'), path: optPath }),
+  /**
+   * Raw test pattern on some universes (hardware validation with a DMX tester). Starting one needs `confirmed`:
+   * every channel is driven, reset and lamp channels included. `pattern: null` stops it.
+   */
+  z.object({ type: z.literal('output.testPattern'), pattern: z.enum(['signature', 'walk', 'ramp', 'zero']).nullable(), universes: z.array(universeSchema).min(1).max(64).default([1]), confirmed: z.boolean().default(false) }),
+  empty('hardware.report'),
+  /** Patch sheet for the crew: CSV (spreadsheet) or PDF (print). */
+  z.object({ type: z.literal('patch.exportSheet'), format: z.enum(['csv', 'pdf']), path: optPath }),
+  // Beta programme: local usage statistics and feedback files
+  empty('usage.get'),
+  empty('usage.clear'),
+  z.object({
+    type: z.literal('feedback.export'),
+    kind: z.enum(['bug', 'idea', 'show-report', 'other']),
+    message: z.string().trim().min(1).max(5000),
+    contact: z.string().trim().max(200).default(''),
+    includeDiagnostic: z.boolean().default(true),
+    includeUsage: z.boolean().default(true),
+    path: optPath,
+  }),
+  // Application
+  empty('app.info'),
+  empty('app.checkUpdates'),
 ]);
 export type Command = z.infer<typeof commandSchema>;
 export type CommandType = Command['type'];
@@ -206,6 +267,8 @@ export interface ProjectState {
   dirty: boolean;
   revision: number;
   issues: PatchIssue[];
+  /** Number of scene-layout steps that can be undone / redone. */
+  sceneHistory: { undo: number; redo: number };
 }
 
 export interface Alert {
@@ -228,6 +291,8 @@ export interface RuntimeState {
   /** Photosensitive flash guard state (estimate from the computed state). */
   safety: { flashGuard: 'off' | 'warn' | 'limit'; flashesPerSecond: number; redFlashesPerSecond: number; violation: boolean; reason: string | null };
   programmer: Record<string, Record<string, number>>;
+  /** Raw DMX test pattern overriding some universes (hardware validation). */
+  testPattern: { kind: TestPatternKind; universes: number[] } | null;
 }
 
 export interface ValuesFrame {
@@ -249,12 +314,15 @@ export interface CommandResults {
   'project.save': { path: string | null };
   'project.saveAs': { path: string | null };
   'project.export': { path: string | null };
+  'project.exportMvr': { path: string | null };
   'project.update': Void;
+  'scene.undo': Void;
+  'scene.redo': Void;
   'project.listRecovery': RecoveryEntry[];
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
   'project.openDemo': Void;
   'onboarding.update': Void;
-  'profile.import': { imported: string[]; errors: string[] };
+  'profile.import': { imported: string[]; errors: string[]; warnings: string[] };
   'profile.remove': Void;
   'ofl.manufacturers': { key: string; name: string }[];
   'ofl.fixtures': string[];
@@ -263,6 +331,7 @@ export interface CommandResults {
   'fixture.update': Void;
   'fixture.remove': Void;
   'fixture.duplicate': { ids: string[] };
+  'fixture.place': Void;
   'group.upsert': Void;
   'group.remove': Void;
   'group.reorder': Void;
@@ -337,6 +406,15 @@ export interface CommandResults {
   'settings.get': Settings;
   'settings.update': Void;
   'logs.recent': LogEntry[];
+  'diagnostic.export': { path: string | null };
+  'patch.exportSheet': { path: string | null };
+  'output.testPattern': Void;
+  'hardware.report': { markdown: string };
+  'usage.get': { enabled: boolean; data: UsageData };
+  'usage.clear': Void;
+  'feedback.export': { path: string | null };
+  'app.info': { name: string; version: string; updates: UpdateStatus };
+  'app.checkUpdates': UpdateStatus;
 }
 
 export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string };

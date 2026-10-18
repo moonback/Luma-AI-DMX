@@ -1,7 +1,10 @@
 import { z } from 'zod';
-import { EFFECT_TYPES, FIXTURE_TYPES, SHOW_EFFECTS, SHOW_MOVEMENTS, showSectionPlanSchema, type ShowSectionPlan } from '../../model/schemas';
+import { EFFECT_TYPES, FIXTURE_TYPES, hexColorSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_MOVEMENTS, showSectionPlanSchema, type ShowSectionPlan } from '../../model/schemas';
+import { clamp } from '../../util/math';
+import { parseIntent } from '../../music/songToShow';
 import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
+import { coarseChannel } from '../../fixtures/profiles';
 import { BRAND } from '../../../shared/brand';
 
 export const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
@@ -17,6 +20,7 @@ const target = z.object({
   fixtureNames: z.array(z.string()).optional(),
   fixtureTypes: z.array(z.enum(FIXTURE_TYPES)).optional(),
   limit: z.number().optional(),
+  module: z.string().optional(),
 });
 const look = z.object({ target, level: z.number().optional(), color: z.string().optional(), colors: z.array(z.string()).optional(), pan: z.number().optional(), tilt: z.number().optional() });
 const effect = z.object({
@@ -26,7 +30,7 @@ const effect = z.object({
   shape: z.enum(['circle', 'figure8', 'pan', 'tilt']).optional(),
 });
 const llmAction = z.object({
-  type: z.enum(['setIntensity', 'setColor', 'setPosition', 'startEffect', 'stopEffect', 'createScene', 'applyScene', 'createCue', 'createSequence', 'setBpm', 'releaseAi']),
+  type: z.enum(['setIntensity', 'setColor', 'setPosition', 'setBeam', 'startEffect', 'stopEffect', 'adjustEffect', 'createScene', 'applyScene', 'createCue', 'createSequence', 'setBpm', 'releaseAi']),
   target: target.optional(),
   level: z.number().optional(),
   color: z.string().optional(),
@@ -47,6 +51,13 @@ const llmAction = z.object({
   loop: z.boolean().optional(),
   cues: z.array(z.object({ name: z.string(), look: z.array(look), fade: z.number().optional(), hold: z.number().optional(), effects: z.array(effect).optional() })).optional(),
   bpm: z.number().optional(),
+  gobo: z.number().optional(),
+  prism: z.boolean().optional(),
+  zoom: z.number().optional(),
+  focus: z.number().optional(),
+  frost: z.number().optional(),
+  iris: z.number().optional(),
+  speedFactor: z.number().optional(),
 });
 export const llmPlanSchema = z.object({ understanding: z.string(), actions: z.array(llmAction) });
 const PLAN_JSON_SCHEMA = z.toJSONSchema(llmPlanSchema);
@@ -59,22 +70,40 @@ Rules:
 ${JSON.stringify(PLAN_JSON_SCHEMA)}
 - Values are normalized 0..1 (level, pan, tilt, amplitude, offset, phaseSpread). Colours are "#RRGGBB". Fades/holds are seconds. speed is cycles per second.
 - Target fixtures only by the exact group names, fixture names or fixture types listed in the rig description. {"all": true} targets the whole rig.
+- Multi-head fixtures list their "modules" (e.g. main head + LED ring). Add "module": "<module name>" to a target to change only that head's colour/intensity.
 - Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove) need pan/tilt. Colour effects need colour attributes.
 - Never touch reset, lamp or other special/control functions; they are not available to you.
 - Strobe effects are only allowed when the rig description says strobeAllowed: true.
+- setBeam changes beam attributes of fixtures that have them: gobo = slot number on the gobo wheel (0 = open, see "gobos" for the slot count), prism true/false, zoom 0 (narrow) .. 1 (wide), focus/frost/iris 0..1.
+- The rig description gives the current look ("now": colour and level of lit fixtures) and "runningAiEffects": use them for relative requests (warmer, dimmer, slower...). adjustEffect re-times running AI effects (speedFactor > 1 faster, < 1 slower; filter with effectType or effectName); stopEffect stops them.
+- To recall an existing scene use applyScene with its exact name from "scenes"; do not recreate it.
 - Use setIntensity/setColor/setPosition for immediate changes, createScene (apply true to show it) for a reusable look, createSequence for timed or multi-step shows (hold = seconds before auto-advancing, omit for manual GO), startEffect for dynamic effects.
 - "understanding" is one or two sentences in French describing what you will do and any limitation (e.g. you cannot hear the music).
 - Keep proposals small and focused; at most 20 actions. Omit optional fields you do not need.`;
 
-export function describeRig(index: ProjectIndex, allowStrobe: boolean, bpm: number): string {
+/** What is on stage right now: display colour/level per fixture id, and the AI effects running. */
+export interface LiveState {
+  current: Record<string, { color: string; level: number }>;
+  aiEffects: { name: string; type: string; speed: number; bpmSync: boolean; beatsPerCycle: number }[];
+}
+
+export function describeRig(index: ProjectIndex, allowStrobe: boolean, bpm: number, live?: LiveState): string {
   return JSON.stringify({
     strobeAllowed: allowStrobe,
     bpm,
-    fixtures: [...index.fixtures.values()].map((rf) => ({
-      name: rf.fixture.name,
-      type: rf.profile.type,
-      attributes: [...new Set(rf.attributes.map(baseAttribute))].filter((a) => a !== 'control' && a !== 'macro'),
-    })),
+    fixtures: [...index.fixtures.values()].map((rf) => {
+      const now = live?.current[rf.fixture.id];
+      const gobos = coarseChannel(rf.mode, 'gobo')?.ranges.filter((r) => r.kind === 'gobo').length;
+      return {
+        name: rf.fixture.name,
+        type: rf.profile.type,
+        attributes: [...new Set(rf.attributes.map(baseAttribute))].filter((a) => a !== 'control' && a !== 'macro'),
+        ...(rf.profile.modules.length ? { modules: rf.profile.modules.map((m) => m.name) } : {}),
+        ...(gobos ? { gobos } : {}),
+        ...(now && now.level > 0.01 ? { now: { color: now.color, level: Math.round(now.level * 100) / 100 } } : {}),
+      };
+    }),
+    ...(live ? { runningAiEffects: live.aiEffects } : {}),
     groups: [...index.groups.values()].map((g) => ({ name: g.name, size: g.fixtureIds.length })),
     scenes: [...index.scenes.values()].map((s) => s.name),
     cueLists: [...index.cueLists.values()].map((c) => c.name),
@@ -274,10 +303,13 @@ const llmShowSchema = z.object({
     layers: z.object({ wash: z.boolean(), moving: z.boolean(), bars: z.boolean() }),
     movement: z.enum(SHOW_MOVEMENTS),
     effect: z.enum(SHOW_EFFECTS),
+    beam: z.enum(SHOW_BEAMS),
     effectBeats: z.number(),
     accents: z.boolean(),
   })),
 });
+/** What is actually parsed: sections are repaired field by field rather than rejected as a whole. */
+const looseShowSchema = z.object({ summary: z.string().catch(''), sections: z.array(z.record(z.string(), z.unknown())).min(1) });
 const SHOW_JSON_SCHEMA = z.toJSONSchema(llmShowSchema);
 
 const SHOW_SYSTEM = `You are the lighting designer assistant of a DMX console. You plan a light show for one song, section by section.
@@ -290,20 +322,57 @@ Rules:
 - palette: 1 to 4 colours "#RRGGBB". Sections that are repeats of the same music should share a palette.
 - layers: which fixture families are lit (only families present in the rig).
 - movement: none | slow | sweep | fast (moving heads only). effect: none | wave | pulse | chase | rainbow | strobe.
+- beam (moving heads with gobo/prism/frost): open | gobo | prism (gobo + prism, for peaks) | frost (soft, for calm parts).
 - effectBeats: effect cycle in beats (0.5 to 16). Use strobe ONLY if strobeAllowed is true AND the operator asked for it.
 - accents: flash on detected impacts (true only for high-energy sections).
 - "summary": one or two sentences in French describing the show.`;
 
-/** Plans a show with an LLM. The result is re-validated section by section; invalid output throws. */
-export async function planShowWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions, sectionCount: number): Promise<{ summary: string; sections: ShowSectionPlan[]; model: string; notices: string[] }> {
+/**
+ * Repairs one LLM section: numbers are rounded/clamped, invalid colours dropped, and every field still missing or
+ * invalid is taken from `fallback` (the local plan). Returns the names of the replaced fields.
+ */
+export function repairShowSection(raw: Record<string, unknown>, fallback: ShowSectionPlan, index: number): { section: ShowSectionPlan; fixed: string[] } {
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
+  const energy = num(raw.energy), beats = num(raw.effectBeats);
+  const candidate: Record<string, unknown> = {
+    ...raw, index, locked: false, note: '',
+    energy: energy === undefined ? undefined : clamp(Math.round(energy), 0, 5),
+    effectBeats: beats === undefined ? undefined : clamp(beats, 0.5, 16),
+    palette: Array.isArray(raw.palette) ? raw.palette.filter((c) => hexColorSchema.safeParse(c).success).slice(0, 4) : undefined,
+  };
+  const section: Record<string, unknown> = { ...fallback, index, locked: false, note: '' };
+  const fixed: string[] = [];
+  for (const [key, schema] of Object.entries(showSectionPlanSchema.shape)) {
+    const r = candidate[key] === undefined ? null : schema.safeParse(candidate[key]);
+    if (r?.success) section[key] = r.data;
+    else fixed.push(key);
+  }
+  return { section: section as ShowSectionPlan, fixed };
+}
+
+/**
+ * Plans a show with an LLM. Sections are repaired one by one against `fallback` (the local plan, one entry per
+ * section): missing sections and invalid fields come from it, a strobe the operator did not ask for is removed.
+ * Only an unusable answer (no sections at all) throws.
+ */
+export async function planShowWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions, fallback: ShowSectionPlan[]): Promise<{ summary: string; sections: ShowSectionPlan[]; model: string; notices: string[] }> {
   const r = await completeJson(SHOW_SYSTEM, `Operator intent: ${intent || '(none)'}\n\n${structure}`, 'show_plan', SHOW_JSON_SCHEMA, opts);
-  const loose = llmShowSchema.safeParse(r.json);
+  const loose = looseShowSchema.safeParse(r.json);
   if (!loose.success) throw new OpenRouterError(`Plan IA non conforme : ${loose.error.issues[0]?.path.join('.')} ${loose.error.issues[0]?.message}`, null);
-  if (loose.data.sections.length !== sectionCount) throw new OpenRouterError(`Plan IA incomplet : ${loose.data.sections.length} sections pour ${sectionCount}`, null);
-  const sections = loose.data.sections.map((s, i) => {
-    const strict = showSectionPlanSchema.safeParse({ ...s, index: i, energy: Math.round(s.energy), palette: s.palette.slice(0, 4), locked: false, note: '' });
-    if (!strict.success) throw new OpenRouterError(`Section ${i + 1} invalide : ${strict.error.issues[0]?.path.join('.')} ${strict.error.issues[0]?.message}`, null);
-    return strict.data;
+  const notices = [...r.notices];
+  const fixedNotes: string[] = [];
+  const strobeWanted = parseIntent(intent).strobe === 'want';
+  const sections = fallback.map((fb, i) => {
+    const raw = loose.data.sections[i];
+    if (!raw) return { ...fb, index: i, locked: false, note: '' };
+    const { section, fixed } = repairShowSection(raw, fb, i);
+    if (section.effect === 'strobe' && !strobeWanted) { section.effect = 'chase'; fixed.push('strobe non demandé → chase'); }
+    if (fixed.length) fixedNotes.push(`${i + 1} (${fixed.join(', ')})`);
+    return section;
   });
-  return { summary: loose.data.summary.slice(0, 1000), sections, model: r.model, notices: r.notices };
+  const missing = fallback.length - Math.min(fallback.length, loose.data.sections.length);
+  if (missing) notices.push(`Plan IA incomplet : ${missing} section(s) sur ${fallback.length} complétée(s) par les règles locales`);
+  if (loose.data.sections.length > fallback.length) notices.push(`Plan IA : ${loose.data.sections.length - fallback.length} section(s) en trop ignorée(s)`);
+  if (fixedNotes.length) notices.push(`Plan IA corrigé (champs invalides repris des règles locales) : section ${fixedNotes.join(' ; ')}`);
+  return { summary: loose.data.summary.slice(0, 1000) || 'Plan IA', sections, model: r.model, notices };
 }

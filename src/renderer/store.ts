@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { LogEntry } from '../core/log/logger';
 import type { FixtureValues } from '../core/model/schemas';
 import type { ProjectState, RuntimeState } from '../shared/commands';
+import type { PlaceSpec, SceneRef } from '../core/visualizer/sceneEdit';
 
 /** Stable empty defaults: selectors must not return fresh objects (would re-render forever). */
 export const EMPTY_OBJ: Readonly<Record<string, never>> = Object.freeze({});
@@ -69,15 +70,31 @@ interface State {
   newProjectOpen: boolean;
   /** User overrides of keyboard shortcuts (from settings). */
   shortcuts: Record<string, string>;
+  /** Interface language (Settings › Apparence); catalogues in ./i18n. */
+  language: 'fr' | 'en';
   /** True while the Settings page records a new shortcut (global handler paused). */
   capturingShortcut: boolean;
   toasts: Toast[];
   confirm: ConfirmRequest | null;
   /** Values shown by the visualizer instead of live values (AI or scene preview). */
   preview: { label: string; values: FixtureValues } | null;
+  /** Selected stage element (point, truss, performer, screen) and the kind being placed by a click on the stage. */
+  sceneSel: SceneRef | null;
+  placing: PlaceSpec | null;
+  setSceneSel(r: SceneRef | null): void;
+  setPlacing(p: PlaceSpec | null): void;
+  /** Side panel of the stage pages: closed, building the scene, or inspecting the selection. */
+  scenePanel: 'build' | 'selection' | null;
+  setScenePanel(p: State['scenePanel']): void;
+  /** Request to frame the 3D camera on a stage point (meters; `seq` makes repeated requests distinct). */
+  frame: { x: number; y: number; height: number; seq: number } | null;
+  frameOn(at: { x: number; y: number; height: number }): void;
+  /** Fixture whose beam the 3D camera rides (beam's-eye view), or null. */
+  beamView: string | null;
+  setBeamView(id: string | null): void;
   /** Onboarding state from the settings (null until loaded) and the open help surface. */
   onboarding: { completed: boolean; checklistHidden: boolean } | null;
-  help: 'welcome' | 'tour' | 'demos' | null;
+  help: 'welcome' | 'tour' | 'demos' | 'stage' | null;
   setHelp(h: State['help']): void;
   setPage(p: PageId): void;
   toggleCollapsed(): void;
@@ -97,17 +114,28 @@ export const useStore = create<State>((set, get) => ({
   values: {},
   sources: {},
   logs: [],
-  page: prefs.page && PAGES.some((p) => p.id === prefs.page) ? prefs.page : 'dashboard',
+  page: 'dashboard',
   collapsed: prefs.collapsed ?? false,
   selection: [],
   cueListId: null,
   diagOpen: false,
   newProjectOpen: false,
   shortcuts: {},
+  language: 'fr',
   capturingShortcut: false,
   toasts: [],
   confirm: null,
   preview: null,
+  sceneSel: null,
+  placing: null,
+  setSceneSel: (sceneSel) => set(sceneSel ? { sceneSel, selection: [], scenePanel: get().scenePanel === 'build' ? 'build' : 'selection' } : { sceneSel }),
+  setPlacing: (placing) => set({ placing }),
+  scenePanel: null,
+  setScenePanel: (scenePanel) => set({ scenePanel }),
+  frame: null,
+  frameOn: (at) => set({ frame: { ...at, seq: (get().frame?.seq ?? 0) + 1 } }),
+  beamView: null,
+  setBeamView: (beamView) => set({ beamView }),
   onboarding: null,
   help: null,
   setHelp: (help) => set({ help }),
@@ -120,7 +148,9 @@ export const useStore = create<State>((set, get) => ({
     set({ collapsed });
     savePrefs({ page: get().page, collapsed });
   },
-  setSelection: (selection) => set({ selection }),
+  // One selection at a time: picking fixtures clears the stage element and vice versa (the latest wins).
+  // A new selection shows the inspector (fixtures have no card in the build tab; a stage element keeps it, scrolled to).
+  setSelection: (selection) => set(selection.length ? { selection, sceneSel: null, scenePanel: 'selection' } : { selection }),
   setCueList: (cueListId) => set({ cueListId }),
   toggleDiag: () => set({ diagOpen: !get().diagOpen }),
   toast: (t) => {

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import type { VisualFixture } from '../../../core/visualizer/model';
-import { aimAngles, beamHit, beamLength, flickerOn, poolShape, type StageGeometry } from '../../../core/visualizer/beam';
+import { beamHit, mountSign, rigAngles, beamLength, flickerOn, poolShape, type StageGeometry } from '../../../core/visualizer/beam';
 import { textures } from './textures';
 
 /**
- * Articulated fixture rigs. Hierarchy: root (mount position) → yoke (pan, around vertical) → head (tilt) → lens.
- * The lens points along s·Y in head space (s = −1 hanging, +1 floor) so the world beam matches `beamDirection()`.
+ * Articulated fixture rigs. Hierarchy: root (mount position, yaw then mount tilt) → yoke (pan) → head (tilt) → lens.
+ * The lens points along s·Y in head space (s = −1 hung or on a wall, +1 floor) so the world beam matches `beamDirection()`.
  */
 
 /* ------------------------------------------------------------------ */
@@ -16,9 +16,11 @@ const BEAM_VERT = /* glsl */ `
   varying float vLen;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying vec3 vWorld;
   void main() {
     vLen = -position.y;                       // 0 at the lens, 1 at the far end
     vec4 world = modelMatrix * vec4(position, 1.0);
+    vWorld = world.xyz;
     vNormal = normalize(mat3(modelMatrix) * normal);
     vView = normalize(cameraPosition - world.xyz);
     gl_Position = projectionMatrix * viewMatrix * world;
@@ -27,23 +29,37 @@ const BEAM_FRAG = /* glsl */ `
   uniform vec3 uColor;
   uniform float uIntensity;
   uniform float uHaze;
+  uniform float uTime;
   varying float vLen;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying vec3 vWorld;
+  float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+  float noise(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z);
+  }
   void main() {
+    // Drifting haze: two octaves of value noise in world space, slowly rising and moving stage left.
+    vec3 q = vWorld * 0.45 + vec3(uTime * 0.07, -uTime * 0.05, uTime * 0.03);
+    float drift = 0.6 + 0.8 * (0.65 * noise(q) + 0.35 * noise(q * 2.3 + 17.0));
     // Soft edges: brighter where we look through the beam's thickness (view-dependent rim trick).
     float edge = pow(abs(dot(normalize(vNormal), normalize(vView))), 1.2);
     // Bright near the source, fading with distance; quick fade-in right at the lens.
     float along = pow(clamp(1.0 - vLen, 0.0, 1.0), 1.3) * smoothstep(0.0, 0.03, vLen);
     // Hot core near the lens so narrow beams stay readable.
     float core = exp(-vLen * 6.0) * 0.6;
-    float a = uIntensity * uHaze * (edge * along * 1.5 + core);
+    float a = uIntensity * uHaze * (edge * along * 1.5 * drift + core);
     gl_FragColor = vec4(uColor * a, a);
   }`;
 
 export function beamMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(1, 1, 1) }, uIntensity: { value: 0 }, uHaze: { value: 0.5 } },
+    uniforms: { uColor: { value: new THREE.Color(1, 1, 1) }, uIntensity: { value: 0 }, uHaze: { value: 0.5 }, uTime: { value: 0 } },
     vertexShader: BEAM_VERT,
     fragmentShader: BEAM_FRAG,
     transparent: true,
@@ -104,13 +120,15 @@ export interface Rig {
   bodies: THREE.Mesh[];
   beams: BeamUnit[];
   ring: THREE.Mesh;
+  /** LED rings around the lens (ring modules), one per VisualFixture.rings entry. */
+  leds: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
   label: THREE.Sprite;
 }
 
 /** Changes in these properties need a rebuild of the rig (structure), everything else is updated per frame. */
-export const rigKey = (f: VisualFixture) => `${f.type}|${f.movable}|${f.mount}|${f.cells.length}|${f.prism}`;
+export const rigKey = (f: VisualFixture) => `${f.type}|${f.movable}|${f.mount}|${f.cells.length}|${f.rings.length}|${f.prism}`;
 
-function labelSprite(text: string): THREE.Sprite {
+export function labelSprite(text: string): THREE.Sprite {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 48;
@@ -134,8 +152,9 @@ function labelSprite(text: string): THREE.Sprite {
 
 export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
   const g = geometries();
-  const s = f.mount === 'hanging' ? -1 : 1;
+  const s = mountSign(f.mount);
   const root = new THREE.Group();
+  root.rotation.order = 'YXZ'; // matches beamDirection(): Ry(yaw)·Rx(mount tilt)
   const yoke = new THREE.Group();
   const head = new THREE.Group();
   root.add(yoke);
@@ -205,6 +224,15 @@ export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
     if (f.prism) for (const a of [-0.16, 0.16]) makeBeam(0, -1, a);
   }
 
+  // A ring module is drawn as a glowing ring around the lens, not as a second beam.
+  const leds = f.rings.map((_, i) => {
+    const led = new THREE.Mesh(new THREE.RingGeometry(0.115 + i * 0.03, 0.14 + i * 0.03, 32), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }));
+    led.position.set(0, s * (lensOffset + 0.002), 0);
+    led.rotation.x = Math.PI / 2;
+    head.add(led);
+    return led;
+  });
+
   const ring = new THREE.Mesh(g.ring!, new THREE.MeshBasicMaterial({ color: 0x8b5cf6, side: THREE.DoubleSide, transparent: true, opacity: 0.9, depthTest: false }));
   ring.rotation.x = Math.PI / 2;
   ring.renderOrder = 9;
@@ -213,7 +241,7 @@ export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
   label.position.set(0, -s * 0.45, 0);
   root.add(label);
   scene.add(root);
-  return { key: rigKey(f), root, yoke, head, bodies, beams, ring, label };
+  return { key: rigKey(f), root, yoke, head, bodies, beams, ring, leds, label };
 }
 
 export function disposeRig(r: Rig, scene: THREE.Scene): void {
@@ -254,17 +282,22 @@ function colorOf(hex: string): { color: THREE.Color; level: number } {
 
 /** Per-frame update: pose, beam colours/lengths, light pools on floor and back wall, strobe flashes. */
 export function updateRig(r: Rig, f: VisualFixture, o: FrameOptions): void {
-  const s = f.mount === 'hanging' ? -1 : 1;
   r.root.position.set(f.x, f.height, -f.y);
-  const { psi, phi } = aimAngles(f);
-  r.yoke.rotation.y = psi;
-  r.head.rotation.x = s < 0 ? -phi : phi;
+  const a = rigAngles(f);
+  r.root.rotation.y = a.yaw;
+  r.root.rotation.x = a.tilt;
+  r.yoke.rotation.y = a.pan;
+  r.head.rotation.x = a.head;
   r.root.updateMatrixWorld(true);
   r.ring.visible = o.selected;
   r.label.visible = o.labels || o.selected;
   for (const b of r.bodies) (b.material as THREE.MeshStandardMaterial).emissive.set(o.selected ? 0x2a1a55 : 0x000000);
 
   const flash = flickerOn(o.time, f.strobeHz) ? 1 : 0;
+  r.leds.forEach((led, i) => {
+    const { color, level } = colorOf(f.rings[i] ?? '#000000');
+    led.material.color.copy(color).multiplyScalar(Math.min(1, level * (o.dimmed ? 0.25 : 1) * 1.4));
+  });
   const base = colorOf(f.color);
   for (const b of r.beams) {
     const cellHex = b.cell >= 0 ? f.cells[b.cell] : undefined;
@@ -285,6 +318,7 @@ export function updateRig(r: Rig, f: VisualFixture, o: FrameOptions): void {
     // Narrow beams cover few pixels: compensate so a 10° spot reads like a 30° wash in haze (visual only).
     u.uIntensity!.value = intensity * Math.min(2.5, Math.max(1, Math.sqrt(30 / angle)));
     u.uHaze!.value = o.haze;
+    u.uTime!.value = o.time;
     b.cone.visible = intensity > 0.005 && o.haze > 0.01;
 
     const showPool = o.pools && hit !== null && intensity > 0.005;

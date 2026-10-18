@@ -1,5 +1,5 @@
 import type { AttributeValues } from '../model/schemas';
-import { baseAttribute, EMITTER_ATTRIBUTES } from '../fixtures/attributes';
+import { baseAttribute, cellOf, EMITTER_ATTRIBUTES } from '../fixtures/attributes';
 import { channelKey, coarseChannel, isDangerousValue, rangeValue, type ResolvedFixture } from '../fixtures/profiles';
 
 const isEmitter = (key: string) => (EMITTER_ATTRIBUTES as readonly string[]).includes(baseAttribute(key));
@@ -21,26 +21,34 @@ export function finalizeFixture(rf: ResolvedFixture, merged: AttributeValues | u
   for (const ch of rf.mode.channels) {
     if (ch.fine) continue;
     const key = channelKey(ch);
-    out[key] = merged?.[key] ?? ch.default / 255;
+    out[key] = merged?.[key] ?? (ch.default16 !== undefined ? ch.default16 / 65535 : ch.default / 255);
   }
-  const hasDimmer = 'dimmer' in out;
-  if (hasDimmer) {
-    out.dimmer = (out.dimmer ?? 0) * opts.master;
-  } else {
-    // Virtual dimmer: fixtures without a dimmer channel scale their emitters.
-    const vd = (merged?.dimmer ?? 1) * opts.master;
-    for (const k of Object.keys(out)) if (isEmitter(k)) out[k] = (out[k] ?? 0) * vd;
+  const keys = Object.keys(out);
+  const dimmers = keys.filter((k) => baseAttribute(k) === 'dimmer');
+  // An emitter is driven by a real dimmer when its own cell (dimmer#n) or the whole fixture has one.
+  const hasRealDimmer = (k: string) => {
+    const c = cellOf(k);
+    return (c !== undefined && `dimmer#${c}` in out) || 'dimmer' in out;
+  };
+  const virtual = keys.filter((k) => isEmitter(k) && !hasRealDimmer(k));
+  for (const k of dimmers) out[k] = (out[k] ?? 0) * opts.master;
+  // Virtual dimmer: emitters without a dimmer channel are scaled by their cell's (or the global) dimmer value.
+  for (const k of virtual) {
+    const c = cellOf(k);
+    out[k] = (out[k] ?? 0) * ((c !== undefined ? merged?.[`dimmer#${c}`] : undefined) ?? merged?.dimmer ?? 1) * opts.master;
   }
   if (opts.blackout) {
     if (opts.policy === 'all-zero') {
-      for (const k of Object.keys(out)) out[k] = 0;
+      for (const k of keys) out[k] = 0;
     } else {
-      if (hasDimmer) out.dimmer = 0;
-      else for (const k of Object.keys(out)) if (isEmitter(k)) out[k] = 0;
+      for (const k of [...dimmers, ...virtual]) out[k] = 0;
       if (opts.policy === 'intensity-shutter') {
-        const sh = coarseChannel(rf.mode, 'shutter');
-        const closed = sh ? rangeValue(sh, 'closed') : undefined;
-        if (closed !== undefined) out.shutter = closed;
+        for (const k of keys) {
+          if (baseAttribute(k) !== 'shutter') continue;
+          const sh = coarseChannel(rf.mode, k);
+          const closed = sh ? rangeValue(sh, 'closed') : undefined;
+          if (closed !== undefined) out[k] = closed;
+        }
       }
     }
   }

@@ -4,8 +4,10 @@ import { commandSchema, type Command } from '../../shared/commands';
 
 /**
  * Remote control for a tablet/phone on the show network: a tiny page served over HTTP, state pushed with
- * Server-Sent Events, commands POSTed as JSON. Access needs the token in the URL. Only show-control commands are
- * accepted: nothing can arm an output, resume transmission or change the project.
+ * Server-Sent Events, commands POSTed as JSON. The token arrives once in the URL (`/?t=…`), is swapped for an
+ * HttpOnly cookie and stripped from the address bar by a redirect. Repeated bad tokens and command floods are
+ * rate-limited per client address. Only show-control commands are accepted: nothing can arm an output, resume
+ * transmission or change the project.
  */
 export interface RemoteState {
   master: number;
@@ -24,6 +26,61 @@ export interface RemoteDeps {
   listId(index: number): string | undefined;
   /** Smartphone photo (JPEG) for a localisation frame; false when no photo is expected for that frame. */
   locatePhoto?(frame: number, jpeg: Buffer): boolean;
+}
+
+const COOKIE = 'luma_t';
+/** Failed authentications tolerated per client address and window before answering 429. */
+export const AUTH_FAILURES_MAX = 10;
+const AUTH_WINDOW_MS = 60_000;
+/** Command token bucket per client: sustained rate and burst (the master fader sends a stream of values). */
+const CMD_RATE_PER_S = 30;
+const CMD_BURST = 60;
+
+function cookieToken(header: string | undefined): string {
+  for (const part of (header ?? '').split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === COOKIE) return decodeURIComponent(v.join('='));
+  }
+  return '';
+}
+
+/** Small per-address limiter: failed logins in a sliding window, commands in a token bucket. */
+export class RemoteLimiter {
+  private readonly failures = new Map<string, { count: number; since: number }>();
+  private readonly buckets = new Map<string, { tokens: number; at: number }>();
+
+  constructor(private readonly now: () => number = Date.now) {}
+
+  blocked(ip: string): boolean {
+    const f = this.failures.get(ip);
+    if (!f) return false;
+    if (this.now() - f.since > AUTH_WINDOW_MS) {
+      this.failures.delete(ip);
+      return false;
+    }
+    return f.count >= AUTH_FAILURES_MAX;
+  }
+
+  fail(ip: string): void {
+    const f = this.failures.get(ip);
+    if (!f || this.now() - f.since > AUTH_WINDOW_MS) this.failures.set(ip, { count: 1, since: this.now() });
+    else f.count++;
+  }
+
+  succeed(ip: string): void {
+    this.failures.delete(ip);
+  }
+
+  takeCommand(ip: string): boolean {
+    const t = this.now();
+    const b = this.buckets.get(ip) ?? { tokens: CMD_BURST, at: t };
+    b.tokens = Math.min(CMD_BURST, b.tokens + ((t - b.at) / 1000) * CMD_RATE_PER_S);
+    b.at = t;
+    this.buckets.set(ip, b);
+    if (b.tokens < 1) return false;
+    b.tokens -= 1;
+    return true;
+  }
 }
 
 const ALLOWED = new Set<Command['type']>(['cue.go', 'cue.back', 'cue.goto', 'cue.pause', 'cue.resume', 'engine.blackout', 'engine.master', 'output.transmit', 'programmer.release']);
@@ -50,25 +107,39 @@ export class RemoteServer {
   private server: http.Server | null = null;
   private readonly clients = new Set<http.ServerResponse>();
   private timer: NodeJS.Timeout | null = null;
+  private limiter = new RemoteLimiter();
 
   constructor(private readonly deps: RemoteDeps) {}
 
   async start(port: number, bind: string, token: string): Promise<void> {
     await this.stop();
+    this.limiter = new RemoteLimiter();
     const expected = Buffer.from(token);
-    const authorized = (url: URL) => {
-      const got = Buffer.from(url.searchParams.get('t') ?? '');
+    const matches = (candidate: string) => {
+      const got = Buffer.from(candidate);
       return got.length === expected.length && timingSafeEqual(got, expected);
     };
     const server = http.createServer((req, res) => {
       const url = new URL(req.url ?? '/', 'http://remote');
+      const ip = req.socket.remoteAddress ?? '?';
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Referrer-Policy', 'no-referrer');
-      if (!authorized(url)) {
+      res.setHeader('Cache-Control', 'no-store');
+      if (this.limiter.blocked(ip)) {
+        res.writeHead(429, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '60' }).end('Trop de tentatives, réessayez dans une minute');
+        return;
+      }
+      const fromQuery = url.searchParams.get('t');
+      if (!matches(cookieToken(req.headers.cookie)) && !(fromQuery !== null && matches(fromQuery))) {
+        this.limiter.fail(ip);
         res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Jeton invalide');
         return;
       }
-      if (req.method === 'GET' && url.pathname === '/') {
+      this.limiter.succeed(ip);
+      if (req.method === 'GET' && url.pathname === '/' && fromQuery !== null) {
+        // Swap the URL token for a cookie so it leaves the address bar and the phone's history.
+        res.writeHead(303, { Location: '/', 'Set-Cookie': `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/` }).end();
+      } else if (req.method === 'GET' && url.pathname === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'" }).end(PAGE);
       } else if (req.method === 'GET' && url.pathname === '/events') {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -91,6 +162,10 @@ export class RemoteServer {
           res.writeHead(ok ? 200 : 400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok, error: ok ? undefined : 'photo inattendue ou invalide' }));
         });
       } else if (req.method === 'POST' && url.pathname === '/cmd') {
+        if (!this.limiter.takeCommand(ip)) {
+          res.writeHead(429, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: false, error: 'trop de commandes' }));
+          return;
+        }
         let body = '';
         req.setEncoding('utf8');
         req.on('data', (chunk: string) => {
@@ -159,15 +234,15 @@ button:active{transform:scale(.98)}.go{background:var(--accent);border-color:var
 <label for="master">Grand master <span id="mv"></span></label><input id="master" type="range" min="0" max="100">
 <div id="loc" style="display:none;margin-top:16px;padding:12px;border:1px solid var(--accent);border-radius:10px"><b>Localisation des projecteurs</b><div class="st" id="locst"></div><label class="go" style="display:block;text-align:center;padding:18px;border-radius:10px;margin-top:8px">Prendre la photo<input id="cam" type="file" accept="image/*" capture="environment" style="display:none"></label><div class="st">Gardez le téléphone immobile, au même endroit, pour toutes les photos.</div></div>
 <div class="st" id="msg"></div><script>
-const t=new URLSearchParams(location.search).get('t');const $=(i)=>document.getElementById(i);let st=null;
-async function send(c){const r=await fetch('cmd?t='+encodeURIComponent(t),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});const j=await r.json();$('msg').textContent=j.ok?'':j.error;$('msg').className='st'+(j.ok?'':' err');}
+const $=(i)=>document.getElementById(i);let st=null;
+async function send(c){const r=await fetch('cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});const j=await r.json();$('msg').textContent=j.ok?'':j.error;$('msg').className='st'+(j.ok?'':' err');}
 const list=()=>Number($('list').value||1);
 $('go').onclick=()=>send({type:'cue.go',list:list()});$('back').onclick=()=>send({type:'cue.back',list:list()});
 $('pause').onclick=()=>{const l=st&&st.lists[list()-1];send({type:l&&l.state==='paused'?'cue.resume':'cue.pause',list:list()});};
 $('release').onclick=()=>send({type:'programmer.release'});$('bo').onclick=()=>send({type:'engine.blackout',on:!(st&&st.blackout)});
 $('stop').onclick=()=>send({type:'output.transmit',on:false});$('master').oninput=(e)=>send({type:'engine.master',value:e.target.value/100});
-const es=new EventSource('events?t='+encodeURIComponent(t));es.onerror=()=>{$('cue').textContent='Connexion perdue — reconnexion…';};
-$('cam').onchange=async(e)=>{const f=e.target.files[0];e.target.value='';if(!f||!st||!st.locate)return;const fr=st.locate.frame;$('locst').textContent='Envoi…';const bmp=await createImageBitmap(f);const k=Math.min(1,960/bmp.width);const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const blob=await new Promise((r)=>c.toBlob(r,'image/jpeg',0.85));const r=await fetch('locate/photo?t='+encodeURIComponent(t)+'&frame='+fr,{method:'POST',body:blob});const j=await r.json();$('locst').textContent=j.ok?'Photo reçue':j.error;};
+const es=new EventSource('events');es.onerror=()=>{$('cue').textContent='Connexion perdue — reconnexion…';};
+$('cam').onchange=async(e)=>{const f=e.target.files[0];e.target.value='';if(!f||!st||!st.locate)return;const fr=st.locate.frame;$('locst').textContent='Envoi…';const bmp=await createImageBitmap(f);const k=Math.min(1,960/bmp.width);const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const blob=await new Promise((r)=>c.toBlob(r,'image/jpeg',0.85));const r=await fetch('locate/photo?frame='+fr,{method:'POST',body:blob});const j=await r.json();$('locst').textContent=j.ok?'Photo reçue':j.error;};
 es.onmessage=(e)=>{st=JSON.parse(e.data);$('loc').style.display=st.locate?'block':'none';if(st.locate)$('locst').textContent='Image '+(st.locate.frame+1)+'/'+st.locate.total+' : '+st.locate.label;const sel=$('list'),cur=sel.value;if(sel.options.length!==st.lists.length){sel.innerHTML='';for(const l of st.lists){const o=document.createElement('option');o.value=l.index;o.textContent=l.name;sel.appendChild(o);}if(cur)sel.value=cur;}
 const l=st.lists[list()-1];$('cue').textContent=(l?(l.cue?'Cue : '+l.cue:'Aucun cue actif')+' · '+l.state:'Aucune liste')+(st.transmitting?'':' · ÉMISSIONS ARRÊTÉES');
 $('bo').classList.toggle('on',st.blackout);if(document.activeElement!==$('master'))$('master').value=Math.round(st.master*100);$('mv').textContent=Math.round(st.master*100)+' %';};

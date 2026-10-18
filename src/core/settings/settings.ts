@@ -50,15 +50,18 @@ export const settingsSchema = z.object({
       autosaveMinutes: z.number().int().min(0).max(60).default(2),
       recentProjects: z.array(z.string().max(1000)).max(10).default([]),
       confirmDangerous: z.boolean().default(true),
+      /** « beta » also receives pre-releases. Updates are installed when the application quits, never during a show. */
+      updateChannel: z.enum(['stable', 'beta']).default('stable'),
+      autoUpdate: z.boolean().default(true),
     })
-    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true }),
+    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true }),
   /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
   onboarding: z
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })
     .default({ completed: false, checklistHidden: false }),
   appearance: z
-    .object({ reducedMotion: z.boolean().default(false), uiScale: z.number().min(0.8).max(1.4).default(1) })
-    .default({ reducedMotion: false, uiScale: 1 }),
+    .object({ reducedMotion: z.boolean().default(false), uiScale: z.number().min(0.8).max(1.4).default(1), language: z.enum(['fr', 'en']).default('fr') })
+    .default({ reducedMotion: false, uiScale: 1, language: 'fr' }),
   engine: z
     .object({
       rateHz: z.number().int().min(10).max(44).default(40),
@@ -110,11 +113,19 @@ export const settingsSchema = z.object({
         .default({ source: 'off', ltcDeviceId: null }),
       /** Tablet/phone remote (HTTP on the local network, token in the URL). */
       remote: z
-        .object({ enabled: z.boolean().default(false), port: z.number().int().min(1024).max(65535).default(8080), token: z.string().min(16).max(100).optional() })
-        .default({ enabled: false, port: 8080 }),
+        .object({
+          enabled: z.boolean().default(false),
+          port: z.number().int().min(1024).max(65535).default(8080),
+          /** Listening IPv4 address: one network interface, loopback, or all of them (0.0.0.0). */
+          bind: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/u).default('0.0.0.0'),
+          token: z.string().min(16).max(100).optional(),
+        })
+        .default({ enabled: false, port: 8080, bind: '0.0.0.0' }),
     })
-    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080 } }),
+    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
+  /** Opt-in, local usage statistics (command types and error counts only). Off until the user turns it on. */
+  telemetry: z.object({ usage: z.boolean().default(false) }).default({ usage: false }),
   /** Overrides of the default shortcuts, by action id. */
   shortcuts: z.record(z.string().max(40), z.string().max(40)).default({}),
 });

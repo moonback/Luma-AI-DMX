@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, crashReporter, dialog, ipcMain, session, shell } from 'electron';
 import { AppService, UserError } from '../core/app/AppService';
 import { commandSchema, type AppEvents } from '../shared/commands';
 import { BRAND } from '../shared/brand';
 import { createSecretStore } from './secrets';
+import { createUpdater } from './updates';
+import type { Logger } from '../core/log/logger';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.ELECTRON_RENDERER_URL;
@@ -14,6 +16,9 @@ if (process.env.LUMA_USER_DATA) app.setPath('userData', process.env.LUMA_USER_DA
 
 app.setName(BRAND.productName);
 if (!app.requestSingleInstanceLock()) app.quit();
+
+// Native crashes leave a minidump in userData/Crashpad; nothing is ever uploaded.
+crashReporter.start({ uploadToServer: false });
 
 let win: BrowserWindow | null = null;
 let service: AppService | null = null;
@@ -26,10 +31,32 @@ function isTrustedSender(url: string): boolean {
   return url.startsWith('file://');
 }
 
+/** Prints self-contained HTML to an A4 landscape PDF in a hidden, script-less window. */
+async function renderPdf(html: string): Promise<Uint8Array> {
+  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false } });
+  try {
+    await w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    return await w.webContents.printToPDF({ landscape: true, pageSize: 'A4', printBackground: true });
+  } finally {
+    w.destroy();
+  }
+}
+
 async function createService(): Promise<AppService> {
   const dataDir = app.getPath('userData');
-  const svc = new AppService({
+  const svc: AppService = new AppService({
     dataDir,
+    crashDir: app.getPath('crashDumps'),
+    // Read lazily: update events arrive after the service is constructed.
+    updater: createUpdater((): Logger => svc.logger),
+    renderPdf,
+    appInfo: {
+      name: BRAND.productName,
+      version: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+    },
     secrets: createSecretStore(dataDir),
     dialogs: {
       openProject: async () => {
@@ -41,8 +68,30 @@ async function createService(): Promise<AppService> {
         return r.canceled ? null : r.filePath ?? null;
       },
       openProfile: async () => {
-        const r = await dialog.showOpenDialog(win!, { title: 'Importer des profils', filters: [{ name: 'Profils JSON', extensions: ['json'] }], properties: ['openFile'] });
+        const r = await dialog.showOpenDialog(win!, { title: 'Importer des profils', filters: [
+          { name: 'Profils (Luma, GDTF, grandMA2)', extensions: ['json', 'gdtf', 'xml', 'qxf'] },
+          { name: 'Profils Luma', extensions: ['json'] },
+          { name: 'GDTF', extensions: ['gdtf'] },
+          { name: 'grandMA2', extensions: ['xml'] },
+          { name: 'QLC+ (bientôt)', extensions: ['qxf'] },
+        ], properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
+      },
+      savePatchSheet: async (name, format) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Exporter la feuille de patch', defaultPath: name, filters: [format === 'csv' ? { name: 'Tableur (CSV)', extensions: ['csv'] } : { name: 'PDF', extensions: ['pdf'] }] });
+        return r.canceled ? null : r.filePath ?? null;
+      },
+      saveMvr: async (name) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Exporter l’implantation (MVR)', defaultPath: name, filters: [{ name: 'My Virtual Rig', extensions: ['mvr'] }] });
+        return r.canceled ? null : r.filePath ?? null;
+      },
+      saveFeedback: async (name) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Enregistrer le retour', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Retour', extensions: ['json'] }] });
+        return r.canceled ? null : r.filePath ?? null;
+      },
+      saveDiagnostic: async (name) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Exporter un diagnostic', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Diagnostic', extensions: ['json'] }] });
+        return r.canceled ? null : r.filePath ?? null;
       },
     },
   });
@@ -119,6 +168,18 @@ function createWindow(): BrowserWindow {
   else void w.loadFile(path.join(here, '../renderer/index.html'));
   return w;
 }
+
+function logFatal(source: string, err: unknown): void {
+  const message = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
+  if (service) service.logger.error(source, message);
+  else console.error(source, message);
+}
+process.on('uncaughtException', (err) => logFatal('Processus principal', err));
+process.on('unhandledRejection', (reason) => logFatal('Promesse non gérée', reason));
+app.on('render-process-gone', (_e, _wc, details) => logFatal('Fenêtre', `processus de rendu arrêté : ${details.reason} (code ${details.exitCode})`));
+app.on('child-process-gone', (_e, details) => {
+  if (details.reason !== 'clean-exit') logFatal('Processus', `${details.type} arrêté : ${details.reason} (code ${details.exitCode})`);
+});
 
 app.whenReady().then(async () => {
   // Only the microphone (audio-reactive input, LTC) and MIDI (controllers, MTC) may be requested by the renderer.

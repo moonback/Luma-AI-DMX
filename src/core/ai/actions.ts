@@ -14,6 +14,8 @@ export const aiTargetSchema = z.object({
   tags: z.array(z.string().max(32)).max(16).optional(),
   /** Keep only the first N fixtures after resolution (e.g. "les quatre lyres"). */
   limit: z.number().int().min(1).max(512).optional(),
+  /** One head of multi-head fixtures (module name, or « anneau » / « tête principale »); fixtures without it are skipped. */
+  module: z.string().trim().min(1).max(48).optional(),
 });
 export type AiTarget = z.infer<typeof aiTargetSchema>;
 
@@ -51,8 +53,16 @@ export const aiActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('setColor'), target: aiTargetSchema, color: hexColorSchema.optional(), colors: z.array(hexColorSchema).min(1).max(16).optional(), fade })
     .refine((a) => a.color || a.colors, { message: 'color ou colors requis' }),
   z.object({ type: z.literal('setPosition'), target: aiTargetSchema, pan: unitSchema.optional(), tilt: unitSchema.optional(), fade }),
+  /** Beam attributes: gobo = slot number on the gobo wheel (0 = open), prism in/out, zoom 0 narrow..1 wide. */
+  z.object({
+    type: z.literal('setBeam'), target: aiTargetSchema,
+    gobo: z.number().int().min(0).max(32).optional(), prism: z.boolean().optional(),
+    zoom: unitSchema.optional(), focus: unitSchema.optional(), frost: unitSchema.optional(), iris: unitSchema.optional(), fade,
+  }),
   z.object({ type: z.literal('startEffect'), effect: aiEffectSpecSchema }),
   z.object({ type: z.literal('stopEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(EFFECT_TYPES).optional(), all: z.boolean().optional() }),
+  /** Speeds up (> 1) or slows down (< 1) running AI effects, all of them when no type/name is given. */
+  z.object({ type: z.literal('adjustEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(EFFECT_TYPES).optional(), speedFactor: z.number().min(0.1).max(10) }),
   z.object({ type: z.literal('createScene'), name: z.string().trim().min(1).max(80), look: z.array(lookPartSchema).min(1).max(64), apply: z.boolean().default(false), fade }),
   z.object({ type: z.literal('applyScene'), sceneName: z.string().trim().min(1).max(80), fade }),
   z.object({
@@ -89,6 +99,36 @@ export type AiActionType = AiAction['type'];
 
 export const MAX_ACTIONS_PER_PROPOSAL = 50;
 
+/**
+ * Version of the AI action contract (`aiActionSchema`). Any change to the schema bumps it, adds the step from the
+ * previous version to `AI_ACTION_MIGRATIONS` (identity when the change is additive) and freezes sample actions of the
+ * new version in `tests/fixtures/ai-contract/`. `tests/unit/ai-contract.test.ts` pins the schema to this number and
+ * checks that the samples of every past version still validate once migrated: a stored plan or a model prompted
+ * with an older contract keeps working.
+ */
+export const AI_ACTIONS_VERSION = 1;
+
+type RawAction = Record<string, unknown>;
+/** `AI_ACTION_MIGRATIONS[n]` turns a version-n action into a version n + 1 action (null drops it). */
+export const AI_ACTION_MIGRATIONS: Record<number, (a: RawAction) => RawAction | null> = {};
+
+/** Brings raw actions written for `fromVersion` to the current contract. Unknown future versions are refused. */
+export function migrateAiActions(raws: readonly unknown[], fromVersion: number): { actions: unknown[]; error: string | null } {
+  if (!Number.isInteger(fromVersion) || fromVersion < 1) return { actions: [], error: `Version de contrat IA invalide : ${fromVersion}` };
+  if (fromVersion > AI_ACTIONS_VERSION) return { actions: [], error: `Actions écrites pour le contrat IA v${fromVersion}, plus récent que celui de cette version (v${AI_ACTIONS_VERSION}) : mettez l’application à jour.` };
+  let actions = [...raws];
+  for (let v = fromVersion; v < AI_ACTIONS_VERSION; v++) {
+    const step = AI_ACTION_MIGRATIONS[v];
+    if (!step) return { actions: [], error: `Aucune migration du contrat IA depuis la v${v}` };
+    actions = actions.flatMap((a) => {
+      if (!a || typeof a !== 'object') return [a];
+      const next = step(a as RawAction);
+      return next ? [next] : [];
+    });
+  }
+  return { actions, error: null };
+}
+
 export const aiPlanSchema = z.object({
   understanding: z.string().max(2000),
   actions: z.array(z.unknown()).max(MAX_ACTIONS_PER_PROPOSAL),
@@ -109,6 +149,8 @@ export interface ValidatedAction {
 
 export interface AiProposal {
   id: string;
+  /** `AI_ACTIONS_VERSION` the actions were validated against. */
+  contractVersion: number;
   prompt: string;
   provider: 'local' | 'openrouter';
   model: string | null;

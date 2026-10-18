@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { act } from '../api';
 import { PageHead, Panel, useResolved } from '../components/ui';
 import type { AiExecutionReport, AiProposal } from '../../core/ai/actions';
-import { StageCanvas } from './Visualizer';
+import { StageCanvas } from './visualizer/StageCanvas';
 
 const EXAMPLES = [
   'Crée une ambiance lounge violette et bleue.',
@@ -15,6 +15,9 @@ const EXAMPLES = [
   'Rends l’ambiance plus chaude et moins agressive.',
   'Fais des mouvements synchronisés au BPM.',
   'Crée trois variantes de cette scène.',
+  'Tout en violet sauf les lyres.',
+  'Mets le gobo 2 et le prisme sur les lyres.',
+  'Ralentis le chase.',
 ];
 
 interface Exchange {

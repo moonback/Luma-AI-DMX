@@ -9,11 +9,13 @@ import type { RecoveryEntry } from '../../core/project/store';
 import type { OpenRouterModel } from '../../core/ai/providers/openrouter';
 import { externalControl } from '../control';
 import { audioEngine } from '../audioEngine';
+import type { UpdateStatus } from '../../core/app/updates';
+import { FeedbackPanel, UsagePanel } from './settings/BetaPanel';
 
 const TABS = [
   { id: 'general', label: 'Général' }, { id: 'appearance', label: 'Apparence' }, { id: 'engine', label: 'Moteur & sécurité' },
   { id: 'network', label: 'Réseau / DMX' }, { id: 'ai', label: 'IA et fournisseurs' }, { id: 'audio', label: 'Audio' },
-  { id: 'shortcuts', label: 'Raccourcis' }, { id: 'control', label: 'Contrôle externe' }, { id: 'logs', label: 'Logs & diagnostics' }, { id: 'backups', label: 'Sauvegardes' },
+  { id: 'shortcuts', label: 'Raccourcis' }, { id: 'control', label: 'Contrôle externe' }, { id: 'logs', label: 'Logs, diagnostic et retours' }, { id: 'backups', label: 'Sauvegardes' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -128,6 +130,42 @@ const OSC_ADDRESSES: [string, string][] = [
   ['/luma/stop', 'STOP OUTPUT'], ['/luma/timecode <secondes>', 'Position de timecode (la timeline suit)'],
 ];
 
+const UPDATE_LABEL: Record<UpdateStatus['state'], string> = {
+  disabled: 'Indisponible', idle: 'En attente', checking: 'Recherche…', downloading: 'Téléchargement', ready: 'Prête à installer', 'up-to-date': 'À jour', error: 'Erreur',
+};
+
+/** Version, update channel and status. Updates install when the application quits, never during a show. */
+function UpdatesPanel({ value, onChange }: { value: Settings['general']; onChange: (v: Partial<Settings['general']>) => void }) {
+  const [info, setInfo] = useState<{ version: string; updates: UpdateStatus } | null>(null);
+  useEffect(() => { void act({ type: 'app.info' }).then((x) => x && setInfo(x)); }, []);
+  const u = info?.updates;
+  const check = async () => {
+    const r = await act({ type: 'app.checkUpdates' });
+    if (r && info) setInfo({ ...info, updates: r });
+  };
+  return (
+    <Panel title="Version et mises à jour">
+      <div className="grid g2">
+        <Field label="Version installée"><span className="mono" data-testid="app-version">{info?.version ?? '…'}</span></Field>
+        <Field label="Mise à jour">
+          <span className="row" data-testid="update-state">
+            <span className={`badge ${u?.state === 'ready' ? 'ok' : u?.state === 'error' ? 'err' : ''}`}>{u ? UPDATE_LABEL[u.state] : '…'}</span>
+            {u?.version && <span className="mono small">v{u.version}{u.state === 'downloading' && u.progress !== null ? ` · ${Math.round(u.progress * 100)} %` : ''}</span>}
+          </span>
+          {u?.detail && <div className="small dim">{u.detail}</div>}
+        </Field>
+        <Field label="Canal" hint="Bêta : versions de test, plus tôt, moins éprouvées. À éviter sur une machine de show.">
+          <select className="select" value={value.updateChannel} onChange={(e) => onChange({ updateChannel: e.target.value as Settings['general']['updateChannel'] })}>
+            <option value="stable">Stable</option><option value="beta">Bêta</option>
+          </select>
+        </Field>
+        <label className="check"><input type="checkbox" checked={value.autoUpdate} onChange={(e) => onChange({ autoUpdate: e.target.checked })} />Télécharger automatiquement (installation à la fermeture, jamais pendant un show)</label>
+      </div>
+      <div className="row"><button className="btn" disabled={!u || u.state === 'disabled' || u.state === 'checking'} onClick={() => void check()}>Rechercher maintenant</button></div>
+    </Panel>
+  );
+}
+
 function ControlTab({ value, onChange }: { value: Settings['control']; onChange: (v: Settings['control']) => void }) {
   const status = useSyncExternalStore((l) => externalControl.subscribe(l), () => externalControl.status);
   const [learnFor, setLearnFor] = useState<string | null>(null);
@@ -183,14 +221,22 @@ function ControlTab({ value, onChange }: { value: Settings['control']; onChange:
         <div className="grid g2">
           <label className="check"><input type="checkbox" data-testid="remote-enabled" checked={r.enabled} onChange={(e) => onChange({ ...value, remote: { ...r, enabled: e.target.checked } })} />Activer la télécommande sur le réseau local</label>
           <Field label="Port HTTP"><NumberInput value={r.port} min={1024} max={65535} onChange={(port) => onChange({ ...value, remote: { ...r, port } })} /></Field>
+          <Field label="Interface d’écoute" hint="Choisissez la carte réseau de la régie plutôt que toutes les interfaces (Wi-Fi public, réseau de la salle…).">
+            <select className="select" data-testid="remote-bind" value={r.bind} onChange={(e) => onChange({ ...value, remote: { ...r, bind: e.target.value } })}>
+              <option value="0.0.0.0">Toutes les interfaces (0.0.0.0)</option>
+              {[...new Set([...ips, r.bind])].filter((ip) => ip !== '0.0.0.0' && ip !== '127.0.0.1').map((ip) => <option key={ip} value={ip}>{ip}{ips.includes(ip) ? '' : ' (absente)'}</option>)}
+              <option value="127.0.0.1">Cette machine uniquement (127.0.0.1)</option>
+            </select>
+          </Field>
         </div>
         <p className="small dim">GO, BACK, pause, blackout, grand master, relâcher et STOP OUTPUT. L’armement des sorties et la reprise des émissions restent réservés à la régie. Toute personne qui a l’adresse complète (jeton inclus) peut piloter le show : régénérez le jeton pour révoquer les accès.</p>
+        <p className="small"><span className="badge warn">Réseau privé uniquement</span> La liaison est en HTTP non chiffré : utilisez un réseau de régie dédié (Wi-Fi protégé, sans invités). Au premier chargement, le jeton est retiré de l’adresse et conservé dans un cookie du téléphone.</p>
         {r.enabled && r.token && (
           <table className="table small" data-testid="remote-urls"><tbody>
-            {(ips.length ? ips : ['<adresse-ip>']).map((ip) => <tr key={ip}><td className="mono">{`http://${ip}:${r.port}/?t=${r.token}`}</td></tr>)}
+            {(r.bind === '0.0.0.0' ? (ips.length ? ips : ['<adresse-ip>']) : [r.bind]).map((ip) => <tr key={ip}><td className="mono">{`http://${ip}:${r.port}/?t=${r.token}`}</td></tr>)}
           </tbody></table>
         )}
-        <button className="btn" onClick={() => onChange({ ...value, remote: { ...r, token: crypto.randomUUID() } })}>Régénérer le jeton</button>
+        <button className="btn" data-testid="remote-new-token" onClick={() => onChange({ ...value, remote: { ...r, token: crypto.randomUUID() } })}>Nouveau jeton (révoque les téléphones connectés)</button>
       </Panel>
       <Panel title="Timecode">
         <div className="grid g2">
@@ -230,7 +276,7 @@ export function SettingsPage() {
   if (!s) return <div className="page">Chargement…</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
-  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
+  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts, language: s.appearance.language }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: 'Paramètres enregistrés' }); } };
 
   return (
     <div className="page">
@@ -251,11 +297,17 @@ export function SettingsPage() {
             </div>
           </Panel>
         )}
+        {tab === 'general' && <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />}
         {tab === 'appearance' && (
           <Panel title="Apparence">
             <div className="grid g2">
               <label className="check"><input type="checkbox" checked={s.appearance.reducedMotion} onChange={(e) => set('appearance', { reducedMotion: e.target.checked })} />Réduire les animations</label>
               <Field label="Échelle de l’interface"><NumberInput value={s.appearance.uiScale} min={0.8} max={1.4} step={0.05} onChange={(v) => set('appearance', { uiScale: v })} /></Field>
+              <Field label="Langue / Language" hint="Traduction anglaise en cours : la navigation, la barre supérieure et la barre d’état sont traduites, les écrans le seront au fur et à mesure.">
+                <select className="select" data-testid="language" value={s.appearance.language} onChange={(e) => set('appearance', { language: e.target.value as Settings['appearance']['language'] })}>
+                  <option value="fr">Français</option><option value="en">English</option>
+                </select>
+              </Field>
             </div>
           </Panel>
         )}
@@ -350,8 +402,12 @@ export function SettingsPage() {
               </Field>
               <div className="row"><button className="btn" onClick={() => useStore.getState().toggleDiag()}>Ouvrir la console de diagnostic</button></div>
             </div>
+            <p className="small muted">Le journal est aussi écrit sur disque (dossier <span className="mono">logs</span> des données de l'application) et survit à un plantage. Le diagnostic regroupe version, paramètres et journal, sans clés ni jetons, et sans le contenu du projet.</p>
+            <div className="row"><button className="btn" onClick={() => void act({ type: 'diagnostic.export' })}>Exporter un diagnostic…</button></div>
           </Panel>
         )}
+        {tab === 'logs' && <FeedbackPanel />}
+        {tab === 'logs' && <UsagePanel enabled={s.telemetry.usage} onChange={(usage) => set('telemetry', { usage })} />}
         {tab === 'backups' && (
           <Panel title="Sauvegardes et récupération">
             <p className="small muted" style={{ marginTop: 0 }}>Chaque enregistrement conserve la version précédente (.bak). La sauvegarde automatique écrit une copie de récupération séparée.</p>

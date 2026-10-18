@@ -1,5 +1,7 @@
 import { createProject, migrateProject, parseProject, ProjectLoadError, serializeProject } from '../../src/core/project/format';
 import { AudioAnalyzer, simulateFrames } from '../../src/core/audio/analyzer';
+import { BUILTIN_PROFILES } from '../../src/core/fixtures/builtinProfiles';
+import type { FixtureProfile } from '../../src/core/model/schemas';
 import { demoProject } from '../helpers';
 
 describe('format de projet', () => {
@@ -8,6 +10,21 @@ describe('format de projet', () => {
     const { project, migratedFrom } = parseProject(serializeProject(p));
     expect(project).toEqual(p);
     expect(migratedFrom).toBeNull();
+  });
+
+  it('garde sans perte les données physiques et valeurs exactes d’un profil', () => {
+    const p = demoProject();
+    const spot = structuredClone(BUILTIN_PROFILES[2]!) as FixtureProfile;
+    spot.physical = { ...spot.physical, tiltMin: -45, tiltMax: 225, zoomMin: 4, zoomMax: 40, panTiltTime: 2.5, dimensions: { width: 0.3, height: 0.5, depth: 0.25 }, weight: 9.5, power: 250, connector: '3-pin' };
+    const ch = spot.modes[0]!.channels[0]!;
+    ch.default16 = 32768;
+    ch.emitterColor = '#FFFFCC';
+    ch.ranges = [{ from: 0, to: 255, label: 'Strobe', kind: 'strobe', dangerous: false, hzFrom: 1, hzTo: 25, physFrom: 0, physTo: 360 }];
+    p.profiles = [spot];
+    const { project, migratedFrom } = parseProject(serializeProject(p));
+    expect(migratedFrom).toBeNull();
+    expect(project.profiles[0]).toEqual(spot);
+    expect(migrateProject(JSON.parse(serializeProject(p))).data).toMatchObject({ profiles: [spot] });
   });
 
   it('migre un projet v1 (clé fixtures) vers v2', () => {

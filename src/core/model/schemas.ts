@@ -19,9 +19,11 @@ export const addressSchema = z.number().int().min(1).max(512);
 
 export const BUILTIN_ATTRIBUTES = [
   'dimmer', 'red', 'green', 'blue', 'white', 'amber', 'uv', 'cyan', 'magenta', 'yellow', 'cto', 'colorWheel',
-  'pan', 'tilt', 'panTiltSpeed',
-  'shutter', 'strobe', 'gobo', 'goboRotation', 'prism', 'focus', 'zoom', 'iris', 'frost',
-  'speed', 'macro', 'control',
+  'warmWhite', 'coldWhite', 'lime', 'indigo', 'colorTemperature', 'colorMacro', 'colorMacroFade',
+  'pan', 'tilt', 'panTiltSpeed', 'panTiltMode',
+  'shutter', 'strobe', 'gobo', 'goboRotation', 'prism', 'focus', 'zoom', 'iris', 'frost', 'effectWheel', 'zoomMode',
+  'gobo2', 'gobo2Rotation', 'prismIndex', 'prismRotation',
+  'speed', 'macro', 'control', 'macroSpeed', 'fog', 'fan', 'dimmerCurve',
 ] as const;
 export type BuiltinAttribute = (typeof BUILTIN_ATTRIBUTES)[number];
 export const attributeSchema = z.union([
@@ -29,6 +31,11 @@ export const attributeSchema = z.union([
   z.string().regex(/^custom:[a-z0-9][a-z0-9-]{0,31}$/, 'Attribut personnalisé: custom:<nom>'),
 ]);
 export type Attribute = z.infer<typeof attributeSchema>;
+/** Value key: an attribute, or "<attribute>#<cell>" for a cell of a multi-cell / multi-head fixture. */
+export const attributeKeySchema = z.string().max(48).refine((k) => {
+  const [attr, cell, ...rest] = k.split('#');
+  return rest.length === 0 && attributeSchema.safeParse(attr).success && (cell === undefined || /^[1-9]\d{0,2}$/.test(cell));
+}, 'Attribut inconnu (attribut ou attribut#cellule)');
 
 /* ------------------------------------------------------------------ */
 /* Fixture profiles                                                    */
@@ -45,6 +52,12 @@ export const channelRangeSchema = z
     color: hexColorSchema.optional(),
     /** Values in a dangerous range (reset, lamp off…) are only emitted after explicit manual confirmation. */
     dangerous: z.boolean().default(false),
+    /** Real strobe/pulse frequency at `from` and `to` (Hz), when the manual documents it. */
+    hzFrom: z.number().min(0).max(100).optional(),
+    hzTo: z.number().min(0).max(100).optional(),
+    /** Generic physical value at `from` and `to` (degrees, rpm…: unit given by the attribute). */
+    physFrom: z.number().optional(),
+    physTo: z.number().optional(),
   })
   .refine((r) => r.from <= r.to, { message: 'Plage DMX inversée (from > to)' });
 export type ChannelRange = z.infer<typeof channelRangeSchema>;
@@ -57,6 +70,10 @@ export const channelSchema = z.object({
   /** Cell number for multi-cell fixtures (LED bars, pixel battens). Absent = whole fixture. */
   cell: z.number().int().min(1).max(512).optional(),
   default: dmxValueSchema.default(0),
+  /** Exact 16-bit default (0..65535) of an attribute with a fine channel; overrides `default` for both bytes. */
+  default16: z.number().int().min(0).max(65535).optional(),
+  /** Light colour of a colour emitter (e.g. #FFFFCC for a warm white), used by the visualizer. */
+  emitterColor: hexColorSchema.optional(),
   ranges: z.array(channelRangeSchema).default([]),
 });
 export type Channel = z.infer<typeof channelSchema>;
@@ -83,6 +100,21 @@ export const modeSchema = z
   });
 export type FixtureMode = z.infer<typeof modeSchema>;
 
+export const MODULE_BEAMS = ['spot', 'wash', 'beam', 'led', 'none'] as const;
+/** 'lens' = the main optic, 'ring' = LED ring around the lens, 'pixel' = k-th pixel along a bar (order of `cells`). */
+export const MODULE_GEOMETRIES = ['lens', 'ring', 'pixel'] as const;
+/** One head of a multi-head fixture (moving head + LED ring, bar + strobe…). */
+export const fixtureModuleSchema = z.object({
+  name: z.string().trim().min(1).max(48),
+  /** Cells whose channels belong to this module; empty = the channels without a cell (main head). */
+  cells: z.array(z.number().int().min(1).max(512)).max(512).default([]),
+  beam: z.enum(MODULE_BEAMS).default('wash'),
+  /** Beam angle in degrees, absent = the profile's beamAngle. */
+  angle: z.number().min(1).max(90).optional(),
+  geometry: z.enum(MODULE_GEOMETRIES).default('lens'),
+});
+export type FixtureModule = z.infer<typeof fixtureModuleSchema>;
+
 export const FIXTURE_TYPES = ['par', 'moving-head-spot', 'moving-head-wash', 'strobe', 'dimmer', 'led-bar', 'other'] as const;
 export type FixtureType = (typeof FIXTURE_TYPES)[number];
 export const profileSchema = z.object({
@@ -97,15 +129,32 @@ export const profileSchema = z.object({
       panRange: z.number().min(0).max(720).default(540),
       tiltRange: z.number().min(0).max(360).default(270),
       beamAngle: z.number().min(1).max(90).default(25),
+      /** Asymmetric tilt travel in degrees (tilt 0 → tiltMin, 1 → tiltMax, tiltMin > tiltMax = inverted); absent = ±tiltRange/2. */
+      tiltMin: z.number().min(-360).max(360).optional(),
+      tiltMax: z.number().min(-360).max(360).optional(),
+      /** Beam angle in degrees at zoom 0 and zoom 1. */
+      zoomMin: z.number().min(1).max(90).optional(),
+      zoomMax: z.number().min(1).max(90).optional(),
+      /** Seconds for a 540° pan move at full speed. */
+      panTiltTime: z.number().positive().max(60).optional(),
+      /** Body size in meters. */
+      dimensions: z.object({ width: z.number().positive().max(10), height: z.number().positive().max(10), depth: z.number().positive().max(10) }).optional(),
+      weight: z.number().positive().max(1000).optional(),
+      power: z.number().positive().max(100000).optional(),
+      connector: z.string().trim().min(1).max(48).optional(),
     })
     .default({ panRange: 540, tiltRange: 270, beamAngle: 25 }),
   modes: z.array(modeSchema).min(1),
+  modules: z.array(fixtureModuleSchema).max(64).default([]),
 });
 export type FixtureProfile = z.infer<typeof profileSchema>;
 
 /* ------------------------------------------------------------------ */
 /* Patch, groups, palettes                                             */
 /* ------------------------------------------------------------------ */
+
+export const fixtureMountSchema = z.enum(['auto', 'hanging', 'floor', 'wall']);
+export type FixtureMount = z.infer<typeof fixtureMountSchema>;
 
 export const fixtureSchema = z.object({
   id: idSchema,
@@ -121,6 +170,12 @@ export const fixtureSchema = z.object({
   rotation: z.number().min(-360).max(360).default(0),
   /** Mounting height in meters (3D visualizer). */
   height: z.number().min(0).max(50).default(4),
+  /** Mounting: absent or 'auto' = hanging, or standing on the floor below 1 m (rule of older projects). */
+  mount: fixtureMountSchema.optional(),
+  /** Tilt of the mounting axis in degrees: leans towards the audience (wall mount: downwards). */
+  mountTilt: z.number().min(-90).max(90).optional(),
+  /** Truss the fixture hangs from: it follows the truss when the truss moves. */
+  trussId: idSchema.nullable().optional(),
   notes: z.string().max(500).default(''),
 });
 export type Fixture = z.infer<typeof fixtureSchema>;
@@ -355,6 +410,8 @@ export type SongAnalysis = z.infer<typeof songAnalysisSchema>;
 
 export const SHOW_MOVEMENTS = ['none', 'slow', 'sweep', 'fast'] as const;
 export const SHOW_EFFECTS = ['none', 'wave', 'pulse', 'chase', 'rainbow', 'strobe'] as const;
+/** Beam look of the moving heads: open, a gobo, gobo + prism, or frost (soft edge). */
+export const SHOW_BEAMS = ['open', 'gobo', 'prism', 'frost'] as const;
 export const showSectionPlanSchema = z.object({
   index: z.number().int().min(0).max(300),
   /** 0 = almost dark, 5 = maximum. */
@@ -363,6 +420,7 @@ export const showSectionPlanSchema = z.object({
   layers: z.object({ wash: z.boolean(), moving: z.boolean(), bars: z.boolean() }),
   movement: z.enum(SHOW_MOVEMENTS),
   effect: z.enum(SHOW_EFFECTS),
+  beam: z.enum(SHOW_BEAMS).default('open'),
   /** Effect cycle in beats. */
   effectBeats: z.number().min(0.5).max(16),
   /** Flash on detected impacts inside the section. */
@@ -397,6 +455,93 @@ export type MusicTrack = z.infer<typeof musicTrackSchema>;
 /* Project                                                             */
 /* ------------------------------------------------------------------ */
 
+/** Stage layout. `thrust` adds a runway towards the audience; `arena` has the audience all around and no cyclorama. */
+export const stageShapeSchema = z.enum(['rect', 'thrust', 'arena']);
+export const thrustSchema = z.object({ width: z.number().min(1).max(50), depth: z.number().min(1).max(50) });
+/** Named stage point (singer, drummer…), position like fixtures (meters, y upstage) plus the aiming height. */
+export const stageMarkerSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  height: z.number().min(0).max(10),
+});
+export type StageMarker = z.infer<typeof stageMarkerSchema>;
+const vec3Schema = z.object({ x: z.number().min(-500).max(500), y: z.number().min(-500).max(500), z: z.number().min(-500).max(500) });
+/** Saved 3D camera (world coordinates of the visualizer). */
+export const stageViewSchema = z.object({ id: idSchema, name: nameSchema, pos: vec3Schema, target: vec3Schema });
+/**
+ * Explicit truss. Position = centre (meters, y upstage), `height` = height of the truss axis, `length` = length of a
+ * straight truss, diameter of a circle, side of a square, or arm length of a corner / tee / cross junction (measured
+ * from the junction node). A totem is a vertical tower from the floor up to `height` (`length` unused). Rotation in
+ * degrees around the vertical (counter-clockwise seen from above, 0 = parallel to the stage lip). Supported by towers
+ * on the floor, hung from motors, or `none` when it rests on other pieces (totems, junctions).
+ */
+export const trussShapeSchema = z.enum(['line', 'circle', 'square', 'corner', 'tee', 'cross', 'totem']);
+export const trussSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  shape: trussShapeSchema,
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  height: z.number().min(0.5).max(30),
+  length: z.number().min(0.5).max(60),
+  rotation: z.number().min(-360).max(360),
+  support: z.enum(['towers', 'hung', 'none']),
+});
+export type Truss = z.infer<typeof trussSchema>;
+/** Performer or instrument silhouette (meters, y upstage, rotation like fixtures: 0 = facing the audience). */
+export const performerSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  kind: z.enum(['standing', 'seated', 'drums', 'keys', 'lectern']),
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  rotation: z.number().min(-360).max(360),
+  /** Stage point the performer stands on: the silhouette follows it. */
+  markerId: idSchema.nullable().optional(),
+});
+export type Performer = z.infer<typeof performerSchema>;
+/**
+ * LED screen / video surface: centre x, y (meters, y upstage), bottom edge `elevation`, size, rotation (0 = facing
+ * the audience). Image stored as a small data URL; videos are chosen per session and never saved in the project.
+ */
+export const screenSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  elevation: z.number().min(0).max(30),
+  width: z.number().min(0.2).max(60),
+  height: z.number().min(0.2).max(30),
+  rotation: z.number().min(-360).max(360),
+  source: z.enum(['color', 'image', 'video', 'pixels']),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  image: z.string().max(1_500_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/).nullable().optional(),
+  /** Light spill on the surroundings, 0..1. */
+  glow: z.number().min(0).max(1),
+});
+export type StageScreen = z.infer<typeof screenSchema>;
+export type StageView = z.infer<typeof stageViewSchema>;
+/**
+ * Set piece from the library (riser, stairs, speaker, stage monitor, mic stand, table, drape, box, column): centre
+ * x, y (meters, y upstage), footprint width × depth, height, raised by `elevation` (stacking), rotation like trusses.
+ */
+export const propSchema = z.object({
+  id: idSchema,
+  name: nameSchema,
+  kind: z.enum(['riser', 'stairs', 'speaker', 'monitor', 'mic', 'table', 'drape', 'box', 'column']),
+  x: z.number().min(-100).max(100),
+  y: z.number().min(-100).max(100),
+  width: z.number().min(0.05).max(40),
+  depth: z.number().min(0.05).max(40),
+  height: z.number().min(0.05).max(20),
+  elevation: z.number().min(0).max(20),
+  rotation: z.number().min(-360).max(360),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
+export type StageProp = z.infer<typeof propSchema>;
+
 export const PROJECT_FORMAT_VERSION = 3;
 
 export const projectSchema = z.object({
@@ -423,8 +568,20 @@ export const projectSchema = z.object({
   audio: audioConfigSchema.default({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, bpmRange: { min: 70, max: 180 }, reactions: DEFAULT_AUDIO_REACTIONS }),
   music: z.object({ tracks: z.array(musicTrackSchema).max(100).default([]) }).default({ tracks: [] }),
   visualizer: z
-    .object({ stageWidth: z.number().min(2).max(200).default(12), stageDepth: z.number().min(2).max(200).default(8) })
-    .default({ stageWidth: 12, stageDepth: 8 }),
+    .object({
+      stageWidth: z.number().min(2).max(200).default(12),
+      stageDepth: z.number().min(2).max(200).default(8),
+      shape: stageShapeSchema.default('rect'),
+      thrust: thrustSchema.default({ width: 3, depth: 4 }),
+      cyclo: z.boolean().default(true),
+      markers: z.array(stageMarkerSchema).max(64).default([]),
+      views: z.array(stageViewSchema).max(20).default([]),
+      trusses: z.array(trussSchema).max(64).default([]),
+      performers: z.array(performerSchema).max(64).default([]),
+      screens: z.array(screenSchema).max(16).default([]),
+      props: z.array(propSchema).max(256).default([]),
+    })
+    .default({ stageWidth: 12, stageDepth: 8, shape: 'rect', thrust: { width: 3, depth: 4 }, cyclo: true, markers: [], views: [], trusses: [], performers: [], screens: [], props: [] }),
   ai: z
     .object({ notes: z.string().max(2000).default(''), recentPrompts: z.array(z.string().max(500)).max(20).default([]) })
     .default({ notes: '', recentPrompts: [] }),

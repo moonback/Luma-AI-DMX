@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -16,7 +16,7 @@ test.beforeAll(async () => {
   app = await electron.launch({
     executablePath: electronPath,
     // Chromium's fake camera (test pattern) and auto-accepted media prompts, for the camera localisation flow.
-    args: [path.resolve('out/main/index.js'), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    args: [path.resolve('out/main/index.js'), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
     env: { ...process.env, LUMA_USER_DATA: mkdtempSync(path.join(tmpdir(), 'luma-e2e-')), LUMA_E2E: '1' },
   });
   page = await app.firstWindow();
@@ -34,6 +34,8 @@ test.afterAll(async () => {
 });
 
 const nav = (id: string) => page.getByTestId(`nav-${id}`).click();
+/** Opens the scene panel unless it already is (it stays open while the page does not change). */
+const openScenePanel = async () => { if (!(await page.getByTestId('stage-settings').isVisible())) await page.getByTestId('stage-settings-toggle').click(); };
 const channel = (ch: number) => page.locator(`.dmx-cell[data-ch="${ch}"]`);
 
 test('sécurité Electron : pas de Node dans le renderer, API minimale exposée', async () => {
@@ -123,6 +125,112 @@ test('blackout et STOP OUTPUT', async () => {
   await page.getByRole('button', { name: 'Reprendre' }).first().click();
 });
 
+test('programmeur → scène → liste de cues → GO', async () => {
+  await nav('ai');
+  await page.getByRole('button', { name: /Relâcher l’IA/ }).click();
+  await nav('console');
+  await page.getByRole('button', { name: 'Aucun', exact: true }).click(); // selection left by the previous scenario
+  await page.getByTestId('fixture-tiles').locator('.fx-tile').first().click();
+  await page.getByTestId('dimmer-fader').fill('200');
+  await page.getByRole('button', { name: 'Enregistrer scène' }).click();
+  await page.locator('.modal input.input').first().fill('Scène e2e');
+  await page.locator('.modal').getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(page.locator('.modal')).toHaveCount(0);
+  await page.keyboard.press('Escape'); // release the programmer: only the cue drives the output now
+
+  await nav('cues');
+  await page.getByRole('button', { name: 'Liste', exact: true }).click();
+  await page.locator('.modal').getByRole('button', { name: 'Valider' }).click();
+  await page.getByRole('button', { name: 'Ajouter un cue' }).click();
+  await expect(page.getByTestId('cue-table').locator('tbody tr')).toHaveCount(1);
+  await page.getByTestId('cue-table').locator('tbody tr').first().locator('select').first().selectOption({ label: 'Scène e2e' });
+  await page.getByTestId('go').click();
+  await expect(page.getByTestId('cue-state')).toContainText('Cue 1');
+
+  await nav('output');
+  await page.getByRole('tab', { name: 'Moniteur 512 canaux' }).click();
+  await expect(channel(1)).toHaveAttribute('data-v', '200', { timeout: 10_000 });
+  await nav('cues');
+  await page.getByRole('button', { name: /Stop/ }).click();
+});
+
+test('feuille de patch exportée en PDF et CSV', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'luma-patch-'));
+  const run = (format: 'pdf' | 'csv') => page.evaluate(async ([f, p]) => (window as unknown as { luma: { invoke: (c: unknown) => Promise<{ ok: boolean; data?: { path: string } }> } }).luma.invoke({ type: 'patch.exportSheet', format: f, path: p }), [format, path.join(dir, `patch.${format}`)] as const);
+  expect((await run('pdf')).ok).toBe(true);
+  expect(readFileSync(path.join(dir, 'patch.pdf')).subarray(0, 5).toString()).toBe('%PDF-');
+  expect((await run('csv')).ok).toBe(true);
+  expect(readFileSync(path.join(dir, 'patch.csv'), 'utf8')).toContain('Demo PAR RGBW 1');
+});
+
+test('sortie réelle armée → STOP OUTPUT coupe les émissions', async () => {
+  type Invoke = (c: unknown) => Promise<{ ok: boolean; data?: { outputs: unknown[] } }>;
+  // A real Art-Net output aimed at this machine (nothing leaves it), added like the Output form would.
+  await page.evaluate(async () => {
+    const invoke = (window as unknown as { luma: { invoke: Invoke } }).luma.invoke;
+    const s = await invoke({ type: 'settings.get' });
+    await invoke({ type: 'output.configure', outputs: [...s.data!.outputs, { kind: 'artnet', id: 'e2e-artnet', name: 'Art-Net local', host: '127.0.0.1', universeMap: [{ local: 1, remote: 0 }] }] });
+  });
+  await nav('output');
+  await page.getByRole('tab', { name: 'Sorties' }).click();
+  const row = page.getByTestId('output-artnet');
+  await expect(row).toContainText('Désarmée');
+  await row.getByTestId('arm').click();
+  await page.locator('.modal').getByRole('button', { name: 'Armer la sortie' }).click();
+  await expect(row).toContainText('Prête');
+  await expect(page.getByTestId('mode')).not.toHaveText('SIMULATION');
+  await page.getByTestId('stop-output').click();
+  await expect(page.locator('body')).toContainText('STOP — émissions réelles arrêtées');
+  await page.getByRole('button', { name: 'Reprendre' }).first().click();
+  await row.getByRole('button', { name: 'Désarmer' }).click();
+  await expect(row).toContainText('Désarmée');
+  await page.evaluate(async () => {
+    const invoke = (window as unknown as { luma: { invoke: Invoke } }).luma.invoke;
+    const s = await invoke({ type: 'settings.get' });
+    await invoke({ type: 'output.configure', outputs: (s.data!.outputs as { id: string }[]).filter((o) => o.id !== 'e2e-artnet') });
+  });
+});
+
+test('campagne matériel : mire signature confirmée, visible au moniteur, rapport de session', async () => {
+  await nav('output');
+  await page.getByRole('tab', { name: 'Diagnostics' }).click();
+  await page.getByTestId('test-pattern-kind').selectOption('signature');
+  await page.getByTestId('test-pattern-start').click();
+  await page.locator('.modal').getByRole('button', { name: 'Lancer la mire' }).click();
+  await expect(page.getByTestId('test-pattern-active')).toContainText('signature');
+  await page.getByRole('tab', { name: 'Moniteur 512 canaux' }).click();
+  await expect(channel(300)).toHaveAttribute('data-v', '44');
+  await page.getByRole('tab', { name: 'Diagnostics' }).click();
+  await page.getByTestId('hardware-report').click();
+  await expect(page.getByTestId('hardware-report-text')).toHaveValue(/signature \(U1\)/);
+  await page.screenshot({ path: `${shots}/21-campagne-materiel.png` });
+  await page.getByRole('button', { name: 'Arrêter la mire' }).click();
+  await expect(page.getByTestId('test-pattern-active')).toHaveCount(0);
+});
+
+test('paramètres : version, mises à jour, retour et statistiques opt-in', async () => {
+  await nav('settings');
+  await expect(page.getByTestId('app-version')).not.toHaveText('…');
+  await expect(page.getByTestId('update-state')).toContainText('Indisponible'); // not a packaged build
+  await page.getByRole('tab', { name: 'Logs, diagnostic et retours' }).click();
+  await expect(page.getByTestId('usage-enabled')).not.toBeChecked();
+  await expect(page.getByTestId('feedback-save')).toBeDisabled();
+  await page.getByTestId('feedback-message').fill('Essai');
+  await expect(page.getByTestId('feedback-save')).toBeEnabled();
+  await page.screenshot({ path: `${shots}/22-retours.png` });
+  await page.getByTestId('feedback-message').fill('');
+  // Interface language: the shell switches at once after saving, and back.
+  await page.getByRole('tab', { name: 'Apparence' }).click();
+  await page.getByTestId('language').selectOption('en');
+  await page.getByTestId('settings-save').click();
+  await expect(page.getByTestId('nav-music')).toContainText('Music');
+  await expect(page.getByTestId('stop-output')).toHaveAttribute('title', /Shift\+Esc/);
+  await page.getByTestId('language').selectOption('fr');
+  await page.getByTestId('settings-save').click();
+  await expect(page.getByTestId('nav-music')).toContainText('Musique');
+  await page.getByRole('tab', { name: 'Général' }).click();
+});
+
 test('captures des autres espaces', async () => {
   for (const [id, n] of [['cues', '10'], ['effects', '11'], ['timeline', '12'], ['audio', '13'], ['settings', '14'], ['dashboard', '15']] as const) {
     await nav(id);
@@ -177,6 +285,297 @@ test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection
   await inv({ type: 'effect.stopAll' });
 });
 
+test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecteur, éblouissement, captures', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const shaderErrors: string[] = [];
+  page.on('console', (m) => { if (m.type() === 'error' && /shader|WebGLProgram|THREE/i.test(m.text())) shaderErrors.push(m.text()); });
+
+  // Stage layout and stage point from the 2D settings panel.
+  await nav('visualizer');
+  await openScenePanel();
+  await page.getByTestId('shape-thrust').click();
+  await page.getByTestId('marker-add').click();
+  await expect(page.getByTestId('marker-row')).toHaveCount(1);
+  await page.screenshot({ path: `${shots}/17-scene-reglages-2d.png` });
+
+  // Moving heads aimed into the house at eye level → glare badge.
+  const state = (await inv({ type: 'project.get' })).data as { project: { patch: { id: string; name: string }[] } };
+  const lyres = state.project.patch.filter((f) => f.name.startsWith('Lyre')).map((f) => f.id);
+  await inv({ type: 'programmer.set', fixtureIds: lyres, values: { dimmer: 1, pan: 0.5, tilt: 0.78, prism: 0 }, confirmSpecial: false });
+  // Lyre 1 may still be selected by the previous scenario: a tile click toggles, so only click when needed.
+  await nav('stage3d');
+  if (!(await page.getByTestId('stage3d-info').isVisible())) {
+    await nav('console');
+    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await nav('stage3d');
+  }
+  await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
+  await expect(page.getByTestId('glare')).toContainText('Éblouissement public');
+  await page.getByTestId('render-menu').click(); // display settings live in the Rendu menu
+  await page.getByTestId('smoke').click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${shots}/17b-scene-avancee-fumee.png` });
+
+  // Saved view round trip.
+  await page.getByTestId('cam-top').click();
+  await page.waitForTimeout(900);
+  await page.getByTestId('cam-save').click();
+  await expect(page.getByTestId('cam-saved')).toHaveCount(1);
+  await page.getByTestId('cam-foh').click();
+  await page.getByTestId('cam-saved').getByText('Vue 1').click();
+
+  // Beam's-eye view on the selected moving head.
+  await page.getByTestId('beam-view').click();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${shots}/17c-scene-vue-projecteur.png` });
+  await page.getByTestId('beam-view').click();
+
+  // Captures: intercept the download link instead of opening the save dialog.
+  await page.evaluate(() => {
+    const w = window as unknown as { __downloads: string[]; __blobSize: number };
+    w.__downloads = [];
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { w.__downloads.push(this.href); };
+    // The app CSP forbids fetching blob: URLs, so measure the recording when its URL is created.
+    const create = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (o: Blob | MediaSource) => { if (o instanceof Blob) w.__blobSize = o.size; return create(o); };
+  });
+  await page.getByTestId('capture').click();
+  await page.getByTestId('record').click();
+  await page.waitForTimeout(1500);
+  await page.getByTestId('record').click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __downloads: string[] }).__downloads.length)).toBe(2);
+  const [png, webm] = await page.evaluate(() => {
+    const w = window as unknown as { __downloads: string[]; __blobSize: number };
+    return [w.__downloads[0]!.length, w.__blobSize];
+  });
+  expect(png).toBeGreaterThan(20_000); // a black frame would compress to a few KB
+  expect(webm).toBeGreaterThan(0);
+  expect(shaderErrors).toEqual([]);
+  await inv({ type: 'programmer.release', fixtureIds: lyres });
+});
+
+test('structures : accroche, suivi, annuler / rétablir, édition directe au gizmo', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  type Fx = { id: string; name: string; position: { x: number; y: number }; height: number; trussId?: string | null };
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const lyre1 = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch.find((f) => f.name === 'Lyre 1')!;
+
+  // A straight truss from the scene panel (10 m, 4 m upstage, 6 m high).
+  await nav('visualizer');
+  await openScenePanel();
+  await page.getByTestId('truss-add').click();
+  await expect(page.getByTestId('truss-row')).toHaveCount(1);
+
+  // Hang Lyre 1 on it from the 3D info panel.
+  await nav('stage3d');
+  if (!(await page.getByTestId('stage3d-info').isVisible())) {
+    await nav('console');
+    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await nav('stage3d');
+  }
+  await page.getByTestId('fixture-truss').selectOption({ label: 'Structure 1' });
+  await expect.poll(async () => (await lyre1()).trussId).toBeTruthy();
+  const hung = await lyre1();
+  expect(hung.position.y).toBe(4);
+  expect(hung.height).toBeCloseTo(5.8);
+
+  // Moving the truss carries the fixture; undo / redo walk it back and forth.
+  await nav('visualizer');
+  await openScenePanel();
+  const yField = page.getByTestId('truss-row').locator('input.mono').nth(2); // L, X, Y, H, rotation
+  await yField.fill('5');
+  await yField.press('Enter');
+  await expect.poll(async () => (await lyre1()).position.y).toBe(5);
+  await page.screenshot({ path: `${shots}/18-structures-2d.png` });
+  await page.getByTestId('scene-undo').click();
+  await expect.poll(async () => (await lyre1()).position.y).toBe(4);
+  await page.getByTestId('scene-redo').click();
+  await expect.poll(async () => (await lyre1()).position.y).toBe(5);
+
+  // Direct editing: top view, drag the gizmo centre of Lyre 1 sideways along its truss.
+  // Editing the truss card selected the truss (one selection at a time): select Lyre 1 again.
+  await nav('stage3d');
+  if (!(await page.getByTestId('stage3d-info').isVisible())) {
+    await nav('console');
+    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await nav('stage3d');
+  }
+  await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
+  await page.getByTestId('edit3d').click();
+  await page.getByTestId('grid').selectOption('0.25');
+  await page.getByTestId('cam-top').click();
+  await page.waitForTimeout(1000);
+  const box = (await page.getByTestId('stage-3d').locator('canvas').boundingBox())!;
+  const before = await lyre1();
+  // Top camera (see viewPose): above the centre of deck + 4 m thrust, fov 48°.
+  const camH = 12 * 1.6, tz = 4 - 6, k = Math.tan((24 * Math.PI) / 180) * (camH - before.height);
+  const toPx = (x: number, z: number) => ({ x: box.x + box.width / 2 + (x / (k * (box.width / box.height))) * (box.width / 2), y: box.y + box.height / 2 - ((tz - z) / k) * (box.height / 2) });
+  const c = toPx(before.position.x, -before.position.y);
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 40, c.y, { steps: 5 });
+  await page.mouse.move(c.x + 80, c.y, { steps: 5 });
+  await expect(page.getByTestId('dims')).toContainText('accroche : Structure 1');
+  await page.screenshot({ path: `${shots}/18b-structures-gizmo.png` });
+  await page.mouse.up();
+  await expect.poll(async () => (await lyre1()).position.x).toBeGreaterThan(before.position.x + 0.5);
+  const moved = await lyre1();
+  expect(moved).toMatchObject({ trussId: before.trussId, position: { y: 5 } });
+  expect(Number.isInteger(moved.position.x * 4)).toBe(true); // 0,25 m grid
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => (await lyre1()).position.x).toBe(before.position.x);
+  await page.getByTestId('edit3d').click();
+  await page.getByTestId('cam-foh').click();
+});
+
+test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol', async () => {
+  const renderErrors: string[] = [];
+  const onConsole = (m: { type: () => string; text: () => string }) => { if (m.type() === 'error' && /shader|WebGL|THREE/i.test(m.text())) renderErrors.push(m.text()); };
+  page.on('console', onConsole);
+
+  // Two performers (one on the stage point), a drum kit and a pixel-mapped LED screen, from the scene panel.
+  await nav('visualizer');
+  await openScenePanel();
+  await page.getByTestId('performer-add').click();
+  await page.getByTestId('performer-add').click();
+  await expect(page.getByTestId('performer-row')).toHaveCount(2);
+  await page.getByTestId('performer-marker').first().selectOption({ label: 'Sur « Point 1 »' });
+  await page.getByTestId('performer-row').nth(1).locator('select').first().selectOption('drums');
+  await page.getByTestId('screen-add').click();
+  await page.getByTestId('screen-source').selectOption('pixels');
+  await expect(page.getByTestId('screen-row')).toHaveCount(1);
+  await page.screenshot({ path: `${shots}/19-interpretes-ecrans-2d.png` });
+
+  // Light the rig: every fixture full, moving heads straight down (tilt 0,5 = 0°).
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const patch = ((await inv({ type: 'project.get' })).data as { project: { patch: { id: string; name: string }[] } }).project.patch;
+  const ids = patch.map((f) => f.id);
+  await inv({ type: 'programmer.set', fixtureIds: ids, values: { dimmer: 1 }, confirmSpecial: false });
+  await inv({ type: 'programmer.set', fixtureIds: patch.filter((f) => f.name.startsWith('Lyre')).map((f) => f.id), values: { tilt: 0.5, pan: 0.5, gobo: 0, prism: 0 }, confirmSpecial: false });
+  await inv({ type: 'effect.start', id: 'rbw' }); // rainbow on the LED bars → pixel-mapped screen
+  await nav('stage3d');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${shots}/19b-interpretes-ecrans-3d.png` });
+
+  // Real lighting: shadow-casting spot lights, budget shown on the chip, switch without reloading.
+  await page.getByTestId('render-menu').click();
+  await page.getByTestId('real-lights').click();
+  await expect(page.getByTestId('real-lights')).toContainText(/Ombres · \d+/, { timeout: 5000 });
+  await page.waitForTimeout(5000); // first frames compile the shadow shaders
+  console.log(`éclairage réel : ${await page.getByTestId('fps').textContent()} · ${await page.getByTestId('real-lights').textContent()}`);
+  await page.screenshot({ path: `${shots}/19c-eclairage-reel.png` });
+
+  // Ambience and reflective floor.
+  await page.getByTestId('ambience').selectOption('club');
+  await page.getByTestId('floor').selectOption('wet');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${shots}/19d-club-sol-mouille.png` });
+  await page.getByTestId('ambience').selectOption('work');
+  await page.getByTestId('floor').selectOption('lacquer');
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${shots}/19e-service-sol-laque.png` });
+
+  // Back to the defaults (preferences persist per viewer).
+  await page.getByTestId('real-lights').click();
+  await page.getByTestId('ambience').selectOption('black');
+  await page.getByTestId('floor').selectOption('matte');
+  await expect(page.getByTestId('fps')).not.toHaveText('0 i/s');
+  page.off('console', onConsole);
+  expect(renderErrors).toEqual([]);
+  await inv({ type: 'effect.stopAll' });
+  await inv({ type: 'programmer.release', fixtureIds: ids });
+});
+
+test('création rapide : équiper les structures, poser au clic, dupliquer, supprimer', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  type Fx = { name: string; trussId?: string | null; mount?: string };
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const patch = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch;
+  await nav('visualizer');
+  await openScenePanel();
+
+  // Equip without a selection (a click on an empty corner clears it): the hung fixtures spread over the trusses,
+  // floor-standing ones stay put; one undoable step.
+  const box = (await page.getByTestId('stage-canvas').boundingBox())!;
+  await page.mouse.click(box.x + 6, box.y + 6);
+  await expect(page.getByTestId('equip')).toHaveText('Équiper les structures');
+  const hungBefore = (await patch()).filter((f) => f.trussId).length;
+  await page.getByTestId('equip').click();
+  await expect.poll(async () => (await patch()).filter((f) => f.trussId).length).toBeGreaterThan(hungBefore);
+  await page.screenshot({ path: `${shots}/20-equiper-structures.png` });
+  await page.getByTestId('scene-undo').click();
+  await expect.poll(async () => (await patch()).filter((f) => f.trussId).length).toBe(hungBefore);
+
+  // Click placement on the 2D plan; the new point is selected, Ctrl+D duplicates it, Suppr deletes the copy.
+  const rows = page.getByTestId('marker-row');
+  const before = await rows.count();
+  await page.getByTestId('marker-add-place').click();
+  await expect(page.getByTestId('placing')).toBeVisible();
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.5);
+  await expect(rows).toHaveCount(before + 1);
+  await expect(page.getByTestId('placing')).toHaveCount(0);
+  await expect(rows.last()).toHaveClass(/on/);
+  await page.keyboard.press('Control+d');
+  await expect(rows).toHaveCount(before + 2);
+  await expect(rows.last().locator('input').first()).toHaveValue(/\(copie\)$/);
+  await page.screenshot({ path: `${shots}/20b-poser-dupliquer.png` });
+  await page.keyboard.press('Delete');
+  await expect(rows).toHaveCount(before + 1);
+
+  // Échap cancels a placement without releasing anything else.
+  await page.getByTestId('truss-add-place').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('placing')).toHaveCount(0);
+});
+
+test('bibliothèque : totems, pièces de truss et décor, au clic ou glissés en 2D et en 3D', async () => {
+  type Inv = (c: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+  type Vis = { trusses: { id: string; shape: string; height: number; x: number; y: number }[]; props: { kind: string }[] };
+  const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
+  const vis = async () => ((await inv({ type: 'project.get' })).data as { project: { visualizer: Vis } }).project.visualizer;
+  await nav('visualizer');
+  await openScenePanel();
+
+  // Library tile then a click on the plan: a 3 m totem lands there.
+  const trusses = (await vis()).trusses.length;
+  await page.getByTestId('lib-totem-3').click();
+  await expect(page.getByTestId('placing')).toContainText('Totem 3 m');
+  const box = (await page.getByTestId('stage-canvas').boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.3);
+  await expect.poll(async () => (await vis()).trusses.length).toBe(trusses + 1);
+  expect((await vis()).trusses.at(-1)).toMatchObject({ shape: 'totem', height: 3 });
+
+  // Set pieces dragged from the library onto the 2D plan, then onto the 3D view.
+  const props = (await vis()).props.length;
+  await page.getByTestId('lib-group-decor').click();
+  await page.getByTestId('lib-riser-2x1').dragTo(page.getByTestId('stage-canvas'), { targetPosition: { x: box.width * 0.4, y: box.height * 0.5 } });
+  await expect.poll(async () => (await vis()).props.length).toBe(props + 1);
+  await expect(page.getByTestId('prop-row')).toHaveCount(props + 1);
+  await page.screenshot({ path: `${shots}/21-bibliotheque-2d.png` });
+
+  await nav('stage3d');
+  await openScenePanel();
+  await page.getByTestId('lib-group-decor').click();
+  const box3 = (await page.getByTestId('stage-3d').boundingBox())!;
+  await page.getByTestId('lib-speaker').dragTo(page.getByTestId('stage-3d'), { targetPosition: { x: box3.width * 0.35, y: box3.height * 0.75 } });
+  await expect.poll(async () => (await vis()).props.at(-1)?.kind).toBe('speaker');
+
+  // An assembled gantry (two totems, a 6 m straight resting on them, corners) renders without shader errors.
+  const errors: string[] = [];
+  const onConsole = (m: { type: () => string; text: () => string }) => { if (m.type() === 'error' && /shader|WebGL|THREE/i.test(m.text())) errors.push(m.text()); };
+  page.on('console', onConsole);
+  const piece = (id: string, shape: string, x: number, length = 0.5, rotation = 0) => ({ id, name: id, shape, x, y: 6, height: 3, length, rotation, support: 'none' });
+  const current = (await vis()).trusses;
+  await inv({ type: 'project.update', visualizer: { trusses: [...current, piece('portique-g', 'totem', -3), piece('portique-d', 'totem', 3), piece('portique', 'line', 0, 6), piece('angle', 'corner', 3, 0.5, 90), piece('croix', 'cross', -3)] } });
+  await page.getByTestId('cam-foh').click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${shots}/21b-bibliotheque-3d.png` });
+  page.off('console', onConsole);
+  expect(errors).toEqual([]);
+});
+
 test('raccourci reconfiguré : Blackout sur K', async () => {
   await nav('settings');
   await page.getByRole('tab', { name: 'Raccourcis' }).click();
@@ -212,7 +611,11 @@ test('fiabilisation : garde-fou, contrôle externe, télécommande et RDM', asyn
   await page.getByTestId('settings-save').click();
   const url = (await page.getByTestId('remote-urls').locator('td').first().textContent())!.replace(/^http:\/\/[^:]+/, 'http://127.0.0.1');
   await page.screenshot({ path: `${shots}/19-controle-externe.png` });
-  const remote = await (await fetch(url)).text();
+  // First visit swaps the URL token for a cookie and redirects to a token-free address.
+  const login = await fetch(url, { redirect: 'manual' });
+  expect(login.status).toBe(303);
+  const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+  const remote = await (await fetch(url.replace(/\?.*$/, ''), { headers: { cookie } })).text();
   expect(remote).toContain('Télécommande');
   expect((await fetch(url.replace(/t=[^&]+/, 't=mauvais'))).status).toBe(403);
   const r = await fetch(url.replace('/?', '/cmd?'), { method: 'POST', body: JSON.stringify({ type: 'engine.blackout', on: true }) });

@@ -9,6 +9,14 @@ files:
 # Native serial-port bindings must stay outside the asar archive.
 asarUnpack:
   - node_modules/@serialport/**
+# Updates: electron-updater reads latest.yml (stable) or beta.yml (pre-releases such as 0.3.0-beta.1).
+publish:
+  provider: github
+  owner: moonback
+  repo: Luma-AI-DMX
+generateUpdatesFilesForAllChannels: true
+# Code signing: set CSC_LINK (base64 .pfx or URL) and CSC_KEY_PASSWORD in the release job; without them the
+# installer is built unsigned and SmartScreen warns on first launch.
 win:
   target:
     - target: nsis
@@ -17,7 +25,5 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   artifactName: ${productName}-Setup-${version}.${ext}
-linux:
-  target: [AppImage]
-mac:
-  target: [dmg]
+# macOS and Linux targets are not built in CI yet: they come back once Windows is stable
+# (report level 2, item 16), so that nothing is promised that has never been built.

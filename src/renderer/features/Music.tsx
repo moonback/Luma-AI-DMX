@@ -12,6 +12,7 @@ const LABEL_COLOR: Record<SectionLabel, string> = {
 };
 const EFFECT_NAMES = { none: '—', wave: 'Vague', pulse: 'Pulsation', chase: 'Chase', rainbow: 'Arc-en-ciel', strobe: 'Strobe' } as const;
 const MOVE_NAMES = { none: 'fixe', slow: 'lent', sweep: 'balayage', fast: 'rapide' } as const;
+const BEAM_NAMES = { open: '', gobo: 'gobo', prism: 'gobo + prisme', frost: 'frost' } as const;
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 function usePlayback() {
@@ -174,13 +175,13 @@ export function MusicPage() {
                             <span className="mono" title="Énergie du plan (0–5)">{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
                             {p.palette.map((c) => <span key={c} style={{ width: 12, height: 12, borderRadius: 3, background: c, display: 'inline-block' }} />)}
                             <span>{EFFECT_NAMES[p.effect]}{p.effect !== 'none' ? ` ${p.effectBeats} t` : ''}</span>
-                            <span className="dim">· {MOVE_NAMES[p.movement]}</span>
+                            <span className="dim">· {MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}</span>
                             {p.note && <span className="badge">{p.note}</span>}
                           </span>
                         ) : <span className="dim">—</span>}
                       </td>
                       <td style={{ width: 200 }}>
-                        <input className="input" disabled={!p} placeholder="plus chaud, plus calme, en rouge…" value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
+                        <input className="input" disabled={!p} placeholder="plus chaud, plus calme, en rouge, prisme…" value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
                       </td>
                       <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                         <button className="btn ghost sm icon" disabled={!p || busy} title="Régénérer cette section (avec la consigne si elle est remplie)" onClick={() => void regenerate(i)}><RefreshCw size={12} /></button>

@@ -1,4 +1,5 @@
 import { defaultSettings } from '../../src/core/settings/settings';
+import { AUTH_FAILURES_MAX, RemoteLimiter } from '../../src/core/control/remote';
 import { makeService } from '../helpers';
 
 describe('télécommande HTTP', () => {
@@ -9,15 +10,24 @@ describe('télécommande HTTP', () => {
     const token = s.control.remote.token!;
     expect(token.length).toBeGreaterThanOrEqual(16);
     const port = 19000 + Math.floor(Math.random() * 1000);
-    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, remote: { enabled: true, port, token } } } });
+    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, remote: { ...s.control.remote, enabled: true, port, token } } } });
     const base = `http://127.0.0.1:${port}`;
     const post = (body: unknown) => fetch(`${base}/cmd?t=${token}`, { method: 'POST', body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, json: (await r.json()) as { ok: boolean; error?: string } }));
 
     expect((await fetch(`${base}/`)).status).toBe(403);
     expect((await fetch(`${base}/?t=${token}x`)).status).toBe(403);
-    const page = await fetch(`${base}/?t=${token}`);
+    // The URL token is swapped for an HttpOnly cookie and stripped from the address bar.
+    const login = await fetch(`${base}/?t=${token}`, { redirect: 'manual' });
+    expect(login.status).toBe(303);
+    expect(login.headers.get('location')).toBe('/');
+    const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+    expect(login.headers.get('set-cookie')).toMatch(/HttpOnly/);
+    const page = await fetch(`${base}/`, { headers: { cookie } });
     expect(page.status).toBe(200);
-    expect(await page.text()).toContain('Télécommande');
+    const html = await page.text();
+    expect(html).toContain('Télécommande');
+    expect(html).not.toContain('?t=');
+    expect((await fetch(`${base}/cmd`, { method: 'POST', headers: { cookie }, body: JSON.stringify({ type: 'engine.master', value: 0.5 }) })).status).toBe(200);
 
     expect((await post({ type: 'engine.master', value: 0.4 })).json.ok).toBe(true);
     expect(svc.engine.master).toBeCloseTo(0.4);
@@ -41,8 +51,42 @@ describe('télécommande HTTP', () => {
     expect(state.lists.length).toBe(svc.getProject().cueLists.length);
     ctrl.abort();
 
-    await svc.execute({ type: 'settings.update', settings: { ...defaultSettings(), control: { ...s.control, remote: { enabled: false, port, token } } } });
+    await svc.execute({ type: 'settings.update', settings: { ...defaultSettings(), control: { ...s.control, remote: { ...s.control.remote, enabled: false, port, token } } } });
     await expect(fetch(`${base}/?t=${token}`)).rejects.toThrow();
     await svc.dispose();
+  });
+
+  it('écoute sur l’interface choisie seulement', async () => {
+    const { svc } = makeService();
+    await svc.init();
+    const s = svc.getSettings();
+    const port = 20000 + Math.floor(Math.random() * 1000);
+    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, remote: { ...s.control.remote, enabled: true, port, bind: '127.0.0.1' } } } });
+    expect(svc.remote.port).toBe(port);
+    expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(403);
+    await svc.dispose();
+  });
+});
+
+describe('limiteur de la télécommande', () => {
+  it('bloque une adresse après trop de jetons faux, puis la libère', () => {
+    let now = 0;
+    const l = new RemoteLimiter(() => now);
+    for (let i = 0; i < AUTH_FAILURES_MAX; i++) l.fail('10.0.0.9');
+    expect(l.blocked('10.0.0.9')).toBe(true);
+    expect(l.blocked('10.0.0.8')).toBe(false);
+    now += 61_000;
+    expect(l.blocked('10.0.0.9')).toBe(false);
+  });
+
+  it('limite le débit des commandes par client', () => {
+    let now = 0;
+    const l = new RemoteLimiter(() => now);
+    let accepted = 0;
+    for (let i = 0; i < 200; i++) if (l.takeCommand('a')) accepted++;
+    expect(accepted).toBe(60);
+    now += 1000;
+    expect(l.takeCommand('a')).toBe(true);
+    expect(l.takeCommand('b')).toBe(true);
   });
 });

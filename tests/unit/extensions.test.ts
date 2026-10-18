@@ -3,10 +3,15 @@ import path from 'node:path';
 import { vi } from 'vitest';
 import { convertOflFixture } from '../../src/core/fixtures/ofl';
 import { ProfileLibrary, resolveFixture, validateProfile } from '../../src/core/fixtures/profiles';
-import { cellColors, colorCells, colorToAttributes, displayColor } from '../../src/core/fixtures/color';
+import { cellColors, colorCells, colorGroups, colorToAttributes, displayColor } from '../../src/core/fixtures/color';
+import { findModule } from '../../src/core/fixtures/modules';
+import { interpretLocally } from '../../src/core/ai/local/interpreter';
+import { lookToValues } from '../../src/core/ai/director';
+import { commandSchema } from '../../src/shared/commands';
+import type { AiAction } from '../../src/core/ai/actions';
 import { computeEffect } from '../../src/core/engine/effects';
 import { ProjectIndex } from '../../src/core/engine/resolve';
-import { effectSchema, type Fixture } from '../../src/core/model/schemas';
+import { effectSchema, profileSchema, type Fixture } from '../../src/core/model/schemas';
 import { buildOpenDmxFrame, OpenDmxOutput, type BreakCapablePort } from '../../src/core/protocols/opendmx';
 import { outputConfigSchema, type OutputConfig } from '../../src/core/protocols/types';
 import { extractJson, parseModels, proposeWithOpenRouter } from '../../src/core/ai/providers/openrouter';
@@ -33,6 +38,14 @@ describe('Open Fixture Library', () => {
     expect(wheel.ranges.some((x) => x.kind === 'color' && x.color === '#FF0000')).toBe(true);
     expect(m11.find((c) => c.attribute === 'control')!.ranges.filter((x) => x.dangerous).length).toBeGreaterThan(0);
     expect(validateProfile(p).ok).toBe(true);
+    expect(p.physical).toMatchObject({ dimensions: { width: 0.17, height: 0.24, depth: 0.145 }, weight: 2.65, power: 50, connector: '3-pin' });
+  });
+
+  it('couleur d’émetteur du profil utilisée par l’affichage', () => {
+    const p = convertOflFixture(ofl('synthetic-rgbww-par'), { manufacturer: 'Test', key: 'rgbww' }).profile!;
+    p.modes[0]!.channels[4]!.emitterColor = '#FFFFCC';
+    const rf = resolveFixture(new ProfileLibrary([p]), fixture({ profileId: p.id, mode: '7-channel' }))!;
+    expect(displayColor(rf, { warmWhite: 1 }).color).toEqual({ r: 1, g: 1, b: 0.8 });
   });
 
   it('convertit une barre pixel : matrice → cellules, groupe Master → fixture entière', () => {
@@ -65,6 +78,19 @@ describe('Open Fixture Library', () => {
     // bar @20: dimmer, strobe, then 12 × 6 channels; cell 12 red = channel 20 + 2 + 11*6 = 88
     expect(u1(engine)[87]).toBe(255);
     expect(u1(engine)[21]).toBe(0);
+  });
+
+  it('convertit un RGBWW : blancs chaud/froid et lime en attributs dédiés, pas en génériques', () => {
+    const r = convertOflFixture(ofl('synthetic-rgbww-par'), { manufacturer: 'Test', key: 'rgbww' });
+    expect(r.warnings).toEqual([]);
+    const p = r.profile!;
+    expect(p.modes[0]!.channels.map((c) => c.attribute)).toEqual(['dimmer', 'red', 'green', 'blue', 'warmWhite', 'coldWhite', 'lime']);
+    expect(validateProfile(p).ok).toBe(true);
+    const lib = new ProfileLibrary([p]);
+    const rf = resolveFixture(lib, fixture({ profileId: p.id, mode: '7-channel' }))!;
+    // White extraction goes to both whites (neutral mix), lime untouched.
+    expect(colorToAttributes(rf, { r: 1, g: 1, b: 0.5 })).toEqual({ red: 0.5, green: 0.5, blue: 0, warmWhite: 0.5, coldWhite: 0.5 });
+    expect(displayColor(rf, { warmWhite: 1 }).color.b).toBeLessThan(displayColor(rf, { coldWhite: 1 }).color.b);
   });
 
   it('refuse un fichier qui n’est pas au format OFL', () => {
@@ -231,5 +257,57 @@ describe('raccourcis personnalisables', () => {
     expect(b.blackout).toBe('');
     expect(b.back).toBe('Shift+Space');
     expect(shortcutConflicts(resolveShortcuts({ blackout: 'P' }))).toEqual([['pause', 'blackout']]);
+  });
+});
+
+describe('projecteurs multi-têtes (modules)', () => {
+  const mhl = profileSchema.parse(JSON.parse(readFileSync(path.resolve('tests/fixtures/profiles/beamz-mhl1940.json'), 'utf8')));
+  const project = () => {
+    const p = demoProject();
+    p.profiles = [mhl];
+    p.patch = [...p.patch.slice(0, 1), fixture({ id: 'm', name: 'Lyre 1', profileId: mhl.id, mode: '26Channels', address: 200 })];
+    return p;
+  };
+
+  it('le MHL1940 a deux groupes de couleur nommés, l’anneau se trouve par son nom générique', () => {
+    expect(validateProfile(mhl).ok).toBe(true);
+    const rf = new ProjectIndex(project()).fixtures.get('m')!;
+    expect(colorGroups(rf).map((g) => [g.cell, g.module])).toEqual([[undefined, 'Main Module'], [1, 'RGB Pix Ring']]);
+    expect(findModule(mhl, 'l’anneau'.slice(2))?.name).toBe('RGB Pix Ring');
+    expect(findModule(mhl, 'Tête principale')?.name).toBe('Main Module');
+    expect(colorToAttributes(rf, { r: 0, g: 0, b: 1 }, undefined, findModule(mhl, 'anneau'))).toEqual({ 'red#1': 0, 'green#1': 0, 'blue#1': 1 });
+  });
+
+  it('la console peut régler le dimmer d’une tête (clé attribut#cellule)', () => {
+    const set = (values: Record<string, number>) => commandSchema.safeParse({ type: 'programmer.set', fixtureIds: ['m'], values }).success;
+    expect(set({ 'dimmer#1': 1, dimmer: 0.5 })).toBe(true);
+    expect(set({ 'inconnu#1': 1 })).toBe(false);
+    expect(set({ 'dimmer#0': 1 })).toBe(false);
+    const { engine } = makeEngine(project());
+    expect(engine.setProgrammer(['m'], { 'dimmer#1': 1 }).applied).toBe(1);
+  });
+
+  it('refuse une cellule rattachée à deux modules', () => {
+    const bad = { ...mhl, modules: [...mhl.modules, { name: 'Doublon', cells: [1], beam: 'led', geometry: 'pixel' }] };
+    expect(validateProfile(bad).errors?.join(' ')).toMatch(/Cellule 1 rattachée/);
+  });
+
+  it('le visualiseur dessine l’anneau comme un anneau, éclairé par son propre dimmer', () => {
+    const rf = new ProjectIndex(project()).fixtures.get('m')!;
+    const [f] = buildVisualModel([rf], { m: { dimmer: 0, 'dimmer#1': 1, 'red#1': 1 } });
+    expect(f!.cells).toEqual([]);
+    expect(f!.rings).toEqual(['#ff0000']);
+    expect(f!.intensity).toBe(0);
+  });
+
+  it('l’IA locale vise « l’anneau » sans toucher la tête principale', () => {
+    const index = new ProjectIndex(project());
+    const ctx = { fixtures: [...index.fixtures.values()].map((rf) => ({ id: rf.fixture.id, name: rf.fixture.name, type: rf.profile.type, attributes: rf.attributes, modules: rf.profile.modules.map((m) => m.name) })), groups: [], current: {}, allowStrobe: false };
+    const r = interpretLocally('mets l’anneau en bleu à 50 %', ctx);
+    const color = r.actions.find((a) => a.type === 'setColor') as Extract<AiAction, { type: 'setColor' }>;
+    expect(color.target.module).toBe('anneau');
+    const look = lookToValues(index, [{ target: color.target, color: '#0000FF', level: 0.5 }]);
+    expect(Object.keys(look)).toEqual(['m']); // the PAR has no ring
+    expect(look.m).toEqual({ 'dimmer#1': 0.5, 'red#1': 0, 'green#1': 0, 'blue#1': 1 });
   });
 });
