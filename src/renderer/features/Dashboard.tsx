@@ -10,15 +10,18 @@ import { FirstSteps } from './Onboarding';
 
 type Src = 'persisted' | 'measured' | 'computed' | 'simulated' | 'config' | 'estimate';
 
-function Kpi({ label, value, sub, src, icon }: { label: string; value: ReactNode; sub?: ReactNode; src: Src; icon?: ReactNode }) {
+function Kpi({ label, value, sub, src, icon, onClick }: { label: string; value: ReactNode; sub?: ReactNode; src: Src; icon?: ReactNode; onClick?: () => void }) {
   const tr = useT();
-  return (
-    <div className="panel kpi">
+  const body = (
+    <>
       <span className="k">{icon}{label}<span className="grow" /><span className="tag-src" title={tr('dash.src.title')}>{tr(`dash.src.${src}`)}</span></span>
       <span className="v">{value}</span>
       {sub && <span className="s">{sub}</span>}
-    </div>
+    </>
   );
+  return onClick
+    ? <button type="button" className="panel kpi clickable" onClick={onClick}>{body}</button>
+    : <div className="panel kpi">{body}</div>;
 }
 
 /** Home card: describe the stage in words (structures, fixtures, set) and build it in one go. */
@@ -72,7 +75,7 @@ export function Dashboard() {
         <section className="kpi-group wide" aria-labelledby="kpi-grp-hw">
           <h2 id="kpi-grp-hw">{tr('dash.grp.hardware')}</h2>
           <div className="grid g4">
-            <Kpi label={tr('dash.fixtures')} src="persisted" value={p.patch.length} sub={tr('dash.fixturesSub', { groups: p.groups.length, issues: ps.issues.length ? tr('dash.patchIssues', { n: ps.issues.length }) : tr('dash.patchOk') })} icon={<Lightbulb size={13} />} />
+            <Kpi label={tr('dash.fixtures')} src="persisted" value={p.patch.length} sub={tr('dash.fixturesSub', { groups: p.groups.length, issues: ps.issues.length ? tr('dash.patchIssues', { n: ps.issues.length }) : tr('dash.patchOk') })} icon={<Lightbulb size={13} />} onClick={() => setPage('fixtures')} />
             <Kpi label={tr('dash.universes')} src="persisted" value={p.show.universes} sub={tr('dash.universesSub', { n: universesUsed })} />
             <Kpi label={tr('dash.output')} src="measured" value={rt?.liveMode ? 'LIVE' : tr('dash.simulation')} sub={real.length ? tr('dash.armed', { armed: real.filter((o) => o.armed).length, total: real.length }) : tr('dash.noReal')} icon={<Cable size={13} />} />
             <Kpi label={tr('dash.protocols')} src="config" value={protocols.length ? protocols.join(' · ') : '—'} sub={tr('dash.inError', { n: outputs.filter((o) => o.state === 'error').length })} />

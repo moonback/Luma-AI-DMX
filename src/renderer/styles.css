@@ -168,6 +168,9 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .kpi .k { font-size: 11px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
 .kpi .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .kpi .s { font-size: 11px; color: var(--text-3); }
+.kpi.clickable { font: inherit; color: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur); }
+.kpi.clickable:hover { border-color: var(--violet); }
+.kpi.clickable:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
 .kpi-groups { margin-bottom: 12px; }
 .kpi-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .kpi-group.wide { grid-column: 1 / -1; }
