@@ -154,6 +154,11 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .table tr.clickable:hover td { background: var(--panel-2); }
 .table tr.active td { background: rgba(52, 211, 153, 0.09); }
 .table tr.next td:first-child { box-shadow: inset 3px 0 var(--cyan); }
+.table tr.active td:first-child { box-shadow: inset 3px 0 var(--ok); }
+.cue-num { white-space: nowrap; }
+.cue-mark { margin-right: 4px; vertical-align: -1px; color: var(--cyan); }
+.cue-mark.now { color: var(--ok); fill: currentColor; }
+.cue-now { font-size: 14px; }
 
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 36px 20px; text-align: center; color: var(--text-2); }
 .empty svg { color: var(--text-3); }
@@ -218,6 +223,30 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .fx-tile .fx-name { font-weight: 600; font-size: 12px; padding-right: 14px; overflow-wrap: anywhere; }
 .sel-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .chip.touched { border-color: var(--cyan); }
+.chip.part { color: var(--text); border-style: dashed; border-color: var(--violet); }
+.chip.add { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; }
+.sel-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--violet-soft); border: 1px solid var(--violet); }
+.table td.pick { cursor: pointer; }
+.sec-timeline { margin-bottom: 4px; }
+.sec-track { position: relative; padding: 8px 0 8px; }
+.sec-strip { display: flex; gap: 2px; height: 52px; }
+.sec-btn { position: relative; min-width: 6px; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 1px; padding: 0 6px; border: 1px solid transparent; border-radius: var(--radius-sm); color: #fff; overflow: hidden; cursor: pointer; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); filter: saturate(0.8) brightness(0.85); transition: filter var(--dur), box-shadow var(--dur); }
+.sec-btn:hover { filter: none; }
+.sec-btn.sel { filter: none; border-color: #fff; box-shadow: 0 0 0 1px #fff, 0 0 14px rgba(255, 255, 255, 0.25); }
+.sec-btn.now { filter: none; box-shadow: inset 0 0 0 2px var(--cyan); }
+.sec-name { font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sec-time { font: 10px var(--mono); opacity: 0.85; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.sec-energy { position: absolute; left: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.75); }
+.sec-event { position: absolute; top: 1px; height: 4px; border-radius: 2px; }
+.sec-event.vocal { top: auto; bottom: 1px; }
+.sec-playhead { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.8); pointer-events: none; }
+.sec-ruler { position: relative; height: 14px; font: 10px var(--mono); color: var(--text-3); }
+.sec-ruler span { position: absolute; transform: translateX(-50%); }
+.sec-ruler span:first-child { transform: none; }
+.sec-ruler span:last-child { transform: translateX(-100%); }
+.sec-legend { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+.sec-swatch { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.sec-legend i { display: inline-block; width: 10px; height: 4px; border-radius: 2px; }
 .ctl-row.touched .mono { color: var(--cyan); font-weight: 600; }
 .panel.fam { box-shadow: inset 0 2px 0 var(--fam); }
 .panel.fam .panel-head h2::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 7px; background: var(--fam); vertical-align: 1px; }
@@ -306,9 +335,12 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .stage-layout { flex: 1; min-height: 320px; display: flex; gap: 10px; }
 .stage-view { flex: 1; min-width: 0; position: relative; }
 .stage-empty { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100% - 40px); padding: 8px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.92); border: 1px solid var(--border-strong); z-index: 3; }
-.scene-panel { width: 340px; flex: none; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.scene-panel { width: 300px; flex: none; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .scene-panel-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 12px; border-bottom: 1px solid var(--border); }
 .scene-panel-body { flex: 1; overflow-y: auto; }
+.scene-rail { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 6px 4px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.scene-rail .btn { position: relative; }
+.rail-count { position: absolute; top: -4px; right: -4px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--violet); color: #fff; font: 700 9px/15px var(--mono); text-align: center; }
 .scene-section { border-bottom: 1px solid var(--border); }
 .scene-section > summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none; font-size: 12px; font-weight: 600; color: var(--text-2); user-select: none; }
 .scene-section > summary::-webkit-details-marker { display: none; }
@@ -349,5 +381,5 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .scene-add.on .scene-add-place { color: var(--violet); }
 .scene-add button:disabled { opacity: 0.45; cursor: not-allowed; }
 .scene-add button:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
-@media (max-width: 1100px) { .scene-panel { width: 290px; } }
+@media (max-width: 1100px) { .scene-panel { width: 260px; } }
 .stage3d:fullscreen { border-radius: 0; }

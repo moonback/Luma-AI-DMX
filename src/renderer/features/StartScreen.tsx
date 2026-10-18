@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FilePlus, FolderOpen, Search, Sparkles } from 'lucide-react';
+import { Compass, FilePlus, FolderOpen, Search, Sparkles } from 'lucide-react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { Modal } from '../components/ui';
@@ -22,6 +22,7 @@ export function StartScreen() {
   return (
     <Modal title={tr('start.title')} onClose={close} wide footer={<>
       <button className="btn ghost" onClick={() => { close(); useStore.getState().setHelp('demos'); }} data-testid="start-demos"><Sparkles size={14} />{tr('start.demos')}</button>
+      <button className="btn ghost" onClick={() => { close(); useStore.getState().setHelp('tour'); }} data-testid="start-tour"><Compass size={14} />{tr('start.tour')}</button>
       <div className="grow" />
       <button className="btn" onClick={close} data-testid="start-continue">{tr('start.continue', { name: current ?? '' })}</button>
     </>}>
@@ -38,7 +39,7 @@ export function StartScreen() {
           <div className="row between"><b className="small">{tr('start.recent')}</b><span className="small dim">{recent.length}</span></div>
           {recent.length > 0 && (
             <label className="row start-search"><Search size={13} className="dim" />
-              <input className="input grow" type="search" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tr('start.search')} aria-label={tr('start.search')} data-testid="start-search" />
+              <input className="input grow" type="search" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) void open(shown[0]); }} title={tr('start.enterHint')} placeholder={tr('start.search')} aria-label={tr('start.search')} data-testid="start-search" />
             </label>
           )}
           <div className="start-recent" role="list">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { useStore } from '../store';
+import { useT } from '../i18n';
 import { ProfileLibrary, resolveFixture, type ResolvedFixture } from '../../core/fixtures/profiles';
 
 export function PageHead({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children?: ReactNode }) {
@@ -74,6 +75,7 @@ export function NumberInput({ value, onChange, min, max, step = 1, className, ti
 }
 
 export function Modal({ title, children, footer, onClose, wide }: { title: string; children: ReactNode; footer?: ReactNode; onClose: () => void; wide?: boolean }) {
+  const tr = useT();
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', k);
@@ -84,7 +86,7 @@ export function Modal({ title, children, footer, onClose, wide }: { title: strin
       <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
         <div className="modal-head row between">
           {title}
-          <button className="btn ghost sm icon" onClick={onClose} title="Fermer (Échap)"><X size={14} /></button>
+          <button className="btn ghost sm icon" onClick={onClose} title={tr('common.closeEsc')}><X size={14} /></button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
@@ -94,6 +96,7 @@ export function Modal({ title, children, footer, onClose, wide }: { title: strin
 }
 
 export function ConfirmHost() {
+  const tr = useT();
   const c = useStore((s) => s.confirm);
   if (!c) return null;
   return (
@@ -102,7 +105,7 @@ export function ConfirmHost() {
       onClose={() => c.resolve(false)}
       footer={
         <>
-          <button className="btn" onClick={() => c.resolve(false)}>Annuler</button>
+          <button className="btn" onClick={() => c.resolve(false)}>{tr('common.cancel')}</button>
           <button className={`btn ${c.danger ? 'danger solid' : 'primary'}`} autoFocus onClick={() => c.resolve(true)}>{c.confirmLabel}</button>
         </>
       }

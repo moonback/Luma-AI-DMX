@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
-import { Eraser, Save, SlidersHorizontal } from 'lucide-react';
+import { Eraser, Plus, Save, SlidersHorizontal, X } from 'lucide-react';
 import { useStore, confirmAction, EMPTY_OBJ } from '../store';
 import { useT } from '../i18n';
-import { act } from '../api';
+import { act, newId } from '../api';
 import { Empty, Modal, Field, PageHead, Panel, pct, useResolved, useThrottled } from '../components/ui';
 import { attributeClass, attributeLabel, EMITTER_ATTRIBUTES, type AttributeClass } from '../../core/fixtures/attributes';
 import { cellColors, colorCapability, colorCells, displayColor } from '../../core/fixtures/color';
@@ -12,6 +12,7 @@ import { rgbToHex } from '../../core/util/math';
 import type { Channel } from '../../core/model/schemas';
 
 const QUICK_COLORS = ['#FFFFFF', '#FF0000', '#FF7000', '#FFD000', '#00FF40', '#00E5FF', '#0040FF', '#8B00FF', '#FF00C8', '#FFB000'];
+const GROUP_COLORS = ['#8B5CF6', '#22D3EE', '#F59E0B', '#34D399', '#F472B6', '#60A5FA'];
 
 /** Fixture ids holding programmer values (the « touched » state shown on tiles and panels). */
 const touchedIds = (programmer: Record<string, Record<string, number>>, ids: string[]) => ids.filter((id) => Object.keys(programmer[id] ?? {}).length > 0);
@@ -37,6 +38,12 @@ export function FixtureTiles({ onPick }: { onPick?: () => void }) {
     onPick?.();
   };
   const same = (ids: string[]) => ids.length > 0 && ids.length === selection.length && ids.every((id) => selection.includes(id));
+  // One click, no dialog: rename / recolour later in Programmer.
+  const newGroup = async () => {
+    const name = tr('console.group.defaultName', { n: groups.length + 1 });
+    const r = await act({ type: 'group.upsert', group: { id: newId(), name, color: GROUP_COLORS[groups.length % GROUP_COLORS.length]!, fixtureIds: selection } });
+    if (r) useStore.getState().toast({ kind: 'success', title: tr('console.group.created', { name }), detail: tr('console.group.createdDetail') });
+  };
   return (
     <div className="col">
       <div className="sel-bar">
@@ -50,17 +57,24 @@ export function FixtureTiles({ onPick }: { onPick?: () => void }) {
         </div>
         <span className="small muted mono">{tr('console.select.count', { n: selection.length, total: all.length })}</span>
       </div>
-      {(types.length > 1 || groups.length > 0) && (
+      {(types.length > 1 || groups.length > 0 || selection.length > 0) && (
         <div className="chips">
           {types.length > 1 && types.map((ty) => {
             const ids = fixtures.filter((f) => f.profile.type === ty).map((f) => f.fixture.id);
             return <button key={ty} className={`chip ${same(ids) ? 'on' : ''}`} onClick={() => setSelection(ids)}>{tr(`console.type.${ty}`)} <span className="dim">{ids.length}</span></button>;
           })}
-          {groups.map((g) => (
-            <button key={g.id} className={`chip ${same(g.fixtureIds) ? 'on' : ''}`} style={{ borderLeft: `3px solid ${g.color}` }} onClick={() => setSelection(g.fixtureIds)}>
-              {g.name} <span className="dim">{g.fixtureIds.length}</span>
-            </button>
-          ))}
+          {groups.map((g) => {
+            const inSel = g.fixtureIds.filter((id) => selection.includes(id)).length;
+            const part = inSel > 0 && !same(g.fixtureIds);
+            return (
+              <button key={g.id} className={`chip ${same(g.fixtureIds) ? 'on' : part ? 'part' : ''}`} aria-pressed={same(g.fixtureIds)} title={part ? tr('console.group.partial') : undefined} style={{ borderLeft: `3px solid ${g.color}` }} onClick={() => setSelection(g.fixtureIds)}>
+                {g.name} <span className="dim">{part ? `${inSel}/${g.fixtureIds.length}` : g.fixtureIds.length}</span>
+              </button>
+            );
+          })}
+          {selection.length > 0 && !groups.some((g) => same(g.fixtureIds)) && (
+            <button className="chip add" title={tr('console.group.newHint')} onClick={() => void newGroup()}><Plus size={12} />{tr('console.group.new')}</button>
+          )}
         </div>
       )}
       <div className="fx-grid" data-testid="fixture-tiles">
@@ -83,16 +97,18 @@ export function FixtureTiles({ onPick }: { onPick?: () => void }) {
 }
 
 function Slider({ label, value, onChange, source, title, touched }: { label: string; value: number; onChange: (v: number) => void; source?: string; title?: string; touched?: boolean }) {
+  const tr = useT();
   return (
     <div className={`ctl-row ${touched ? 'touched' : ''}`} title={title}>
       <span className="lbl">{label}</span>
       <input type="range" min={0} max={255} value={Math.round(value * 255)} aria-label={label} onChange={(e) => onChange(Number(e.target.value) / 255)} />
-      <span className="mono small">{Math.round(value * 255)} {source && <span className="tag-src" title="Source qui contrôle la valeur">{source}</span>}</span>
+      <span className="mono small">{Math.round(value * 255)} {source && <span className="tag-src" title={tr('console.ctl.source')}>{source}</span>}</span>
     </div>
   );
 }
 
 function RangeChips({ channel, attr, set, current }: { channel: Channel; attr: string; set: (attr: string, v: number, special: boolean) => void; current: number }) {
+  const tr = useT();
   const dmx = Math.round(current * 255);
   return (
     <div className="col" style={{ gap: 4, padding: '4px 0' }}>
@@ -102,7 +118,7 @@ function RangeChips({ channel, attr, set, current }: { channel: Channel; attr: s
           <button
             key={i}
             className={`chip ${dmx >= r.from && dmx <= r.to ? 'on' : ''} ${r.dangerous ? 'danger' : ''}`}
-            title={`${r.from}–${r.to}${r.dangerous ? ' · fonction spéciale : confirmation requise' : ''}`}
+            title={`${r.from}–${r.to}${r.dangerous ? tr('console.ctl.special') : ''}`}
             onClick={() => set(attr, Math.round((r.from + r.to) / 2) / 255, r.dangerous)}
           >
             {r.color && <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: r.color, marginRight: 5 }} />}
@@ -115,6 +131,7 @@ function RangeChips({ channel, attr, set, current }: { channel: Channel; attr: s
 }
 
 function XYPad({ pan, tilt, onChange }: { pan: number; tilt: number; onChange: (pan: number, tilt: number) => void }) {
+  const tr = useT();
   const ref = useRef<HTMLDivElement>(null);
   const move = (e: React.PointerEvent) => {
     if (e.buttons !== 1) return;
@@ -122,7 +139,7 @@ function XYPad({ pan, tilt, onChange }: { pan: number; tilt: number; onChange: (
     onChange(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)));
   };
   return (
-    <div ref={ref} className="xy" onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); move(e); }} onPointerMove={move} title="Glisser : pan (horizontal) / tilt (vertical)">
+    <div ref={ref} className="xy" onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); move(e); }} onPointerMove={move} title={tr('console.ctl.xy')}>
       <div className="dot" style={{ left: `${pan * 100}%`, top: `${tilt * 100}%` }} />
     </div>
   );
@@ -138,17 +155,18 @@ function ReleaseFamily({ ids, classes }: { ids: string[]; classes: AttributeClas
 }
 
 function RecordSceneDialog({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState('Nouvelle scène');
+  const tr = useT();
+  const [name, setName] = useState(tr('console.rec.default'));
   const save = async () => {
-    const r = await act({ type: 'scene.record', name: name.trim() || 'Scène' });
+    const r = await act({ type: 'scene.record', name: name.trim() || tr('console.rec.fallback') });
     if (r) {
-      useStore.getState().toast({ kind: 'success', title: 'Scène enregistrée', detail: 'Retrouvez-la dans Programmer et Cues & Sequences.' });
+      useStore.getState().toast({ kind: 'success', title: tr('console.rec.done'), detail: tr('console.rec.doneDetail') });
       onClose();
     }
   };
   return (
-    <Modal title="Enregistrer le programmeur comme scène" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Annuler</button><button className="btn primary" onClick={() => void save()}>Enregistrer</button></>}>
-      <Field label="Nom de la scène" hint="Seules les valeurs présentes dans le programmeur (manuel) sont enregistrées."><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void save()} /></Field>
+    <Modal title={tr('console.rec.title')} onClose={onClose} footer={<><button className="btn" onClick={onClose}>{tr('common.cancel')}</button><button className="btn primary" onClick={() => void save()}>{tr('console.rec.save')}</button></>}>
+      <Field label={tr('console.rec.name')} hint={tr('console.rec.nameHint')}><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void save()} /></Field>
     </Modal>
   );
 }
@@ -170,7 +188,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
   const sendThrottled = useThrottled((vals: Record<string, number>) => void act({ type: 'programmer.set', fixtureIds: ids, values: vals, confirmSpecial: false }), 25);
   const set = async (attr: string, v: number, special = false) => {
     if (special) {
-      const ok = await confirmAction({ title: 'Fonction spéciale', message: `« ${attributeLabel(attr)} » : cette valeur déclenche une fonction spéciale du projecteur (reset, extinction lampe…).\nElle sera envoyée immédiatement aux ${ids.length} projecteur(s) sélectionné(s).`, confirmLabel: 'Envoyer' });
+      const ok = await confirmAction({ title: tr('console.special.title'), message: tr('console.special.msg', { attr: attributeLabel(attr), n: ids.length }), confirmLabel: tr('console.special.send') });
       if (!ok) return;
       await act({ type: 'programmer.set', fixtureIds: ids, values: { [attr]: v }, confirmSpecial: true });
       return;
@@ -202,9 +220,16 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
 
   return (
     <div className="col gap-lg">
+      <div className="sel-summary small" data-testid="selection-summary">
+        <span className="muted">{tr('console.sel.controlling', { n: selected.length })}</span>
+        {selected.slice(0, 6).map((rf) => <span key={rf.fixture.id} className="badge violet">{rf.fixture.name}</span>)}
+        {selected.length > 6 && <span className="badge">{tr('console.sel.more', { n: selected.length - 6 })}</span>}
+        <span className="grow" />
+        <button className="btn ghost sm icon" title={tr('console.sel.clear')} aria-label={tr('console.sel.clear')} onClick={() => useStore.getState().setSelection([])}><X size={13} /></button>
+      </div>
       {modules.length > 1 && (
-        <div className="chips" role="group" aria-label="Tête">
-          {[{ name: '', label: 'Toutes' }, ...modules.map((m) => ({ name: m.name, label: m.name }))].map((m) => (
+        <div className="chips" role="group" aria-label={tr('console.head')}>
+          {[{ name: '', label: tr('console.headAll') }, ...modules.map((m) => ({ name: m.name, label: m.name }))].map((m) => (
             <button key={m.name} className={`chip ${scope === m.name ? 'on' : ''}`} aria-pressed={scope === m.name} onClick={() => setScope(m.name)}>{m.label}</button>
           ))}
         </div>
@@ -213,8 +238,8 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
         <div className="row" style={{ alignItems: 'flex-end', gap: 18 }}>
           <div className="fader">
             <span className="val">{pct(cur(dimmerKeys[0] ?? 'dimmer'))}</span>
-            <input type="range" min={0} max={255} value={Math.round(cur(dimmerKeys[0] ?? 'dimmer') * 255)} aria-label="Intensité" data-testid="dimmer-fader" onChange={(e) => setDimmer(Number(e.target.value) / 255)} />
-            <span className="lbl">Dimmer{!first.attributes.includes('dimmer') && <><br /><span className="dim">virtuel</span></>}</span>
+            <input type="range" min={0} max={255} value={Math.round(cur(dimmerKeys[0] ?? 'dimmer') * 255)} aria-label={tr('console.family.intensity')} data-testid="dimmer-fader" onChange={(e) => setDimmer(Number(e.target.value) / 255)} />
+            <span className="lbl">{tr('console.dimmer')}{!first.attributes.includes('dimmer') && <><br /><span className="dim">{tr('console.dimmerVirtual')}</span></>}</span>
             {src('dimmer') && <span className="tag-src">{src('dimmer')}</span>}
           </div>
           <div className="col">
@@ -226,7 +251,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
               <button className="btn sm" disabled={ids.length < 2} onClick={() => fan(dimmerValues, 0, top)}>{tr('console.fanUp')}</button>
               <button className="btn sm" disabled={ids.length < 2} onClick={() => fan(dimmerValues, top, 0)}>{tr('console.fanDown')}</button>
             </div>
-            <div className="small muted">Le manuel est toujours prioritaire. « Relâcher » rend la main aux cues, effets et IA.</div>
+            <div className="small muted">{tr('console.manualNote')}</div>
           </div>
         </div>
       </Panel>
@@ -235,7 +260,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
         <Panel title={tr('console.family.color')} className="fam fam-color" actions={<ReleaseFamily ids={ids} classes={['color']} />}>
           <div className="col">
             <div className="row">
-              <input type="color" value={rgbToHex(d.color)} onChange={(e) => sendColor(e.target.value)} title="Couleur convertie selon les capacités de chaque projecteur (RGB, RGBW, roue)" />
+              <input type="color" value={rgbToHex(d.color)} onChange={(e) => sendColor(e.target.value)} title={tr('console.colorHint')} />
               <div className="swatches">
                 {QUICK_COLORS.map((c) => <button key={c} className="swatch-btn" style={{ background: c }} title={c} onClick={() => void act({ type: 'programmer.setColor', fixtureIds: ids, color: c, ...colorScope })} />)}
               </div>
@@ -248,17 +273,17 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
       )}
 
       {colorCells(first).length > 0 && (
-        <Panel title={`Cellules — ${first.fixture.name}`}>
+        <Panel title={tr('console.cells', { name: first.fixture.name })}>
           <div className="col">
             <div className="row wrap">
               {cellColors(first, values[first.fixture.id] ?? {}).map(({ cell, color }) => (
-                <label key={cell} className="col" style={{ alignItems: 'center', gap: 2 }} title={`Couleur de la cellule ${cell} (toutes les barres sélectionnées ayant cette cellule)`}>
-                  <input type="color" aria-label={`Cellule ${cell}`} value={rgbToHex(color.r + color.g + color.b > 0 ? color : { r: 0, g: 0, b: 0 })} onChange={(e) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: e.target.value, cell })} />
+                <label key={cell} className="col" style={{ alignItems: 'center', gap: 2 }} title={tr('console.cellHint', { cell })}>
+                  <input type="color" aria-label={tr('console.cell', { cell })} value={rgbToHex(color.r + color.g + color.b > 0 ? color : { r: 0, g: 0, b: 0 })} onChange={(e) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: e.target.value, cell })} />
                   <span className="small dim">{moduleOfCell(first.profile, cell)?.name ?? cell}</span>
                 </label>
               ))}
             </div>
-            <span className="small dim">Le sélecteur « Couleur » ci-dessus applique la couleur à toutes les cellules. Les effets Rainbow et Color cycle se répartissent cellule par cellule.</span>
+            <span className="small dim">{tr('console.cellsNote')}</span>
           </div>
         </Panel>
       )}
@@ -268,9 +293,9 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
           <div className="row" style={{ alignItems: 'flex-start', gap: 16 }}>
             <XYPad pan={cur('pan')} tilt={cur('tilt')} onChange={(p, t) => sendThrottled({ ...(has('pan') ? { pan: p } : {}), ...(has('tilt') ? { tilt: t } : {}) })} />
             <div className="col grow">
-              {has('pan') && <Slider label="Pan (16 bits)" value={cur('pan')} source={src('pan')} touched={touched('pan')} onChange={(v) => set('pan', v)} />}
-              {has('tilt') && <Slider label="Tilt (16 bits)" value={cur('tilt')} source={src('tilt')} touched={touched('tilt')} onChange={(v) => set('tilt', v)} />}
-              {has('panTiltSpeed') && <Slider label="Vitesse P/T" value={cur('panTiltSpeed')} touched={touched('panTiltSpeed')} onChange={(v) => set('panTiltSpeed', v)} />}
+              {has('pan') && <Slider label={tr('console.pan16')} value={cur('pan')} source={src('pan')} touched={touched('pan')} onChange={(v) => set('pan', v)} />}
+              {has('tilt') && <Slider label={tr('console.tilt16')} value={cur('tilt')} source={src('tilt')} touched={touched('tilt')} onChange={(v) => set('tilt', v)} />}
+              {has('panTiltSpeed') && <Slider label={tr('console.ptSpeed')} value={cur('panTiltSpeed')} touched={touched('panTiltSpeed')} onChange={(v) => set('panTiltSpeed', v)} />}
               <div className="row">
                 <button className="btn sm" onClick={() => sendThrottled({ pan: 0.5, tilt: 0.5 })}>{tr('console.center')}</button>
                 {has('pan') && <button className="btn sm" disabled={ids.length < 2} title={tr('console.fanHint')} onClick={() => panFan(0.15)}>{tr('console.fanPan')}</button>}
@@ -291,10 +316,10 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
       )}
 
       {palettes.length > 0 && (
-        <Panel title="Palettes">
+        <Panel title={tr('console.palettes')}>
           <div className="chips">
             {palettes.map((p) => (
-              <button key={p.id} className="chip" onClick={() => void act({ type: 'palette.apply', id: p.id, fixtureIds: ids })} title={`Palette ${p.kind}`}>
+              <button key={p.id} className="chip" onClick={() => void act({ type: 'palette.apply', id: p.id, fixtureIds: ids })} title={tr('console.paletteKind', { kind: p.kind })}>
                 {p.color && <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: p.color, marginRight: 5 }} />}{p.name}
               </button>
             ))}
@@ -302,25 +327,26 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
         </Panel>
       )}
 
-      <Panel title={`Valeurs DMX — ${first.fixture.name}`}>
+      <Panel title={tr('console.dmx', { name: first.fixture.name })}>
         <table className="table small">
-          <thead><tr><th>Adr</th><th>Canal</th><th>Valeur</th><th>Source</th></tr></thead>
+          <thead><tr><th>{tr('console.dmx.addr')}</th><th>{tr('console.dmx.channel')}</th><th>{tr('console.dmx.value')}</th><th>{tr('console.dmx.source')}</th></tr></thead>
           <tbody>
             {first.mode.channels.map((c, i) => {
               const key = channelKey(c);
               const v = values[first.fixture.id]?.[key];
               const raw = v === undefined ? c.default : first.mode.channels.some((x) => x.fine && channelKey(x) === key) ? (c.fine ? Math.round(v * 65535) & 255 : Math.round(v * 65535) >> 8) : Math.round(v * 255);
-              return <tr key={i}><td className="mono">{first.fixture.universe}.{first.fixture.address + i}</td><td>{c.name}</td><td className="mono">{raw}</td><td>{c.fine ? '' : <span className="tag-src">{sources[first.fixture.id]?.[key] ?? 'défaut'}</span>}</td></tr>;
+              return <tr key={i}><td className="mono">{first.fixture.universe}.{first.fixture.address + i}</td><td>{c.name}</td><td className="mono">{raw}</td><td>{c.fine ? '' : <span className="tag-src">{sources[first.fixture.id]?.[key] ?? tr('console.dmx.default')}</span>}</td></tr>;
             })}
           </tbody>
         </table>
-        <p className="small dim" style={{ marginBottom: 0 }}>Valeurs calculées par le moteur (avant transmission). L’état réellement transmis est visible dans DMX Output.</p>
+        <p className="small dim" style={{ marginBottom: 0 }}>{tr('console.dmx.note')}</p>
       </Panel>
     </div>
   );
 }
 
 export function LiveConsole() {
+  const tr = useT();
   const { fixtures, byId } = useResolved();
   const selection = useStore((s) => s.selection);
   const rt = useStore((s) => s.runtime);
@@ -329,22 +355,22 @@ export function LiveConsole() {
   const master = useThrottled((v: number) => void act({ type: 'engine.master', value: v }), 30);
   return (
     <div className="page">
-      <PageHead title="Live Console" subtitle="Contrôle manuel prioritaire — les contrôles sont générés à partir des profils">
-        <div className="row" title="Grand master (intensités)">
-          <span className="small muted">Master</span>
-          <input type="range" min={0} max={100} style={{ width: 140 }} value={Math.round((rt?.engine.master ?? 1) * 100)} onChange={(e) => master(Number(e.target.value) / 100)} />
+      <PageHead title={tr('console.title')} subtitle={tr('console.subtitle')}>
+        <div className="row" title={tr('console.masterHint')}>
+          <span className="small muted">{tr('console.master')}</span>
+          <input type="range" min={0} max={100} style={{ width: 140 }} aria-label={tr('console.masterHint')} value={Math.round((rt?.engine.master ?? 1) * 100)} onChange={(e) => master(Number(e.target.value) / 100)} />
           <span className="mono small">{Math.round((rt?.engine.master ?? 1) * 100)}%</span>
         </div>
-        <button className="btn" disabled={!selection.length} onClick={() => void act({ type: 'programmer.release', fixtureIds: selection })} title="Relâcher la sélection"><Eraser size={15} />Relâcher sélection</button>
-        <button className="btn" onClick={() => void act({ type: 'programmer.release' })} title="Relâcher tout le programmeur (Échap)">Tout relâcher</button>
-        <button className="btn primary" disabled={!rt?.engine.programmerCount} onClick={() => setRecording(true)}><Save size={15} />Enregistrer scène</button>
+        <button className="btn" disabled={!selection.length} onClick={() => void act({ type: 'programmer.release', fixtureIds: selection })} title={tr('console.releaseSelHint')}><Eraser size={15} />{tr('console.releaseSel')}</button>
+        <button className="btn" onClick={() => void act({ type: 'programmer.release' })} title={tr('console.releaseAllHint')}>{tr('console.releaseAll')}</button>
+        <button className="btn primary" disabled={!rt?.engine.programmerCount} onClick={() => setRecording(true)}><Save size={15} />{tr('console.record')}</button>
       </PageHead>
       {fixtures.length === 0 ? (
-        <Empty icon={<SlidersHorizontal size={32} />} title="Aucun projecteur" action={<button className="btn primary" onClick={() => useStore.getState().setPage('fixtures')}>Ouvrir le patch</button>}>Patchez des projecteurs pour les piloter.</Empty>
+        <Empty icon={<SlidersHorizontal size={32} />} title={tr('console.noFixtures')} action={<button className="btn primary" onClick={() => useStore.getState().setPage('fixtures')}>{tr('console.openPatch')}</button>}>{tr('console.noFixturesHint')}</Empty>
       ) : (
         <div className="split console-split">
-          <Panel title="Projecteurs"><FixtureTiles /></Panel>
-          {selected.length ? <Controls selected={selected} /> : <Panel title="Contrôles"><p className="muted" style={{ margin: 0 }}>Sélectionnez un ou plusieurs projecteurs (ou un groupe) pour afficher leurs contrôles.</p></Panel>}
+          <Panel title={tr('console.fixtures')}><FixtureTiles /></Panel>
+          {selected.length ? <Controls selected={selected} /> : <Panel title={tr('console.controls')}><p className="muted" style={{ margin: 0 }}>{tr('console.controlsEmpty')}</p></Panel>}
         </div>
       )}
       {recording && <RecordSceneDialog onClose={() => setRecording(false)} />}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, Boxes, Camera, Copy, Crosshair, LayoutTemplate, Library, MapPin, Monitor, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
+import { Armchair, Boxes, Camera, Copy, Crosshair, LayoutTemplate, Library, MapPin, Monitor, PanelLeftClose, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2 } from 'lucide-react';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
 import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
@@ -73,19 +73,20 @@ function TemplatePicker({ vis }: { vis: Vis }) {
 
 /** Side panel shared by the 2D and 3D views: build the scene (template, library, elements) or inspect the selection. */
 export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
+  const tr = useT();
   const tab = useStore((s) => s.scenePanel) ?? 'build';
   const setTab = useStore((s) => s.setScenePanel);
   const count = useStore((s) => (s.sceneSel ? 1 : s.selection.length));
   const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
   return (
-    <aside className="scene-panel" aria-label="Panneau de la scène">
+    <aside className="scene-panel" aria-label={tr('stagePanel.aria')}>
       <div className="scene-panel-head">
-        <div className="chips grow" role="tablist" aria-label="Panneau">
-          <button role="tab" aria-selected={tab === 'build'} className={`chip ${tab === 'build' ? 'on' : ''}`} onClick={() => setTab('build')} data-testid="panel-build"><Settings2 size={12} />Construire</button>
-          <button role="tab" aria-selected={tab === 'selection'} className={`chip ${tab === 'selection' ? 'on' : ''}`} onClick={() => setTab('selection')} data-testid="panel-selection">Sélection{count ? ` (${count})` : ''}</button>
+        <div className="chips grow" role="tablist" aria-label={tr('stagePanel.tabs')}>
+          <button role="tab" aria-selected={tab === 'build'} className={`chip ${tab === 'build' ? 'on' : ''}`} onClick={() => setTab('build')} data-testid="panel-build"><Settings2 size={12} />{tr('stagePanel.build')}</button>
+          <button role="tab" aria-selected={tab === 'selection'} className={`chip ${tab === 'selection' ? 'on' : ''}`} onClick={() => setTab('selection')} data-testid="panel-selection">{tr('stagePanel.selection')}{count ? ` (${count})` : ''}</button>
         </div>
-        <button className="btn ghost sm icon" onClick={() => useStore.getState().setHelp('stage')} title="Assistant : plateau, modèle, patch et équipement pas à pas" aria-label="Assistant de scène" data-testid="stage-wizard-open"><Wand2 size={14} /></button>
-        <button className="btn ghost sm icon" onClick={() => setTab(null)} title="Fermer le panneau" aria-label="Fermer le panneau"><X size={14} /></button>
+        <button className="btn ghost sm icon" onClick={() => useStore.getState().setHelp('stage')} title={tr('stagePanel.wizardHint')} aria-label={tr('stagePanel.wizard')} data-testid="stage-wizard-open"><Wand2 size={14} /></button>
+        <button className="btn ghost sm icon" onClick={() => setTab(null)} title={tr('stagePanel.close')} aria-label={tr('stagePanel.close')}><PanelLeftClose size={14} /></button>
       </div>
       {tab === 'selection' ? <div className="scene-panel-body" data-testid="stage-selection"><SelectionTab vis={vis} mode={mode} /></div> : (
       <div className="scene-panel-body" data-testid="stage-settings">

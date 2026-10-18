@@ -106,7 +106,17 @@ describe('Live Console', () => {
     });
     expect(invoke).toHaveBeenCalledWith({ type: 'programmer.set', fixtureIds: ['spot1'], values: { pan: 0 }, confirmSpecial: false });
     expect(invoke).toHaveBeenCalledWith({ type: 'programmer.set', fixtureIds: ['spot2'], values: { pan: 0.15 }, confirmSpecial: false });
-    fireEvent.click(screen.getByText('Spot 1')); // single fixture: fan is meaningless
+    fireEvent.click(screen.getByText('Spot 1', { selector: '.fx-name' })); // single fixture: fan is meaningless
     expect(screen.getByRole('button', { name: 'Éventail pan' })).toBeDisabled();
+  });
+
+  it('crée un groupe depuis la sélection en un clic et résume la sélection contrôlée', async () => {
+    render(<LiveConsole />);
+    fireEvent.click(screen.getByText('PAR 1'));
+    expect(screen.getByTestId('selection-summary')).toHaveTextContent('PAR 1');
+    await rtlAct(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Groupe' }));
+    });
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ type: 'group.upsert', group: expect.objectContaining({ fixtureIds: ['par1'] }) }));
   });
 });
