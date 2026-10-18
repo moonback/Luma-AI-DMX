@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { FolderOpen, KeyRound } from 'lucide-react';
+import { FolderOpen, KeyRound, Trash2, X } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { Field, NumberInput, PageHead, Panel, Tabs } from '../components/ui';
@@ -12,6 +12,8 @@ import { audioEngine } from '../audioEngine';
 import type { UpdateStatus } from '../../core/app/updates';
 import { FeedbackPanel, UsagePanel } from './settings/BetaPanel';
 import { useT } from '../i18n';
+import { openProject } from '../App';
+import { splitPath } from './StartScreen';
 
 const TAB_IDS = ['general', 'appearance', 'engine', 'network', 'ai', 'audio', 'shortcuts', 'control', 'logs', 'backups'] as const;
 type TabId = (typeof TAB_IDS)[number];
@@ -259,6 +261,32 @@ function ControlTab({ value, onChange }: { value: Settings['control']; onChange:
   );
 }
 
+function RecentPanel({ recent, onChange }: { recent: string[]; onChange: (list: string[]) => void }) {
+  const tr = useT();
+  const clearAll = async () => {
+    if (await confirmAction({ title: tr('settings.recent.clearTitle'), message: tr('settings.recent.clearMessage'), confirmLabel: tr('settings.recent.clear'), danger: true })) onChange([]);
+  };
+  return (
+    <Panel title={tr('start.recent')} actions={recent.length > 0 && <button className="btn ghost sm" onClick={() => void clearAll()} data-testid="recent-clear"><Trash2 size={12} />{tr('settings.recent.clear')}</button>}>
+      {recent.length ? (
+        <div className="start-recent" role="list" style={{ maxHeight: 'none' }}>
+          {recent.map((p) => {
+            const { name, dir } = splitPath(p);
+            return (
+              <div key={p} role="listitem" className="row" style={{ gap: 4 }}>
+                <button className="start-recent-item grow" onClick={() => void openProject(p)} title={p}>
+                  <FolderOpen size={14} className="dim" /><span className="grow col"><b>{name}</b><span className="small dim">{dir}</span></span>
+                </button>
+                <button className="btn ghost sm icon" onClick={() => onChange(recent.filter((x) => x !== p))} title={tr('settings.recent.remove')} aria-label={`${tr('settings.recent.remove')} : ${name}`} data-testid="recent-remove"><X size={13} /></button>
+              </div>
+            );
+          })}
+        </div>
+      ) : <p className="small muted" style={{ margin: 0 }}>{tr('start.none')}</p>}
+    </Panel>
+  );
+}
+
 export function SettingsPage() {
   const tr = useT();
   const [s, setS] = useState<Settings | null>(null);
@@ -278,6 +306,13 @@ export function SettingsPage() {
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
   const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts, language: s.appearance.language }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: tr('settings.saved') }); } };
   const tabs = TAB_IDS.map((id) => ({ id, label: tr(`settings.tab.${id}`) }));
+  // Removing recent projects is saved at once, without committing the other pending edits.
+  const forgetRecent = async (recentProjects: string[]) => {
+    const next = { ...saved!, general: { ...saved!.general, recentProjects } };
+    if (!(await act({ type: 'settings.update', settings: next }))) return;
+    setSaved(next);
+    setS({ ...s, general: { ...s.general, recentProjects } });
+  };
 
   return (
     <div className="page">
@@ -286,19 +321,19 @@ export function SettingsPage() {
         <button className="btn primary" disabled={!dirty} onClick={() => void save()} data-testid="settings-save">{tr('common.save')}</button>
       </PageHead>
       <Tabs tabs={tabs} value={tab} onChange={setTab} />
-      <div style={{ maxWidth: 860 }}>
+      <div style={{ maxWidth: 860, display: 'flex', flexDirection: 'column', gap: 14 }}>
         {tab === 'general' && (
           <Panel title={tr('settings.tab.general')}>
-            <div className="grid g2">
+            <div className="grid g2" style={{ alignItems: 'start' }}>
               <Field label={tr('settings.general.autosave')} hint={tr('settings.general.autosaveHint')}><NumberInput value={s.general.autosaveMinutes} min={0} max={60} onChange={(v) => set('general', { autosaveMinutes: v })} /></Field>
-              <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
-              <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
-              <Field label={tr('start.recent')}>
-                <div className="col small">{s.general.recentProjects.length ? s.general.recentProjects.map((p) => <button key={p} className="btn ghost sm" style={{ justifyContent: 'flex-start' }} onClick={async () => (!project.dirty || (await confirmAction({ title: tr('project.unsavedTitle'), message: tr('settings.general.openUnsaved'), confirmLabel: tr('common.open') }))) && void act({ type: 'project.open', path: p })}><FolderOpen size={12} />{p}</button>) : <span className="dim">{tr('settings.none')}</span>}</div>
-              </Field>
+              <div className="col" style={{ gap: 10, paddingTop: 22 }}>
+                <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
+                <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
+              </div>
             </div>
           </Panel>
         )}
+        {tab === 'general' && <RecentPanel recent={s.general.recentProjects} onChange={(recentProjects) => void forgetRecent(recentProjects)} />}
         {tab === 'general' && <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />}
         {tab === 'appearance' && (
           <Panel title={tr('settings.tab.appearance')}>

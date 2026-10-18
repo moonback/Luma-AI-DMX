@@ -6,7 +6,7 @@ import { Modal } from '../components/ui';
 import { detachStageIfWanted, newProjectFlow, openProject } from '../App';
 
 /** File name and folder of a project path (Windows or POSIX separators). */
-const splitPath = (p: string) => { const i = Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/')); return { name: p.slice(i + 1), dir: p.slice(0, Math.max(0, i)) }; };
+export const splitPath = (p: string) => { const i = Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/')); return { name: p.slice(i + 1), dir: p.slice(0, Math.max(0, i)) }; };
 
 /** Startup chooser: new project, open a file, search the recent projects, or keep the project restored at launch. */
 export function StartScreen() {
