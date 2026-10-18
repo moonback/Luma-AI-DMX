@@ -3,6 +3,30 @@
 > Rédigé le 18/10/2026 à partir du dépôt (branche `feat/scene-lot2`, commit `5998174` + 2 fichiers modifiés non commités).
 > Les roadmaps existantes (`ROADMAP.md`, `docs/roadmap/scene.md`, `stage3d.md`, `fixture.md`) décrivent **quoi construire**. Ce rapport traite de **comment le construire et le livrer** : passer d'un prototype riche, développé seul et vite, à un logiciel qu'on peut confier à un éclairagiste sur un vrai plateau.
 
+## 0. État d'avancement (18/10/2026, version 0.2.0)
+
+| # | Action | État | Où |
+|---|---|---|---|
+| 1 | CI GitHub Actions | ✅ fait : typecheck, lint, tests + couverture, perf indicatif, e2e, paquet, messages de commit | `.github/workflows/ci.yml` |
+| 2 | Discipline git | ✅ fait : CONTRIBUTING, modèle de PR, CHANGELOG, contrôle Conventional Commits en CI | `CONTRIBUTING.md` |
+| 3 | Campagne matérielle | 🟡 outillée, **pas réalisée** (aucun matériel) : mires de test, chronométrage des reconnexions, rapport de session, protocole | `docs/HARDWARE.md` |
+| 4 | Journal persistant + diagnostic | ✅ fait | `core/log`, Paramètres › Logs |
+| 5 | Télécommande durcie | ✅ fait : interface d'écoute, jeton → cookie, limitation de débit | `core/control/remote.ts` |
+| 6 | Découper `AppService` | ✅ fait : 1 366 → < 400 lignes, handlers par domaine | `core/app/handlers`, ADR 0005 |
+| 7 | Découper `Visualizer` / `Stage3D` | ✅ fait : 1 049 → 95 et 763 → 250 lignes ; `stage3d/scene.ts` reste à 571 lignes | `features/visualizer`, `stage3d/scene.ts` |
+| 8 | Couverture mesurée | ✅ fait : seuils bloquants sur `core` (lignes 90,9 %, branches 76,3 %) | `vitest.config.ts` |
+| 9 | Tests du renderer | ✅ fait : 4 espaces en tests de composants sur un vrai `AppService`, 5 parcours e2e (21 tests e2e au total) | `tests/components`, `tests/e2e` |
+| 10 | Documentation rangée | ✅ fait : `docs/roadmap/`, 5 ADR | `docs/adr` |
+| 11 | Distribution | 🟡 mise à jour automatique (canal bêta) et workflow de release prêts ; **signature : il manque le certificat** (secrets `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`) | `release.yml`, `main/updates.ts` |
+| 12 | Programme bêta | 🟡 outils prêts (retour intégré, statistiques opt-in locales) ; **reste à recruter les 3 à 5 éclairagistes** | Paramètres › Logs, diagnostic et retours |
+| 13 | Évaluation IA à l'échelle | ✅ 175 cas, 0 violation ; 🟡 LLM distant enregistré et corpus de 50 titres pas encore faits | `tests/eval` |
+| 14 | Contrat d'actions IA versionné | ✅ fait | `core/ai/actions.ts`, ADR 0002 |
+| 15 | Interopérabilité | ✅ import GDTF, export MVR, feuille de patch PDF/CSV (grandMA2 déjà présent) | `core/fixtures/gdtf.ts`, `core/project/mvr.ts` |
+| 16 | macOS / Linux | ✅ cibles retirées tant qu'elles ne sont pas construites en CI | `electron-builder.yml` |
+| 17 | Internationalisation | 🟡 infrastructure fr/en, coque traduite, cliquet en lint ; 1 212 textes d'écrans restent à extraire | `renderer/i18n`, `scripts/check-i18n.mjs` |
+
+Critères du niveau 2 (§ 4) : CI bloquante ✅ · couverture `core` ≥ 80 % ✅ · diagnostic exportable ✅ · aucun fichier > 600 lignes ✅ (vérifié en lint) · banc IA ≥ 150 cas sans violation ✅ · **restent hors code** : validation matérielle, certificat de signature, 3 utilisateurs externes en show.
+
 ## 1. Diagnostic
 
 ### Mesures du jour
