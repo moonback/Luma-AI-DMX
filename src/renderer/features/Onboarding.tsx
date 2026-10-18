@@ -67,7 +67,7 @@ function DemoGallery() {
   return (
     <Modal title="Projets de démonstration" onClose={close} wide>
       <div className="col gap-lg" data-testid="demo-gallery">
-        <p className="small muted" style={{ margin: 0 }}>Dix projets fictifs (lieux, artistes et événements inventés) construits avec les profils intégrés « Luma Demo ». Ouvrez-en un pour explorer patch, groupes, scènes, cues, effets et timeline, puis jouez-le en sortie virtuelle et dans la vue 3D.</p>
+        <p className="small muted" style={{ margin: 0 }}>{DEMOS.length} projets fictifs (lieux, artistes et événements inventés) construits avec les profils intégrés « Luma Demo ». Ouvrez-en un pour explorer patch, groupes, scènes, cues, effets et timeline, puis jouez-le en sortie virtuelle et dans la vue 3D.</p>
         <div className="chips">
           <button className={`chip ${!filter ? 'on' : ''}`} onClick={() => setFilter(null)}>Tous ({DEMOS.length})</button>
           {categories.map((c) => <button key={c} className={`chip ${filter === c ? 'on' : ''}`} onClick={() => setFilter(c)}>{c}</button>)}

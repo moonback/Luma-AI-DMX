@@ -5,9 +5,22 @@ import { ProjectIndex } from '../../src/core/engine/resolve';
 import { makeService } from '../helpers';
 
 describe('projets de démonstration', () => {
-  it('10 projets aux identifiants uniques', () => {
-    expect(DEMOS).toHaveLength(10);
-    expect(new Set(DEMOS.map((d) => d.id)).size).toBe(10);
+  it('20 projets aux identifiants uniques', () => {
+    expect(DEMOS).toHaveLength(20);
+    expect(new Set(DEMOS.map((d) => d.id)).size).toBe(20);
+  });
+
+  it.each(DEMOS.map((d) => [d.id, d] as const))('%s : catalogue cohérent (looks, effets et rigs référencés)', (_id, d) => {
+    const looks = new Set(d.looks.map((l) => l.name)), fx = new Set(d.effects.map((e) => e.name)), rigs = new Set(d.rigs.map((r) => r.prefix));
+    expect(looks.size).toBe(d.looks.length);
+    expect(fx.size).toBe(d.effects.length);
+    for (const l of d.looks) for (const part of l.parts) for (const r of part.rigs) expect(rigs.has(r)).toBe(true);
+    for (const e of d.effects) for (const r of e.rigs) expect(rigs.has(r)).toBe(true);
+    for (const list of d.cueLists) for (const c of list.cues) {
+      if (c.look) expect(looks.has(c.look)).toBe(true);
+      for (const e of c.effects ?? []) expect(fx.has(e)).toBe(true);
+    }
+    for (const e of d.timeline?.events ?? []) expect(e.look ? looks.has(e.look) : fx.has(e.effect!)).toBe(true);
   });
 
   it.each(DEMOS.map((d) => [d.id]))('%s : projet valide et cohérent', (id) => {

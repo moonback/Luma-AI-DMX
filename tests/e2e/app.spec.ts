@@ -714,7 +714,7 @@ test('onboarding : visite guidée complète, premiers pas, projet de démonstrat
 
   await page.getByTestId('help').click();
   await page.getByTestId('help-demos').click();
-  await expect(page.getByTestId('demo-gallery').locator('[data-testid^="demo-"]')).toHaveCount(10);
+  await expect(page.getByTestId('demo-gallery').locator('[data-testid^="demo-"]')).toHaveCount(20);
   await page.screenshot({ path: `${shots}/24-projets-demo.png` });
   await page.getByTestId('demo-gala-danse').getByRole('button', { name: 'Ouvrir' }).click();
   const confirm = page.getByRole('button', { name: 'Ouvrir la démo' });

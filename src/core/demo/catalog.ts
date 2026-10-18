@@ -1,7 +1,9 @@
 import type { EffectParams, EffectType, StageProp } from '../model/schemas';
+import { C } from './palette';
+import { MORE_DEMOS } from './catalogMore';
 
 /**
- * Ten fictional demonstration projects, described as plain data (importable by the renderer for the gallery) and
+ * Twenty fictional demonstration projects, described as plain data (importable by the renderer for the gallery) and
  * turned into real, validated projects by `buildDemo` (main process). Venues, artists and events are invented; every
  * fixture uses the built-in "Luma Demo" profiles, which describe no commercial model.
  */
@@ -47,10 +49,6 @@ export interface DemoSpec {
   notes: string;
 }
 
-const C = {
-  white: '#FFFFFF', warm: '#FFD7A0', amber: '#FFB000', orange: '#FF7000', red: '#FF0000', pink: '#FF4FA0', magenta: '#FF00C8',
-  violet: '#8B00FF', blue: '#0040FF', navy: '#1A237E', cyan: '#00E5FF', teal: '#00BFA5', green: '#00FF60', gold: '#FFC23D',
-};
 
 const club: DemoSpec = {
   id: 'club-electro', name: 'Le Hangar — nuit électro', venue: 'Le Hangar (club, 600 places)', show: 'Résidence DJ « Pulse »', category: 'Club',
@@ -459,4 +457,4 @@ const gala: DemoSpec = {
   notes: 'Démo : conduite simple, idéale pour une prise en main.',
 };
 
-export const DEMOS: DemoSpec[] = [club, pop, theatre, wedding, conference, jazz, festival, runway, gospel, gala];
+export const DEMOS: DemoSpec[] = [club, pop, theatre, wedding, conference, jazz, festival, runway, gospel, gala, ...MORE_DEMOS];
