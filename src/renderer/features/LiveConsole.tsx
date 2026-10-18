@@ -9,7 +9,7 @@ import { cellColors, colorCapability, colorCells, displayColor } from '../../cor
 import { channelKey, coarseChannel, type ResolvedFixture } from '../../core/fixtures/profiles';
 import { findModule, moduleDimmerKeys, moduleOfCell } from '../../core/fixtures/modules';
 import { rgbToHex } from '../../core/util/math';
-import type { Channel } from '../../core/model/schemas';
+import type { Channel, Palette } from '../../core/model/schemas';
 
 const QUICK_COLORS = ['#FFFFFF', '#FF0000', '#FF7000', '#FFD000', '#00FF40', '#00E5FF', '#0040FF', '#8B00FF', '#FF00C8', '#FFB000'];
 const GROUP_COLORS = ['#8B5CF6', '#22D3EE', '#F59E0B', '#34D399', '#F472B6', '#60A5FA'];
@@ -154,6 +154,27 @@ function ReleaseFamily({ ids, classes }: { ids: string[]; classes: AttributeClas
   return <button className="btn sm" title={tr('console.releaseFamilyHint')} onClick={() => void act({ type: 'programmer.release', fixtureIds: ids, attributes })}><Eraser size={13} />{tr('console.releaseFamily')}</button>;
 }
 
+/** Palettes of one family as one-click chips, plus « store » from the first selected fixture's programmer values. */
+function FamilyPalettes({ kind, ids }: { kind: Palette['kind']; ids: string[] }) {
+  const tr = useT();
+  const palettes = useStore((s) => s.project!.project.palettes).filter((p) => p.kind === kind);
+  const store = async () => {
+    const name = tr('console.pal.defaultName', { kind: tr(`prog.kind.${kind}`), n: palettes.length + 1 });
+    const r = await act({ type: 'palette.recordFromProgrammer', name, kind, fixtureId: ids[0]! });
+    if (r) useStore.getState().toast({ kind: 'success', title: tr('console.pal.stored', { name }), detail: tr('console.pal.storedDetail') });
+  };
+  return (
+    <div className="chips" role="group" aria-label={tr('console.pal.aria', { kind: tr(`prog.kind.${kind}`) })}>
+      {palettes.map((p) => (
+        <button key={p.id} className="chip" onClick={() => void act({ type: 'palette.apply', id: p.id, fixtureIds: ids })}>
+          {p.color && <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: p.color, marginRight: 5 }} />}{p.name}
+        </button>
+      ))}
+      <button className="chip add" title={tr('console.pal.storeHint')} onClick={() => void store()}><Plus size={12} />{tr('console.pal.store')}</button>
+    </div>
+  );
+}
+
 function RecordSceneDialog({ onClose }: { onClose: () => void }) {
   const tr = useT();
   const [name, setName] = useState(tr('console.rec.default'));
@@ -176,7 +197,6 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
   const values = useStore((s) => s.values);
   const sources = useStore((s) => s.sources);
   const programmer = useStore((s) => s.runtime?.programmer ?? EMPTY_OBJ) as Record<string, Record<string, number>>;
-  const palettes = useStore((s) => s.project!.project.palettes);
   const ids = selected.map((s) => s.fixture.id);
   const first = selected[0]!;
   const cur = (attr: string) => programmer[first.fixture.id]?.[attr] ?? values[first.fixture.id]?.[attr] ?? 0;
@@ -254,6 +274,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
             <div className="small muted">{tr('console.manualNote')}</div>
           </div>
         </div>
+        <FamilyPalettes kind="intensity" ids={ids} />
       </Panel>
 
       {colorCaps.size > 0 && !(colorCaps.size === 1 && colorCaps.has('none')) && (
@@ -268,6 +289,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
             {emitters.map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
             {has('colorWheel') && channelFor('colorWheel') && <RangeChips channel={channelFor('colorWheel')!} attr="colorWheel" current={cur('colorWheel')} set={set} />}
             {['cyan', 'magenta', 'yellow', 'cto'].filter(has).map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
+            <FamilyPalettes kind="color" ids={ids} />
           </div>
         </Panel>
       )}
@@ -302,6 +324,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
               </div>
             </div>
           </div>
+          <FamilyPalettes kind="position" ids={ids} />
         </Panel>
       )}
 
@@ -312,18 +335,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
             if (!ch) return null;
             return ch.ranges.length ? <RangeChips key={a} channel={ch} attr={a} current={cur(a)} set={set} /> : <Slider key={a} label={ch.name} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />;
           })}
-        </Panel>
-      )}
-
-      {palettes.length > 0 && (
-        <Panel title={tr('console.palettes')}>
-          <div className="chips">
-            {palettes.map((p) => (
-              <button key={p.id} className="chip" onClick={() => void act({ type: 'palette.apply', id: p.id, fixtureIds: ids })} title={tr('console.paletteKind', { kind: p.kind })}>
-                {p.color && <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: p.color, marginRight: 5 }} />}{p.name}
-              </button>
-            ))}
-          </div>
+          <FamilyPalettes kind="beam" ids={ids} />
         </Panel>
       )}
 
