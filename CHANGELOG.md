@@ -11,6 +11,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 - `crashReporter` local (minidumps jamais envoyés) ; exceptions et rejets non gérés, arrêts des processus de rendu journalisés.
 - « Exporter un diagnostic… » (Paramètres › Logs) : version, paramètres, état des sorties, journal et minidumps, sans clé, jeton ni contenu du projet.
 
+### Modifié
+- Télécommande durcie : interface d'écoute au choix (par défaut toutes, comme avant), jeton échangé contre un cookie HttpOnly puis retiré de l'adresse, 10 jetons faux par minute et par adresse au maximum (429), 30 commandes/s par client, bouton « Nouveau jeton », rappel « réseau privé ».
+- Tests e2e : rendu WebGL logiciel (SwiftShader) pour tourner sur les machines sans GPU.
+
 ### Corrigé
 - Erreur de lint commitée (`attributeSchema` inutilisé dans `src/shared/commands.ts`).
 

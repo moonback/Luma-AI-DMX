@@ -1239,7 +1239,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   private async applyRemote(): Promise<void> {
     const r = this.settings.control.remote;
-    const conf = r.enabled ? `${r.port}|${r.token}` : '';
+    const conf = r.enabled ? `${r.bind}|${r.port}|${r.token}` : '';
     if (conf === this.remoteConfig) return;
     this.remoteConfig = conf;
     if (!r.enabled || !r.token) {
@@ -1247,11 +1247,11 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       return;
     }
     try {
-      await this.remote.start(r.port, '0.0.0.0', r.token);
-      this.logger.info('Télécommande', `Serveur actif sur le port ${r.port} (réseau local, accès par jeton)`);
+      await this.remote.start(r.port, r.bind, r.token);
+      this.logger.info('Télécommande', `Serveur actif sur ${r.bind}:${r.port} (accès par jeton, HTTP non chiffré : réseau privé uniquement)`);
     } catch (err) {
       this.remoteConfig = '';
-      this.logger.error('Télécommande', `Impossible d’écouter sur le port ${r.port} : ${(err as Error).message}`);
+      this.logger.error('Télécommande', `Impossible d’écouter sur ${r.bind}:${r.port} : ${(err as Error).message}`);
     }
   }
 

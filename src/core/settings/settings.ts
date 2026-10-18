@@ -110,10 +110,16 @@ export const settingsSchema = z.object({
         .default({ source: 'off', ltcDeviceId: null }),
       /** Tablet/phone remote (HTTP on the local network, token in the URL). */
       remote: z
-        .object({ enabled: z.boolean().default(false), port: z.number().int().min(1024).max(65535).default(8080), token: z.string().min(16).max(100).optional() })
-        .default({ enabled: false, port: 8080 }),
+        .object({
+          enabled: z.boolean().default(false),
+          port: z.number().int().min(1024).max(65535).default(8080),
+          /** Listening IPv4 address: one network interface, loopback, or all of them (0.0.0.0). */
+          bind: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/u).default('0.0.0.0'),
+          token: z.string().min(16).max(100).optional(),
+        })
+        .default({ enabled: false, port: 8080, bind: '0.0.0.0' }),
     })
-    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080 } }),
+    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
   /** Overrides of the default shortcuts, by action id. */
   shortcuts: z.record(z.string().max(40), z.string().max(40)).default({}),

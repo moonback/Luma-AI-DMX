@@ -59,7 +59,7 @@ describe('séquence de localisation (moteur)', () => {
     const s = svc.getSettings();
     const port = 21000 + Math.floor(Math.random() * 1000);
     const token = s.control.remote.token!;
-    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, remote: { enabled: true, port, token } } } });
+    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, remote: { ...s.control.remote, enabled: true, port, token } } } });
     const photos: LocatePhoto[] = [];
     svc.on('locatePhoto', (p) => photos.push(p));
     const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);

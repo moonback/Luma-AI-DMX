@@ -16,7 +16,7 @@ test.beforeAll(async () => {
   app = await electron.launch({
     executablePath: electronPath,
     // Chromium's fake camera (test pattern) and auto-accepted media prompts, for the camera localisation flow.
-    args: [path.resolve('out/main/index.js'), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    args: [path.resolve('out/main/index.js'), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
     env: { ...process.env, LUMA_USER_DATA: mkdtempSync(path.join(tmpdir(), 'luma-e2e-')), LUMA_E2E: '1' },
   });
   page = await app.firstWindow();
@@ -505,7 +505,11 @@ test('fiabilisation : garde-fou, contrôle externe, télécommande et RDM', asyn
   await page.getByTestId('settings-save').click();
   const url = (await page.getByTestId('remote-urls').locator('td').first().textContent())!.replace(/^http:\/\/[^:]+/, 'http://127.0.0.1');
   await page.screenshot({ path: `${shots}/19-controle-externe.png` });
-  const remote = await (await fetch(url)).text();
+  // First visit swaps the URL token for a cookie and redirects to a token-free address.
+  const login = await fetch(url, { redirect: 'manual' });
+  expect(login.status).toBe(303);
+  const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+  const remote = await (await fetch(url.replace(/\?.*$/, ''), { headers: { cookie } })).text();
   expect(remote).toContain('Télécommande');
   expect((await fetch(url.replace(/t=[^&]+/, 't=mauvais'))).status).toBe(403);
   const r = await fetch(url.replace('/?', '/cmd?'), { method: 'POST', body: JSON.stringify({ type: 'engine.blackout', on: true }) });

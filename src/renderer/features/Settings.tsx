@@ -183,14 +183,22 @@ function ControlTab({ value, onChange }: { value: Settings['control']; onChange:
         <div className="grid g2">
           <label className="check"><input type="checkbox" data-testid="remote-enabled" checked={r.enabled} onChange={(e) => onChange({ ...value, remote: { ...r, enabled: e.target.checked } })} />Activer la télécommande sur le réseau local</label>
           <Field label="Port HTTP"><NumberInput value={r.port} min={1024} max={65535} onChange={(port) => onChange({ ...value, remote: { ...r, port } })} /></Field>
+          <Field label="Interface d’écoute" hint="Choisissez la carte réseau de la régie plutôt que toutes les interfaces (Wi-Fi public, réseau de la salle…).">
+            <select className="select" data-testid="remote-bind" value={r.bind} onChange={(e) => onChange({ ...value, remote: { ...r, bind: e.target.value } })}>
+              <option value="0.0.0.0">Toutes les interfaces (0.0.0.0)</option>
+              {[...new Set([...ips, r.bind])].filter((ip) => ip !== '0.0.0.0' && ip !== '127.0.0.1').map((ip) => <option key={ip} value={ip}>{ip}{ips.includes(ip) ? '' : ' (absente)'}</option>)}
+              <option value="127.0.0.1">Cette machine uniquement (127.0.0.1)</option>
+            </select>
+          </Field>
         </div>
         <p className="small dim">GO, BACK, pause, blackout, grand master, relâcher et STOP OUTPUT. L’armement des sorties et la reprise des émissions restent réservés à la régie. Toute personne qui a l’adresse complète (jeton inclus) peut piloter le show : régénérez le jeton pour révoquer les accès.</p>
+        <p className="small"><span className="badge warn">Réseau privé uniquement</span> La liaison est en HTTP non chiffré : utilisez un réseau de régie dédié (Wi-Fi protégé, sans invités). Au premier chargement, le jeton est retiré de l’adresse et conservé dans un cookie du téléphone.</p>
         {r.enabled && r.token && (
           <table className="table small" data-testid="remote-urls"><tbody>
-            {(ips.length ? ips : ['<adresse-ip>']).map((ip) => <tr key={ip}><td className="mono">{`http://${ip}:${r.port}/?t=${r.token}`}</td></tr>)}
+            {(r.bind === '0.0.0.0' ? (ips.length ? ips : ['<adresse-ip>']) : [r.bind]).map((ip) => <tr key={ip}><td className="mono">{`http://${ip}:${r.port}/?t=${r.token}`}</td></tr>)}
           </tbody></table>
         )}
-        <button className="btn" onClick={() => onChange({ ...value, remote: { ...r, token: crypto.randomUUID() } })}>Régénérer le jeton</button>
+        <button className="btn" data-testid="remote-new-token" onClick={() => onChange({ ...value, remote: { ...r, token: crypto.randomUUID() } })}>Nouveau jeton (révoque les téléphones connectés)</button>
       </Panel>
       <Panel title="Timecode">
         <div className="grid g2">
