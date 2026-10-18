@@ -398,3 +398,296 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .scene-add button:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
 @media (max-width: 1100px) { .scene-panel { width: 260px; } }
 .stage3d:fullscreen { border-radius: 0; }
+
+
+/* Realistic concert rig — volumetric beams, metal truss,
+   independent moving heads, atmospheric haze and crowd */
+
+.gen-rig {
+  --beat: 0.5s;
+  --rig-metal: #596274;
+  --rig-dark: #111722;
+  --beam-violet: 167, 112, 255;
+  --beam-cyan: 73, 220, 255;
+  --beam-pink: 255, 76, 173;
+
+  position: relative;
+  height: 190px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--radius);
+  background:
+    radial-gradient(
+      ellipse at 50% 5%,
+      rgba(46, 54, 83, .48),
+      transparent 60%
+    ),
+    linear-gradient(180deg, #111522 0%, #090b12 56%, #030408 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    inset 0 -25px 50px rgba(0, 0, 0, .65);
+}
+
+/* Atmospheric depth */
+.gen-haze {
+  position: absolute;
+  z-index: 0;
+  inset: 12% -25% 10%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse at 20% 60%,
+      rgba(120, 137, 190, .12),
+      transparent 48%
+    ),
+    radial-gradient(
+      ellipse at 70% 55%,
+      rgba(105, 85, 175, .14),
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 48% 90%,
+      rgba(110, 120, 150, .09),
+      transparent 55%
+    );
+  filter: blur(12px);
+  animation: gen-haze-drift 14s ease-in-out infinite alternate;
+}
+
+/* Metal lattice truss */
+.gen-truss {
+  position: absolute;
+  z-index: 6;
+  top: 9px;
+  left: 4%;
+  right: 4%;
+  height: 14px;
+  border-top: 2px solid #687286;
+  border-bottom: 2px solid #343c4b;
+  background:
+    repeating-linear-gradient(
+      60deg,
+      transparent 0 8px,
+      rgba(133, 146, 169, .65) 8px 9px,
+      transparent 9px 16px
+    ),
+    repeating-linear-gradient(
+      -60deg,
+      transparent 0 8px,
+      rgba(133, 146, 169, .65) 8px 9px,
+      transparent 9px 16px
+    ),
+    linear-gradient(180deg, #303949, #141a25);
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, .8),
+    0 0 1px rgba(200, 215, 255, .5);
+}
+
+/* Moving heads */
+.gen-head {
+  position: absolute;
+  z-index: 7;
+  top: 19px;
+  left: calc(10% + var(--i) * 16%);
+  width: 14px;
+  height: 13px;
+  margin-left: -7px;
+  transform-origin: 50% 2px;
+  border: 1px solid #465064;
+  border-radius: 3px 3px 5px 5px;
+  background: linear-gradient(
+    110deg,
+    #50596a 0%,
+    #1c2330 42%,
+    #343c4b 70%,
+    #10151f 100%
+  );
+  box-shadow:
+    0 2px 3px rgba(0, 0, 0, .8),
+    inset 0 1px rgba(255, 255, 255, .16);
+  animation:
+    gen-sweep-real 3.8s cubic-bezier(.45, 0, .55, 1) infinite alternate,
+    gen-color 8s steps(1, end) infinite;
+  animation-delay:
+    calc(var(--i) * -.31s),
+    calc(var(--i) * -1.3s);
+}
+
+.gen-head:nth-child(even) {
+  animation-direction: alternate-reverse, normal;
+}
+
+/* Lens */
+.gen-head::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border: 1px solid rgba(255, 255, 255, .85);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 3px 1px currentColor,
+    0 0 9px 2px currentColor,
+    0 0 17px rgba(255, 255, 255, .25);
+}
+
+/* Layered beam: bright narrow core + soft outer volume */
+.gen-head::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 10px;
+  left: 50%;
+  width: 84px;
+  height: 190px;
+  margin-left: -42px;
+  pointer-events: none;
+  clip-path: polygon(47% 0, 53% 0, 100% 100%, 0 100%);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, .48) 0%,
+      currentColor 12%,
+      transparent 100%
+    );
+  opacity: .27;
+  mix-blend-mode: screen;
+  filter: blur(2px);
+  transform-origin: 50% 0;
+  animation: gen-beam-breathe 2.6s ease-in-out infinite alternate;
+}
+
+/* A thin optical core can be added as a separate child
+   if the renderer allows extra markup. */
+
+/* Stage */
+.gen-stage {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 37px;
+  border-top: 1px solid rgba(170, 143, 255, .65);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(167, 112, 255, .24),
+      rgba(100, 65, 180, .06) 35%,
+      transparent 70%
+    ),
+    linear-gradient(180deg, #171725, #07090f 65%);
+  box-shadow:
+    0 -4px 22px rgba(135, 86, 255, .12),
+    inset 0 1px rgba(255, 255, 255, .06);
+  animation: gen-stage-pulse 1s ease-in-out infinite alternate;
+}
+
+/* Crowd: layered silhouettes */
+.gen-crowd {
+  position: absolute;
+  z-index: 9;
+  left: -2%;
+  right: -2%;
+  bottom: -7px;
+  height: 29px;
+  background:
+    radial-gradient(ellipse at 50% 100%, #020204 0 8px, transparent 8.8px)
+      0 0 / 17px 29px repeat-x,
+    radial-gradient(ellipse at 50% 4px, #030407 0 5px, transparent 5.8px)
+      0 0 / 17px 29px repeat-x;
+  animation: gen-crowd-dance .55s ease-in-out infinite alternate;
+}
+
+.gen-crowd.back {
+  z-index: 4;
+  bottom: 3px;
+  height: 24px;
+  opacity: .7;
+  filter: blur(.6px);
+  background-position: 8px 0, 8px 0;
+  animation-delay: -.275s;
+}
+
+/* Restrained strobe: one brief hit per phrase */
+.gen-strobe {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse at 50% 30%,
+      rgba(255, 255, 255, .8),
+      rgba(190, 205, 255, .22) 45%,
+      transparent 80%
+    );
+  opacity: 0;
+  animation: gen-strobe-hit 8s linear infinite;
+}
+
+/* Motion */
+@keyframes gen-sweep-real {
+  0%   { transform: rotate(-32deg); }
+  50%  { transform: rotate(12deg); }
+  100% { transform: rotate(38deg); }
+}
+
+@keyframes gen-color {
+  0%, 100% { color: #ad83ff; }
+  25%      { color: #56dfff; }
+  50%      { color: #ff70bc; }
+  75%      { color: #ffc66e; }
+}
+
+@keyframes gen-beam-breathe {
+  from {
+    opacity: .19;
+    width: 68px;
+    margin-left: -34px;
+  }
+  to {
+    opacity: .34;
+    width: 100px;
+    margin-left: -50px;
+  }
+}
+
+@keyframes gen-stage-pulse {
+  from { filter: brightness(.88); }
+  to   { filter: brightness(1.18); }
+}
+
+@keyframes gen-crowd-dance {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-3px); }
+}
+
+@keyframes gen-haze-drift {
+  from { transform: translate3d(-4%, 0, 0); }
+  to   { transform: translate3d(4%, -2%, 0); }
+}
+
+/* 0.35 s flash approximately once every 8 seconds */
+@keyframes gen-strobe-hit {
+  0%, 94%, 98%, 100% { opacity: 0; }
+  95% { opacity: .28; }
+  96% { opacity: .08; }
+  97% { opacity: .2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen-haze,
+  .gen-head,
+  .gen-head::after,
+  .gen-stage,
+  .gen-crowd,
+  .gen-strobe {
+    animation: none;
+  }
+}
+

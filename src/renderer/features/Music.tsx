@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lock, LockOpen, Music2, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
-import { useT } from '../i18n';
+import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
 import { Empty, PageHead, Panel } from '../components/ui';
 import { musicPlayer } from '../musicPlayer';
@@ -73,6 +73,8 @@ function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; s
   );
 }
 
+const GEN_STEPS: MessageKey[] = ['music.genStep.analyze', 'music.genStep.sections', 'music.genStep.looks', 'music.genStep.moves', 'music.genStep.final'];
+
 /** Blocking modal while the show is generated (not closable: the command cannot be cancelled). */
 function GeneratingModal() {
   const t = useT();
@@ -89,8 +91,20 @@ function GeneratingModal() {
       <div className="modal" role="dialog" aria-modal="true" aria-label={t('music.generating')} data-testid="music-generating">
         <div className="modal-head">{t('music.generating')}</div>
         <div className="modal-body col">
+          <div className="gen-rig" aria-hidden="true">
+            <div className="gen-haze" />
+            <div className="gen-truss" />
+            {[0, 1, 2, 3, 4, 5].map((i) => <span key={i} className="gen-head" style={{ '--i': i } as React.CSSProperties} />)}
+            <div className="gen-stage" />
+            <div className="gen-crowd back" />
+            <div className="gen-crowd" />
+            <div className="gen-strobe" />
+          </div>
           <div className="meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><div style={{ width: `${pct}%` }} /></div>
-          <span className="small dim mono">{pct} %</span>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span className="small dim gen-step" aria-live="polite">{t(GEN_STEPS[Math.min(GEN_STEPS.length - 1, Math.floor(p * GEN_STEPS.length / 0.95))]!)}</span>
+            <span className="small dim mono">{pct} %</span>
+          </div>
         </div>
       </div>
     </div>
@@ -199,7 +213,7 @@ export function MusicPage() {
                   ? <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
                   : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
               ) : <span className="small dim">{t('music.noAudio')}</span>}
-              <button className="btn ghost sm" onClick={() => void act({ type: 'music.removeTrack', id: track.id })}>{t('music.remove')}</button>
+              <button className="btn ghost sm" onClick={() => { if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop(); void act({ type: 'music.removeTrack', id: track.id }); }}>{t('music.remove')}</button>
             </div>
           }>
             <div className="row wrap" style={{ gap: 18, marginBottom: 12 }} data-testid="music-summary">

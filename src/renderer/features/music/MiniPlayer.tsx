@@ -23,6 +23,9 @@ export function MiniPlayer() {
   const paused = musicPlayer.paused;
   const trackId = playing?.trackId ?? paused?.trackId;
   const track = useStore((s) => s.project?.project.music.tracks.find((x) => x.id === trackId));
+  // Track removed (or undone, or project closed) while playing or paused: cut the audio and the timecode right away.
+  const gone = !!trackId && !track;
+  useEffect(() => { if (gone) musicPlayer.stop(); }, [gone]);
   if (!track) return null;
   const a = track.analysis;
   const at = playing ? pos : paused!.at;
