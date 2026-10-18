@@ -18,6 +18,8 @@ export interface SynthSection {
   /** Bars of noise riser at the end of the section. */
   riser?: number;
   gain?: number;
+  /** 0..1 level of a sung line (harmonic tone with vibrato, one note per beat, an octave above the chord). */
+  voice?: number;
 }
 
 export function synthSong(opts: { bpm: number; sections: SynthSection[]; sr?: number; seed?: number }) {
@@ -56,6 +58,15 @@ export function synthSong(opts: { bpm: number; sections: SynthSection[]; sr?: nu
       }
       for (let k = 0; k < 4; k++) {
         const tb = t0 + k * beat;
+        if (s.voice) {
+          const f0 = hz(root + 12 + [0, 4, 7, 4][k]!);
+          add(tb, beat * 0.95, (t) => {
+            const ph = 2 * Math.PI * f0 * (t - (0.015 / (2 * Math.PI * 5.5)) * Math.cos(2 * Math.PI * 5.5 * t));
+            let v = 0;
+            for (let h = 1; h <= 8; h++) v += Math.sin(h * ph) / h;
+            return g * s.voice! * 0.12 * v * Math.min(1, t * 30, (beat * 0.95 - t) * 30);
+          });
+        }
         if (s.kick) add(tb, 0.25, (t) => g * 0.8 * Math.exp(-t * 18) * Math.sin(2 * Math.PI * (50 + 100 * Math.exp(-t * 30)) * t));
         if (s.snare && k % 2 === 1) add(tb, 0.18, (t) => g * 0.35 * Math.exp(-t * 25) * rnd());
         if (s.bass && k % 2 === 0) add(tb, beat * 0.9, (t) => g * (k === 0 ? 0.5 : 0.3) * Math.exp(-t * 3) * Math.sin(2 * Math.PI * hz(root - 24) * t));

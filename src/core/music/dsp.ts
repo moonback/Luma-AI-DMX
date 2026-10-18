@@ -35,7 +35,7 @@ export function fft(re: Float64Array, im: Float64Array): void {
 }
 
 export const N_BANDS = 24;
-const BAND_LO = 40, BAND_HI = 11000;
+export const BAND_LO = 40, BAND_HI = 11000;
 export const BASS_MAX_HZ = 150;
 export const HIGH_MIN_HZ = 4000;
 

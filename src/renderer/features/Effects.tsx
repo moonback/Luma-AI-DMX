@@ -8,6 +8,7 @@ import { EFFECT_TYPES, effectParamsSchema, type Effect, type EffectType } from '
 export const EFFECT_LABELS: Record<EffectType, string> = {
   fade: 'Fade', pulse: 'Pulse', chase: 'Chase', wave: 'Wave', rainbow: 'Rainbow', strobe: 'Strobe', dimmerWave: 'Dimmer wave',
   colorCycle: 'Color cycle', panTilt: 'Pan/Tilt', randomMove: 'Mouvement aléatoire',
+  fan: 'Éventail', bassFollow: 'Suiveur de basses', brightnessColor: 'Couleur par la brillance',
 };
 
 function Editor({ effect }: { effect: Effect }) {
@@ -17,7 +18,7 @@ function Editor({ effect }: { effect: Effect }) {
   const p = draft.params;
   const setP = (patch: Partial<Effect['params']>) => setDraft({ ...draft, params: { ...p, ...patch } });
   const dirty = JSON.stringify(draft) !== JSON.stringify(effect);
-  const usesColors = draft.type === 'colorCycle';
+  const usesColors = draft.type === 'colorCycle' || draft.type === 'brightnessColor';
   const usesShape = draft.type === 'panTilt';
   const usesAttr = ['fade', 'pulse', 'wave', 'chase'].includes(draft.type);
   return (

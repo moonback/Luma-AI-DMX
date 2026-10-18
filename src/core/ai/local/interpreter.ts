@@ -142,7 +142,7 @@ function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
 /** « … sauf les lyres » / « sans toucher aux PAR » : splits off the exclusion clause so it never becomes the target. */
 const EXCLUDE_RE = /\b(sauf|excepte|hormis|a part|sans toucher(?: aux?| a la| a l| les?)?|except|but not)\b(.*)$/;
 
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const MOVING_TARGET: AiTarget = { fixtureTypes: MOVING };
 

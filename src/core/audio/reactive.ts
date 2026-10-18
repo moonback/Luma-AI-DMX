@@ -97,6 +97,7 @@ export class AudioReactive {
       this.onDropFired?.(cfgDrop.cueListId);
     }
     const fresh = this.features && this.now() - this.receivedAt < STALE_MS;
+    this.engine.audioBands = fresh ? { bass: this.features!.bass, brightness: this.features!.brightness } : null;
     if (!fresh) {
       this.engine.setExternal('audio', null);
       if (this.engine.bpmSource === 'audio') this.engine.bpmSource = 'manual';

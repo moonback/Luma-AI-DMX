@@ -132,7 +132,7 @@ describe('Song-to-Show', () => {
     const plan = vi.mocked(openrouter.planShowWithOpenRouter);
     plan.mockResolvedValueOnce({
       summary: 'Show test', model: 'test/model', notices: [],
-      sections: analysis.sections.map((_, i) => ({ index: i, energy: 3, palette: ['#00FF00'], layers: { wash: true, moving: true, bars: false }, movement: 'slow' as const, effect: 'pulse' as const, beam: 'gobo' as const, effectBeats: 2, accents: false, locked: false, note: '' })),
+      sections: analysis.sections.map((_, i) => ({ index: i, energy: 3, palette: ['#00FF00'], layers: { wash: true, moving: true, bars: false }, movement: 'slow' as const, effect: 'pulse' as const, beam: 'gobo' as const, effectBeats: 2, accents: false, groups: [], focus: null, extras: [], locked: false, note: '' })),
     });
     const ok = await svc.execute({ type: 'music.generate', trackId: id, intent: 'tout en vert', nextVariant: false });
     expect(ok.provider).toBe('openrouter');

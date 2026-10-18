@@ -1,10 +1,11 @@
 import type { SectionLabel, SongAnalysis, SongSection } from '../model/schemas';
 import { cosine, mean, median, N_BANDS, spectralFlux, Spectrum } from './dsp';
+import { detectVocals } from './vocals';
 
 /**
  * Offline song analysis: tempo, beat grid (dynamic programming, Ellis 2007), downbeats, structure (bar-level
  * self-similarity + checkerboard novelty, boundaries snapped to 4-bar phrases), section labels (repetition and
- * energy rules), key (Krumhansl–Schmuckler) and events (impacts, risers, silences).
+ * energy rules), key (Krumhansl–Schmuckler) and events (impacts, risers, silences, vocal stretches).
  * Signal processing and explicit rules only: no trained model. Labels are estimates; the UI lets the user edit them.
  */
 export interface AnalyzeOptions {
@@ -401,6 +402,7 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
     // At least 2 rising bars and a clear rise (log energy +0.5 ≈ ×1.65).
     if (len >= 2 && bars[b - 1]!.high - bars[b - len - 1]!.high > 0.5) events.push({ t: bars[b - len - 1]!.start, kind: 'riser', duration: bars[b]!.start - bars[b - len - 1]!.start });
   }
+  for (const v of detectVocals(f.bands, f.chroma, f.rms, f.fr, f.offset)) events.push({ t: v.t, kind: 'vocal', duration: Math.min(600, v.duration) });
   events.sort((a, b) => a.t - b.t);
 
   const totalChroma = avgVec(f.chroma, 0, f.chroma.length, 12);

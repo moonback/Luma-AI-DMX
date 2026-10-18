@@ -10,8 +10,10 @@ import { SECTION_LABELS, type MusicTrack, type SectionLabel } from '../../core/m
 const LABEL_COLOR: Record<SectionLabel, string> = {
   intro: '#475569', verse: '#2563eb', prechorus: '#7c3aed', build: '#a855f7', chorus: '#db2777', drop: '#e11d48', break: '#0f766e', bridge: '#ca8a04', outro: '#334155',
 };
-const EFFECT_NAMES = { none: '—', wave: 'Vague', pulse: 'Pulsation', chase: 'Chase', rainbow: 'Arc-en-ciel', strobe: 'Strobe' } as const;
-const MOVE_NAMES = { none: 'fixe', slow: 'lent', sweep: 'balayage', fast: 'rapide' } as const;
+const EFFECT_NAMES = { none: '—', wave: 'Vague', pulse: 'Pulsation', chase: 'Chase', rainbow: 'Arc-en-ciel', strobe: 'Strobe', colorChase: 'Chase couleur' } as const;
+const MOVE_NAMES = { none: 'fixe', slow: 'lent', sweep: 'balayage', fast: 'rapide', fan: 'éventail', ballyhoo: 'ballyhoo' } as const;
+const EXTRA_NAMES = { ramp: 'montée progressive', blinder: 'blinder', breathe: 'zoom qui respire', bassFollow: 'suit les basses', colorFollow: 'couleur suit la brillance' } as const;
+const EVENT_STYLE = { impact: ['Impact', '#fde047'], riser: ['Montée', '#22d3ee'], vocal: ['Voix', '#f472b6'] } as const;
 const BEAM_NAMES = { open: '', gobo: 'gobo', prism: 'gobo + prisme', frost: 'frost' } as const;
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -37,8 +39,8 @@ function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; s
           </button>
         ))}
       </div>
-      {a.events.filter((e) => e.kind !== 'silence').map((e, i) => (
-        <span key={i} title={e.kind === 'impact' ? 'Impact' : 'Montée'} style={{ position: 'absolute', top: -6, left: `${(e.t / a.duration) * 100}%`, width: e.kind === 'riser' ? `${(e.duration / a.duration) * 100}%` : 2, height: 4, background: e.kind === 'impact' ? '#fde047' : '#22d3ee', borderRadius: 2 }} />
+      {a.events.map((e, i) => e.kind !== 'silence' && (
+        <span key={i} title={EVENT_STYLE[e.kind][0]} style={{ position: 'absolute', top: e.kind === 'vocal' ? 48 : -6, left: `${(e.t / a.duration) * 100}%`, width: e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : 2, height: 4, background: EVENT_STYLE[e.kind][1], borderRadius: 2 }} />
       ))}
       {pos !== null && <span style={{ position: 'absolute', top: -4, bottom: -4, width: 2, background: '#fff', left: `${Math.min(100, (pos / a.duration) * 100)}%` }} />}
     </div>
@@ -48,6 +50,7 @@ function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; s
 export function MusicPage() {
   const project = useStore((s) => s.project!.project);
   const tracks = project.music.tracks;
+  const { groups, visualizer: { markers } } = project;
   const [trackId, setTrackId] = useState<string | null>(tracks[0]?.id ?? null);
   const [progress, setProgress] = useState<{ p: number; step: string } | null>(null);
   const [intent, setIntent] = useState('');
@@ -135,7 +138,7 @@ export function MusicPage() {
               <span><span className="small muted">Tonalité </span><b>{KEY_NAMES[track.analysis.key.tonic]} {track.analysis.key.mode === 'major' ? 'majeur' : 'mineur'}</b> <span className="small dim">({Math.round(track.analysis.key.confidence * 100)} %)</span></span>
               <span><span className="small muted">Durée </span><b className="mono">{fmt(track.analysis.duration)}</b></span>
               <span><span className="small muted">Sections </span><b>{track.analysis.sections.length}</b></span>
-              <span className="small dim">{track.analysis.events.filter((e) => e.kind === 'impact').length} impacts · {track.analysis.events.filter((e) => e.kind === 'riser').length} montées</span>
+              <span className="small dim">{track.analysis.events.filter((e) => e.kind === 'impact').length} impacts · {track.analysis.events.filter((e) => e.kind === 'riser').length} montées · {Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0))} s de voix</span>
             </div>
             <SectionStrip track={track} selected={selected} onSelect={setSelected} pos={playing?.trackId === track.id ? pos : null} />
             <p className="small dim" style={{ marginBottom: 0 }}>Étiquettes estimées par répétition et énergie (pas de modèle entraîné) : corrigez-les dans le tableau si besoin, le show suivra.</p>
@@ -177,7 +180,9 @@ export function MusicPage() {
                             <span className="mono" title="Énergie du plan (0–5)">{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
                             {p.palette.map((c) => <span key={c} style={{ width: 12, height: 12, borderRadius: 3, background: c, display: 'inline-block' }} />)}
                             <span>{EFFECT_NAMES[p.effect]}{p.effect !== 'none' ? ` ${p.effectBeats} t` : ''}</span>
-                            <span className="dim">· {MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}</span>
+                            <span className="dim">· {MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}{p.focus ? ` · vers ${p.focus === 'audience' ? 'le public' : markers.find((m) => m.id === p.focus)?.name ?? 'un repère'}` : ''}</span>
+                            {p.groups.length > 0 && <span className="dim">· {p.groups.map((g) => groups.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}</span>}
+                            {p.extras.length > 0 && <span className="dim">· {p.extras.map((x) => EXTRA_NAMES[x]).join(', ')}</span>}
                             {p.note && <span className="badge">{p.note}</span>}
                           </span>
                         ) : <span className="dim">—</span>}

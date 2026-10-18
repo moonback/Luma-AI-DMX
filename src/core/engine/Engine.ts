@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { FixtureValues } from '../model/schemas';
 import { coarseChannel, isDangerousValue } from '../fixtures/profiles';
 import { CURVES, lerp } from '../util/math';
-import { computeEffect, effectRate } from './effects';
+import { computeEffect, effectRate, type AudioBands } from './effects';
 import { mergeSources, type EffectOutput, type LayerInput } from './merge';
 import { CueListPlayback, type PlaybackStatus } from './playback';
 import { finalizeFixture, renderFixture, type BlackoutPolicy } from './render';
@@ -137,6 +137,8 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
   blackout = false;
   bpm = 120;
   bpmSource: 'manual' | 'audio' = 'manual';
+  /** Band levels of the current audio, for band-follower effects (set by the audio reactions, null when stale). */
+  audioBands: AudioBands | null = null;
 
   /** Computed state (normalized, after merge/defaults/master/blackout). */
   values: FixtureValues = {};
@@ -336,13 +338,13 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
     const aiValues = aiOverride ?? this.ai.values;
     if (Object.keys(aiValues).length) layers.push({ id: 'ai', label: 'IA', kind: 'ai', priority: this.settings.priorities.ai, order: aiOverride ? this.seq + 1 : this.ai.order, values: aiValues });
     const tl = this.timeline.timelineId ? this.index.timelines.get(this.timeline.timelineId) : undefined;
-    const tv = this.timeline.evaluate(tl, this.index, this.bpm, this.settings.maxStrobeHz);
+    const tv = this.timeline.evaluate(tl, this.index, this.bpm, this.settings.maxStrobeHz, this.audioBands);
     if (Object.keys(tv.values).length) layers.push({ id: 'timeline', label: `Timeline · ${tl?.name ?? ''}`, kind: 'timeline', priority: this.settings.priorities.timeline, order: 0, values: tv.values });
     effects.push(...tv.effects);
     for (const inst of this.effects.values()) {
       const def = this.index.effects.get(inst.effectId);
       if (!def) continue;
-      effects.push({ id: inst.instanceId, label: def.name, priority: def.priority, order: inst.order, blend: def.blend, values: computeEffect(def, inst.phase, this.index.resolveTargets(def.targets)) });
+      effects.push({ id: inst.instanceId, label: def.name, priority: def.priority, order: inst.order, blend: def.blend, values: computeEffect(def, inst.phase, this.index.resolveTargets(def.targets), this.audioBands) });
     }
     for (const ext of this.external.values()) {
       if (ext.layer) layers.push(ext.layer);

@@ -1,7 +1,7 @@
 import type { FixtureValues, Timeline } from '../model/schemas';
 import { attributeClass } from '../fixtures/attributes';
 import type { EffectOutput } from './merge';
-import { computeEffect, effectRate } from './effects';
+import { computeEffect, effectRate, type AudioBands } from './effects';
 import type { ProjectIndex } from './resolve';
 
 export type TransportState = 'stopped' | 'playing' | 'paused';
@@ -73,7 +73,7 @@ export class TimelineTransport {
   }
 
   /** Values contributed by active scene/effect events at the current playhead. */
-  evaluate(tl: Timeline | undefined, index: ProjectIndex, bpm: number, maxStrobeHz: number): { values: FixtureValues; effects: EffectOutput[] } {
+  evaluate(tl: Timeline | undefined, index: ProjectIndex, bpm: number, maxStrobeHz: number, audio: AudioBands | null = null): { values: FixtureValues; effects: EffectOutput[] } {
     const values: FixtureValues = {};
     const effects: EffectOutput[] = [];
     if (!tl || this.state === 'stopped') return { values, effects };
@@ -101,7 +101,7 @@ export class TimelineTransport {
           priority: def.priority,
           order: 0,
           blend: def.blend,
-          values: computeEffect(def, phase, index.resolveTargets(def.targets)),
+          values: computeEffect(def, phase, index.resolveTargets(def.targets), audio),
         });
       }
     }

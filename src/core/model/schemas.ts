@@ -248,7 +248,7 @@ export const cueListSchema = z.object({
 });
 export type CueList = z.infer<typeof cueListSchema>;
 
-export const EFFECT_TYPES = ['fade', 'pulse', 'chase', 'wave', 'rainbow', 'strobe', 'dimmerWave', 'colorCycle', 'panTilt', 'randomMove'] as const;
+export const EFFECT_TYPES = ['fade', 'pulse', 'chase', 'wave', 'rainbow', 'strobe', 'dimmerWave', 'colorCycle', 'panTilt', 'randomMove', 'fan', 'bassFollow', 'brightnessColor'] as const;
 export type EffectType = (typeof EFFECT_TYPES)[number];
 export const targetSchema = z.object({
   fixtureIds: z.array(idSchema).default([]),
@@ -404,12 +404,15 @@ export const songAnalysisSchema = z.object({
   downbeats: z.array(seconds).max(10000),
   sections: z.array(songSectionSchema).max(300),
   key: z.object({ tonic: z.number().int().min(0).max(11), mode: z.enum(['major', 'minor']), confidence: unitSchema }),
-  events: z.array(z.object({ t: seconds, kind: z.enum(['impact', 'riser', 'silence']), duration: z.number().min(0).max(600) })).max(2000),
+  /** `vocal`: stretch where a voice is detected (presence in 300 Hz–3 kHz + harmonic stability). */
+  events: z.array(z.object({ t: seconds, kind: z.enum(['impact', 'riser', 'silence', 'vocal']), duration: z.number().min(0).max(600) })).max(2000),
 });
 export type SongAnalysis = z.infer<typeof songAnalysisSchema>;
 
-export const SHOW_MOVEMENTS = ['none', 'slow', 'sweep', 'fast'] as const;
-export const SHOW_EFFECTS = ['none', 'wave', 'pulse', 'chase', 'rainbow', 'strobe'] as const;
+export const SHOW_MOVEMENTS = ['none', 'slow', 'sweep', 'fast', 'fan', 'ballyhoo'] as const;
+export const SHOW_EFFECTS = ['none', 'wave', 'pulse', 'chase', 'rainbow', 'strobe', 'colorChase'] as const;
+/** Section layers: intensity ramp, blinder hit, zoom/iris breathing, band followers (dimmer ← bass, colour ← brightness). */
+export const SHOW_EXTRAS = ['ramp', 'blinder', 'breathe', 'bassFollow', 'colorFollow'] as const;
 /** Beam look of the moving heads: open, a gobo, gobo + prism, or frost (soft edge). */
 export const SHOW_BEAMS = ['open', 'gobo', 'prism', 'frost'] as const;
 export const showSectionPlanSchema = z.object({
@@ -425,11 +428,17 @@ export const showSectionPlanSchema = z.object({
   effectBeats: z.number().min(0.5).max(16),
   /** Flash on detected impacts inside the section. */
   accents: z.boolean(),
+  /** Project groups lit in this section (ids); empty = the fixture families of `layers`. */
+  groups: z.array(idSchema).max(32).default([]),
+  /** Where the moving heads aim: a stage marker id, the audience, or null (spread focus). */
+  focus: z.union([z.literal('audience'), idSchema]).nullable().default(null),
+  extras: z.array(z.enum(SHOW_EXTRAS)).max(SHOW_EXTRAS.length).default([]),
   /** Locked sections are kept when the show is regenerated. */
   locked: z.boolean().default(false),
   note: z.string().max(200).default(''),
 });
 export type ShowSectionPlan = z.infer<typeof showSectionPlanSchema>;
+export type ShowExtra = (typeof SHOW_EXTRAS)[number];
 export const showPlanSchema = z.object({
   intent: z.string().max(500),
   provider: z.enum(['local', 'openrouter']),

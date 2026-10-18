@@ -100,16 +100,20 @@ export async function planShow(app: AppService, t: MusicTrack, intent: string, v
   app.aiBusy = true;
   try {
     const a = t.analysis;
+    const vocals = a.events.filter((e) => e.kind === 'vocal');
+    const voiced = (s: { start: number; end: number }) => vocals.reduce((d, v) => d + Math.max(0, Math.min(s.end, v.t + v.duration) - Math.max(s.start, v.t)), 0) / Math.max(0.1, s.end - s.start);
+    const names = (list: { name: string }[]) => (list.length ? list.map((x) => `"${x.name}"`).join(', ') : '(none)');
     // Only the symbolic structure leaves the machine: no audio.
     const structure = [
       `Tempo ${a.bpm.toFixed(1)} BPM, key ${KEY_NAMES[a.key.tonic]} ${a.key.mode}, duration ${a.duration.toFixed(0)} s.`,
       `Rig: ${rig.wash} wash/PAR, ${rig.moving} moving heads, ${rig.bars} LED bars; strobeAllowed: ${rig.allowStrobe}.`,
-      'Sections (index, label, start s, duration s, measured energy 0..1, repeat group):',
-      ...a.sections.map((s, i) => `${i}. ${s.label} (${SECTION_NAMES[s.label]}) start ${s.start.toFixed(1)} dur ${(s.end - s.start).toFixed(1)} energy ${s.energy.toFixed(2)} group ${s.cluster}`),
+      `Groups: ${names(rig.groups)}. Stage markers: ${names(rig.markers)}.`,
+      'Sections (index, label, start s, duration s, measured energy 0..1, repeat group, share of the section with a voice):',
+      ...a.sections.map((s, i) => `${i}. ${s.label} (${SECTION_NAMES[s.label]}) start ${s.start.toFixed(1)} dur ${(s.end - s.start).toFixed(1)} energy ${s.energy.toFixed(2)} group ${s.cluster} voice ${voiced(s).toFixed(2)}`),
     ].join('\n');
     const model = ai.model || DEFAULT_OPENROUTER_MODEL;
     const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-    const r = await planShowWithOpenRouter(intent, structure, { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps }, local.sections);
+    const r = await planShowWithOpenRouter(intent, structure, { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps }, local.sections, { groups: rig.groups, markers: rig.markers });
     app.aiLastError = null;
     // Locked sections are kept from the previous plan.
     const sections = r.sections.map((s, i) => (t.plan?.sections[i]?.locked && t.plan.sections.length === r.sections.length ? t.plan.sections[i]! : s));

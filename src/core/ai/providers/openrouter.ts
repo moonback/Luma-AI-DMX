@@ -1,7 +1,10 @@
 import { z } from 'zod';
-import { EFFECT_TYPES, FIXTURE_TYPES, hexColorSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_MOVEMENTS, showSectionPlanSchema, type ShowSectionPlan } from '../../model/schemas';
+import { FIXTURE_TYPES, hexColorSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS, showSectionPlanSchema, type ShowSectionPlan } from '../../model/schemas';
 import { clamp } from '../../util/math';
+import { AI_EFFECT_TYPES } from '../actions';
 import { parseIntent } from '../../music/songToShow';
+import type { NamedRef } from '../../music/showRig';
+import { normalize } from '../local/interpreter';
 import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
 import { coarseChannel } from '../../fixtures/profiles';
@@ -24,7 +27,7 @@ const target = z.object({
 });
 const look = z.object({ target, level: z.number().optional(), color: z.string().optional(), colors: z.array(z.string()).optional(), pan: z.number().optional(), tilt: z.number().optional() });
 const effect = z.object({
-  name: z.string(), effectType: z.enum(EFFECT_TYPES), target,
+  name: z.string(), effectType: z.enum(AI_EFFECT_TYPES), target,
   speed: z.number().optional(), bpmSync: z.boolean().optional(), beatsPerCycle: z.number().optional(), amplitude: z.number().optional(),
   offset: z.number().optional(), phaseSpread: z.number().optional(), colors: z.array(z.string()).optional(),
   shape: z.enum(['circle', 'figure8', 'pan', 'tilt']).optional(),
@@ -40,7 +43,7 @@ const llmAction = z.object({
   fade: z.number().optional(),
   effect: effect.optional(),
   effectName: z.string().optional(),
-  effectType: z.enum(EFFECT_TYPES).optional(),
+  effectType: z.enum(AI_EFFECT_TYPES).optional(),
   all: z.boolean().optional(),
   name: z.string().optional(),
   look: z.array(look).optional(),
@@ -306,6 +309,9 @@ const llmShowSchema = z.object({
     beam: z.enum(SHOW_BEAMS),
     effectBeats: z.number(),
     accents: z.boolean(),
+    groups: z.array(z.string()),
+    focus: z.string().nullable(),
+    extras: z.array(z.enum(SHOW_EXTRAS)),
   })),
 });
 /** What is actually parsed: sections are repaired field by field rather than rejected as a whole. */
@@ -321,7 +327,11 @@ Rules:
 - energy: integer 0 (almost dark) to 5 (maximum). Follow the operator's intent first, then the song's dynamics.
 - palette: 1 to 4 colours "#RRGGBB". Sections that are repeats of the same music should share a palette.
 - layers: which fixture families are lit (only families present in the rig).
-- movement: none | slow | sweep | fast (moving heads only). effect: none | wave | pulse | chase | rainbow | strobe.
+- movement (moving heads only): none | slow | sweep | fast | fan (heads open and close like a fan) | ballyhoo (wide random sweeps).
+- effect: none | wave | pulse | chase | rainbow | strobe | colorChase (palette colours chasing across the fixtures).
+- groups: names of project groups (from the "Groups" list) lit in this section, e.g. back lights on verses, front lights on choruses; [] = use layers.
+- focus: name of a stage marker (from the "Stage markers" list) the moving heads aim at and hold (e.g. a shower on the singer while they sing), "audience" to sweep the audience, or null.
+- extras (any of): ramp (long calm section slowly building up), blinder (full hit on the section start, for drops), breathe (zoom / iris breathing on calm parts), bassFollow (dimmer follows the bass, bass-heavy peaks), colorFollow (colour follows the brightness of the music).
 - beam (moving heads with gobo/prism/frost): open | gobo | prism (gobo + prism, for peaks) | frost (soft, for calm parts).
 - effectBeats: effect cycle in beats (0.5 to 16). Use strobe ONLY if strobeAllowed is true AND the operator asked for it.
 - accents: flash on detected impacts (true only for high-energy sections).
@@ -331,6 +341,9 @@ Rules:
  * Repairs one LLM section: numbers are rounded/clamped, invalid colours dropped, and every field still missing or
  * invalid is taken from `fallback` (the local plan). Returns the names of the replaced fields.
  */
+/** Newer fields an older or terse model may leave out: kept from the fallback without being reported as fixed. */
+const OPTIONAL_FIELDS = new Set(['groups', 'focus', 'extras']);
+
 export function repairShowSection(raw: Record<string, unknown>, fallback: ShowSectionPlan, index: number): { section: ShowSectionPlan; fixed: string[] } {
   const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
   const energy = num(raw.energy), beats = num(raw.effectBeats);
@@ -345,7 +358,7 @@ export function repairShowSection(raw: Record<string, unknown>, fallback: ShowSe
   for (const [key, schema] of Object.entries(showSectionPlanSchema.shape)) {
     const r = candidate[key] === undefined ? null : schema.safeParse(candidate[key]);
     if (r?.success) section[key] = r.data;
-    else fixed.push(key);
+    else if (r || !OPTIONAL_FIELDS.has(key)) fixed.push(key);
   }
   return { section: section as ShowSectionPlan, fixed };
 }
@@ -355,7 +368,9 @@ export function repairShowSection(raw: Record<string, unknown>, fallback: ShowSe
  * section): missing sections and invalid fields come from it, a strobe the operator did not ask for is removed.
  * Only an unusable answer (no sections at all) throws.
  */
-export async function planShowWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions, fallback: ShowSectionPlan[]): Promise<{ summary: string; sections: ShowSectionPlan[]; model: string; notices: string[] }> {
+export async function planShowWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions, fallback: ShowSectionPlan[], refs: { groups: NamedRef[]; markers: NamedRef[] } = { groups: [], markers: [] }): Promise<{ summary: string; sections: ShowSectionPlan[]; model: string; notices: string[] }> {
+  // The model names groups and markers; the plan stores their ids (unknown names are dropped).
+  const idOf = (list: NamedRef[], x: unknown) => (typeof x === 'string' ? list.find((r) => r.id === x || normalize(r.name).trim() === normalize(x).trim())?.id : undefined);
   const r = await completeJson(SHOW_SYSTEM, `Operator intent: ${intent || '(none)'}\n\n${structure}`, 'show_plan', SHOW_JSON_SCHEMA, opts);
   const loose = looseShowSchema.safeParse(r.json);
   if (!loose.success) throw new OpenRouterError(`Plan IA non conforme : ${loose.error.issues[0]?.path.join('.')} ${loose.error.issues[0]?.message}`, null);
@@ -365,6 +380,8 @@ export async function planShowWithOpenRouter(intent: string, structure: string, 
   const sections = fallback.map((fb, i) => {
     const raw = loose.data.sections[i];
     if (!raw) return { ...fb, index: i, locked: false, note: '' };
+    if (Array.isArray(raw.groups)) raw.groups = raw.groups.map((g) => idOf(refs.groups, g)).filter(Boolean);
+    if (typeof raw.focus === 'string' && raw.focus !== 'audience') raw.focus = idOf(refs.markers, raw.focus) ?? null;
     const { section, fixed } = repairShowSection(raw, fb, i);
     if (section.effect === 'strobe' && !strobeWanted) { section.effect = 'chase'; fixed.push('strobe non demandé → chase'); }
     if (fixed.length) fixedNotes.push(`${i + 1} (${fixed.join(', ')})`);

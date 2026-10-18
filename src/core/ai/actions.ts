@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { EFFECT_TYPES, FIXTURE_TYPES, hexColorSchema, unitSchema } from '../model/schemas';
+import { FIXTURE_TYPES, hexColorSchema, unitSchema, type EffectType } from '../model/schemas';
+
+/** Effect types of the AI contract v1; newer engine types (fan, band followers) need a contract bump to be offered. */
+export const AI_EFFECT_TYPES = ['fade', 'pulse', 'chase', 'wave', 'rainbow', 'strobe', 'dimmerWave', 'colorCycle', 'panTilt', 'randomMove'] as const satisfies readonly EffectType[];
 
 /**
  * The ONLY things an AI (local or remote) may ask for. Actions are validated against the patch and the
@@ -34,7 +37,7 @@ export type LookPart = z.infer<typeof lookPartSchema>;
 
 export const aiEffectSpecSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  effectType: z.enum(EFFECT_TYPES),
+  effectType: z.enum(AI_EFFECT_TYPES),
   target: aiTargetSchema,
   speed: z.number().min(0.01).max(30).optional(),
   bpmSync: z.boolean().optional(),
@@ -60,9 +63,9 @@ export const aiActionSchema = z.discriminatedUnion('type', [
     zoom: unitSchema.optional(), focus: unitSchema.optional(), frost: unitSchema.optional(), iris: unitSchema.optional(), fade,
   }),
   z.object({ type: z.literal('startEffect'), effect: aiEffectSpecSchema }),
-  z.object({ type: z.literal('stopEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(EFFECT_TYPES).optional(), all: z.boolean().optional() }),
+  z.object({ type: z.literal('stopEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(AI_EFFECT_TYPES).optional(), all: z.boolean().optional() }),
   /** Speeds up (> 1) or slows down (< 1) running AI effects, all of them when no type/name is given. */
-  z.object({ type: z.literal('adjustEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(EFFECT_TYPES).optional(), speedFactor: z.number().min(0.1).max(10) }),
+  z.object({ type: z.literal('adjustEffect'), effectName: z.string().max(80).optional(), effectType: z.enum(AI_EFFECT_TYPES).optional(), speedFactor: z.number().min(0.1).max(10) }),
   z.object({ type: z.literal('createScene'), name: z.string().trim().min(1).max(80), look: z.array(lookPartSchema).min(1).max(64), apply: z.boolean().default(false), fade }),
   z.object({ type: z.literal('applyScene'), sceneName: z.string().trim().min(1).max(80), fade }),
   z.object({

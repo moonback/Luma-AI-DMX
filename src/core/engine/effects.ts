@@ -43,11 +43,15 @@ function colorAt(colors: readonly string[], t: number): Rgb {
   return { r: lerp(a.r, b.r, u), g: lerp(a.g, b.g, u), b: lerp(a.b, b.b, u) };
 }
 
+/** Smoothed band levels (0..1) of the audio being played or heard; null when no fresh audio. */
+export interface AudioBands { bass: number; brightness: number }
+
 /**
  * Pure function: effect output for `phase` (cycles elapsed since start). Deterministic for a given input,
  * random effects use a seeded hash so the same seed/phase always yields the same values.
+ * Band followers (bassFollow, brightnessColor) read `audio` and output nothing without it.
  */
-export function computeEffect(effect: Effect, phase: number, targets: readonly ResolvedFixture[]): FixtureValues {
+export function computeEffect(effect: Effect, phase: number, targets: readonly ResolvedFixture[], audio: AudioBands | null = null): FixtureValues {
   const out: FixtureValues = {};
   const n = targets.length;
   const [lo, hi] = range(effect);
@@ -55,6 +59,7 @@ export function computeEffect(effect: Effect, phase: number, targets: readonly R
   const isReverse = p.direction === 'reverse';
 
   // Colour effects run per pixel: every cell of a multi-cell fixture is its own element in the phase spread.
+  if ((effect.type === 'bassFollow' || effect.type === 'brightnessColor') && !audio) return out;
   if (effect.type === 'rainbow' || effect.type === 'colorCycle') {
     const elements = targets.flatMap((rf) => {
       const cells = colorCells(rf);
@@ -110,6 +115,21 @@ export function computeEffect(effect: Effect, phase: number, targets: readonly R
         else if (p.shape === 'figure8') { set.pan = mid + half * Math.sin(a); set.tilt = mid + half * Math.sin(2 * a); }
         else if (p.shape === 'pan') set.pan = mid + half * Math.sin(a);
         else set.tilt = mid + half * Math.sin(a);
+        break;
+      }
+      case 'fan': {
+        // Heads spread symmetrically from the centre and fold back: outer heads swing widest, in opposite directions.
+        const side = n > 1 ? (2 * i) / (n - 1) - 1 : 0;
+        set.pan = 0.5 + side * ((hi - lo) / 2) * (0.5 - 0.5 * Math.cos(TAU * phase));
+        break;
+      }
+      case 'bassFollow':
+        set.dimmer = lerp(1 - p.amplitude, 1, Math.min(1, audio!.bass * 1.4));
+        break;
+      case 'brightnessColor': {
+        const [dark, bright] = [p.colors[0] ?? '#FF3000', p.colors[1] ?? '#00C8FF'].map(hexToRgb) as [Rgb, Rgb];
+        const b = Math.min(1, audio!.brightness * 2);
+        Object.assign(set, colorToAttributes(rf, { r: lerp(dark.r, bright.r, b), g: lerp(dark.g, bright.g, b), b: lerp(dark.b, bright.b, b) }));
         break;
       }
       case 'randomMove': {
