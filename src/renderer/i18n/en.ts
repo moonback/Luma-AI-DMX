@@ -77,4 +77,15 @@ export const en: Record<MessageKey, string> = {
 
   'fixtures.exportMvr': 'MVR',
   'fixtures.exportMvrTitle': 'Layout and patch as MVR (Capture, Vectorworks, grandMA3…)',
+
+  'stage3d.spin': 'Orbit',
+  'stage3d.spinTitle': 'Automatic camera orbit around the stage (R)',
+  'stage3d.solo': 'Solo',
+  'stage3d.soloTitle': 'Dim the fixtures outside the selection (I)',
+  'stage3d.frameSel': 'Frame the selection, or the whole stage without a selection (F)',
+  'stage3d.present': 'Presentation mode: hide the interface (H)',
+  'stage3d.presentExit': 'Leave presentation (H)',
+  'stage3d.exposure': 'Exposure',
+  'stage3d.exposureTitle': 'Overall render brightness',
+  'stage3d.keys': '1–5 cameras · F frame · R orbit · I solo · H presentation',
 };

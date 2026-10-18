@@ -333,7 +333,7 @@ export function updateRig(r: Rig, f: VisualFixture, o: FrameOptions): void {
       b.pool.rotateZ(Math.atan2(local.y, local.x));
       b.pool.scale.set(shape.radius * shape.stretch, shape.radius, 1);
       b.pool.material.map = f.gobo && b.cell < 0 ? textures().gobo(f.gobo) : textures().pool;
-      b.pool.material.color.copy(color).multiplyScalar(Math.min(1.5, intensity * shape.falloff * 1.4));
+      b.pool.material.color.copy(color).multiplyScalar(Math.min(0.9, intensity * shape.falloff * 0.9)); // overlapping pools add up: keep headroom before white
     }
   }
 }

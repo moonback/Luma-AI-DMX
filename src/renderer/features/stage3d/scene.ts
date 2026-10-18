@@ -32,8 +32,8 @@ export const VIEWS: { id: ViewId; label: string }[] = [
 ];
 
 /** `view`: a built-in camera id or the id of a view saved in the project. */
-export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId }
-const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte' };
+export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number }
+const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte', exposure: 1 };
 /** Editor grid steps in meters (0 = free); rotations snap to 15° whenever a grid is on. */
 export const GRIDS = [0, 0.25, 0.5, 1];
 const ROTATION_SNAP_DEG = 15;
@@ -114,6 +114,9 @@ export interface StageLatest {
   edit: boolean;
   tool: 'translate' | 'rotate';
   selSet: SceneRef | null;
+  /** Turntable camera, and fixtures outside the selection dimmed. */
+  spin: boolean;
+  solo: boolean;
 }
 
 /** UI feedback from the 3D view (React state setters). */
@@ -269,7 +272,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.85, 0.55, 0.12);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.5, 0.2);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   bloom.enabled = latest.current.prefs.glow;
@@ -417,7 +420,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
   const t0 = performance.now();
   const loop = () => {
     const now = performance.now();
-    const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st, vis: cfg, follow: fid, edit: editing, tool: tl, selSet: selS } = latest.current;
+    const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st, vis: cfg, follow: fid, edit: editing, tool: tl, selSet: selS, spin, solo } = latest.current;
     // Environment follows the stage layout, stage points, trusses, set pieces and the selection (fixtures never add a truss).
     const k = `${JSON.stringify(st)}|${JSON.stringify(cfg.markers)}|${JSON.stringify(cfg.trusses)}|${JSON.stringify(cfg.props)}|${selS?.id ?? ''}`;
     if (k !== envKey) {
@@ -462,6 +465,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     }
     if (fog) setLowFog(fog, (now - t0) / 1000, p.smoke ? 0.25 + 0.5 * p.haze : 0);
     const group = gf ? useStore.getState().project?.project.groups.find((g) => g.id === gf) : null;
+    const dim = (id: string) => (!!group && !group.fixtureIds.includes(id)) || (solo && sel.length > 0 && !sel.includes(id));
     const ids = new Set(m.map((f) => f.id));
     for (const [id, r] of rigs) if (!ids.has(id)) { disposeRig(r, scene); rigs.delete(id); }
     for (const f of m) {
@@ -472,10 +476,11 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
         rigs.set(f.id, r);
       }
       const o = overrides.get(f.id);
-      updateRig(r, o ? { ...f, ...o } : f, { time: (now - t0) / 1000, haze: p.haze, pools: p.pools && !p.real, labels: p.labels, selected: sel.includes(f.id), dimmed: !!group && !group.fixtureIds.includes(f.id), stage: st });
+      updateRig(r, o ? { ...f, ...o } : f, { time: (now - t0) / 1000, haze: p.haze, pools: p.pools && !p.real, labels: p.labels, selected: sel.includes(f.id), dimmed: dim(f.id), stage: st });
     }
     real.setEnabled(p.real);
-    real.update(m, (f) => !!group && !group.fixtureIds.includes(f.id));
+    real.update(m, (f) => dim(f.id));
+    renderer.toneMappingExposure = 1.1 * p.exposure;
     if (anim) {
       const k2 = Math.min(1, (now - anim.start) / 700);
       const e = k2 < 0.5 ? 2 * k2 * k2 : 1 - (-2 * k2 + 2) ** 2 / 2;
@@ -510,6 +515,8 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     // Beam's-eye view: the camera rides just ahead of the lens along the beam axis (orbit disabled meanwhile).
     const followed = fid ? m.find((f) => f.id === fid) : undefined;
     controls.enabled = !followed && !dragging;
+    controls.autoRotate = spin && !followed && !dragging;
+    controls.autoRotateSpeed = 0.8;
     if (followed) {
       const d = beamDirection(followed);
       const dir = new THREE.Vector3(d.x, d.y, d.z);

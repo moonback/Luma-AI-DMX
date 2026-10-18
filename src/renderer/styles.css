@@ -255,11 +255,23 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 
 /* 3D stage */
 .stage3d canvas { display: block; }
-.stage3d-toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: var(--radius); background: rgba(11, 13, 18, 0.72); border: 1px solid var(--border); backdrop-filter: blur(6px); z-index: 2; }
+.stage3d-toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: 12px; background: linear-gradient(180deg, rgba(24, 28, 40, 0.78), rgba(11, 13, 18, 0.7)); border: 1px solid rgba(255, 255, 255, 0.07); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px) saturate(1.2); z-index: 2; }
+.stage3d-toolbar .chip { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.07); display: inline-flex; align-items: center; gap: 5px; transition: background var(--dur), border-color var(--dur), color var(--dur); }
+.stage3d-toolbar .chip:hover { background: rgba(255, 255, 255, 0.07); }
+.stage3d-toolbar .chip.on { background: var(--violet-soft); border-color: var(--violet); box-shadow: 0 0 12px rgba(139, 92, 246, 0.35); }
+.stage3d-fps { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; opacity: 0.85; min-width: 58px; text-align: center; }
+.stage3d-fps.ok { color: var(--ok); }
+.stage3d-fps.mid { color: var(--warn); }
+.stage3d-fps.low { color: var(--err); }
+.stage3d-vignette { position: absolute; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%); }
+.stage3d-unbare { position: absolute; top: 10px; right: 10px; z-index: 2; opacity: 0.25; transition: opacity var(--dur); }
+.stage3d-unbare:hover, .stage3d-unbare:focus-visible { opacity: 1; }
 .stage3d-panel { position: absolute; right: 10px; bottom: 34px; width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.92); border: 1px solid var(--border-strong); z-index: 2; }
 .stage3d-tip { position: absolute; pointer-events: none; display: flex; flex-direction: column; padding: 6px 9px; border-radius: 6px; background: rgba(18, 22, 32, 0.95); border: 1px solid var(--border-strong); z-index: 3; white-space: nowrap; }
 .stage3d-dims { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); pointer-events: none; padding: 5px 10px; border-radius: 6px; background: rgba(18, 22, 32, 0.95); border: 1px solid var(--violet); color: var(--text); z-index: 3; white-space: nowrap; }
 .stage3d-status { position: absolute; left: 12px; bottom: 8px; right: 290px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; z-index: 2; pointer-events: none; }
+.stage3d-status > .small { padding: 3px 10px; border-radius: 999px; background: rgba(11, 13, 18, 0.6); border: 1px solid rgba(255, 255, 255, 0.06); backdrop-filter: blur(6px); }
+.stage3d-keys { color: var(--text-3); }
 .stage3d-status .badge { pointer-events: auto; }
 .stage3d-sep { width: 1px; height: 18px; background: var(--border); }
 .stage3d-pop { position: absolute; top: calc(100% + 6px); right: 0; width: 290px; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.96); border: 1px solid var(--border-strong); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); z-index: 4; }

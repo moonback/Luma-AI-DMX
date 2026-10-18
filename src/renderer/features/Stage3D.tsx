@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Camera, CircleStop, Cloud, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Plus, Rotate3d, SlidersHorizontal, Sparkles, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
+import { Camera, CircleStop, Cloud, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Orbit, Plus, Presentation, Rotate3d, ScanEye, SlidersHorizontal, Sparkles, SunMedium, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { useResolved } from '../components/ui';
+import { useT } from '../i18n';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import type { Fixture, FixtureValues, Project } from '../../core/model/schemas';
 import { audienceGlare } from '../../core/visualizer/beam';
@@ -94,8 +95,12 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const [lights, setLights] = useState(0);
   const [shadows, setShadows] = useState(0);
   const [menu, setMenu] = useState(false);
-  const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet });
-  latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet };
+  const [spin, setSpin] = useState(false);
+  const [solo, setSolo] = useState(false);
+  const [bare, setBare] = useState(false);
+  const t = useT();
+  const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo });
+  latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo };
   const api = useRef<StageApi | null>(null);
 
   useEffect(() => {
@@ -144,6 +149,34 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     setPrefs({ view: view.id });
   };
   const deleteView = (id: string) => void act({ type: 'project.update', visualizer: { views: vis.views.filter((v) => v.id !== id) } });
+  /** Frames the selected fixtures (their centre), or goes back to the current camera without a selection. */
+  const frameSelection = () => {
+    const sel = model.filter((f) => selection.includes(f.id));
+    setFollow(null);
+    if (!sel.length) { api.current?.goTo(prefs.view); return; }
+    const avg = (k: 'x' | 'y' | 'height') => sel.reduce((s, f) => s + f[k], 0) / sel.length;
+    api.current?.frame({ x: avg('x'), y: avg('y'), height: avg('height') });
+  };
+  // View shortcuts (no modifier, not while typing): 1–5 cameras, F frame, R orbit, I solo, H presentation.
+  const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keys.current = (e) => {
+    const el = e.target as HTMLElement;
+    if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable) return;
+    const view = VIEWS[Number(e.key) - 1];
+    const k = e.key.toLowerCase();
+    if (view) pickView(view.id);
+    else if (k === 'f') frameSelection();
+    else if (k === 'r') setSpin((v) => !v);
+    else if (k === 'i') setSolo((v) => !v);
+    else if (k === 'h') setBare((v) => !v);
+    else return;
+    e.preventDefault();
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keys.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const toggleRecord = () => { api.current?.record(!recording); setRecording(!recording); };
   const fullscreen = () => {
     const el = wrap.current;
@@ -156,7 +189,9 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   return (
     <div ref={wrap} className="canvas-wrap stage3d" style={{ height: '100%' }}>
       <div ref={host} style={{ position: 'absolute', inset: 0, cursor: placing ? 'crosshair' : undefined }} onPointerDown={() => { setMenu(false); setCtx(null); }} onDragOver={acceptLibraryDrag} onDrop={(e) => dropLibraryItem(e, api.current?.groundAt(e.clientX, e.clientY) ?? null)} data-testid="stage-3d" />
-      <div className="stage3d-toolbar">
+      <div className="stage3d-vignette" aria-hidden />
+      {bare && <button className="chip stage3d-unbare" onClick={() => setBare(false)} title={t('stage3d.presentExit')} aria-label={t('stage3d.presentExit')} data-testid="present-exit"><Presentation size={12} /></button>}
+      {!bare && <div className="stage3d-toolbar">
         <div className="chips" role="group" aria-label="Caméras">
           <Camera size={14} className="dim" />
           {VIEWS.map((v) => (
@@ -171,6 +206,12 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           {vis.views.length < 20 && <button className="chip" onClick={saveView} title="Enregistrer le point de vue actuel dans le projet" aria-label="Enregistrer la vue" data-testid="cam-save"><Plus size={12} /></button>}
         </div>
         <div className="grow" />
+        <div className="chips" role="group">
+          <button className="chip" onClick={frameSelection} title={t('stage3d.frameSel')} aria-label={t('stage3d.frameSel')} data-testid="frame-sel"><Focus size={12} /></button>
+          <button className={`chip ${spin ? 'on' : ''}`} onClick={() => setSpin(!spin)} title={t('stage3d.spinTitle')} aria-pressed={spin} data-testid="spin"><Orbit size={12} /> {t('stage3d.spin')}</button>
+          <button className={`chip ${solo ? 'on' : ''}`} onClick={() => setSolo(!solo)} title={t('stage3d.soloTitle')} aria-pressed={solo} data-testid="solo"><ScanEye size={12} /> {t('stage3d.solo')}</button>
+        </div>
+        <span className="stage3d-sep" />
         <button className={`chip ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title="Édition directe : déplacer et pivoter projecteurs et structures" data-testid="edit3d"><Move3d size={12} /> Éditer</button>
         {edit && (
           <>
@@ -190,12 +231,17 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         <button className="chip" onClick={() => api.current?.capture()} title="Capture d’image (PNG)" aria-label="Capture d’image" data-testid="capture"><ImageDown size={12} /></button>
         <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} aria-label={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
         <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)" aria-label="Plein écran"><Expand size={12} /></button>
-        <span className="mono small dim" data-testid="fps">{fps} i/s</span>
+        <button className="chip" onClick={() => setBare(true)} title={t('stage3d.present')} aria-label={t('stage3d.present')} data-testid="present"><Presentation size={12} /></button>
+        <span className={`stage3d-fps mono ${fps >= 45 ? 'ok' : fps >= 25 ? 'mid' : 'low'}`} data-testid="fps">{fps} i/s</span>
         {menu && (
           <div className="stage3d-pop" role="dialog" aria-label="Réglages de rendu" data-testid="render-pop">
             <label className="row small" title="Densité de brume : visibilité des faisceaux dans l’air">
               <Sun size={13} className="dim" /><span className="grow">Brume</span>
               <input type="range" min={0} max={100} value={Math.round(prefs.haze * 100)} style={{ width: 130 }} onChange={(e) => setPrefs({ haze: Number(e.target.value) / 100 })} data-testid="haze" />
+            </label>
+            <label className="row small" title={t('stage3d.exposureTitle')}>
+              <SunMedium size={13} className="dim" /><span className="grow">{t('stage3d.exposure')}</span>
+              <input type="range" min={40} max={200} value={Math.round(prefs.exposure * 100)} style={{ width: 130 }} onChange={(e) => setPrefs({ exposure: Number(e.target.value) / 100 })} onDoubleClick={() => setPrefs({ exposure: 1 })} data-testid="exposure" />
             </label>
             <div className="chips">
               <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title="Halo lumineux (bloom)"><Sparkles size={12} /> Glow</button>
@@ -216,7 +262,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
             </label>
           </div>
         )}
-      </div>
+      </div>}
       {hover && (
         <div className="stage3d-tip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <b>{hover.f.name}</b>
@@ -225,7 +271,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       )}
       {dims && <div className="stage3d-dims mono small" data-testid="dims">{dims}</div>}
       {ctx && <ContextMenu ctx={ctx} model={model} vis={vis} patch={project.patch} onClose={() => setCtx(null)} />}
-      <div className="stage3d-status">
+      {!bare && <div className="stage3d-status">
         {(dark.length > 0 || glare.length > 0) && (
           <div className="row" style={{ gap: 6 }}>
             {dark.length > 0 && (
@@ -240,8 +286,8 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
             )}
           </div>
         )}
-        <div className="small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · clic droit : menu · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}</div>
-      </div>
+        <div className="small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · clic droit : menu · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}<span className="stage3d-keys"> · {t('stage3d.keys')}</span></div>
+      </div>}
     </div>
   );
 }

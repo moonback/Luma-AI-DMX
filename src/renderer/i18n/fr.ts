@@ -78,6 +78,17 @@ export const fr = {
 
   'fixtures.exportMvr': 'MVR',
   'fixtures.exportMvrTitle': 'Implantation et patch au format MVR (Capture, Vectorworks, grandMA3…)',
+
+  'stage3d.spin': 'Tourner',
+  'stage3d.spinTitle': 'Rotation automatique de la caméra autour de la scène (R)',
+  'stage3d.solo': 'Isoler',
+  'stage3d.soloTitle': 'Atténuer les projecteurs hors sélection (I)',
+  'stage3d.frameSel': 'Cadrer la sélection, ou toute la scène sans sélection (F)',
+  'stage3d.present': 'Mode présentation : masquer l’interface (H)',
+  'stage3d.presentExit': 'Quitter la présentation (H)',
+  'stage3d.exposure': 'Exposition',
+  'stage3d.exposureTitle': 'Luminosité globale du rendu',
+  'stage3d.keys': '1–5 caméras · F cadrer · R tourner · I isoler · H présentation',
 } as const;
 
 export type MessageKey = keyof typeof fr;
