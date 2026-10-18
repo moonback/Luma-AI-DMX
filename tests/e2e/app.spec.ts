@@ -652,6 +652,12 @@ test('intelligence musicale : import, analyse, Song-to-Show, lecture synchronis√
   await expect(page.getByTestId('music-plan-summary')).toContainText('sections');
   await expect(page.getByTestId('music-sections')).toContainText('Chase');
   await page.screenshot({ path: `${shots}/20-musique-song-to-show.png` });
+  // A click on a section of the strip opens its editor (label, look, instruction).
+  await page.getByTestId('section-strip').getByRole('button', { name: 'Refrain' }).first().click();
+  await expect(page.getByTestId('section-editor')).toBeVisible();
+  await page.screenshot({ path: `${shots}/20b-musique-modale-section.png` });
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('section-editor')).toBeHidden();
   // Synchronised playback (the timeline chase itself is covered by the timecode unit tests).
   await page.getByTestId('music-play').click();
   await expect(page.getByTestId('music-stop')).toBeVisible();
