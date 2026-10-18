@@ -107,8 +107,8 @@ export function escalation(analysis: SongAnalysis, i: number): number {
   return k ? Math.min(1, 0.5 * k + (last ? 0.5 : 0)) : 0;
 }
 
-/** `bars`: section length in bars; `bassShare`: share of low-frequency energy of the section. */
-function sectionPlan(index: number, energy: number, palette: string[], rig: RigInfo, intent: Intent, variant: number, label: SectionLabel, bars = 0, bassShare = 0.5): ShowSectionPlan {
+/** `bars`: section length in bars; `bassShare`: share of low-frequency energy; `perBeat`: onsets per beat. */
+function sectionPlan(index: number, energy: number, palette: string[], rig: RigInfo, intent: Intent, variant: number, label: SectionLabel, bars = 0, bassShare = 0.5, perBeat = 2): ShowSectionPlan {
   const peak = label === 'chorus' || label === 'drop';
   const alt = (variant + index) % 2 === 0;
   // With a singer on stage: shower on them in the calm parts (still heads), sweep the audience on the peaks.
@@ -123,6 +123,9 @@ function sectionPlan(index: number, energy: number, palette: string[], rig: RigI
   else if (energy >= 5) { effect = 'chase'; effectBeats = 1; }
   if (label === 'drop' && rig.allowStrobe && intent.strobe === 'want') effect = 'strobe';
   if (label === 'bridge' && energy >= 2) { effect = 'rainbow'; effectBeats = 16; }
+  // Busy playing (≥ 3 onsets per beat) runs the effect twice as fast, sparse playing (< 1) half as fast.
+  if (perBeat >= 3) effectBeats = Math.max(1, effectBeats / 2);
+  else if (perBeat < 1) effectBeats = Math.min(16, effectBeats * 2);
   const beam: ShowSectionPlan['beam'] = peak && energy >= 5 ? 'prism' : energy >= 3 ? 'gobo' : energy <= 1 ? 'frost' : 'open';
   const layers = { wash: rig.wash > 0 || (rig.bars === 0 && rig.moving === 0), moving: rig.moving > 0 && (energy >= 2 || peak || !!focus), bars: rig.bars > 0 && energy >= 2 };
   const extras: ShowExtra[] = [];
@@ -180,7 +183,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     const rot = (s.cluster + variant) % base.length;
     const palette = [...base.slice(rot), ...base.slice(0, rot)];
     if ((label === 'chorus' || label === 'drop') && !intent.colors.length) palette.splice(1, 0, accent);
-    const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare);
+    const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60));
     const out = { ...plan, groups: byLabel.get(label) ?? [] };
     return { ...out, why: explain(analysis, i, out, intent, rig) };
   });
@@ -438,6 +441,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   // Breath before a drop: one beat of black so the hit lands on a dark stage (only after a section long enough).
   const breaths = analysis.sections.flatMap((s, i) => (breathBefore(analysis.sections, i) && s.start - analysis.sections[i - 1]!.start > 4 * beat ? [{ t: s.start - beat, duration: beat }] : []));
 
+  let lastLook: TimelineEvent | undefined;
   analysis.sections.forEach((sec, i) => {
     const p = plan.sections[i];
     if (!p) return;
@@ -452,7 +456,8 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     looks[i] = full;
     const nextFade = fades[i + 1] ?? 0;
     // Overlap with the next section by its fade: this scene holds while the next one fades in (crossfade).
-    events.push(ev({ kind: 'scene', refId: scene.id, start: sec.start, duration: len + nextFade, fade: fades[i]!, fadeOut: 0, label }));
+    lastLook = ev({ kind: 'scene', refId: scene.id, start: sec.start, duration: len + nextFade, fade: fades[i]!, fadeOut: 0, label });
+    events.push(lastLook);
     if (ramped) {
       // Intensities rise across the section from RAMP_FROM to the full level (HTP over the section scene).
       const rise: Scene = { id: randomUUID(), name: `${name} · progression`.slice(0, 80), notes: '', values: intensityOnly(full), origin: 'ai' };
@@ -513,6 +518,18 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     for (const e of impacts) events.push(ev({ kind: 'scene', refId: accent.id, start: e.t, duration: beat, fade: 0, fadeOut: beat, label: 'Accent', lane: 2 }));
   }
 
+  // Ending: a last hit in the closing seconds gets a white button then black; otherwise the last look fades out
+  // over the last 2 bars.
+  const ending: { t: number; duration: number }[] = [];
+  const lastSec = analysis.sections.at(-1);
+  const final = analysis.events.findLast((e) => e.kind === 'impact' && lastSec && e.t >= lastSec.start && e.t > analysis.duration - 8);
+  if (final && analysis.duration - final.t > beat + 0.05) {
+    const button: Scene = { id: randomUUID(), name: `${short} · final`.slice(0, 80), notes: '', values: whiteHit(rigFixtures), origin: 'ai' };
+    scenes.push(button);
+    events.push(ev({ kind: 'scene', refId: button.id, start: final.t, duration: beat, fade: 0, fadeOut: beat, label: 'Final', lane: 2 }));
+    ending.push({ t: final.t + beat, duration: analysis.duration - final.t - beat });
+  } else if (lastLook) lastLook.fadeOut = Math.min(8 * beat, lastLook.duration);
+
   // Risers: the intensity of the coming section ramps up over the riser (dimmers only, so colours and positions
   // stay those of the current section until the cut).
   analysis.events.filter((e) => e.kind === 'riser' && e.duration > 0).forEach((r) => {
@@ -536,7 +553,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   }
 
   // Silences: scene events are cut around them (intensities merge HTP, so a dark scene on top would not darken).
-  const silences = [...analysis.events.filter((e) => e.kind === 'silence'), ...breaths];
+  const silences = [...analysis.events.filter((e) => e.kind === 'silence'), ...breaths, ...ending];
   const cut: TimelineEvent[] = [];
   for (const e of events) {
     let pieces = [e];

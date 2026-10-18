@@ -361,4 +361,26 @@ describe('Song-to-Show', () => {
     for (const v of [mid!, peak!, calm!]) expect(v.spot1!.pan! + v.spot2!.pan!).toBeCloseTo(1, 1);
     expect(new Set([mid!, peak!, calm!].map((v) => v.spot1!.tilt!.toFixed(2))).size).toBe(3);
   });
+
+  it('fin du show et vitesse des effets : coup final puis noir, sinon fondu ; effet plus rapide sur un jeu dense', () => {
+    const p = demoProject();
+    const index = new ProjectIndex(p);
+    const beat = 60 / analysis.bpm;
+    const quiet = analysis.events.filter((e) => !(e.kind === 'impact' && e.t > analysis.duration - 8));
+    const hit = { t: analysis.duration - 3, kind: 'impact' as const, duration: 0 };
+    const withHit = { ...analysis, events: [...quiet, hit] };
+    const c = compileShow(index, 'T', withHit, planLocally(withHit, '', rigInfo(index, false)), { maxStrobeHz: 10, allowStrobe: false });
+    const scenesAt = (cc: typeof c, t: number) => cc.timeline.events.filter((e) => e.kind === 'scene' && t >= e.start && t < e.start + e.duration);
+    expect(scenesAt(c, hit.t + 0.01).map((e) => e.label)).toContain('Final');
+    expect(scenesAt(c, hit.t + beat + 0.1)).toHaveLength(0);
+    const fade = { ...analysis, events: quiet };
+    const f = compileShow(index, 'T', fade, planLocally(fade, '', rigInfo(index, false)), { maxStrobeHz: 10, allowStrobe: false });
+    const last = f.timeline.events.filter((e) => e.kind === 'scene' && e.lane === 0).at(-1)!;
+    expect(last.fadeOut).toBeCloseTo(Math.min(8 * beat, last.duration));
+
+    const ci = analysis.sections.findIndex((s) => s.label === 'verse');
+    const busy = (perBeat: number) => planLocally({ ...analysis, sections: analysis.sections.map((s, i) => (i === ci ? { ...s, density: (perBeat * analysis.bpm) / 60 } : s)) }, '', rigInfo(index, false)).sections[ci]!.effectBeats;
+    expect(busy(4)).toBeLessThan(busy(2));
+    expect(busy(0.5)).toBeGreaterThan(busy(2));
+  });
 });

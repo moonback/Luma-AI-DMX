@@ -106,8 +106,8 @@ function songStructure(t: MusicTrack, rig: Required<RigInfo>): string {
     `Tempo ${a.bpm.toFixed(1)} BPM, key ${KEY_NAMES[a.key.tonic]} ${a.key.mode}, duration ${a.duration.toFixed(0)} s.`,
     `Rig: ${rig.wash} wash/PAR, ${rig.moving} moving heads, ${rig.bars} LED bars; strobeAllowed: ${rig.allowStrobe}.`,
     `Groups: ${names(rig.groups)}. Stage markers: ${names(rig.markers)}.`,
-    'Sections (index, label, start s, duration s, measured energy 0..1, repeat group, share of the section with a voice):',
-    ...a.sections.map((s, i) => `${i}. ${s.label} (${SECTION_NAMES[s.label]}) start ${s.start.toFixed(1)} dur ${(s.end - s.start).toFixed(1)} energy ${s.energy.toFixed(2)} group ${s.cluster} voice ${voiced(s).toFixed(2)}`),
+    'Sections (index, label, start s, duration s, measured energy 0..1, repeat group, share of the section with a voice, brightness 0..1, onsets per beat, bass share 0..1):',
+    ...a.sections.map((s, i) => `${i}. ${s.label} (${SECTION_NAMES[s.label]}) start ${s.start.toFixed(1)} dur ${(s.end - s.start).toFixed(1)} energy ${s.energy.toFixed(2)} group ${s.cluster} voice ${voiced(s).toFixed(2)} bright ${s.brightness.toFixed(2)} onsets ${(s.density / (a.bpm / 60)).toFixed(1)} bass ${s.bassShare.toFixed(2)}`),
   ].join('\n');
 }
 

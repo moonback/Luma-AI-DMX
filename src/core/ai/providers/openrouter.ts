@@ -332,7 +332,14 @@ const SECTION_RULES = `- energy: integer 0 (almost dark) to 5 (maximum). Follow 
 - beam (moving heads with gobo/prism/frost): open | gobo | prism (gobo + prism, for peaks) | frost (soft, for calm parts).
 - effectBeats: effect cycle in beats (0.5 to 16). Use strobe ONLY if strobeAllowed is true AND the operator asked for it.
 - accents: flash on detected impacts (true only for high-energy sections).
-- why: one short sentence in French explaining this look (repeat of an earlier section, measured energy, intent).`;
+- why: one short sentence in French explaining this look (repeat of an earlier section, measured energy, intent).
+Design like a touring lighting designer:
+- Build an arc: keep the intro and verses low so the peaks have room; each repeated chorus or drop a little bigger than the previous one, the last peak the biggest.
+- Contrast neighbours: a section should differ from the one before it in energy, movement or effect, never the same look twice in a row.
+- Few colours per section (1 or 2, 3 at most on peaks); calm parts in deep saturated colours, peaks may add white.
+- Effect speed follows the playing: more onsets per beat → smaller effectBeats; sparse parts → slow waves or none.
+- Bright sections (high brightness) suit gobos and prisms, dark ones frost and slow movement; bass-heavy peaks suit bassFollow.
+The console mirrors effects across the stage, varies them every 8 bars, blacks out one beat before drops and ends the show on the last hit: do not try to encode these.`;
 const SHOW_SYSTEM = `${SHOW_INTRO}
 ${JSON.stringify(SHOW_JSON_SCHEMA)}
 Rules:
