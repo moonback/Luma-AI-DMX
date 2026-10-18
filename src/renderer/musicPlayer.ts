@@ -17,6 +17,8 @@ class MusicPlayer {
   private timer: ReturnType<typeof setInterval> | null = null;
   private startedAt = 0;
   playing: { trackId: string; timelineId: string | null } | null = null;
+  /** Set by pause(): where to resume (cleared by play and stop). */
+  paused: { trackId: string; at: number } | null = null;
   private readonly listeners = new Set<() => void>();
   /** Bumped on every change (playback or a restored file): the React snapshot. */
   revision = 0;
@@ -103,7 +105,16 @@ class MusicPlayer {
     this.changed();
   }
 
+  pause(): void {
+    if (!this.playing) return;
+    const p = { trackId: this.playing.trackId, at: this.position() };
+    this.stop();
+    this.paused = p;
+    this.changed();
+  }
+
   stop(): void {
+    this.paused = null;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     const s = this.source;

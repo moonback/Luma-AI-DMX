@@ -26,6 +26,7 @@ import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
 import { HelpButton, OnboardingHost } from './features/Onboarding';
 import { StartScreen } from './features/StartScreen';
+import { MiniPlayer } from './features/music/MiniPlayer';
 import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/WhatsNew';
 import { t, useT } from './i18n';
 
@@ -312,6 +313,7 @@ export function App() {
       <main className="main">{ready ? <View key={page} /> : <div className="empty">{tr('app.connecting')}</div>}</main>
       <StatusBar />
       <DiagnosticsDrawer />
+      {ready && <MiniPlayer />}
       <Toasts />
       <OnboardingHost />
       <WhatsNewHost />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Lock, LockOpen, Music2, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
@@ -9,6 +9,7 @@ import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
 import { SECTION_LABELS, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
 import { BEAM_NAMES, EFFECT_NAMES, EVENT_STYLE, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
 import { SectionEditor } from './music/SectionEditor';
+import { usePlayback } from './music/MiniPlayer';
 
 // Kept in French whatever the UI language: the local rules (parseIntent) only read French.
 const INTENT_PRESETS = [
@@ -18,16 +19,6 @@ const INTENT_PRESETS = [
   ['wedding', 'ambiance douce et chaleureuse, pas de strobe, sans fumée'],
   ['minimal', 'sobre, sans mouvement, pas de strobe'],
 ] as const;
-
-function usePlayback() {
-  useSyncExternalStore((l) => musicPlayer.subscribe(l), () => musicPlayer.revision);
-  const [pos, setPos] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setPos(musicPlayer.position()), 100);
-    return () => clearInterval(id);
-  }, []);
-  return { playing: musicPlayer.playing, pos };
-}
 
 function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; selected: number; onSelect: (i: number) => void; pos: number | null }) {
   const t = useT();
