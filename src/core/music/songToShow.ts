@@ -96,6 +96,16 @@ export function parseIntent(text: string): Intent {
 /* ---------------- Local planner ---------------- */
 
 const clampE = (e: number) => Math.max(0, Math.min(5, Math.round(e)));
+const isPeak = (label: SectionLabel) => label === 'chorus' || label === 'drop';
+
+/** Energy added to a repeated chorus / drop: each repeat goes higher, the last peak of the song the highest (max +1). */
+export function escalation(analysis: SongAnalysis, i: number): number {
+  const s = analysis.sections[i]!;
+  if (!isPeak(s.label)) return 0;
+  const k = analysis.sections.slice(0, i).filter((x) => x.label === s.label).length;
+  const last = analysis.sections.findLastIndex((x) => isPeak(x.label)) === i;
+  return k ? Math.min(1, 0.5 * k + (last ? 0.5 : 0)) : 0;
+}
 
 /** `bars`: section length in bars; `bassShare`: share of low-frequency energy of the section. */
 function sectionPlan(index: number, energy: number, palette: string[], rig: RigInfo, intent: Intent, variant: number, label: SectionLabel, bars = 0, bassShare = 0.5): ShowSectionPlan {
@@ -143,6 +153,7 @@ function explain(analysis: SongAnalysis, i: number, p: ShowSectionPlan, intent: 
   const peak = s.label === 'chorus' || s.label === 'drop';
   if (intent.verseShift && ['verse', 'intro', 'outro'].includes(s.label)) parts.push('couplets sobres demandés');
   if (intent.peakShift && peak) parts.push('temps forts renforcés (intention)');
+  if (escalation(analysis, i)) parts.push(`${SECTION_NAMES[s.label].toLowerCase()} répété → plus fort que le précédent`);
   if (intent.globalShift) parts.push(intent.globalShift < 0 ? 'ambiance calme demandée' : 'ambiance énergique demandée');
   if (intent.colors.length) parts.push('couleurs demandées');
   if (p.groups.length) parts.push(`groupes demandés : ${p.groups.map((g) => rig.groups?.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}`);
@@ -164,7 +175,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     const label = s.label;
     let e = 0.6 * LABEL_ENERGY[label] + 0.4 * s.energy * 5 + intent.globalShift;
     if (label === 'verse' || label === 'intro' || label === 'outro') e += intent.verseShift;
-    if (label === 'chorus' || label === 'drop') e += intent.peakShift;
+    if (label === 'chorus' || label === 'drop') e += intent.peakShift + escalation(analysis, i);
     // Same music (cluster) → same palette, rotated by the variant.
     const rot = (s.cluster + variant) % base.length;
     const palette = [...base.slice(rot), ...base.slice(0, rot)];
@@ -346,11 +357,28 @@ function extrasFor(index: ProjectIndex, name: string, s: ShowSectionPlan, lights
     const ids = heads.filter((id) => index.fixtures.get(id)!.attributes.includes(attr));
     if (ids.length) out.push(fx(`${name} · ${attr}`, 'wave', ids, 'override', { ...sync, attribute: attr, offset: 0.5, amplitude: 0.6, phaseSpread: 0.25 }));
   }
-  if (s.extras.includes('bassFollow') && lights.length + heads.length) out.push(fx(`${name} · basses`, 'bassFollow', [...lights, ...heads], 'scale', { ...sync, amplitude: 0.6 }));
+  if (s.extras.includes('bassFollow') && lights.length + heads.length) out.push(fx(`${name} · basses`, 'bassFollow', spatial(index, [...lights, ...heads]), 'scale', { ...sync, amplitude: 0.6 }));
   const colored = lights.filter((id) => colorCapability(index.fixtures.get(id)!) !== 'none');
   if (s.extras.includes('colorFollow') && colored.length) out.push(fx(`${name} · brillance`, 'brightnessColor', colored, 'override', { ...sync, colors: [s.palette[0]!, s.palette[1] ?? '#FFFFFF'] }));
   return out;
 }
+
+/** Fixture ids from stage left to stage right (then downstage first): effects chase across the stage, not the patch order. */
+function spatial(index: ProjectIndex, ids: Iterable<string>): string[] {
+  const pos = (id: string) => index.fixtures.get(id)!.fixture.position;
+  return [...ids].sort((a, b) => pos(a).x - pos(b).x || pos(a).y - pos(b).y);
+}
+
+/** Phrase starts of a section: every 8 bars on the analysed downbeats; a tail shorter than 4 bars joins the last phrase. */
+function phraseStarts(downbeats: readonly number[], sec: { start: number; end: number }): number[] {
+  const db = downbeats.filter((d) => d > sec.start + 0.05 && d < sec.end - 0.05);
+  const out = [sec.start];
+  for (let k = 7; k < db.length; k += 8) if (db.length - k >= 4) out.push(db[k]!);
+  return out;
+}
+
+/** Peak entered with a breath: a drop, or a chorus right after a build. */
+const breathBefore = (sections: SongAnalysis['sections'], i: number) => i > 0 && (sections[i]!.label === 'drop' || (sections[i]!.label === 'chorus' && sections[i - 1]!.label === 'build'));
 
 /** The parts of `e` outside [a, b); the part after the gap restarts without a fade (hard re-entry). */
 function splitAround(e: TimelineEvent, a: number, b: number): TimelineEvent[] {
@@ -386,9 +414,12 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   const fades = analysis.sections.map((sec, i) => {
     const p = plan.sections[i]!, prev = plan.sections[i - 1];
     if (!prev) return 0;
-    if (sec.label === 'drop') return 0; // hard cut on the drop
+    if (breathBefore(analysis.sections, i)) return 0; // hard cut after the blackout
     return p.energy > prev.energy ? beat : Math.min(4 * beat * 2, sec.end - sec.start); // rise: 1 beat, fall: 2 bars
   });
+
+  // Breath before a drop: one beat of black so the hit lands on a dark stage (only after a section long enough).
+  const breaths = analysis.sections.flatMap((s, i) => (breathBefore(analysis.sections, i) && s.start - analysis.sections[i - 1]!.start > 4 * beat ? [{ t: s.start - beat, duration: beat }] : []));
 
   analysis.sections.forEach((sec, i) => {
     const p = plan.sections[i];
@@ -411,8 +442,8 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
       overlays.push(rise);
       events.push(ev({ kind: 'scene', refId: rise.id, start: sec.start, duration: len + nextFade, fade: len, fadeOut: nextFade, label: 'Progression', lane: 2 }));
     }
-    const lights = [...lit].filter((id) => fixtureLayer(index.fixtures.get(id)!) !== 'moving');
-    const movers = [...lit].filter((id) => fixtureLayer(index.fixtures.get(id)!) === 'moving' && id !== follow?.fixture.id);
+    const lights = spatial(index, lit).filter((id) => fixtureLayer(index.fixtures.get(id)!) !== 'moving');
+    const movers = spatial(index, lit).filter((id) => fixtureLayer(index.fixtures.get(id)!) === 'moving' && id !== follow?.fixture.id);
     if (p.extras.includes('blinder')) {
       const blinders = rigFixtures.filter(isBlinder);
       const hit = blinders.length ? blinders : lights.map((id) => index.fixtures.get(id)!);
@@ -434,10 +465,24 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
         main = effectFor(main.name, { ...p, effect: 'pulse', effectBeats: 4 }, opts.maxStrobeHz, lights);
       }
     }
-    for (const e of [main, moveFor(`${name} · mouvement`, p, movers), ...extrasFor(index, name, p, lights, movers)]) {
+    // Symmetry: the main effect mirrors from the edges to the centre; every other 8-bar phrase it sweeps across the
+    // stage instead, and the heads reverse, so a long section keeps evolving with the music's phrasing.
+    if (main) main.params.direction = 'pingpong';
+    const move = moveFor(`${name} · mouvement`, p, movers);
+    const starts = phraseStarts(analysis.downbeats, sec);
+    const flip: Record<string, Effect['params']['direction']> = { pingpong: 'forward', forward: 'reverse' };
+    for (const e of [main, move, ...extrasFor(index, name, p, lights, movers)]) {
       if (!e) continue;
       effects.push(e);
-      events.push(ev({ kind: 'effect', refId: e.id, start: sec.start, duration: len, fade: 0, label: e.name.slice(-40), lane: 1 }));
+      const alt = (e === main || e === move) && e.params.phaseSpread > 0 && starts.length > 1
+        ? { ...e, id: randomUUID(), name: `${e.name} B`.slice(0, 80), params: { ...e.params, direction: flip[e.params.direction]! } } : null;
+      if (alt) effects.push(alt);
+      starts.forEach((t, j) => {
+        if (!alt && j) return;
+        const end = alt ? starts[j + 1] ?? sec.end : sec.end;
+        const ref = alt && j % 2 ? alt : e;
+        events.push(ev({ kind: 'effect', refId: ref.id, start: t, duration: end - t, fade: 0, label: ref.name.slice(-40), lane: 1 }));
+      });
     }
   });
 
@@ -457,9 +502,12 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     const k = analysis.sections.findIndex((s) => Math.abs(s.start - (r.t + r.duration)) < beat);
     const target = looks[k];
     if (k <= 0 || !target) return;
+    // Before a breath the rise peaks as the blackout starts.
+    const end = analysis.sections[k]!.start - (breaths.some((b) => Math.abs(b.t + b.duration - analysis.sections[k]!.start) < 1e-6) ? beat : 0);
+    if (end - r.t < 0.05) return;
     const ramp: Scene = { id: randomUUID(), name: `${short} · montée ${k + 1}`.slice(0, 80), notes: '', values: intensityOnly(target), origin: 'ai' };
     scenes.push(ramp);
-    events.push(ev({ kind: 'scene', refId: ramp.id, start: r.t, duration: analysis.sections[k]!.start - r.t, fade: analysis.sections[k]!.start - r.t, fadeOut: 0, label: 'Montée', lane: 2 }));
+    events.push(ev({ kind: 'scene', refId: ramp.id, start: r.t, duration: end - r.t, fade: end - r.t, fadeOut: 0, label: 'Montée', lane: 2 }));
   });
 
   if (follow && singer) {
@@ -471,7 +519,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   }
 
   // Silences: scene events are cut around them (intensities merge HTP, so a dark scene on top would not darken).
-  const silences = analysis.events.filter((e) => e.kind === 'silence');
+  const silences = [...analysis.events.filter((e) => e.kind === 'silence'), ...breaths];
   const cut: TimelineEvent[] = [];
   for (const e of events) {
     let pieces = [e];

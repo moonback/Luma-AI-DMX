@@ -3,10 +3,10 @@ import { analyzeAudio } from '../../src/core/music/analyze';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { adjustSection, compileShow, parseIntent, planLocally, rigInfo } from '../../src/core/music/songToShow';
+import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo } from '../../src/core/music/songToShow';
 import { effectFlashViolation } from '../../src/core/safety/flashGuard';
 import { ProjectIndex } from '../../src/core/engine/resolve';
-import { profileSchema, type Fixture, type SongAnalysis } from '../../src/core/model/schemas';
+import { profileSchema, type Effect, type Fixture, type SongAnalysis } from '../../src/core/model/schemas';
 import * as openrouter from '../../src/core/ai/providers/openrouter';
 import { defaultSettings } from '../../src/core/settings/settings';
 import { demoSong } from '../music-synth';
@@ -287,7 +287,8 @@ describe('Song-to-Show', () => {
     expect(ramps).toHaveLength(risers.length);
     for (const r of ramps) {
       expect(r.fade).toBeCloseTo(r.duration);
-      expect(analysis.sections.some((s) => Math.abs(s.start - (r.start + r.duration)) < 1e-6)).toBe(true);
+      // Ends on the next section, or on the blackout one beat before it (breath before the peak).
+      expect(analysis.sections.some((s) => [0, 60 / analysis.bpm].some((b) => Math.abs(s.start - b - (r.start + r.duration)) < 1e-6))).toBe(true);
       const scene = c.scenes.find((s) => s.id === r.refId)!;
       for (const attrs of Object.values(scene.values)) for (const k of Object.keys(attrs)) expect(k.split('#')[0]).toBe('dimmer');
     }
@@ -296,5 +297,43 @@ describe('Song-to-Show', () => {
     const after = scenesAt(gap.t + 1.01).find((e) => e.lane === 0)!;
     expect(after).toMatchObject({ start: gap.t + 1, fade: 0 });
     expect(scenesAt(gap.t - 0.5).some((e) => e.lane === 0)).toBe(true);
+  });
+
+  it('dramaturgie : refrains en escalade, noir avant le drop, effets symétriques dans l’ordre de la scène, phrases de 8 mesures', () => {
+    const p = demoProject();
+    p.patch = p.patch.slice(0, 4).map((f, k) => ({ ...f, position: { x: 3 - 2 * k, y: 0 } })); // patch order = right to left
+    const index = new ProjectIndex(p);
+    const beat = 60 / analysis.bpm;
+    const choruses = analysis.sections.map((s, i) => [s, i] as const).filter(([s]) => s.label === 'chorus').map(([, i]) => i);
+    expect(choruses.length).toBeGreaterThan(1);
+    expect(escalation(analysis, choruses[0]!)).toBe(0);
+    expect(escalation(analysis, choruses.at(-1)!)).toBe(1);
+    const plain = planLocally(analysis, '', rigInfo(index, false));
+    expect(plain.sections[choruses.at(-1)!]!.energy).toBeGreaterThanOrEqual(plain.sections[choruses[0]!]!.energy);
+    expect(plain.sections[choruses.at(-1)!]!.why).toMatch(/plus fort que le précédent/);
+
+    const di = choruses[0]!;
+    const a = { ...analysis, sections: analysis.sections.map((s, i) => (i === di ? { ...s, label: 'drop' as const } : s)) };
+    const c = compileShow(index, 'T', a, planLocally(a, '', rigInfo(index, false)), { maxStrobeHz: 10, allowStrobe: false });
+    const drop = a.sections[di]!;
+    const scenesAt = (t: number) => c.timeline.events.filter((e) => e.kind === 'scene' && t >= e.start && t < e.start + e.duration);
+    expect(scenesAt(drop.start - beat / 2)).toHaveLength(0);
+    expect(scenesAt(drop.start + 0.01).find((e) => e.lane === 0)).toMatchObject({ start: drop.start, fade: 0 });
+    expect(scenesAt(drop.start - 1.5 * beat).some((e) => e.lane === 0)).toBe(true);
+
+    // Effects run stage left → right, mirrored, and alternate with a sweep every 8 bars on the downbeats.
+    const xs = (e: Effect) => e.targets.fixtureIds.map((id) => p.patch.find((f) => f.id === id)!.position.x);
+    for (const e of c.effects) expect(xs(e)).toEqual([...xs(e)].sort((u, v) => u - v));
+    // A 16-bar verse (verse + first chorus merged): two phrases, the second one runs the B variant from bar 9.
+    const [s0, s1, s2, ...rest] = analysis.sections;
+    const m = { ...analysis, sections: [s0!, { ...s1!, end: s2!.end }, ...rest] };
+    const cm = compileShow(index, 'T', m, planLocally(m, '', rigInfo(index, false)), { maxStrobeHz: 10, allowStrobe: false });
+    const sec = m.sections[1]!;
+    const inSec = cm.timeline.events.filter((e) => e.kind === 'effect' && e.start >= sec.start && e.start < sec.end).map((e) => ({ ...e, def: cm.effects.find((x) => x.id === e.refId)! }));
+    const mains = inSec.filter((e) => e.def.params.direction === 'pingpong' || (e.def.name.endsWith(' B') && e.def.params.direction === 'forward'));
+    expect(mains.map((e) => e.def.name.endsWith(' B'))).toEqual([false, true]);
+    const bar9 = analysis.downbeats.filter((d) => d > sec.start + 0.05)[7]!;
+    expect(mains[1]!.start).toBe(bar9);
+    expect(mains[0]!.start + mains[0]!.duration).toBeCloseTo(bar9);
   });
 });
