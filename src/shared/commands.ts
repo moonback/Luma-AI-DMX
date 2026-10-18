@@ -195,6 +195,8 @@ export const commandSchema = z.discriminatedUnion('type', [
     }).partial(),
   }),
   z.object({ type: z.literal('music.regenerateSection'), trackId: idSchema, index: z.number().int().min(0).max(300), instruction: z.string().max(200).default('') }),
+  /** Back to the plan before the last change (calling it again swaps back). */
+  z.object({ type: z.literal('music.restorePrevious'), trackId: idSchema }),
   empty('timeline.stop'),
   z.object({ type: z.literal('timeline.seek'), seconds: z.number().min(0).max(86400) }),
   // Engine
@@ -395,6 +397,7 @@ export interface CommandResults {
   'music.generate': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.regenerateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.updateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
+  'music.restorePrevious': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'timeline.stop': Void;
   'timeline.seek': Void;
   'engine.master': Void;

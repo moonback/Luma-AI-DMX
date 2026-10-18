@@ -66,8 +66,14 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       if (!s) throw new UserError('Section introuvable');
       const patch = Object.fromEntries(Object.entries(cmd.patch).filter(([, v]) => v !== undefined));
       const why = s.why.startsWith('Modifié à la main') ? s.why : `Modifié à la main${s.why ? ` ; ${s.why}` : ''}`.slice(0, 300);
-      plan.sections[cmd.index] = { ...s, ...patch, why };
+      // A hand-edited section is locked so « Régénérer le show » keeps it (unless the edit itself unlocks it).
+      plan.sections[cmd.index] = { ...s, ...patch, locked: cmd.patch.locked ?? true, why };
       return applyShow(app, t, plan, []);
+    }
+    case 'music.restorePrevious': {
+      const t = track(app, cmd.trackId);
+      if (!t.previousPlan) throw new UserError('Aucun show précédent pour ce morceau');
+      return applyShow(app, t, t.previousPlan, []);
     }
     case 'music.regenerateSection': {
       const t = track(app, cmd.trackId);
@@ -193,6 +199,7 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
     d.scenes.push(...c.scenes);
     d.effects.push(...c.effects);
     d.timelines.push(c.timeline);
+    track.previousPlan = track.plan; // so restoring twice swaps back (redo)
     track.plan = plan;
     track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id };
   });

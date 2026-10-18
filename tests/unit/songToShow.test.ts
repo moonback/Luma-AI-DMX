@@ -199,6 +199,24 @@ describe('Song-to-Show', () => {
     await svc.dispose();
   });
 
+  it('une retouche verrouille la section, la régénération la garde, « Revenir » échange les deux derniers shows', async () => {
+    const { svc, id } = await setup();
+    await expect(svc.execute({ type: 'music.restorePrevious', trackId: id })).rejects.toThrow(/Aucun show précédent/);
+    await svc.execute({ type: 'music.generate', trackId: id, intent: 'ambiance froide', nextVariant: false });
+    await svc.execute({ type: 'music.updateSection', trackId: id, index: 0, patch: { palette: ['#FF0000'] } });
+    const edited = svc.getProject().music.tracks[0]!.plan!;
+    expect(edited.sections[0]!.locked).toBe(true);
+    await svc.execute({ type: 'music.generate', trackId: id, intent: 'ambiance froide', nextVariant: true });
+    const regen = svc.getProject().music.tracks[0]!.plan!;
+    expect(regen.sections[0]).toEqual(edited.sections[0]);
+    await svc.execute({ type: 'music.restorePrevious', trackId: id });
+    expect(svc.getProject().music.tracks[0]!.plan).toEqual(edited);
+    await svc.execute({ type: 'music.restorePrevious', trackId: id });
+    expect(svc.getProject().music.tracks[0]!.plan).toEqual(regen);
+    expect(svc.getProject().timelines).toHaveLength(1);
+    await svc.dispose();
+  });
+
   it('explique chaque look : énergie mesurée, répétition, retouche', () => {
     const rig = { wash: 4, moving: 2, bars: 0, allowStrobe: false };
     const plan = planLocally(analysis, 'sobre sur les couplets', rig);

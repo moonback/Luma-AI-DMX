@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Lock, LockOpen, Music2, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Upload, Wand2 } from 'lucide-react';
+import { Lock, LockOpen, Music2, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { act } from '../api';
@@ -9,6 +9,15 @@ import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
 import { SECTION_LABELS, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
 import { BEAM_NAMES, EFFECT_NAMES, EVENT_STYLE, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
 import { SectionEditor } from './music/SectionEditor';
+
+// Kept in French whatever the UI language: the local rules (parseIntent) only read French.
+const INTENT_PRESETS = [
+  ['dark', 'ambiance calme, couleurs froides'],
+  ['edm', 'explosion sur les drops, strobe, lumières sur les basses, couleurs qui suivent la musique'],
+  ['rock', 'couplets sobres, refrains explosifs, couleurs chaudes'],
+  ['wedding', 'ambiance douce et chaleureuse, pas de strobe, sans fumée'],
+  ['minimal', 'sobre, sans mouvement, pas de strobe'],
+] as const;
 
 function usePlayback() {
   useSyncExternalStore((l) => musicPlayer.subscribe(l), () => musicPlayer.revision);
@@ -100,6 +109,13 @@ export function MusicPage() {
     setBusy(false);
     if (r) setNotices(r.notices);
   };
+  const restore = async () => {
+    if (!track) return;
+    setBusy(true);
+    const r = await act({ type: 'music.restorePrevious', trackId: track.id });
+    setBusy(false);
+    if (r) setNotices(r.notices);
+  };
   const regenerate = async (index: number) => {
     if (!track) return;
     setBusy(true);
@@ -157,9 +173,13 @@ export function MusicPage() {
           <Panel title={t('music.intent')} actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : t('music.localRules')} · {t('music.variantN', { n: track.plan.variant })}</span> : null}>
             <div className="col">
               <textarea className="input" rows={2} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
+              <div className="chips" data-testid="music-intent-presets">
+                {INTENT_PRESETS.map(([key, text]) => <button key={key} className="chip" title={text} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{t(`music.preset.${key}`)}</button>)}
+              </div>
               <div className="row">
                 <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>
                 <button className="btn" disabled={busy || !track.plan} onClick={() => void generate(true)} title={t('music.variantHint')}><Shuffle size={14} />{t('music.variant')}</button>
+                <button className="btn" disabled={busy || !track.previousPlan} onClick={() => void restore()} title={t('music.restoreHint')} data-testid="music-restore"><Undo2 size={14} />{t('music.restore')}</button>
                 {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>{t('music.openTimeline')}</button>}
               </div>
               {track.plan && <p className="small" style={{ margin: 0 }} data-testid="music-plan-summary"><Sparkles size={12} /> {track.plan.summary}</p>}
