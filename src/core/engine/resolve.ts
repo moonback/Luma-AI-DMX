@@ -1,4 +1,4 @@
-import type { CueList, Effect, Group, Project, Scene, Target, Timeline } from '../model/schemas';
+import type { CueList, Effect, FixtureProfile, Group, Project, Scene, Target, Timeline } from '../model/schemas';
 import { ProfileLibrary, resolveFixture, type ResolvedFixture } from '../fixtures/profiles';
 
 /** Read-only lookup tables built from a project revision. Rebuilt whenever the project changes. */
@@ -12,8 +12,9 @@ export class ProjectIndex {
   readonly effects = new Map<string, Effect>();
   readonly timelines = new Map<string, Timeline>();
 
-  constructor(readonly project: Project) {
-    this.lib = new ProfileLibrary(project.profiles);
+  /** `library`: user profiles available to every project; the project's embedded copies take precedence. */
+  constructor(readonly project: Project, library: readonly FixtureProfile[] = []) {
+    this.lib = new ProfileLibrary([...library, ...project.profiles]);
     for (const f of project.patch) {
       const rf = resolveFixture(this.lib, f);
       if (rf) {

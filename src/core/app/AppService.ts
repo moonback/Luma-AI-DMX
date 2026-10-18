@@ -2,13 +2,14 @@ import { EventEmitter } from 'node:events';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { projectSchema, type Project } from '../model/schemas';
+import { projectSchema, type FixtureProfile, type Project } from '../model/schemas';
 import { ProjectIndex } from '../engine/resolve';
 import { Engine, type EngineSettings } from '../engine/Engine';
 import { OutputManager, createAdapter, type AdapterFactory } from '../protocols/OutputManager';
 import type { OutputState } from '../protocols/types';
 import { validatePatch } from '../fixtures/patch';
 import { createProject } from '../project/format';
+import { embedUsedProfiles, loadLibrary } from './library';
 import { writeFileAtomic } from '../project/store';
 import { defaultSettings, settingsSchema, type Settings } from '../settings/settings';
 import { Logger, type LogEntry } from '../log/logger';
@@ -85,6 +86,8 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   readonly audio: AudioReactive;
   project: Project;
   index: ProjectIndex;
+  /** User profile library (data folder), shared by every project. */
+  userProfiles: FixtureProfile[] = [];
   projectPath: string | null = null;
   revision = 0;
   savedRevision = 0;
@@ -176,6 +179,8 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     if (!this.settings.sacn) this.settings.sacn = { cid: randomUUID() };
     this.settings.control.remote.token ??= randomUUID();
     await this.persistSettings();
+    await loadLibrary(this);
+    this.setProject(this.project, true);
     this.logger.level = this.settings.logs.level;
     this.engine.updateSettings(this.engineSettings());
     await this.outputs.configure(this.settings.outputs);
@@ -224,7 +229,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   projectState(): ProjectState {
     return {
-      project: this.project, path: this.projectPath, dirty: this.dirty, revision: this.revision, issues: validatePatch(this.index.lib, this.project.patch),
+      project: this.project, library: this.userProfiles, path: this.projectPath, dirty: this.dirty, revision: this.revision, issues: validatePatch(this.index.lib, this.project.patch),
       sceneHistory: { undo: this.sceneUndo.length, redo: this.sceneRedo.length },
     };
   }
@@ -257,6 +262,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   mutate(fn: (draft: Project) => void): void {
     const draft = structuredClone(this.project);
     fn(draft);
+    embedUsedProfiles(draft, this.userProfiles);
     draft.meta.modifiedAt = new Date().toISOString();
     const parsed = projectSchema.safeParse(draft);
     if (!parsed.success) throw new UserError(`Modification refusée : ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ')}`);
@@ -265,7 +271,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   setProject(p: Project, reset: boolean): void {
     this.project = p;
-    this.index = new ProjectIndex(p);
+    this.index = new ProjectIndex(p, this.userProfiles);
     if (reset) {
       this.sceneUndo = [];
       this.sceneRedo = [];

@@ -11,6 +11,7 @@ import { findFreeAddress, validatePatch } from '../../fixtures/patch';
 import { SCENE_FIELDS, UserError } from '../shared';
 import { patchSheetCsv, patchSheetHtml } from '../../fixtures/patchSheet';
 import type { AppService, CommandIn } from '../AppService';
+import { removeFromLibrary, saveToLibrary } from '../library';
 
 /* Fixture profiles (Luma, grandMA2, Open Fixture Library) and the patch. */
 export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' | 'ofl' | 'fixture' | 'patch'>): Promise<unknown> {
@@ -34,14 +35,14 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         // GDTF: every DMX mode of the file, merged into the existing profile of the same fixture.
         const r = convertGdtf(bytes);
         warnings = r.warnings;
-        const existing = r.profile ? app.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
+        const existing = r.profile ? app.userProfiles.find((x) => x.id === r.profile!.id) ?? app.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
         parsed = { profiles: r.profile ? [existing ? mergeProfileModes(existing, r.profile) : r.profile] : [], errors: r.errors };
         for (const w of warnings) app.logger.warn('GDTF', `${path.basename(file)} : ${w}`);
       } else if (ext === '.xml' || text.trimStart().startsWith('<')) {
         // grandMA2 export: one file = one mode, merged into the existing profile of the same fixture.
         const r = convertMa2Fixture(text);
         warnings = r.warnings;
-        const existing = r.profile ? app.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
+        const existing = r.profile ? app.userProfiles.find((x) => x.id === r.profile!.id) ?? app.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
         parsed = { profiles: r.profile ? [existing ? mergeProfileModes(existing, r.profile) : r.profile] : [], errors: r.errors };
         for (const w of warnings) app.logger.warn('grandMA2', `${path.basename(file)} : ${w}`);
       } else {
@@ -65,6 +66,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         }
         return true;
       });
+      await saveToLibrary(app, accepted);
       if (accepted.length) app.mutate((d) => {
         for (const p of accepted) d.profiles = [...d.profiles.filter((x) => x.id !== p.id), p];
       });
@@ -107,6 +109,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         return { imported: null, profileId: null, warnings: r.warnings, errors: r.errors };
       }
       const profile = r.profile;
+      await saveToLibrary(app, [profile]);
       app.mutate((d) => { d.profiles = [...d.profiles.filter((x) => x.id !== profile.id), profile]; });
       app.logger.info('OFL', `Profil importé : ${profile.manufacturer} ${profile.name} (${profile.modes.length} mode(s))`);
       return { imported: `${profile.manufacturer} ${profile.name}`, profileId: profile.id, warnings: r.warnings, errors: r.errors };
@@ -114,6 +117,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
     case 'profile.remove': {
       const used = app.project.patch.filter((f) => f.profileId === cmd.id);
       if (used.length) throw new UserError(`Profil utilisé par ${used.length} projecteur(s)`);
+      await removeFromLibrary(app, cmd.id);
       app.mutate((d) => { d.profiles = d.profiles.filter((p) => p.id !== cmd.id); });
       return ok;
     }

@@ -8,6 +8,7 @@ import { followTruss } from '../../visualizer/truss';
 import { UserError } from '../shared';
 import { addRecent, clearAutosave } from '../files';
 import { exportMvr } from '../../project/mvr';
+import { saveToLibrary } from '../library';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Project documents: new/open/save/export, demos, recovery, onboarding. */
@@ -28,6 +29,7 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
       if (!file) return { opened: false, migratedFrom: null };
       try {
         const { project, migratedFrom } = await loadProjectFile(file);
+        await saveToLibrary(app, project.profiles, true);
         app.setProject(project, true);
         app.projectPath = cmd.type === 'project.open' ? file : null;
         if (cmd.type === 'project.open') addRecent(app, file);

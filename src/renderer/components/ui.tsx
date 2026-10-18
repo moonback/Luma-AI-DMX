@@ -128,11 +128,12 @@ export const dmx = (v: number | undefined) => (v === undefined ? '–' : String(
 /** Resolved fixtures for the current project (profile + mode), memoized on the project revision. */
 export function useResolved(): { lib: ProfileLibrary; fixtures: ResolvedFixture[]; byId: Map<string, ResolvedFixture> } {
   const project = useStore((s) => s.project?.project);
+  const library = useStore((s) => s.project?.library);
   return useMemo(() => {
-    const lib = new ProfileLibrary(project?.profiles ?? []);
+    const lib = new ProfileLibrary([...(library ?? []), ...(project?.profiles ?? [])]);
     const fixtures = (project?.patch ?? []).map((f) => resolveFixture(lib, f)).filter((x): x is ResolvedFixture => !!x);
     return { lib, fixtures, byId: new Map(fixtures.map((f) => [f.fixture.id, f])) };
-  }, [project]);
+  }, [project, library]);
 }
 
 /** Runs `fn` at most every `ms` while values keep coming (fader drags). The last value is always sent. */

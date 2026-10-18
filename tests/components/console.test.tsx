@@ -14,7 +14,7 @@ beforeEach(() => {
   (window as unknown as { luma: unknown }).luma = { invoke, on: () => () => undefined };
   const project = demoProject();
   useStore.setState({
-    project: { project, path: null, dirty: false, revision: 1, issues: validatePatch(new ProfileLibrary(), project.patch), sceneHistory: { undo: 0, redo: 0 } },
+    project: { project, library: [], path: null, dirty: false, revision: 1, issues: validatePatch(new ProfileLibrary(), project.patch), sceneHistory: { undo: 0, redo: 0 } },
     runtime: null,
     values: {},
     sources: {},

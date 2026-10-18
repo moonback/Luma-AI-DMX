@@ -7,7 +7,7 @@ import {
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
 import type { AiExecutionReport, AiProposal } from '../core/ai/actions';
-import type { Project } from '../core/model/schemas';
+import type { FixtureProfile, Project } from '../core/model/schemas';
 import type { PatchIssue } from '../core/fixtures/patch';
 import type { EngineSnapshot } from '../core/engine/Engine';
 import type { OutputStatus } from '../core/protocols/config';
@@ -265,6 +265,8 @@ export type CommandInput = z.input<typeof commandSchema>;
 
 export interface ProjectState {
   project: Project;
+  /** User profile library (imported profiles, available in every project). */
+  library: FixtureProfile[];
   path: string | null;
   dirty: boolean;
   revision: number;
