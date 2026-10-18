@@ -1,7 +1,7 @@
 # Rapport d'amélioration — passer Luma AI DMX au niveau 2
 
 > Rédigé le 18/10/2026 à partir du dépôt (branche `feat/scene-lot2`, commit `5998174` + 2 fichiers modifiés non commités).
-> Les roadmaps existantes (`ROADMAP.md`, `roadmap-scene.md`, `roadmap-stage3d.md`, `roadmap-fixture.md`) décrivent **quoi construire**. Ce rapport traite de **comment le construire et le livrer** : passer d'un prototype riche, développé seul et vite, à un logiciel qu'on peut confier à un éclairagiste sur un vrai plateau.
+> Les roadmaps existantes (`ROADMAP.md`, `docs/roadmap/scene.md`, `stage3d.md`, `fixture.md`) décrivent **quoi construire**. Ce rapport traite de **comment le construire et le livrer** : passer d'un prototype riche, développé seul et vite, à un logiciel qu'on peut confier à un éclairagiste sur un vrai plateau.
 
 ## 1. Diagnostic
 

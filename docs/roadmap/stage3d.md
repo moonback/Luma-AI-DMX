@@ -1,6 +1,6 @@
 # Roadmap — Stage 3D : interface et création de scène
 
-> Complément de [roadmap-scene.md](roadmap-scene.md) (modèle, rendu, analyses), centré ici sur l'**ergonomie** de la page Stage 3D et sur la **création de scène**. Rédigé le 17/10/2026 à partir du code actuel (`src/renderer/features/Stage3D.tsx`, `Visualizer.tsx`, `stage3d/*`).
+> Complément de [scene.md](scene.md) (modèle, rendu, analyses), centré ici sur l'**ergonomie** de la page Stage 3D et sur la **création de scène**. Rédigé le 17/10/2026 à partir du code actuel (`src/renderer/features/Stage3D.tsx`, `Visualizer.tsx`, `stage3d/*`).
 
 ## 1. Analyse de l'existant
 
@@ -127,7 +127,7 @@ Effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaines et plus
 | Étape | Contenu | Pourquoi |
 |---|---|---|
 | 1 | 1.1, 1.2, 1.3 | Gain immédiat sur le temps de création, peu de code (modèle et actions existants) |
-| 2 | 2.1, 2.2, 2.3 | Une seule façon d'éditer ; prérequis du décor et des praticables (fonctionnalité 1 de roadmap-scene) |
+| 2 | 2.1, 2.2, 2.3 | Une seule façon d'éditer ; prérequis du décor et des praticables (fonctionnalité 1 de scene.md) |
 | 3 | 3.1, 3.2, 3.3, 1.4, 3.4 | Confort quotidien, une fois l'édition stabilisée |
 | 4 | 3.5, 4.1, 4.2 | L'assistant réutilise tout ce qui précède |
 

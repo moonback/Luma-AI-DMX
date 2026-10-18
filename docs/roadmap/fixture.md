@@ -1,6 +1,6 @@
 # Roadmap — Fixtures et patch DMX
 
-> Complément de [ROADMAP.md](ROADMAP.md), centré sur la page **Fixtures** (« Patch DMX : profils, univers, adresses et positions ») : comment faire entrer **n'importe quelle machine réelle** dans l'application, la piloter correctement et la patcher vite. Rédigé le 18/10/2026 à partir du code actuel et d'un fichier réel : `BeamZ@MHL1940@26Channels@MHL1940.xml` (export grandMA2).
+> Complément de [ROADMAP.md](../../ROADMAP.md), centré sur la page **Fixtures** (« Patch DMX : profils, univers, adresses et positions ») : comment faire entrer **n'importe quelle machine réelle** dans l'application, la piloter correctement et la patcher vite. Rédigé le 18/10/2026 à partir du code actuel et d'un fichier réel : `BeamZ@MHL1940@26Channels@MHL1940.xml` (export grandMA2).
 
 ## 1. État actuel
 
@@ -192,7 +192,7 @@ Légende effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaine
 - **Critères** : 0 appel réseau sans action de l'utilisateur.
 
 #### 18. Import de manuel PDF · L · dépend de 8
-- Déjà prévu dans [ROADMAP.md](ROADMAP.md) (5.2) : le résultat s'ouvre dans l'éditeur de la feature 8, en différence face au tableau du PDF, plages dangereuses à confirmer.
+- Déjà prévu dans [ROADMAP.md](../../ROADMAP.md) (5.2) : le résultat s'ouvre dans l'éditeur de la feature 8, en différence face au tableau du PDF, plages dangereuses à confirmer.
 
 ---
 

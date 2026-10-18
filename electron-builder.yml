@@ -17,7 +17,5 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   artifactName: ${productName}-Setup-${version}.${ext}
-linux:
-  target: [AppImage]
-mac:
-  target: [dmg]
+# macOS and Linux targets are not built in CI yet: they come back once Windows is stable
+# (report level 2, item 16), so that nothing is promised that has never been built.
