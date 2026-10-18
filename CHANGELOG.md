@@ -9,6 +9,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 - `CONTRIBUTING.md`, modèle de PR et ce changelog.
 - Tests de composants des espaces Cues, Fixtures, DMX Output et AI Director, branchés sur un vrai `AppService` headless (même validation Zod que le process main).
 - Contrat d'actions IA versionné (`AI_ACTIONS_VERSION` = 1) : migrations entre versions, refus explicite d'un contrat plus récent, schéma figé et échantillons par version, test de propriété (2 000 actions aléatoires) sur la validation.
+- Banc d'évaluation IA porté de 32 à 175 cas (dont 33 adverses) ; seuils relevés à 98 % (mesuré : reconnaissance 99,3 %, intention 99,2 %, validité 100 %, 0 violation de sécurité).
+- Interpréteur local : 13 ambiances nommées (rock, théâtre, mystère, coucher de soleil, sous-marine, glaciale, feu de camp, mariage, Halloween, Noël…), « ambiance … » crée une scène, lavande/lilas, « tempo 140 », « stop les effets », « fade to black », « respirer » / « clignoter doucement » (pulse lent, jamais de strobe), effet fade, « intensité minimale », « divise par deux ».
 - Parcours e2e « programmeur → scène → liste de cues → GO » et « sortie réelle armée → STOP OUTPUT ».
 - Journal persistant : `userData/logs/luma.log` (JSON lines, rotation 2 Mo × 5), survit à un plantage.
 - `crashReporter` local (minidumps jamais envoyés) ; exceptions et rejets non gérés, arrêts des processus de rendu journalisés.

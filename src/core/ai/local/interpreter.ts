@@ -48,6 +48,27 @@ export const COLORS: { forms: string[]; hex: string; label: string }[] = [
   { forms: ['cyan', 'turquoise'], hex: '#00E5FF', label: 'cyan' },
   { forms: ['blanc', 'blanche', 'blancs', 'blanches', 'white'], hex: '#FFFFFF', label: 'blanc' },
   { forms: ['ambre', 'amber'], hex: '#FFB000', label: 'ambre' },
+  { forms: ['lavande', 'lilas', 'lavender', 'lilac'], hex: '#B57EDC', label: 'lavande' },
+];
+
+/**
+ * Named moods: « ambiance rock », « ambiance coucher de soleil »… (colours, level, scene name). Only the first three
+ * apply on their own (« lounge », « club »); the others need a lighting word, so « un poème sur l’océan » stays off-topic.
+ */
+const MOODS: { re: RegExp; colors: string[]; level: number; name: string; standalone?: boolean }[] = [
+  { re: /\b(lounge|chill|cosy|cozy|tamise\w*)\b/, colors: ['#8B00FF', '#0040FF'], level: 0.55, name: 'lounge', standalone: true },
+  { re: /\b(club|fete|party|dancefloor|boite)\b/, colors: ['#FF00C8', '#00E5FF'], level: 0.9, name: 'club', standalone: true },
+  { re: /\b(romanti\w*|diner|intime)\b/, colors: ['#FFB000', '#FF4FA0'], level: 0.5, name: 'intime', standalone: true },
+  { re: /\b(rock|metal|concert)\b/, colors: ['#FF0000', '#FFFFFF'], level: 0.9, name: 'rock' },
+  { re: /\b(theatre|discours|conference|allocution)\b/, colors: ['#FFE2B8'], level: 0.6, name: 'théâtre' },
+  { re: /\b(mysteri\w*|inquietant\w*|sombre|angoiss\w*|mystery)\b/, colors: ['#4B0082', '#0040FF'], level: 0.35, name: 'mystère' },
+  { re: /\b(coucher de soleil|lever de soleil|sunset|sunrise|crepuscule)\b/, colors: ['#FF7000', '#FF4FA0'], level: 0.7, name: 'coucher de soleil' },
+  { re: /\b(sous[ -]marin\w*|ocean\w*|aquatique|underwater)\b/, colors: ['#0040FF', '#00E5FF'], level: 0.55, name: 'sous-marine' },
+  { re: /\b(glaciale?|glace|hiver\w*|banquise|icy)\b/, colors: ['#9FD8FF', '#FFFFFF'], level: 0.6, name: 'glaciale' },
+  { re: /\b(feu de camp|braises?|campfire|cheminee)\b/, colors: ['#FF7000', '#FF0000'], level: 0.5, name: 'feu de camp' },
+  { re: /\b(mariage|bal|wedding)\b/, colors: ['#FFB000', '#FF4FA0'], level: 0.6, name: 'mariage' },
+  { re: /\bhalloween\b/, colors: ['#FF7000', '#8B00FF'], level: 0.5, name: 'halloween' },
+  { re: /\b(noel|christmas)\b/, colors: ['#FF0000', '#00FF40'], level: 0.7, name: 'Noël' },
 ];
 
 const has = (text: string, re: RegExp) => re.test(text);
@@ -63,7 +84,7 @@ function findColors(text: string): { hex: string; label: string }[] {
 }
 
 function findDuration(text: string): number | null {
-  const m = new RegExp(`${NUM}\\s*(secondes?|secs?|s|minutes?|mins?|mn)\\b`).exec(text);
+  const m = new RegExp(`${NUM}\\s*(secondes?|seconds?|secs?|s|minutes?|mins?|mn)\\b`).exec(text);
   if (!m || !m[1] || !m[2]) return null;
   const n = toNumber(m[1]);
   return m[2].startsWith('m') ? n * 60 : n;
@@ -238,7 +259,7 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   const wantsCreate = has(text, /\b(cree|creer|creez|create|enregistre\w*|sauvegarde\w*|prepare\w*)\b/);
 
   // 1. Release AI
-  if (has(text, /\b(relache\w*|release|rends? la main|annule\w*|reprends? la main|(arrete|stoppe?) tout|stop (all|everything))\b/)) {
+  if (has(text, /\b(relache\w*|release|rends? la main|annule\w*|reprends? la main|(arrete|stoppe?) tout|stop (all|everything)(?! effects?))\b/)) {
     actions.push({ type: 'releaseAi' });
     return { understanding: 'Relâcher la couche IA : le contrôle revient aux playbacks et au manuel.', actions, notices, recognized: true };
   }
@@ -261,7 +282,7 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   }
 
   // 2. Show generation
-  if (has(text, /\bshow\b/) && (duration !== null || has(text, /\b(genere\w*|cree\w*|fais|fait|make|generate)\b/))) {
+  if (has(text, /\bshow\b/) && (duration !== null || has(text, /\b(genere\w*|cree\w*|prepare\w*|fais|fait|make|generate)\b/))) {
     const total = Math.min(3600, duration ?? 120);
     const soft = has(text, /\b(lounge|chill|jazz|calme|acoustique|doux|douce|ambient)\b/);
     const sections = soft ? SOFT_SECTIONS : ELECTRO_SECTIONS;
@@ -351,13 +372,13 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   // 6. Stop or re-time running AI effects
   const fxWords = EFFECT_WORDS.filter(([re]) => re.test(text));
   const fxLabel = fxWords.length ? `les effets IA de type ${fxWords.map(([, , l]) => l).join(', ')}` : 'tous les effets IA en cours';
-  if (has(text, /\b(arrete\w*|stoppe?\w*|coupe\w*|enleve\w*|retire\w*)\b/) && (fxWords.length || has(text, /\beffets?\b/))) {
+  if (has(text, /\b(arrete\w*|stop\w*|coupe\w*|enleve\w*|retire\w*)\b/) && (fxWords.length || has(text, /\b(effets?|effects?)\b/))) {
     if (fxWords.length) actions.push(...fxWords.flatMap(([, types]) => types.map((effectType) => ({ type: 'stopEffect' as const, effectType }))));
     else actions.push({ type: 'stopEffect', all: true });
     return { understanding: `Arrêter ${fxLabel}.`, actions, notices, recognized: true };
   }
-  const slower = has(text, /\b(ralenti\w*|plus lent\w*|moins vite|moins rapide|slower|slow down)\b/);
-  const faster = has(text, /\b(accelere\w*|plus vite|plus rapide|speed up|faster)\b/);
+  const slower = has(text, /\b(ralenti\w*|plus lent\w*|moins vite|moins rapides?|slower|slow down)\b/);
+  const faster = has(text, /\b(accelere\w*|plus vite|plus rapides?|speed up|faster)\b/);
   if (slower || faster) {
     const speedFactor = (has(text, /\bun peu\b/) ? 1.5 : 2) ** (slower ? -1 : 1);
     const rounded = Math.round(speedFactor * 100) / 100;
@@ -367,7 +388,7 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   }
 
   // 7. Blackout-like
-  if (has(text, /\b(eteins?|eteint|eteindre|noir|blackout|off|extinction|coupe (tout|la lumiere))\b/)) {
+  if (has(text, /\b(eteins?|eteint|eteindre|noir|blackout|off|extinction|coupe (tout|la lumiere)|(fade )?to black)\b/)) {
     actions.push({ type: 'setIntensity', target, level: 0, fade: duration ?? 1 });
     return { understanding: `Éteindre ${targetLabel} en ${duration ?? 1} s (couche IA, le blackout général reste disponible dans la barre supérieure).`, actions, notices, recognized: true };
   }
@@ -378,7 +399,9 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   if (has(text, /\bchase\w*|chenillard\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · chase', 'chase', fxTarget(ALL), { speed: 2, ...bpmExtra }) }); said.push('chase'); }
   if (has(text, /\b(arc[ -]en[ -]ciel|rainbow)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · arc-en-ciel', 'rainbow', fxTarget(ALL), { speed: 0.1, phaseSpread: 1, ...(bpmSync ? { bpmSync: true, beatsPerCycle: 8 } : {}) }) }); said.push('arc-en-ciel'); }
   if (has(text, /\b(vagues?|wave|ondulation)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · vague', 'dimmerWave', fxTarget(ALL), { speed: 0.25, phaseSpread: 1, ...(bpmSync ? { bpmSync: true, beatsPerCycle: 4 } : {}) }) }); said.push('vague d’intensité'); }
-  if (has(text, /\b(pulse|pulsation\w*|battement\w*|pulsant\w*)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · pulse', 'pulse', fxTarget(ALL), { speed: 2, ...bpmExtra }) }); said.push('pulse'); }
+  if (has(text, /\b(fade effect|effet (de )?fade)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · fade', 'fade', fxTarget(ALL), { speed: 0.25, ...(bpmSync ? { bpmSync: true, beatsPerCycle: 4 } : {}) }) }); said.push('fondu cyclique'); }
+  // « Respirer » and « clignoter doucement » are a slow pulse (never a strobe).
+  if (has(text, /\b(pulse|pulsation\w*|battement\w*|pulsant\w*|respir\w*|breath\w*|clignot\w*)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · pulse', 'pulse', fxTarget(ALL), { speed: 2, ...bpmExtra }) }); said.push('pulse'); }
   if (has(text, /\b(cycle de couleurs?|color ?cycle|change\w* de couleur)\b/)) { actions.push({ type: 'startEffect', effect: effectSpec('IA · cycle couleurs', 'colorCycle', fxTarget(ALL), { speed: 0.1, colors: colors.length ? colors.map((c) => c.hex) : undefined, ...(bpmSync ? { bpmSync: true, beatsPerCycle: 4 } : {}) }) }); said.push('cycle de couleurs'); }
   if (has(text, /\b(strobe|stroboscopique|flash)\b/) && !has(text, /\bstroboscopes\b/)) {
     const hz = /(\d+(?:[.,]\d+)?)\s*hz\b/.exec(text);
@@ -386,7 +409,7 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
     if (ctx.allowStrobe) { actions.push({ type: 'startEffect', effect: effectSpec('IA · strobe', 'strobe', fxTarget(ALL), { speed }) }); said.push(`strobe ${speed} Hz`); }
     else notices.push('Effet strobe refusé : il est désactivé dans Paramètres › Sécurité (protection photosensible).');
   }
-  if (has(text, /\b(mouvements?|bouge\w*|balaya\w*|movement|cercles?|en huit|aleatoire\w*|random)\b/)) {
+  if (has(text, /\b(mouvements?|bouge\w*|balaya\w*|movement|move|cercles?|circles?|en huit|aleatoire\w*|random)\b/)) {
     const random = has(text, /\b(aleatoire\w*|random)\b/);
     const shape = has(text, /\ben huit\b/) ? 'figure8' : 'circle';
     actions.push({ type: 'startEffect', effect: effectSpec(random ? 'IA · mouvement aléatoire' : 'IA · mouvement', random ? 'randomMove' : 'panTilt', target.all ? MOVING_TARGET : target, { speed: 0.2, amplitude: 0.5, ...(bpmSync ? { bpmSync: true, beatsPerCycle: random ? 2 : 8 } : {}), ...(random ? {} : { shape }) }) });
@@ -413,22 +436,22 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   }
 
   // 9. Look: templates and colours
-  const lounge = has(text, /\b(lounge|chill|cosy|cozy|tamise\w*)\b/);
-  const party = has(text, /\b(club|fete|party|dancefloor|boite)\b/);
-  const romantic = has(text, /\b(romanti\w*|diner|intime)\b/);
+  const lightingWord = has(text, /\b(ambiance|atmosphere|mood|look|scene|lumiere|eclairage|light\w*)\b/);
+  const mood = MOODS.find((m) => m.re.test(text) && (m.standalone || lightingWord));
   let lookColors = colors.map((c) => c.hex);
   let level: number | null = percentUsed ? null : percent;
-  const template = lounge ? 'lounge' : party ? 'club' : romantic ? 'intime' : null;
-  if (!lookColors.length && template) lookColors = lounge ? ['#8B00FF', '#0040FF'] : party ? ['#FF00C8', '#00E5FF'] : ['#FFB000', '#FF4FA0'];
+  const template = mood?.name ?? null;
+  if (!lookColors.length && mood) lookColors = mood.colors;
   if (!lookColors.length && has(text, /\b(chaud|chaude|warm)\b/)) lookColors = ['#FF9A3C'];
   if (!lookColors.length && has(text, /\b(froid|froide|cold)\b/)) lookColors = ['#9FD8FF'];
   if (level === null && has(text, /\b(plein feu|full|max\w*|a fond)\b/)) level = 1;
   if (level === null && has(text, /\b(monte\w*|augmente\w*|fade ?in|allume\w*)\b/)) level = 1;
-  if (level === null && has(text, /\b(baisse\w*|diminue\w*)\b/)) level = Math.round(averageLevel(ctx) * 50) / 100;
-  if (level === null && template) level = lounge ? 0.55 : party ? 0.9 : 0.5;
+  if (level === null && has(text, /\b(minimum|minimale?|au minimum)\b/)) level = 0.1;
+  if (level === null && has(text, /\b(baisse\w*|diminue\w*|divise\w*|moitie)\b/)) level = Math.round(averageLevel(ctx) * 50) / 100;
+  if (level === null && mood) level = mood.level;
 
   const hasLook = lookColors.length > 0 || level !== null;
-  if (hasLook && (wantsCreate || template) && has(text, /\b(scene|ambiance|look|atmosphere|etat)\b/)) {
+  if (hasLook && (wantsCreate || template || has(text, /\b(ambiance|atmosphere|mood)\b/)) && has(text, /\b(scene|ambiance|look|atmosphere|etat|mood)\b/)) {
     const name = template ? `Ambiance ${template}` : `Scène IA ${colors.map((c) => c.label).join(' ')}`.trim();
     const part: LookPart = { target, level: level ?? 0.8 };
     if (lookColors.length === 1) part.color = lookColors[0]!;
@@ -465,7 +488,7 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   }
 
   // 11. Explicit BPM
-  const bpm = /\b(\d{2,3})\s*bpm\b/.exec(text);
+  const bpm = /\b(\d{2,3})\s*bpm\b/.exec(text) ?? /\b(?:tempo|bpm)\s*(?:a|=|:|sur|to)?\s*(\d{2,3})\b/.exec(text);
   if (bpm?.[1]) {
     actions.push({ type: 'setBpm', bpm: Math.min(300, Math.max(20, parseInt(bpm[1], 10))) });
     said.push(`BPM fixé à ${bpm[1]}`);
