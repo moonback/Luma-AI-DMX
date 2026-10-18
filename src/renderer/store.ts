@@ -96,7 +96,7 @@ interface State {
   setBeamView(id: string | null): void;
   /** Onboarding state from the settings (null until loaded) and the open help surface. */
   onboarding: { completed: boolean; checklistHidden: boolean } | null;
-  help: 'welcome' | 'tour' | 'demos' | 'stage' | null;
+  help: 'welcome' | 'tour' | 'demos' | 'stage' | 'whatsnew' | null;
   setHelp(h: State['help']): void;
   setPage(p: PageId): void;
   toggleCollapsed(): void;

@@ -14,7 +14,8 @@ export function StartScreen() {
   const recent = useStore((s) => s.startScreen);
   const current = useStore((s) => s.project?.project.meta.name);
   const [query, setQuery] = useState('');
-  if (!recent) return null;
+  const notesOpen = useStore((s) => s.help === 'whatsnew');
+  if (!recent || notesOpen) return null; // the release notes show first, then this chooser
   const close = () => useStore.setState({ startScreen: null });
   const open = async (path?: string) => { if (await openProject(path)) close(); };
   const q = query.trim().toLowerCase();

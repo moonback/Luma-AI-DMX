@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, Sparkles, X } from 'lucide-react';
+import { BookOpen, Check, Gift, ChevronLeft, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, Sparkles, X } from 'lucide-react';
 import { useStore, confirmAction, type PageId } from '../store';
 import { act } from '../api';
 import { Modal } from '../components/ui';
 import { DEMOS } from '../../core/demo/catalog';
+import { useT } from '../i18n';
 
 /* ------------------------------------------------------------------ */
 /* Shared helpers                                                      */
@@ -241,6 +242,7 @@ export function FirstSteps() {
 /* ------------------------------------------------------------------ */
 
 export function HelpButton() {
+  const tr = useT();
   const [open, setOpen] = useState(false);
   const setHelp = useStore((s) => s.setHelp);
   const pick = (fn: () => void) => { setOpen(false); fn(); };
@@ -258,6 +260,7 @@ export function HelpButton() {
           <button className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => pick(() => setHelp('demos'))} data-testid="help-demos"><Sparkles size={14} />Projets de démonstration</button>
           <button className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => pick(showChecklist)}><ListChecks size={14} />Liste « Premiers pas »</button>
           <button className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => pick(() => setHelp('welcome'))}><BookOpen size={14} />Écran d’accueil</button>
+          <button className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => pick(() => setHelp('whatsnew'))} data-testid="help-whatsnew"><Gift size={14} />{tr('whatsnew.menu')}</button>
           <button className="btn ghost" style={{ justifyContent: 'flex-start' }} onClick={() => pick(() => useStore.getState().setPage('settings'))}><Keyboard size={14} />Raccourcis clavier (Settings)</button>
         </div>
       )}

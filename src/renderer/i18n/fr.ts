@@ -109,6 +109,12 @@ export const fr = {
   'start.search': 'Rechercher un projet récent…',
   'start.none': 'Aucun projet récent : ouvrez un fichier ou créez un projet.',
   'start.noMatch': 'Aucun projet récent ne correspond.',
+
+  'whatsnew.title': 'Nouveautés de la mise à jour',
+  'whatsnew.version': 'Version {version} — {date}',
+  'whatsnew.previous': 'Versions précédentes',
+  'whatsnew.ok': 'J’ai compris',
+  'whatsnew.menu': 'Nouveautés de la mise à jour',
   'start.continue': 'Continuer avec « {name} »',
   'start.demos': 'Projets de démonstration',
   'textScene.title': 'Construire la scène depuis une description',

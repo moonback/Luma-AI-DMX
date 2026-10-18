@@ -107,6 +107,12 @@ export const en: Record<MessageKey, string> = {
   'start.search': 'Search a recent project…',
   'start.none': 'No recent project: open a file or create a project.',
   'start.noMatch': 'No recent project matches.',
+
+  'whatsnew.title': 'What’s new in this update',
+  'whatsnew.version': 'Version {version} — {date}',
+  'whatsnew.previous': 'Previous versions',
+  'whatsnew.ok': 'Got it',
+  'whatsnew.menu': 'What’s new',
   'start.continue': 'Continue with “{name}”',
   'start.demos': 'Demo projects',
   'textScene.title': 'Build the stage from a description',

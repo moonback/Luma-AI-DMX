@@ -26,6 +26,7 @@ import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
 import { HelpButton, OnboardingHost } from './features/Onboarding';
 import { StartScreen } from './features/StartScreen';
+import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/WhatsNew';
 import { t, useT } from './i18n';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
@@ -313,6 +314,7 @@ export function App() {
       <DiagnosticsDrawer />
       <Toasts />
       <OnboardingHost />
+      <WhatsNewHost />
       <StartScreen />
       <ConfirmHost />
     </div>
@@ -323,7 +325,10 @@ export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
   document.documentElement.style.zoom = String(settings.appearance.uiScale);
-  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: settings.onboarding.completed ? null : 'welcome', startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
+  // First run: the welcome screen replaces the release notes; afterwards they show once per new version.
+  const firstRun = !settings.onboarding.completed;
+  if (firstRun) markWhatsNewSeen();
+  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
   void externalControl.configure(settings.control);
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

@@ -12,16 +12,14 @@ type Src = 'persisted' | 'measured' | 'computed' | 'simulated' | 'config' | 'est
 
 function Kpi({ label, value, sub, src, icon, onClick }: { label: string; value: ReactNode; sub?: ReactNode; src: Src; icon?: ReactNode; onClick?: () => void }) {
   const tr = useT();
-  const body = (
-    <>
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag className={`panel kpi${onClick ? ' clickable' : ''}`} {...(onClick && { type: 'button' as const, onClick })}>
       <span className="k">{icon}{label}<span className="grow" /><span className="tag-src" title={tr('dash.src.title')}>{tr(`dash.src.${src}`)}</span></span>
       <span className="v">{value}</span>
       {sub && <span className="s">{sub}</span>}
-    </>
+    </Tag>
   );
-  return onClick
-    ? <button type="button" className="panel kpi clickable" onClick={onClick}>{body}</button>
-    : <div className="panel kpi">{body}</div>;
 }
 
 /** Home card: describe the stage in words (structures, fixtures, set) and build it in one go. */
@@ -78,13 +76,13 @@ export function Dashboard() {
             <Kpi label={tr('dash.fixtures')} src="persisted" value={p.patch.length} sub={tr('dash.fixturesSub', { groups: p.groups.length, issues: ps.issues.length ? tr('dash.patchIssues', { n: ps.issues.length }) : tr('dash.patchOk') })} icon={<Lightbulb size={13} />} onClick={() => setPage('fixtures')} />
             <Kpi label={tr('dash.universes')} src="persisted" value={p.show.universes} sub={tr('dash.universesSub', { n: universesUsed })} />
             <Kpi label={tr('dash.output')} src="measured" value={rt?.liveMode ? 'LIVE' : tr('dash.simulation')} sub={real.length ? tr('dash.armed', { armed: real.filter((o) => o.armed).length, total: real.length }) : tr('dash.noReal')} icon={<Cable size={13} />} />
-            <Kpi label={tr('dash.protocols')} src="config" value={protocols.length ? protocols.join(' · ') : '—'} sub={tr('dash.inError', { n: outputs.filter((o) => o.state === 'error').length })} />
+            <Kpi label={tr('dash.protocols')} src="config" value={protocols.length ? protocols.join(' · ') : '—'} sub={tr('dash.inError', { n: outputs.filter((o) => o.state === 'error').length })} onClick={() => setPage('output')} />
           </div>
         </section>
         <section className="kpi-group" aria-labelledby="kpi-grp-show">
           <h2 id="kpi-grp-show">{tr('dash.grp.show')}</h2>
           <div className="grid g2">
-            <Kpi label={tr('dash.activeCue')} src="computed" value={active[0]?.cueName ?? '—'} sub={active.length ? `${p.cueLists.find((l) => l.id === active[0]!.cueListId)?.name ?? ''} · ${Math.round(active[0]!.progress * 100)} %` : tr('dash.cuesProgrammed', { n: p.cueLists.reduce((n, l) => n + l.cues.length, 0) })} />
+            <Kpi label={tr('dash.activeCue')} src="computed" value={active[0]?.cueName ?? '—'} sub={active.length ? `${p.cueLists.find((l) => l.id === active[0]!.cueListId)?.name ?? ''} · ${Math.round(active[0]!.progress * 100)} %` : tr('dash.cuesProgrammed', { n: p.cueLists.reduce((n, l) => n + l.cues.length, 0) })} onClick={() => setPage('cues')} />
             <Kpi label="BPM" src={rt?.engine.bpmSource === 'audio' ? 'estimate' : 'persisted'} value={rt?.engine.bpm.toFixed(0) ?? '–'} sub={rt?.engine.bpmSource === 'audio' ? tr('dash.bpmAudio', { n: Math.round((audio?.bpmConfidence ?? 0) * 100) }) : tr('dash.bpmManual')} />
           </div>
         </section>
