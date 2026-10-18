@@ -201,7 +201,8 @@ function DiagnosticsDrawer() {
   const toggle = useStore((s) => s.toggleDiag);
   const end = useRef<HTMLDivElement>(null);
   const [level, setLevel] = useState<'all' | 'warn'>('all');
-  useEffect(() => end.current?.scrollIntoView(), [logs.length, open]);
+  // scrollTop plutôt que scrollIntoView : ce dernier fait aussi défiler la page (écran noir à la fermeture).
+  useEffect(() => { if (end.current) end.current.scrollTop = end.current.scrollHeight; }, [logs.length, open]);
   if (!open) return null;
   const shown = level === 'all' ? logs : logs.filter((l) => l.level === 'warn' || l.level === 'error');
   return (
@@ -215,14 +216,13 @@ function DiagnosticsDrawer() {
         <div className="grow" />
         <button className="btn ghost sm icon" onClick={toggle} title={tr('common.close')}><X size={14} /></button>
       </div>
-      <div style={{ overflow: 'auto', flex: 1, padding: '6px 0' }}>
+      <div ref={end} style={{ overflow: 'auto', flex: 1, padding: '6px 0' }}>
         {shown.length === 0 && <div className="empty small">{tr('diag.empty')}</div>}
         {shown.map((l) => (
           <div key={l.id} className={`log-line ${l.level}`}>
             <span className="dim">{l.t.slice(11, 19)}</span><span>{l.level.toUpperCase()}</span><span className="muted">{l.source}</span><span>{l.message}</span>
           </div>
         ))}
-        <div ref={end} />
       </div>
     </div>
   );
