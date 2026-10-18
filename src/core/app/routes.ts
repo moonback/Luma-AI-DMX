@@ -15,7 +15,7 @@ export type CommandDomain = Prefix<CommandType>;
 export type CommandIn<D extends CommandDomain> = Extract<Command, { type: `${D}.${string}` }>;
 
 /** Polling and streaming commands, left out of the usage statistics (they say nothing about what is used). */
-export const UNCOUNTED = new Set<CommandType>(['audio.features', 'output.universe', 'output.virtualHistory', 'project.get', 'settings.get', 'logs.recent', 'app.info', 'usage.get']);
+export const UNCOUNTED = new Set<CommandType>(['audio.features', 'output.universe', 'output.virtualHistory', 'project.get', 'settings.get', 'logs.recent', 'app.info', 'usage.get', 'music.loadAudio']);
 
 /** Exhaustive at compile time: a new command prefix without a handler does not build. */
 export const ROUTES: { [D in CommandDomain]: (app: AppService, cmd: CommandIn<D>) => unknown } = {

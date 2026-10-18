@@ -1,11 +1,12 @@
 import { analyzeAudio } from '../core/music/analyze';
 import type { MusicTrack, SongAnalysis } from '../core/model/schemas';
 import { audioEngine } from './audioEngine';
+import { act } from './api';
 
 /**
  * Song import and synchronised playback, outside React (keeps playing across pages).
- * The audio file stays in memory for the session only: the project stores the analysis and the file's SHA-256, so a
- * re-imported file is recognised without re-analysis.
+ * The project stores the analysis and the file's SHA-256 (a re-imported file is recognised without re-analysis); the audio
+ * itself is saved on this machine by the main process and restored on demand.
  */
 const ANALYSIS_RATE = 22050;
 
@@ -17,12 +18,15 @@ class MusicPlayer {
   private startedAt = 0;
   playing: { trackId: string; timelineId: string | null } | null = null;
   private readonly listeners = new Set<() => void>();
+  /** Bumped on every change (playback or a restored file): the React snapshot. */
+  revision = 0;
 
   subscribe(l: () => void): () => void {
     this.listeners.add(l);
     return () => this.listeners.delete(l);
   }
   private changed(): void {
+    this.revision++;
     for (const l of this.listeners) l();
   }
 
@@ -36,14 +40,9 @@ class MusicPlayer {
     const data = await file.arrayBuffer();
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), (b) => b.toString(16).padStart(2, '0')).join('');
     opts.onProgress(0.02, 'Décodage');
-    const ctx = new AudioContext();
-    let buffer: AudioBuffer;
-    try {
-      buffer = await ctx.decodeAudioData(data.slice(0));
-    } finally {
-      void ctx.close();
-    }
+    const buffer = await decode(data);
     this.buffers.set(hash, buffer);
+    await act({ type: 'music.storeAudio', hash, data: new Uint8Array(data) });
     const name = file.name.replace(/\.[^.]+$/, '');
     if (opts.known(hash)) return { hash, name, analysis: null };
     // Mono 22.05 kHz for the analysis (the browser downmixes and resamples).
@@ -60,6 +59,16 @@ class MusicPlayer {
       yieldFn: () => new Promise((r) => setTimeout(r, 0)),
     });
     return { hash, name, analysis };
+  }
+
+  /** Restores the audio saved on this machine; false when the file was never imported here. */
+  async restore(hash: string): Promise<boolean> {
+    if (this.buffers.has(hash)) return true;
+    const data = await act({ type: 'music.loadAudio', hash });
+    if (!data) return false;
+    this.buffers.set(hash, await decode(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer));
+    this.changed();
+    return true;
   }
 
   position(): number {
@@ -105,6 +114,15 @@ class MusicPlayer {
     this.ctx = null;
     this.playing = null;
     this.changed();
+  }
+}
+
+async function decode(data: ArrayBuffer): Promise<AudioBuffer> {
+  const ctx = new AudioContext();
+  try {
+    return await ctx.decodeAudioData(data.slice(0));
+  } finally {
+    void ctx.close();
   }
 }
 

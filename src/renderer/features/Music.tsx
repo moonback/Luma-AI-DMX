@@ -16,7 +16,7 @@ const BEAM_NAMES = { open: '', gobo: 'gobo', prism: 'gobo + prisme', frost: 'fro
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 function usePlayback() {
-  useSyncExternalStore((l) => musicPlayer.subscribe(l), () => musicPlayer.playing);
+  useSyncExternalStore((l) => musicPlayer.subscribe(l), () => musicPlayer.revision);
   const [pos, setPos] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setPos(musicPlayer.position()), 100);
@@ -60,6 +60,8 @@ export function MusicPage() {
   const track = tracks.find((t) => t.id === trackId) ?? tracks[0] ?? null;
   const planIntent = track?.plan?.intent ?? '';
   useEffect(() => { if (planIntent) setIntent(planIntent); }, [track?.id, planIntent]);
+  const hash = track?.hash;
+  useEffect(() => { if (hash) musicPlayer.restore(hash).catch(() => undefined); }, [hash]);
 
   const importFile = async (f: File) => {
     try {
@@ -70,7 +72,7 @@ export function MusicPage() {
       } else {
         const known = tracks.find((t) => t.hash === r.hash);
         if (known) setTrackId(known.id);
-        useStore.getState().toast({ kind: 'info', title: 'Morceau déjà analysé', detail: 'Analyse reprise du projet ; le fichier audio est chargé pour la lecture.' });
+        useStore.getState().toast({ kind: 'info', title: 'Morceau déjà analysé', detail: 'Analyse reprise du projet ; le fichier audio est enregistré pour la lecture.' });
       }
     } catch (err) {
       useStore.getState().toast({ kind: 'error', title: 'Import impossible', detail: err instanceof Error ? err.message : String(err) });
@@ -112,7 +114,7 @@ export function MusicPage() {
         </Panel>
       )}
       {!track ? (
-        <Empty icon={<Music2 size={32} />} title="Aucun morceau">Importez un fichier audio (WAV, MP3, FLAC…). Il est analysé sur cette machine ; seule l’analyse est enregistrée dans le projet, jamais le son.</Empty>
+        <Empty icon={<Music2 size={32} />} title="Aucun morceau">Importez un fichier audio (WAV, MP3, FLAC…). Il est analysé sur cette machine ; l’analyse est enregistrée dans le projet et le son sur cette machine.</Empty>
       ) : (
         <div className="col gap-lg">
           {tracks.length > 1 && (
@@ -124,7 +126,7 @@ export function MusicPage() {
                 playing?.trackId === track.id
                   ? <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />Stop {fmt(pos)}</button>
                   : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />Lecture synchronisée</button>
-              ) : <span className="small dim">Réimportez le fichier pour la lecture (le son n’est pas enregistré dans le projet)</span>}
+              ) : <span className="small dim">Réimportez le fichier pour la lecture (son absent de cette machine)</span>}
               <button className="btn ghost sm" onClick={() => void act({ type: 'music.removeTrack', id: track.id })}>Retirer</button>
             </div>
           }>

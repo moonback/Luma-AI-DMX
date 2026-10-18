@@ -179,6 +179,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('locate.apply'), updates: z.array(z.object({ fixtureId: idSchema, x: z.number().min(-100).max(100), y: z.number().min(-100).max(100), height: z.number().min(0).max(50).optional() })).min(1).max(2048) }),
   // Music (Song-to-Show)
   z.object({ type: z.literal('music.addTrack'), name: z.string().trim().min(1).max(200), hash: z.string().regex(/^[0-9a-f]{64}$/), analysis: songAnalysisSchema }),
+  z.object({ type: z.literal('music.storeAudio'), hash: z.string().regex(/^[0-9a-f]{64}$/), data: z.instanceof(Uint8Array).refine((d) => d.byteLength > 0 && d.byteLength <= 500 * 1024 * 1024, 'fichier audio vide ou trop volumineux (500 Mo max)') }),
+  z.object({ type: z.literal('music.loadAudio'), hash: z.string().regex(/^[0-9a-f]{64}$/) }),
   z.object({ type: z.literal('music.removeTrack'), id: idSchema }),
   z.object({ type: z.literal('music.setSection'), trackId: idSchema, index: z.number().int().min(0).max(300), label: z.enum(SECTION_LABELS).optional(), locked: z.boolean().optional() }),
   z.object({ type: z.literal('music.generate'), trackId: idSchema, intent: z.string().max(500), nextVariant: z.boolean().default(false) }),
@@ -372,6 +374,8 @@ export interface CommandResults {
   'locate.end': Void;
   'locate.apply': { updated: number };
   'music.addTrack': { id: string; cached: boolean };
+  'music.storeAudio': Void;
+  'music.loadAudio': Uint8Array | null;
   'music.removeTrack': Void;
   'music.setSection': Void;
   'music.generate': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };

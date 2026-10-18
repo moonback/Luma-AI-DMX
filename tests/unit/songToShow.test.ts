@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import { analyzeAudio } from '../../src/core/music/analyze';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { adjustSection, compileShow, parseIntent, planLocally, rigInfo } from '../../src/core/music/songToShow';
 import { effectFlashViolation } from '../../src/core/safety/flashGuard';
@@ -37,6 +38,16 @@ describe('Song-to-Show', () => {
     const i = parseIntent('Concert pop, sobre sur les couplets, explosion sur les refrains, pas de strobe, en violet');
     expect(i).toMatchObject({ verseShift: -1, peakShift: 1, strobe: 'forbid', colors: ['#8B00FF'] });
     expect(parseIntent('ambiance froide sans mouvement')).toMatchObject({ warmth: 'cold', noMovement: true });
+  });
+
+  it('enregistre le son importé sur la machine et le restitue', async () => {
+    const { svc } = await setup();
+    const data = new Uint8Array([1, 2, 3, 4]);
+    const hash = createHash('sha256').update(data).digest('hex');
+    expect(await svc.execute({ type: 'music.loadAudio', hash })).toBeNull();
+    await svc.execute({ type: 'music.storeAudio', hash, data });
+    expect(Array.from((await svc.execute({ type: 'music.loadAudio', hash }))!)).toEqual([1, 2, 3, 4]);
+    await expect(svc.execute({ type: 'music.storeAudio', hash: HASH, data })).rejects.toThrow(/Empreinte/);
   });
 
   it('génère un show calé sur la structure, conforme à l’intention et sûr', async () => {

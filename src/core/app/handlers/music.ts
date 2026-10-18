@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { Project, MusicTrack, ShowPlan } from '../../model/schemas';
 import { adjustSection, compileShow, planLocally, rigInfo } from '../../music/songToShow';
 import { KEY_NAMES, SECTION_NAMES } from '../../music/analyze';
@@ -20,6 +22,16 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       app.logger.info('Musique', `« ${cmd.name} » analysé : ${a.bpm.toFixed(1)} BPM, ${KEY_NAMES[a.key.tonic]} ${a.key.mode === 'major' ? 'majeur' : 'mineur'}, ${a.sections.length} sections`);
       return { id, cached: false };
     }
+    // The audio itself is kept per machine (keyed by its SHA-256), not in the project file.
+    case 'music.storeAudio': {
+      if (createHash('sha256').update(cmd.data).digest('hex') !== cmd.hash) throw new UserError('Empreinte du fichier audio incohérente');
+      const file = audioFile(app, cmd.hash);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, cmd.data);
+      return ok;
+    }
+    case 'music.loadAudio':
+      return fs.readFile(audioFile(app, cmd.hash)).then((b) => new Uint8Array(b.buffer, b.byteOffset, b.byteLength), () => null);
     case 'music.removeTrack': {
       const t = track(app, cmd.id);
       app.mutate((d) => {
@@ -61,6 +73,8 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
     }
   }
 }
+
+const audioFile = (app: AppService, hash: string) => path.join(app.opts.dataDir, 'music', hash);
 
 export function track(app: AppService, id: string): MusicTrack {
   const t = app.project.music.tracks.find((x) => x.id === id);
