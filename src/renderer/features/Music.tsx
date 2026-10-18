@@ -12,6 +12,22 @@ import { SectionEditor } from './music/SectionEditor';
 import { usePlayback } from './music/MiniPlayer';
 
 // Kept in French whatever the UI language: the local rules (parseIntent) only read French.
+const HISTORY_KEY = 'luma.intentHistory';
+function loadHistory(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+/** Most recent first, no duplicates, 8 kept (per machine, all projects). */
+function remember(intent: string): string[] {
+  const list = [intent, ...loadHistory().filter((x) => x !== intent)].slice(0, 8);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch { /* storage unavailable: the list stays in memory */ }
+  return list;
+}
+
 const INTENT_PRESETS = [
   ['dark', 'ambiance calme, couleurs froides'],
   ['edm', 'explosion sur les drops, strobe, lumières sur les basses, couleurs qui suivent la musique'],
@@ -61,6 +77,7 @@ export function MusicPage() {
   const [trackId, setTrackId] = useState<string | null>(tracks[0]?.id ?? null);
   const [progress, setProgress] = useState<{ p: number; step: string } | null>(null);
   const [intent, setIntent] = useState('');
+  const [history, setHistory] = useState(loadHistory);
   const [busy, setBusy] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
@@ -98,6 +115,7 @@ export function MusicPage() {
     setBusy(true);
     const r = await act({ type: 'music.generate', trackId: track.id, intent, nextVariant });
     setBusy(false);
+    if (r && intent.trim()) setHistory(remember(intent.trim()));
     if (r) setNotices(r.notices);
   };
   const restore = async () => {
@@ -166,6 +184,12 @@ export function MusicPage() {
               <textarea className="input" rows={2} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
               <div className="chips" data-testid="music-intent-presets">
                 {INTENT_PRESETS.map(([key, text]) => <button key={key} className="chip" title={text} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{t(`music.preset.${key}`)}</button>)}
+                {history.length > 0 && (
+                  <select className="select" value="" onChange={(e) => e.target.value && setIntent(e.target.value)} aria-label={t('music.recentIntents')} data-testid="music-intent-history" style={{ maxWidth: 260 }}>
+                    <option value="">{t('music.recentIntents')}</option>
+                    {history.map((h) => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                )}
               </div>
               <div className="row">
                 <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>

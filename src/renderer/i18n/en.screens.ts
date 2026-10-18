@@ -167,6 +167,7 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'music.variantHint': 'New variant of the unlocked sections',
   'music.restore': 'Back to the previous show',
   'music.player': 'Song player',
+  'music.recentIntents': 'Recent intents…',
   'music.pause': 'Pause',
   'music.resume': 'Resume',
   'music.openPage': 'Open Song-to-Show',

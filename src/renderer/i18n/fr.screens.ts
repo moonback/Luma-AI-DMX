@@ -165,6 +165,7 @@ export const frScreens = {
   'music.variantHint': 'Nouvelle variante des sections non verrouillées',
   'music.restore': 'Revenir au show précédent',
   'music.player': 'Lecteur du morceau',
+  'music.recentIntents': 'Intentions récentes…',
   'music.pause': 'Pause',
   'music.resume': 'Reprendre',
   'music.openPage': 'Ouvrir Song-to-Show',
