@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { act } from '../api';
 import { PageHead, Panel, useResolved } from '../components/ui';
 import type { AiExecutionReport, AiProposal } from '../../core/ai/actions';
-import { StageCanvas } from './Visualizer';
+import { StageCanvas } from './visualizer/StageCanvas';
 
 const EXAMPLES = [
   'Crée une ambiance lounge violette et bleue.',

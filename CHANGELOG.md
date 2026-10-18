@@ -14,6 +14,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ### Modifié
 - Télécommande durcie : interface d'écoute au choix (par défaut toutes, comme avant), jeton échangé contre un cookie HttpOnly puis retiré de l'adresse, 10 jetons faux par minute et par adresse au maximum (429), 30 commandes/s par client, bouton « Nouveau jeton », rappel « réseau privé ».
 - `AppService` découpé par domaine (`src/core/app/handlers/*`, `control.ts`, `monitor.ts`, `files.ts`) : 1 400 → 390 lignes, routage des commandes vérifié à la compilation, comportement inchangé.
+- `Visualizer.tsx` (1 049 lignes) découpé en `visualizer/StageCanvas.tsx`, `drawStage.ts` (dessin pur), `ScenePanel.tsx`, `sceneCards.tsx` ; `Stage3D.tsx` (763) séparé de sa partie three.js impérative (`stage3d/scene.ts`).
+- `npm run lint` refuse tout fichier source de plus de 600 lignes (400 dans `src/core/app`).
 - Roadmaps déplacées dans `docs/roadmap/` ; décisions structurantes écrites en ADR (`docs/adr/`).
 - Cibles macOS et Linux retirées d'`electron-builder.yml` tant qu'elles ne sont pas construites en CI.
 - Tests e2e : rendu WebGL logiciel (SwiftShader) pour tourner sur les machines sans GPU.
