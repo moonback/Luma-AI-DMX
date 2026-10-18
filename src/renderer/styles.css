@@ -314,5 +314,16 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .scene-template { display: flex; flex-direction: column; gap: 2px; padding: 8px 9px; text-align: left; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; transition: border-color var(--dur), background var(--dur); }
 .scene-template:hover { border-color: var(--violet); background: var(--violet-soft); }
 .scene-template:focus-visible, .scene-section > summary:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
+.scene-quickadd { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.scene-add { position: relative; display: flex; }
+.scene-add-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px 5px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel-2); color: var(--text-2); font-size: 10px; line-height: 1.1; cursor: pointer; transition: border-color var(--dur), background var(--dur), color var(--dur); }
+.scene-add-main span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-add-main:hover:not(:disabled) { color: var(--text); border-color: var(--violet); background: var(--violet-soft); }
+.scene-add-place { position: absolute; top: 2px; right: 2px; display: grid; place-items: center; width: 17px; height: 17px; padding: 0; border: none; border-radius: 4px; background: transparent; color: var(--text-3); cursor: pointer; }
+.scene-add-place:hover:not(:disabled) { color: var(--text); background: var(--panel); }
+.scene-add.on .scene-add-main { border-color: var(--violet); background: var(--violet-soft); color: var(--text); }
+.scene-add.on .scene-add-place { color: var(--violet); }
+.scene-add button:disabled { opacity: 0.45; cursor: not-allowed; }
+.scene-add button:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
 @media (max-width: 1100px) { .scene-panel { width: 290px; } }
 .stage3d:fullscreen { border-radius: 0; }

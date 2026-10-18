@@ -15,12 +15,16 @@ import { hangFixture, removeSceneElement } from '../../sceneActions';
 
 export type Vis = Project['visualizer'];
 
-/** Collapsible panel section (native <details>: keyboard accessible, toggled state kept by the browser). */
+/** Open / closed state the user chose per section, kept while the panel is closed or switches tab. */
+const sectionOpen = new Map<string, boolean>();
+
+/** Collapsible panel section (native details element: keyboard accessible); a closed section renders nothing, so long lists cost nothing. */
 export function Section({ icon, title, count, open = true, children }: { icon: ReactNode; title: string; count?: number; open?: boolean; children: ReactNode }) {
+  const [isOpen, setOpen] = useState(() => sectionOpen.get(title) ?? open);
   return (
-    <details className="scene-section" open={open}>
+    <details className="scene-section" open={isOpen} onToggle={(e) => { const o = e.currentTarget.open; sectionOpen.set(title, o); setOpen(o); }}>
       <summary>{icon}<span className="grow">{title}</span>{count !== undefined && <span className="badge">{count}</span>}</summary>
-      <div className="scene-section-body">{children}</div>
+      {isOpen && <div className="scene-section-body">{children}</div>}
     </details>
   );
 }

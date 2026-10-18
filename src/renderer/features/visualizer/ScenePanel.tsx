@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, Boxes, Camera, Copy, Crosshair, LayoutTemplate, Library, MapPin, Monitor, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
+import { Armchair, Boxes, Camera, Copy, Crosshair, LayoutTemplate, Library, MapPin, Monitor, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
 import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
-import { t } from '../../i18n';
+import { t, useT, type MessageKey } from '../../i18n';
 import { useResolved } from '../../components/ui';
 import { buildVisualModel } from '../../../core/visualizer/model';
 import { setScreenVideo } from '../../screenMedia';
@@ -20,16 +20,31 @@ const SHAPES: { id: Vis['shape']; label: string }[] = [
   { id: 'rect', label: 'Rectangle' }, { id: 'thrust', label: 'Avancée' }, { id: 'arena', label: 'Arène (360°)' },
 ];
 
-/** "+ Add" (next free spot) and "place with a click on the stage" for one kind of element. */
-function AddBtn({ kind, label, testId }: { kind: SceneKind; label: string; testId: string }) {
-  const vis = useStore((s) => s.project!.project.visualizer);
+/** Quick-add tile: "+" (next free spot) and "place with a click on the stage" for one kind of element. */
+function AddBtn({ kind, label, icon, testId }: { kind: SceneKind; label: MessageKey; icon: ReactNode; testId: string }) {
+  const tr = useT();
+  const full = useStore((s) => !canAdd(s.project!.project.visualizer, kind));
   const placing = useStore((s) => s.placing?.kind === kind && !s.placing.preset);
-  const full = !canAdd(vis, kind);
+  const name = SCENE_LABEL[kind].toLowerCase();
   return (
-    <div className="row" style={{ gap: 6 }}>
-      <button className="btn sm" onClick={() => addSceneElement(kind)} disabled={full} data-testid={testId}><Plus size={12} />{label}</button>
-      <button className={`btn sm ${placing ? 'on' : ''}`} onClick={() => useStore.getState().setPlacing(placing ? null : { kind, label: SCENE_LABEL[kind].toLowerCase() })} disabled={full} aria-pressed={placing}
-        title="Poser au clic sur le plateau (2D ou 3D) — Échap pour annuler" data-testid={`${testId}-place`}><Crosshair size={12} />Poser au clic</button>
+    <div className={`scene-add ${placing ? 'on' : ''}`}>
+      <button className="scene-add-main" onClick={() => addSceneElement(kind)} disabled={full} title={tr('scene.addTitle', { name })} data-testid={testId}>{icon}<span>{tr(label)}</span></button>
+      <button className="scene-add-place" onClick={() => useStore.getState().setPlacing(placing ? null : { kind, label: name })} disabled={full} aria-pressed={placing}
+        title={tr('scene.placeTitle')} aria-label={tr('scene.placeLabel', { name })} data-testid={`${testId}-place`}><Crosshair size={11} /></button>
+    </div>
+  );
+}
+
+/** Always-visible add bar at the top of the build tab, so adding never needs scrolling to a section. */
+function QuickAdd() {
+  const tr = useT();
+  return (
+    <div className="scene-quickadd" role="toolbar" aria-label={tr('scene.addBar')}>
+      <AddBtn kind="marker" label="scene.addMarker" icon={<MapPin size={14} />} testId="marker-add" />
+      <AddBtn kind="truss" label="scene.addTruss" icon={<Boxes size={14} />} testId="truss-add" />
+      <AddBtn kind="prop" label="scene.addProp" icon={<Armchair size={14} />} testId="prop-add" />
+      <AddBtn kind="performer" label="scene.addPerformer" icon={<UserRound size={14} />} testId="performer-add" />
+      <AddBtn kind="screen" label="scene.addScreen" icon={<Monitor size={14} />} testId="screen-add" />
     </div>
   );
 }
@@ -74,6 +89,7 @@ export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
       </div>
       {tab === 'selection' ? <div className="scene-panel-body" data-testid="stage-selection"><SelectionTab vis={vis} mode={mode} /></div> : (
       <div className="scene-panel-body" data-testid="stage-settings">
+        <QuickAdd />
         <Section icon={<LayoutTemplate size={13} />} title="Partir d’un modèle" open={!hasSceneContent(vis)}>
           <TemplatePicker vis={vis} />
           <label className="btn sm" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
@@ -84,9 +100,6 @@ export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
               if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
             }} />
           </label>
-        </Section>
-        <Section icon={<Library size={13} />} title="Bibliothèque">
-          <LibraryPicker />
         </Section>
         <Section icon={<Theater size={13} />} title="Plateau">
           <div className="chips" role="group" aria-label="Forme du plateau">
@@ -106,9 +119,11 @@ export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
             )}
           </div>
         </Section>
+        <Section icon={<Library size={13} />} title="Bibliothèque">
+          <LibraryPicker />
+        </Section>
         <Section icon={<MapPin size={13} />} title="Points de scène" count={vis.markers.length}>
           {vis.markers.map((m) => <MarkerCard key={m.id} m={m} vis={vis} />)}
-          <AddBtn kind="marker" label="Point de scène" testId="marker-add" />
           <p className="scene-hint">Repères « chanteur », « batteur »… déplaçables en 2D (Positionner).</p>
         </Section>
         <TrussSettings vis={vis} />
@@ -151,17 +166,29 @@ function LibraryGlyph({ item }: { item: LibraryItem }) {
   return <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>{body}</svg>;
 }
 
+/** Lower-case, accent-free text for the library search ("Écran" matches "ecran"). */
+const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
 /** Library of pieces: click a tile then the stage, or drag the tile onto the 2D / 3D view. */
 function LibraryPicker() {
   const [group, setGroup] = useState<LibraryGroup>('truss');
+  const [query, setQuery] = useState('');
+  const tr = useT();
   const placing = useStore((s) => s.placing);
+  const q = fold(query.trim());
+  // A search looks through every category, so a piece is found without knowing where it lives.
+  const items = q ? LIBRARY.filter((x) => fold(x.label).includes(q)) : LIBRARY.filter((x) => x.group === group);
   return (
     <>
-      <div className="chips" role="tablist" aria-label="Catégories">
-        {LIBRARY_GROUPS.map((g) => <button key={g.id} role="tab" aria-selected={group === g.id} className={`chip ${group === g.id ? 'on' : ''}`} onClick={() => setGroup(g.id)} data-testid={`lib-group-${g.id}`}>{g.label}</button>)}
-      </div>
+      <input className="input" type="search" placeholder={tr('scene.libSearch')} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={tr('scene.libSearch')} data-testid="lib-search" />
+      {!q && (
+        <div className="chips" role="tablist" aria-label="Catégories">
+          {LIBRARY_GROUPS.map((g) => <button key={g.id} role="tab" aria-selected={group === g.id} className={`chip ${group === g.id ? 'on' : ''}`} onClick={() => setGroup(g.id)} data-testid={`lib-group-${g.id}`}>{g.label}</button>)}
+        </div>
+      )}
+      {q && !items.length && <p className="scene-hint">{tr('scene.libNone', { q: query.trim() })}</p>}
       <div className="scene-library">
-        {LIBRARY.filter((x) => x.group === group).map((item) => (
+        {items.map((item) => (
           <button key={item.id} className={`scene-lib-item ${placing?.label === item.label ? 'on' : ''}`} draggable data-testid={`lib-${item.id}`}
             title={`${item.label} — cliquer puis cliquer sur le plateau, ou glisser sur la vue`}
             onClick={() => useStore.getState().setPlacing(placing?.label === item.label ? null : { kind: item.kind, label: item.label, preset: { ...item.preset } })}
@@ -214,7 +241,6 @@ function PropSettings({ vis }: { vis: Vis }) {
   return (
     <Section icon={<Armchair size={13} />} title="Décor" count={vis.props.length}>
       {vis.props.map((p) => <PropCard key={p.id} p={p} vis={vis} />)}
-      <AddBtn kind="prop" label="Décor" testId="prop-add" />
       <p className="scene-hint">Plus de modèles dans la bibliothèque (onglet Décor) ; en mode Positionner, glisser pour déplacer.</p>
     </Section>
   );
@@ -233,7 +259,6 @@ function TrussSettings({ vis }: { vis: Vis }) {
         </button>
       )}
       {vis.trusses.map((t) => <TrussCard key={t.id} t={t} vis={vis} />)}
-      <AddBtn kind="truss" label="Structure" testId="truss-add" />
       <p className="scene-hint">Les projecteurs accrochés suivent la structure ; aimantation au dépôt.</p>
     </Section>
   );
@@ -244,7 +269,6 @@ function PerformerSettings({ vis }: { vis: Vis }) {
   return (
     <Section icon={<UserRound size={13} />} title="Interprètes et instruments" count={vis.performers.length}>
       {vis.performers.map((pf) => <PerformerCard key={pf.id} pf={pf} vis={vis} />)}
-      <AddBtn kind="performer" label="Interprète" testId="performer-add" />
       <p className="scene-hint">Lâché sur un point de scène en 2D, l’interprète s’y pose et le suit ; sur un praticable, il monte dessus.</p>
     </Section>
   );
@@ -255,7 +279,6 @@ function ScreenSettings({ vis }: { vis: Vis }) {
   return (
     <Section icon={<Monitor size={13} />} title="Écrans LED" count={vis.screens.length}>
       {vis.screens.map((sc) => <ScreenCard key={sc.id} sc={sc} vis={vis} />)}
-      <AddBtn kind="screen" label="Écran" testId="screen-add" />
       <p className="scene-hint">Couleur, image, vidéo (non enregistrée) ou pixel mapping des barres LED.</p>
     </Section>
   );
