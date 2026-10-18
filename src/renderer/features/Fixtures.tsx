@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Camera, Copy, FileDown, Lightbulb, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
+import { useT } from '../i18n';
 import { Empty, Field, Modal, NumberInput, PageHead, Panel, useResolved } from '../components/ui';
 import { channelCount, channelKey } from '../../core/fixtures/profiles';
 import { findFreeAddress } from '../../core/fixtures/patch';
@@ -184,6 +185,7 @@ function Editor({ id }: { id: string }) {
 }
 
 export function Fixtures() {
+  const tr = useT();
   const { fixtures } = useResolved();
   const ps = useStore((s) => s.project!);
   const selection = useStore((s) => s.selection);
@@ -225,6 +227,7 @@ export function Fixtures() {
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
         <button className="btn" data-testid="patch-sheet-pdf" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'pdf' })} title="Feuille de patch imprimable (A4 paysage), par univers"><FileDown size={15} />Patch PDF</button>
         <button className="btn" data-testid="patch-sheet-csv" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'csv' })} title="Feuille de patch pour tableur (CSV « ; », UTF-8)"><FileDown size={15} />CSV</button>
+        <button className="btn" data-testid="export-mvr" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'project.exportMvr' })} title={tr('fixtures.exportMvrTitle')}><FileDown size={15} />{tr('fixtures.exportMvr')}</button>
         <button className="btn" data-testid="locate-open" disabled={!ps.project.patch.length} onClick={() => setLocating(true)} title="Mesurer les positions réelles avec une caméra et détecter les erreurs de patch"><Camera size={15} />Localiser par caméra</button>
         <button className="btn primary" data-testid="add-fixture" onClick={() => setAdding(true)}><Plus size={15} />Ajouter</button>
       </PageHead>

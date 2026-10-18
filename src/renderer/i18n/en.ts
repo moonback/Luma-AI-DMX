@@ -74,4 +74,7 @@ export const en: Record<MessageKey, string> = {
   'diag.empty': 'No events.',
 
   'app.connecting': 'Connecting to the engine…',
+
+  'fixtures.exportMvr': 'MVR',
+  'fixtures.exportMvrTitle': 'Layout and patch as MVR (Capture, Vectorworks, grandMA3…)',
 };

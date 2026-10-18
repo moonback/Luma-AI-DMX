@@ -42,6 +42,7 @@ export interface Dialogs {
   saveDiagnostic?(defaultName: string): Promise<string | null>;
   savePatchSheet?(defaultName: string, format: 'csv' | 'pdf'): Promise<string | null>;
   saveFeedback?(defaultName: string): Promise<string | null>;
+  saveMvr?(defaultName: string): Promise<string | null>;
 }
 
 export interface SecretStore {

@@ -75,6 +75,9 @@ export const fr = {
   'diag.empty': 'Aucun événement.',
 
   'app.connecting': 'Connexion au moteur…',
+
+  'fixtures.exportMvr': 'MVR',
+  'fixtures.exportMvrTitle': 'Implantation et patch au format MVR (Capture, Vectorworks, grandMA3…)',
 } as const;
 
 export type MessageKey = keyof typeof fr;

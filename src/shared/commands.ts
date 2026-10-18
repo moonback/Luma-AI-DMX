@@ -55,6 +55,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('project.save'),
   z.object({ type: z.literal('project.saveAs'), path: optPath }),
   z.object({ type: z.literal('project.export'), path: optPath }),
+  /** Patch and positions as MVR (Capture, Vectorworks, grandMA3…). */
+  z.object({ type: z.literal('project.exportMvr'), path: optPath }),
   z.object({
     type: z.literal('project.update'),
     meta: z.object({ name: nameSchema.optional(), show: z.string().trim().max(80).optional(), notes: z.string().max(5000).optional() }).optional(),
@@ -312,6 +314,7 @@ export interface CommandResults {
   'project.save': { path: string | null };
   'project.saveAs': { path: string | null };
   'project.export': { path: string | null };
+  'project.exportMvr': { path: string | null };
   'project.update': Void;
   'scene.undo': Void;
   'scene.redo': Void;

@@ -1,3 +1,4 @@
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Project } from '../../model/schemas';
 import { createProject, ProjectLoadError } from '../../project/format';
@@ -6,6 +7,7 @@ import { listRecovery, loadProjectFile, saveProjectFile } from '../../project/st
 import { followTruss } from '../../visualizer/truss';
 import { UserError } from '../shared';
 import { addRecent, clearAutosave } from '../files';
+import { exportMvr } from '../../project/mvr';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Project documents: new/open/save/export, demos, recovery, onboarding. */
@@ -104,5 +106,12 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
       return ok;
     case 'project.listRecovery':
       return listRecovery(app.autosaveDir, app.projectPath);
+    case 'project.exportMvr': {
+      const file = cmd.path ?? (await app.opts.dialogs.saveMvr?.(`${app.project.meta.name.replace(/[\\/:*?"<>|]/gu, '_')}.mvr`)) ?? null;
+      if (!file) return { path: null };
+      await fs.writeFile(file, exportMvr(app.project));
+      app.logger.info('Projet', `Implantation exportée en MVR : ${path.basename(file)} (${app.project.patch.length} projecteurs)`);
+      return { path: file };
+    }
   }
 }
