@@ -18,6 +18,7 @@ import type { RdmDevice } from '../core/protocols/rdm';
 import type { RecoveryEntry } from '../core/project/store';
 import type { LogEntry } from '../core/log/logger';
 import type { Settings } from '../core/settings/settings';
+import type { UpdateStatus } from '../core/app/updates';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 
 /**
@@ -226,6 +227,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('settings.update'), settings: settingsSchema }),
   empty('logs.recent'),
   z.object({ type: z.literal('diagnostic.export'), path: optPath }),
+  // Application
+  empty('app.info'),
+  empty('app.checkUpdates'),
 ]);
 export type Command = z.infer<typeof commandSchema>;
 export type CommandType = Command['type'];
@@ -376,6 +380,8 @@ export interface CommandResults {
   'settings.update': Void;
   'logs.recent': LogEntry[];
   'diagnostic.export': { path: string | null };
+  'app.info': { name: string; version: string; updates: UpdateStatus };
+  'app.checkUpdates': UpdateStatus;
 }
 
 export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string };

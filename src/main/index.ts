@@ -5,6 +5,8 @@ import { AppService, UserError } from '../core/app/AppService';
 import { commandSchema, type AppEvents } from '../shared/commands';
 import { BRAND } from '../shared/brand';
 import { createSecretStore } from './secrets';
+import { createUpdater } from './updates';
+import type { Logger } from '../core/log/logger';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.ELECTRON_RENDERER_URL;
@@ -31,9 +33,11 @@ function isTrustedSender(url: string): boolean {
 
 async function createService(): Promise<AppService> {
   const dataDir = app.getPath('userData');
-  const svc = new AppService({
+  const svc: AppService = new AppService({
     dataDir,
     crashDir: app.getPath('crashDumps'),
+    // Read lazily: update events arrive after the service is constructed.
+    updater: createUpdater((): Logger => svc.logger),
     appInfo: {
       name: BRAND.productName,
       version: app.getVersion(),

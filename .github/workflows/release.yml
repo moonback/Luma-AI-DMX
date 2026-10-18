@@ -1,0 +1,46 @@
+name: Release
+
+# Push a tag vX.Y.Z (stable) or vX.Y.Z-beta.N (beta channel) matching package.json to publish a release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Le tag correspond à package.json
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME ≠ version v$v de package.json"; exit 1; }
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: Signature disponible ?
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+        run: |
+          if [ -z "$CSC_LINK" ]; then echo "::warning::Aucun certificat (secret WIN_CSC_LINK) : installateur NON signé, SmartScreen avertira."; fi
+      - name: Construire et publier
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          type=release
+          case "$GITHUB_REF_NAME" in *-*) type=prerelease ;; esac
+          npx electron-vite build
+          npx electron-builder --win --x64 --publish always -c.publish.releaseType=$type

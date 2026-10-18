@@ -9,6 +9,7 @@ import type { RecoveryEntry } from '../../core/project/store';
 import type { OpenRouterModel } from '../../core/ai/providers/openrouter';
 import { externalControl } from '../control';
 import { audioEngine } from '../audioEngine';
+import type { UpdateStatus } from '../../core/app/updates';
 
 const TABS = [
   { id: 'general', label: 'Général' }, { id: 'appearance', label: 'Apparence' }, { id: 'engine', label: 'Moteur & sécurité' },
@@ -127,6 +128,42 @@ const OSC_ADDRESSES: [string, string][] = [
   ['/luma/master <0..1>', 'Grand master'], ['/luma/bpm <bpm>', 'Tempo'], ['/luma/release', 'Relâcher le programmeur'],
   ['/luma/stop', 'STOP OUTPUT'], ['/luma/timecode <secondes>', 'Position de timecode (la timeline suit)'],
 ];
+
+const UPDATE_LABEL: Record<UpdateStatus['state'], string> = {
+  disabled: 'Indisponible', idle: 'En attente', checking: 'Recherche…', downloading: 'Téléchargement', ready: 'Prête à installer', 'up-to-date': 'À jour', error: 'Erreur',
+};
+
+/** Version, update channel and status. Updates install when the application quits, never during a show. */
+function UpdatesPanel({ value, onChange }: { value: Settings['general']; onChange: (v: Partial<Settings['general']>) => void }) {
+  const [info, setInfo] = useState<{ version: string; updates: UpdateStatus } | null>(null);
+  useEffect(() => { void act({ type: 'app.info' }).then((x) => x && setInfo(x)); }, []);
+  const u = info?.updates;
+  const check = async () => {
+    const r = await act({ type: 'app.checkUpdates' });
+    if (r && info) setInfo({ ...info, updates: r });
+  };
+  return (
+    <Panel title="Version et mises à jour">
+      <div className="grid g2">
+        <Field label="Version installée"><span className="mono" data-testid="app-version">{info?.version ?? '…'}</span></Field>
+        <Field label="Mise à jour">
+          <span className="row" data-testid="update-state">
+            <span className={`badge ${u?.state === 'ready' ? 'ok' : u?.state === 'error' ? 'err' : ''}`}>{u ? UPDATE_LABEL[u.state] : '…'}</span>
+            {u?.version && <span className="mono small">v{u.version}{u.state === 'downloading' && u.progress !== null ? ` · ${Math.round(u.progress * 100)} %` : ''}</span>}
+          </span>
+          {u?.detail && <div className="small dim">{u.detail}</div>}
+        </Field>
+        <Field label="Canal" hint="Bêta : versions de test, plus tôt, moins éprouvées. À éviter sur une machine de show.">
+          <select className="select" value={value.updateChannel} onChange={(e) => onChange({ updateChannel: e.target.value as Settings['general']['updateChannel'] })}>
+            <option value="stable">Stable</option><option value="beta">Bêta</option>
+          </select>
+        </Field>
+        <label className="check"><input type="checkbox" checked={value.autoUpdate} onChange={(e) => onChange({ autoUpdate: e.target.checked })} />Télécharger automatiquement (installation à la fermeture, jamais pendant un show)</label>
+      </div>
+      <div className="row"><button className="btn" disabled={!u || u.state === 'disabled' || u.state === 'checking'} onClick={() => void check()}>Rechercher maintenant</button></div>
+    </Panel>
+  );
+}
 
 function ControlTab({ value, onChange }: { value: Settings['control']; onChange: (v: Settings['control']) => void }) {
   const status = useSyncExternalStore((l) => externalControl.subscribe(l), () => externalControl.status);
@@ -259,6 +296,7 @@ export function SettingsPage() {
             </div>
           </Panel>
         )}
+        {tab === 'general' && <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />}
         {tab === 'appearance' && (
           <Panel title="Apparence">
             <div className="grid g2">

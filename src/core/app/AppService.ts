@@ -14,6 +14,7 @@ import { defaultSettings, settingsSchema, type Settings } from '../settings/sett
 import { Logger, type LogEntry } from '../log/logger';
 import { FileLogSink } from '../log/fileSink';
 import type { AppInfo } from '../log/diagnostic';
+import type { Updater } from './updates';
 import { AudioReactive } from '../audio/reactive';
 import type { AiProposal } from '../ai/actions';
 import { interpreterContext } from '../ai/director';
@@ -31,7 +32,7 @@ import { handleMusic } from './handlers/music';
 import { handleLocate, endLocate, onLocatePhoto } from './handlers/locate';
 import { handleOutput } from './handlers/output';
 import { handleAi } from './handlers/ai';
-import { handleSystem } from './handlers/system';
+import { configureUpdates, handleSystem } from './handlers/system';
 import { applyControl, onOsc, remoteState } from './control';
 import { onFrame, onOutputStatus } from './monitor';
 import { autosave } from './files';
@@ -63,6 +64,7 @@ export interface AppServiceOptions {
   /** Where Electron's crashReporter writes its dumps, listed in the diagnostic. */
   crashDir?: string;
   appInfo?: AppInfo;
+  updater?: Updater;
 }
 
 export { UserError };
@@ -81,7 +83,7 @@ const ROUTES: { [D in CommandDomain]: (app: AppService, cmd: CommandIn<D>) => un
   music: handleMusic, locate: handleLocate,
   engine: handleOutput, output: handleOutput, rdm: handleOutput,
   ai: handleAi,
-  audio: handleSystem, settings: handleSystem, logs: handleSystem, diagnostic: handleSystem,
+  audio: handleSystem, settings: handleSystem, logs: handleSystem, diagnostic: handleSystem, app: handleSystem,
 };
 
 /**
@@ -187,6 +189,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.logger.level = this.settings.logs.level;
     this.engine.updateSettings(this.engineSettings());
     await this.outputs.configure(this.settings.outputs);
+    configureUpdates(this);
     await applyControl(this);
     if (this.opts.autoStart !== false) this.engine.start();
     this.timers.push(setInterval(() => void autosave(this), 15000));

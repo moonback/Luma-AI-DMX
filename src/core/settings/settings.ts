@@ -50,8 +50,11 @@ export const settingsSchema = z.object({
       autosaveMinutes: z.number().int().min(0).max(60).default(2),
       recentProjects: z.array(z.string().max(1000)).max(10).default([]),
       confirmDangerous: z.boolean().default(true),
+      /** « beta » also receives pre-releases. Updates are installed when the application quits, never during a show. */
+      updateChannel: z.enum(['stable', 'beta']).default('stable'),
+      autoUpdate: z.boolean().default(true),
     })
-    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true }),
+    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true }),
   /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
   onboarding: z
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })

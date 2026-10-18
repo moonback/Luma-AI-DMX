@@ -3,10 +3,11 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writeFileAtomic } from '../../project/store';
 import { applyControl } from '../control';
+import { DISABLED_UPDATES } from '../updates';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Audio input, settings, logs and the diagnostic export. */
-export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic'>): Promise<unknown> {
+export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app'>): Promise<unknown> {
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'audio.features':
@@ -29,6 +30,7 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
       app.engine.updateSettings(app.engineSettings());
       if (outputsChanged) await app.outputs.configure(app.settings.outputs);
       await applyControl(app);
+      configureUpdates(app);
       app.logger.info('Paramètres', 'Paramètres enregistrés');
       return ok;
     }
@@ -41,7 +43,18 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
       app.logger.info('Diagnostic', `Exporté : ${path.basename(file)}`);
       return { path: file };
     }
+    case 'app.info': {
+      const info = app.opts.appInfo;
+      return { name: info?.name ?? 'Luma AI DMX', version: info?.version ?? 'dev', updates: app.opts.updater?.status() ?? DISABLED_UPDATES };
+    }
+    case 'app.checkUpdates':
+      return app.opts.updater ? app.opts.updater.check() : DISABLED_UPDATES;
   }
+}
+
+/** Applies the update channel and the automatic-update switch from the settings. */
+export function configureUpdates(app: AppService): void {
+  app.opts.updater?.configure({ channel: app.settings.general.updateChannel, auto: app.settings.general.autoUpdate });
 }
 
 /** Support bundle: version, settings and logs, secrets masked, never the project content. */

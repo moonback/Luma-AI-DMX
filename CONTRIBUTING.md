@@ -23,7 +23,7 @@
 ## Publier une version
 1. Déplacer « Non publié » sous un nouveau titre `## [x.y.z] — AAAA-MM-JJ` dans `CHANGELOG.md`.
 2. `npm version x.y.z` (met à jour `package.json` et crée le tag `vx.y.z`).
-3. `git push --follow-tags`.
+3. `git push --follow-tags` : le workflow `release.yml` construit, signe (si les secrets `WIN_CSC_LINK` et `WIN_CSC_KEY_PASSWORD` existent) et publie la release GitHub, lue par la mise à jour automatique. Une version `x.y.z-beta.n` part sur le canal bêta.
 
 ## Règles de conception
 Voir `docs/ARCHITECTURE.md` et les décisions dans `docs/adr/`. En particulier : `src/core` ne dépend ni d'Electron ni de React ; l'IA ne produit jamais de DMX ; aucun fichier source ne dépasse 600 lignes.
