@@ -11,6 +11,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  commits:
+    name: Messages de commit
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: node scripts/check-commits.mjs origin/${{ github.base_ref }} ${{ github.event.pull_request.head.sha }}
+
   check:
     name: Typecheck, lint, tests
     runs-on: windows-latest
