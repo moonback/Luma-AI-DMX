@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, crashReporter, dialog, ipcMain, session, shell } from 'electron';
 import { AppService, UserError } from '../core/app/AppService';
 import { commandSchema, type AppEvents } from '../shared/commands';
 import { BRAND } from '../shared/brand';
@@ -14,6 +14,9 @@ if (process.env.LUMA_USER_DATA) app.setPath('userData', process.env.LUMA_USER_DA
 
 app.setName(BRAND.productName);
 if (!app.requestSingleInstanceLock()) app.quit();
+
+// Native crashes leave a minidump in userData/Crashpad; nothing is ever uploaded.
+crashReporter.start({ uploadToServer: false });
 
 let win: BrowserWindow | null = null;
 let service: AppService | null = null;
@@ -30,6 +33,14 @@ async function createService(): Promise<AppService> {
   const dataDir = app.getPath('userData');
   const svc = new AppService({
     dataDir,
+    crashDir: app.getPath('crashDumps'),
+    appInfo: {
+      name: BRAND.productName,
+      version: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+    },
     secrets: createSecretStore(dataDir),
     dialogs: {
       openProject: async () => {
@@ -48,6 +59,10 @@ async function createService(): Promise<AppService> {
           { name: 'GDTF / QLC+ (bientôt)', extensions: ['gdtf', 'qxf'] },
         ], properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
+      },
+      saveDiagnostic: async (name) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Exporter un diagnostic', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Diagnostic', extensions: ['json'] }] });
+        return r.canceled ? null : r.filePath ?? null;
       },
     },
   });
@@ -124,6 +139,18 @@ function createWindow(): BrowserWindow {
   else void w.loadFile(path.join(here, '../renderer/index.html'));
   return w;
 }
+
+function logFatal(source: string, err: unknown): void {
+  const message = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
+  if (service) service.logger.error(source, message);
+  else console.error(source, message);
+}
+process.on('uncaughtException', (err) => logFatal('Processus principal', err));
+process.on('unhandledRejection', (reason) => logFatal('Promesse non gérée', reason));
+app.on('render-process-gone', (_e, _wc, details) => logFatal('Fenêtre', `processus de rendu arrêté : ${details.reason} (code ${details.exitCode})`));
+app.on('child-process-gone', (_e, details) => {
+  if (details.reason !== 'clean-exit') logFatal('Processus', `${details.type} arrêté : ${details.reason} (code ${details.exitCode})`);
+});
 
 app.whenReady().then(async () => {
   // Only the microphone (audio-reactive input, LTC) and MIDI (controllers, MTC) may be requested by the renderer.

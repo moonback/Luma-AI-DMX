@@ -23,6 +23,8 @@ import { buildDemo } from '../demo/projects';
 import { listRecovery, loadProjectFile, saveProjectFile, writeFileAtomic } from '../project/store';
 import { defaultSettings, settingsSchema, type Settings } from '../settings/settings';
 import { Logger, type LogEntry } from '../log/logger';
+import { FileLogSink } from '../log/fileSink';
+import { buildDiagnostic, listCrashDumps, type AppInfo } from '../log/diagnostic';
 import { AudioReactive } from '../audio/reactive';
 import { hexToRgb } from '../util/math';
 import type { AiProposal } from '../ai/actions';
@@ -46,6 +48,7 @@ export interface Dialogs {
   openProject(): Promise<string | null>;
   saveProject(defaultName: string): Promise<string | null>;
   openProfile(): Promise<string | null>;
+  saveDiagnostic?(defaultName: string): Promise<string | null>;
 }
 
 export interface SecretStore {
@@ -62,6 +65,11 @@ export interface AppServiceOptions {
   autoStart?: boolean;
   /** RDM over Art-Net ports (tests use a simulated node on other ports). */
   rdm?: { listenPort: number; nodePort: number; timeoutMs?: number };
+  /** Persistent log directory (default `<dataDir>/logs`); `false` keeps the log in memory only. */
+  logDir?: string | false;
+  /** Where Electron's crashReporter writes its dumps, listed in the diagnostic. */
+  crashDir?: string;
+  appInfo?: AppInfo;
 }
 
 export class UserError extends Error {}
@@ -117,6 +125,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   private locate: { seq: Sequence; level: number; frame: number; photo: boolean; awaitingPhoto: boolean } | null = null;
   private remoteConfig = '';
   private timecodeAt = 0;
+  private logSink: FileLogSink | null = null;
 
   constructor(private readonly opts: AppServiceOptions) {
     super();
@@ -149,6 +158,14 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   async init(): Promise<void> {
     await fs.mkdir(this.opts.dataDir, { recursive: true });
+    if (this.opts.logDir !== false) {
+      try {
+        this.logSink = new FileLogSink(this.opts.logDir ?? path.join(this.opts.dataDir, 'logs'));
+        this.logSink.attach(this.logger);
+      } catch (err) {
+        this.logger.warn('Journal', `Journal persistant indisponible : ${(err as Error).message}`);
+      }
+    }
     try {
       const raw = JSON.parse(await fs.readFile(this.settingsFile, 'utf8')) as unknown;
       const parsed = settingsSchema.safeParse(raw);
@@ -193,6 +210,18 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   private async persistSettings(): Promise<void> {
     await writeFileAtomic(this.settingsFile, JSON.stringify(this.settings, null, 2), false);
+  }
+
+  /** Support bundle: version, settings and logs, secrets masked, never the project content. */
+  diagnostic() {
+    return buildDiagnostic({
+      app: this.opts.appInfo ?? { name: 'Luma AI DMX', version: 'dev', platform: process.platform, arch: process.arch, versions: { node: process.versions.node } },
+      settings: this.settings,
+      project: { name: this.project.meta.name, fixtures: this.project.patch.length, universes: this.project.show.universes, cueLists: this.project.cueLists.length },
+      outputs: this.outputs.status().map((o) => ({ ...o })),
+      logs: this.logSink?.tail(2000) ?? this.logger.recent(2000).map((e) => JSON.stringify(e)),
+      crashDumps: listCrashDumps(this.opts.crashDir),
+    });
   }
 
   getSettings(): Settings {
@@ -1043,6 +1072,14 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
         return ok;
       }
       case 'logs.recent': return this.logger.recent();
+      case 'diagnostic.export': {
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/gu, '-');
+        const file = cmd.path ?? (await this.opts.dialogs.saveDiagnostic?.(`luma-diagnostic-${stamp}.json`)) ?? null;
+        if (!file) return { path: null };
+        await writeFileAtomic(file, JSON.stringify(this.diagnostic(), null, 2), false);
+        this.logger.info('Diagnostic', `Exporté : ${path.basename(file)}`);
+        return { path: file };
+      }
     }
   }
 

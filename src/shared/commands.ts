@@ -225,6 +225,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('settings.get'),
   z.object({ type: z.literal('settings.update'), settings: settingsSchema }),
   empty('logs.recent'),
+  z.object({ type: z.literal('diagnostic.export'), path: optPath }),
 ]);
 export type Command = z.infer<typeof commandSchema>;
 export type CommandType = Command['type'];
@@ -374,6 +375,7 @@ export interface CommandResults {
   'settings.get': Settings;
   'settings.update': Void;
   'logs.recent': LogEntry[];
+  'diagnostic.export': { path: string | null };
 }
 
 export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string };

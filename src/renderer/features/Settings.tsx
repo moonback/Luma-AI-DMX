@@ -350,6 +350,8 @@ export function SettingsPage() {
               </Field>
               <div className="row"><button className="btn" onClick={() => useStore.getState().toggleDiag()}>Ouvrir la console de diagnostic</button></div>
             </div>
+            <p className="small muted">Le journal est aussi écrit sur disque (dossier <span className="mono">logs</span> des données de l'application) et survit à un plantage. Le diagnostic regroupe version, paramètres et journal, sans clés ni jetons, et sans le contenu du projet.</p>
+            <div className="row"><button className="btn" onClick={() => void act({ type: 'diagnostic.export' })}>Exporter un diagnostic…</button></div>
           </Panel>
         )}
         {tab === 'backups' && (
