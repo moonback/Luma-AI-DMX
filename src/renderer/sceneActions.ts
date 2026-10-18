@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
-import { act, newId } from './api';
-import { useStore } from './store';
+import { act, call, newId } from './api';
+import { hasSceneContent } from '../core/visualizer/templates';
+import { t } from './i18n';
+import { confirmAction, useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
 import { hangHeight, nearestOnTruss, snapTrussEnds, type P2 } from '../core/visualizer/truss';
-import type { Fixture, Truss } from '../core/model/schemas';
+import type { Fixture, Project, Truss } from '../core/model/schemas';
 import { libraryItem } from '../core/visualizer/library';
 import {
   SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
@@ -151,4 +153,21 @@ export function dropLibraryItem(e: React.DragEvent, at: P2 | null): void {
   if (!item) return;
   e.preventDefault();
   if (at) addSceneElement(item.kind, at, item.preset);
+}
+
+/** Photos are downscaled before analysis (enough detail for structures, fewer tokens). */
+export const PHOTO_MAX_PX = 1600;
+
+/** Analyses a stage photo and, after confirmation, replaces the stage size, trusses, set pieces and screens (undoable). */
+export async function sceneFromPhoto(v: Project['visualizer'], image: string): Promise<void> {
+  toast(t('photo.analysing'), t('photo.analysingDetail'));
+  const r = await call({ type: 'ai.sceneFromPhoto', image }).catch(() => null); // error already shown
+  if (!r) return;
+  const found = t('photo.found', { trusses: r.trusses.length, props: r.props.length, screens: r.screens.length, w: r.stageWidth, d: r.stageDepth });
+  if (!r.trusses.length && !r.props.length && !r.screens.length) { toast(t('photo.none'), r.summary, 'error'); return; }
+  const lines = [r.summary, '', found, ...(r.dropped ? [t('photo.dropped', { n: r.dropped })] : []), ...(hasSceneContent(v) ? ['', t('photo.replace')] : [])];
+  if (!(await confirmAction({ title: t('photo.confirmTitle'), message: lines.join('\n'), confirmLabel: t('photo.confirm') }))) return;
+  for (const sc of v.screens) setScreenVideo(sc.id, null);
+  const ok = await act({ type: 'project.update', visualizer: { stageWidth: r.stageWidth, stageDepth: r.stageDepth, trusses: r.trusses, props: r.props, screens: r.screens } });
+  if (ok) toast(t('photo.done'), [found, ...r.notices].join(' · '));
 }

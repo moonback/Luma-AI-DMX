@@ -89,6 +89,18 @@ export const fr = {
   'stage3d.exposure': 'Exposition',
   'stage3d.exposureTitle': 'Luminosité globale du rendu',
   'stage3d.keys': '1–5 caméras · F cadrer · R tourner · I isoler · H présentation',
+  'photo.button': 'Reproduire depuis une photo…',
+  'photo.buttonTitle': 'Analyse une photo de la vraie scène (modèle IA vision via OpenRouter) et reproduit structures, décor et écrans',
+  'photo.error': 'Photo',
+  'photo.analysing': 'Analyse de la photo…',
+  'photo.analysingDetail': 'Le modèle IA reconstruit les structures (quelques secondes).',
+  'photo.found': '{trusses} structure(s), {props} élément(s) de décor, {screens} écran(s) — plateau {w} × {d} m',
+  'photo.none': 'Aucune structure reconnue',
+  'photo.confirmTitle': 'Reproduire la scène de la photo',
+  'photo.dropped': '{n} élément(s) illisible(s) ignoré(s).',
+  'photo.replace': 'Remplace le plateau, les structures, le décor et les écrans actuels (points et artistes conservés). Ctrl+Z pour annuler.',
+  'photo.confirm': 'Reproduire',
+  'photo.done': 'Scène reproduite',
 } as const;
 
 export type MessageKey = keyof typeof fr;

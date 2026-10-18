@@ -243,7 +243,7 @@ export function extractJson(content: string): unknown {
 }
 
 /** One chat completion constrained to a JSON object (as far as the model supports it); returns the parsed object. */
-async function completeJson(system: string, user: string, schemaName: string, jsonSchema: unknown, opts: OpenRouterOptions): Promise<{ json: unknown; model: string; notices: string[] }> {
+export async function completeJson(system: string, user: string | unknown[], schemaName: string, jsonSchema: unknown, opts: OpenRouterOptions): Promise<{ json: unknown; model: string; notices: string[] }> {
   const caps = opts.capabilities;
   const body: Record<string, unknown> = {
     model: opts.model,

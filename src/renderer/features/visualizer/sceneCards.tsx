@@ -78,12 +78,12 @@ const SCREEN_SOURCES: { id: StageScreen['source']; label: string }[] = [
 /** Images are downscaled before being stored in the project (keeps project files small). */
 const SCREEN_IMAGE_MAX_PX = 512;
 
-function shrinkImage(file: File): Promise<string> {
+export function shrinkImage(file: File, max = SCREEN_IMAGE_MAX_PX): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const k = Math.min(1, SCREEN_IMAGE_MAX_PX / Math.max(img.width, img.height));
+      const k = Math.min(1, max / Math.max(img.width, img.height));
       const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.width * k)), height: Math.max(1, Math.round(img.height * k)) });
       c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);

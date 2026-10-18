@@ -1,7 +1,9 @@
 import type { AiProposal } from '../../ai/actions';
 import { buildProposal, executeProposal, guardProposalFlashes, liveState, proposeLocally } from '../../ai/director';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel } from '../../ai/providers/openrouter';
+import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
 import { OPENROUTER_KEY, UserError } from '../shared';
+import { randomUUID } from 'node:crypto';
 import type { AppService, CommandIn } from '../AppService';
 
 /* AI Director: proposals (local or OpenRouter), revision, application and the model catalogue. */
@@ -36,6 +38,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
     case 'ai.listModels':
       if (cmd.refresh) app.modelCache = null;
       return openRouterModels(app);
+    case 'ai.sceneFromPhoto': return sceneFromPhoto(app, cmd.image);
     case 'ai.setKey':
       app.opts.secrets.set(OPENROUTER_KEY, cmd.key);
       app.logger.info('IA', cmd.key ? 'Clé API enregistrée (stockage chiffré du système)' : 'Clé API supprimée');
@@ -99,6 +102,30 @@ export async function aiPropose(app: AppService, prompt: string): Promise<AiProp
     storeProposal(app, proposal);
     app.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); });
     return proposal;
+  } finally {
+    app.aiBusy = false;
+  }
+}
+
+/** Photo → scene with a vision model (needs OpenRouter); nothing is applied here, the renderer asks first. */
+async function sceneFromPhoto(app: AppService, image: string) {
+  const ai = app.settings.ai;
+  const key = app.opts.secrets.get(OPENROUTER_KEY);
+  if (!key) throw new UserError('Analyse de photo : configurez une clé OpenRouter dans Paramètres › IA');
+  if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
+  app.aiBusy = true;
+  try {
+    const model = ai.model || DEFAULT_OPENROUTER_MODEL;
+    const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
+    const r = await sceneFromPhotoWithOpenRouter(image, { apiKey: key, model, effort: ai.effort, timeoutMs: Math.max(60, ai.timeoutSec) * 1000, capabilities: caps }, randomUUID);
+    app.aiLastError = null;
+    app.logger.info('IA', `Scène depuis photo : ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
+    return r;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    app.aiLastError = msg;
+    app.logger.error('IA', `Analyse de photo impossible : ${msg}`);
+    throw err instanceof UserError ? err : new UserError(`Analyse de photo impossible : ${msg}`);
   } finally {
     app.aiBusy = false;
   }

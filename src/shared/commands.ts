@@ -22,6 +22,7 @@ import type { UpdateStatus } from '../core/app/updates';
 import type { UsageData } from '../core/telemetry/usage';
 import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
+import type { PhotoScene } from '../core/ai/sceneFromPhoto';
 
 /**
  * Single typed command bus between renderer and main. Every payload is validated with Zod in the main process
@@ -212,6 +213,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ai.apply'), proposalId: z.string().uuid() }),
   empty('ai.release'),
   z.object({ type: z.literal('ai.listModels'), refresh: z.boolean().default(false) }),
+  /** Photo of a real stage (downscaled JPEG/PNG data URL) → trusses, set pieces and screens, for review before applying. */
+  z.object({ type: z.literal('ai.sceneFromPhoto'), image: z.string().max(8_000_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/) }),
   z.object({ type: z.literal('ai.setKey'), key: z.string().trim().min(10).max(500).nullable() }),
   // Audio
   z.object({
@@ -406,6 +409,7 @@ export interface CommandResults {
   'ai.release': Void;
   'ai.listModels': OpenRouterModel[];
   'ai.setKey': Void;
+  'ai.sceneFromPhoto': PhotoScene & { model: string; notices: string[] };
   'audio.features': Void;
   'audio.config': Void;
   'audio.armDrop': Void;

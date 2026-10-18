@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, Boxes, Copy, Crosshair, LayoutTemplate, Library, MapPin, Monitor, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
+import { Armchair, Boxes, Camera, Copy, Crosshair, LayoutTemplate, Library, MapPin, Monitor, Plus, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2, X } from 'lucide-react';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
+import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
+import { t } from '../../i18n';
 import { useResolved } from '../../components/ui';
 import { buildVisualModel } from '../../../core/visualizer/model';
 import { setScreenVideo } from '../../screenMedia';
@@ -10,7 +12,7 @@ import { LIBRARY, LIBRARY_GROUPS, type LibraryGroup, type LibraryItem } from '..
 import { SCENE_LABEL, canAdd, findElement, type SceneKind } from '../../../core/visualizer/sceneEdit';
 import { LIBRARY_MIME, addSceneElement, duplicateSceneElement, equipRig, removeSceneElement } from '../../sceneActions';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../../core/visualizer/templates';
-import { type Vis, Section, Num, MarkerCard, PropCard, TrussCard, PerformerCard, ScreenCard, ElementCard, FixtureCard } from './sceneCards';
+import { shrinkImage, type Vis, Section, Num, MarkerCard, PropCard, TrussCard, PerformerCard, ScreenCard, ElementCard, FixtureCard } from './sceneCards';
 
 /* Side panel shared by the 2D and 3D views: templates, library, element lists, selection inspector, undo / redo. */
 
@@ -74,6 +76,14 @@ export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
       <div className="scene-panel-body" data-testid="stage-settings">
         <Section icon={<LayoutTemplate size={13} />} title="Partir d’un modèle" open={!hasSceneContent(vis)}>
           <TemplatePicker vis={vis} />
+          <label className="btn sm" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
+            <Camera size={12} />{t('photo.button')}
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
+            }} />
+          </label>
         </Section>
         <Section icon={<Library size={13} />} title="Bibliothèque">
           <LibraryPicker />
