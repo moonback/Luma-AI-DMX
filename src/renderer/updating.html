@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+    <title>Luma AI DMX — Mise à jour</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; color: #e6e9f2; font: 14px/1.4 'Segoe UI', system-ui, sans-serif; user-select: none; }
+      body { display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 0 28px; box-sizing: border-box; border: 1px solid #262b38; }
+      h1 { margin: 0; font-size: 16px; font-weight: 600; }
+      p { margin: 0; color: #9aa3b8; font-size: 12.5px; }
+      .bar { position: relative; height: 6px; border-radius: 3px; background: #1c2130; overflow: hidden; margin-top: 6px; }
+      /* Indeterminate: the app is shutting down and the installer reports its own progress next. */
+      .bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 3px; background: linear-gradient(90deg, #7c5cff, #3fd0ff); animation: slide 1.2s ease-in-out infinite; }
+      @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+    </style>
+  </head>
+  <body>
+    <h1 id="title">Installation de la mise à jour…</h1>
+    <p>Fermeture de la console en toute sécurité, puis lancement de l’installateur. L’application redémarrera ensuite d’elle-même.</p>
+    <div class="bar" role="progressbar" aria-label="Installation en cours"></div>
+  </body>
+</html>

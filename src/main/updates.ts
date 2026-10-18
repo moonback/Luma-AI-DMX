@@ -9,9 +9,9 @@ const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
  * GitHub-release updates through electron-updater. Downloads run in the background; the new version is installed
  * when the application quits (never a forced restart during a show). Disabled outside a packaged build.
  */
-export function createUpdater(logger: () => Logger | null): Updater {
+export function createUpdater(logger: () => Logger | null): Updater & { installNow(): boolean } {
   if (!app.isPackaged || process.env.LUMA_E2E) {
-    return { status: () => DISABLED_UPDATES, configure: () => undefined, check: async () => DISABLED_UPDATES };
+    return { status: () => DISABLED_UPDATES, configure: () => undefined, check: async () => DISABLED_UPDATES, installNow: () => false };
   }
   const { autoUpdater } = electronUpdater;
   let status: UpdateStatus = { state: 'idle', version: null, progress: null, detail: null, checkedAt: null };
@@ -62,5 +62,19 @@ export function createUpdater(logger: () => Logger | null): Updater {
       }
     },
     check,
+    /**
+     * Quits and runs the downloaded installer with its UI (not silent): as an update it skips the wizard pages and
+     * shows its progress bar, then restarts the app. False when nothing is ready, so the caller just quits.
+     */
+    installNow() {
+      if (status.state !== 'ready') return false;
+      try {
+        autoUpdater.quitAndInstall(false, true);
+        return true;
+      } catch (err) {
+        log('warn', `Installation impossible : ${(err as Error).message}`);
+        return false;
+      }
+    },
   };
 }

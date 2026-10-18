@@ -23,6 +23,7 @@ crashReporter.start({ uploadToServer: false });
 
 let win: BrowserWindow | null = null;
 let service: AppService | null = null;
+let updater: ReturnType<typeof createUpdater> | null = null;
 let quitting = false;
 
 const projectFilters = [{ name: BRAND.productName, extensions: ['json'] }];
@@ -49,7 +50,7 @@ async function createService(): Promise<AppService> {
     dataDir,
     crashDir: app.getPath('crashDumps'),
     // Read lazily: update events arrive after the service is constructed.
-    updater: createUpdater((): Logger => svc.logger),
+    updater: (updater = createUpdater((): Logger => svc.logger)),
     renderPdf,
     appInfo: {
       name: BRAND.productName,
@@ -192,6 +193,26 @@ function showSplash(): { win: BrowserWindow; done: Promise<void> } {
   return { win: s, done: Promise.race([ended, timeout]).catch(() => undefined) };
 }
 
+/** Small window with a progress bar shown while the app shuts down to install a downloaded update. */
+function showInstallWindow(version: string | null): BrowserWindow {
+  const w = new BrowserWindow({
+    width: 460,
+    height: 160,
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    center: true,
+    backgroundColor: '#0B0D12',
+    title: BRAND.productName,
+    icon,
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  guardNavigation(w);
+  const load = DEV_URL ? w.loadURL(`${DEV_URL}/updating.html`) : w.loadFile(path.join(here, '../renderer/updating.html'));
+  if (version) void load.then(() => w.webContents.executeJavaScript(`document.getElementById('title').textContent = ${JSON.stringify(`Installation de la version ${version}…`)}`)).catch(() => undefined);
+  return w;
+}
+
 function logFatal(source: string, err: unknown): void {
   const message = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
   if (service) service.logger.error(source, message);
@@ -260,9 +281,11 @@ app.on('before-quit', (e) => {
   quitting = true;
   if (disposed || !service) return;
   e.preventDefault();
+  const update = updater?.status();
+  if (update?.state === 'ready') showInstallWindow(update.version);
   // Clean shutdown: stop the engine, send sACN stream-terminated packets, close sockets/serial ports.
   void service.dispose().finally(() => {
     disposed = true;
-    app.quit();
+    if (!updater?.installNow()) app.quit();
   });
 });

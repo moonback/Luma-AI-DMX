@@ -15,7 +15,7 @@ export default defineConfig({
   },
   renderer: {
     root: resolve('src/renderer'),
-    build: { rollupOptions: { input: { index: resolve('src/renderer/index.html'), splash: resolve('src/renderer/splash.html') } } },
+    build: { rollupOptions: { input: { index: resolve('src/renderer/index.html'), splash: resolve('src/renderer/splash.html'), updating: resolve('src/renderer/updating.html') } } },
     plugins: [react()],
   },
 });
