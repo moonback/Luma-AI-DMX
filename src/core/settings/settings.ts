@@ -60,8 +60,8 @@ export const settingsSchema = z.object({
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })
     .default({ completed: false, checklistHidden: false }),
   appearance: z
-    .object({ reducedMotion: z.boolean().default(false), uiScale: z.number().min(0.8).max(1.4).default(1), language: z.enum(['fr', 'en']).default('fr') })
-    .default({ reducedMotion: false, uiScale: 1, language: 'fr' }),
+    .object({ reducedMotion: z.boolean().default(false), theme: z.enum(['dark', 'light']).default('dark'), uiScale: z.number().min(0.8).max(1.4).default(1), language: z.enum(['fr', 'en']).default('fr') })
+    .default({ reducedMotion: false, theme: 'dark', uiScale: 1, language: 'fr' }),
   engine: z
     .object({
       rateHz: z.number().int().min(10).max(44).default(40),

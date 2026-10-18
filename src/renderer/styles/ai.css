@@ -1,0 +1,8 @@
+/* AI */
+.chat { display: flex; flex-direction: column; gap: 8px; }
+.bubble { padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel-2); }
+.bubble.user { align-self: flex-end; max-width: 80%; background: var(--sel-soft); border-color: color-mix(in srgb, var(--sel) 40%, transparent); }
+.action-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; background: var(--bg); }
+.action-card.rejected { border-color: color-mix(in srgb, var(--err) 55%, transparent); }
+.action-card.warning { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.action-card.excluded { opacity: 0.45; }

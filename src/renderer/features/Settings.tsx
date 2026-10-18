@@ -272,7 +272,8 @@ export function SettingsPage() {
   useEffect(() => { if (tab === 'backups') void act({ type: 'project.listRecovery' }).then((x) => setRecovery(x ?? [])); }, [tab]);
   const reduced = !!s?.appearance.reducedMotion;
   const scale = s?.appearance.uiScale ?? 1;
-  useEffect(() => { document.documentElement.classList.toggle('reduced-motion', reduced); document.documentElement.style.zoom = String(scale); }, [reduced, scale]);
+  const theme = s?.appearance.theme ?? 'dark';
+  useEffect(() => { document.documentElement.classList.toggle('reduced-motion', reduced); document.documentElement.style.zoom = String(scale); document.documentElement.dataset.theme = theme; }, [reduced, scale, theme]);
   if (!s) return <div className="page">{tr('common.loading')}</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
@@ -303,6 +304,11 @@ export function SettingsPage() {
           <Panel title={tr('settings.tab.appearance')}>
             <div className="grid g2">
               <label className="check"><input type="checkbox" checked={s.appearance.reducedMotion} onChange={(e) => set('appearance', { reducedMotion: e.target.checked })} />{tr('settings.appearance.reducedMotion')}</label>
+              <Field label={tr('settings.appearance.theme')}>
+                <select className="select" data-testid="theme" value={s.appearance.theme} onChange={(e) => set('appearance', { theme: e.target.value as Settings['appearance']['theme'] })}>
+                  <option value="dark">{tr('settings.appearance.themeDark')}</option><option value="light">{tr('settings.appearance.themeLight')}</option>
+                </select>
+              </Field>
               <Field label={tr('settings.appearance.scale')}><NumberInput value={s.appearance.uiScale} min={0.8} max={1.4} step={0.05} onChange={(v) => set('appearance', { uiScale: v })} /></Field>
               <Field label={tr('settings.appearance.language')} hint={tr('settings.appearance.languageHint')}>
                 <select className="select" data-testid="language" value={s.appearance.language} onChange={(e) => set('appearance', { language: e.target.value as Settings['appearance']['language'] })}>

@@ -321,6 +321,7 @@ export function App() {
 export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
+  document.documentElement.dataset.theme = settings.appearance.theme;
   document.documentElement.style.zoom = String(settings.appearance.uiScale);
   useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: settings.onboarding.completed ? null : 'welcome', startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
   void externalControl.configure(settings.control);

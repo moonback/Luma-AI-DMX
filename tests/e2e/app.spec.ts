@@ -228,6 +228,17 @@ test('paramètres : version, mises à jour, retour et statistiques opt-in', asyn
   await page.getByTestId('language').selectOption('fr');
   await page.getByTestId('settings-save').click();
   await expect(page.getByTestId('nav-music')).toContainText('Musique');
+  // Light theme: applied to the whole window once saved, then back to dark for the other scenarios.
+  await page.getByTestId('theme').selectOption('light');
+  await page.getByTestId('settings-save').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await nav('console');
+  await page.screenshot({ path: `${shots}/22b-theme-clair-console.png` });
+  await nav('settings');
+  await page.getByRole('tab', { name: 'Apparence' }).click();
+  await page.getByTestId('theme').selectOption('dark');
+  await page.getByTestId('settings-save').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('tab', { name: 'Général' }).click();
 });
 
@@ -237,6 +248,12 @@ test('captures des autres espaces', async () => {
     await page.waitForTimeout(250);
     await page.screenshot({ path: `${shots}/${n}-${id}.png` });
   }
+  // Multi-selection state of the console (reference for the redesign).
+  await nav('console');
+  await page.getByRole('button', { name: 'Tous', exact: true }).click();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${shots}/15b-console-selection.png` });
+  await page.getByRole('button', { name: 'Aucun', exact: true }).click();
 });
 
 test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection', async () => {

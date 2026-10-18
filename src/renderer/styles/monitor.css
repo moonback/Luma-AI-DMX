@@ -1,0 +1,7 @@
+/* DMX monitor */
+.dmx-grid { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; }
+.dmx-cell { position: relative; height: 30px; border-radius: 1px; background: var(--panel-2); overflow: hidden; font-family: var(--mono); font-size: 9.5px; display: flex; flex-direction: column; justify-content: space-between; padding: 1px 2px; }
+.dmx-cell .bar { position: absolute; left: 0; right: 0; bottom: 0; background: color-mix(in srgb, var(--fam-intensity) 55%, transparent); }
+.dmx-cell span { position: relative; z-index: 1; }
+.dmx-cell .ch { color: var(--text-3); }
+.dmx-cell.diff { outline: 1px solid var(--warn); }

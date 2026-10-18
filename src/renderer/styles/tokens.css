@@ -1,0 +1,125 @@
+/* ------------------------------------------------------------------ */
+/* Design tokens — thème « Régie » (docs/plans/refonte-ma.md, § 2.2)   */
+/* Les hex de ce bloc sont lus par tests/unit/theme.test.ts (contraste). */
+/* ------------------------------------------------------------------ */
+:root {
+  /* Surfaces neutres */
+  --bg: #050505;
+  --panel: #121212;
+  --panel-2: #1b1b1b;
+  --panel-3: #252525;
+  --border: #2e2e2e;
+  --border-strong: #474747;
+  --border-soft: #1f1f1f;
+  --text: #ececec;
+  --text-2: #b0b0b0;
+  --text-3: #8c8c8c;
+  --on-accent: #0a0a0a;
+  --on-live: #ffffff;
+
+  /* États codés : la couleur porte une information */
+  --sel: #ffc21a;
+  --prog: #ff7a1a;
+  --run: #3ccf6e;
+  --next: #3bb4ff;
+  --live: #d42a20;
+  --warn: #f0a020;
+  --err-text: #ff8a80;
+  --ok: var(--run);
+  --err: var(--live);
+  --sel-soft: rgb(255 194 26 / 0.14);
+  --prog-soft: rgb(255 122 26 / 0.16);
+  --run-soft: rgb(60 207 110 / 0.12);
+  --next-soft: rgb(59 180 255 / 0.14);
+  --warn-soft: rgb(240 160 32 / 0.1);
+  --err-soft: rgb(212 42 32 / 0.16);
+
+  /* Familles d'attributs */
+  --fam-intensity: #e8c840;
+  --fam-position: #3bb4ff;
+  --fam-color: #d05cff;
+  --fam-beam: #4fd1a5;
+  --fam-focus: #8aa0ff;
+  --fam-control: #9a9a9a;
+
+  /* Types de fenêtre (barre de titre) */
+  --win-pool: #3a3320;
+  --win-sheet: #1f2b3a;
+  --win-encoder: #3a2a1f;
+  --win-view: #262626;
+
+  /* Calques */
+  --scrim: rgb(0 0 0 / 0.72);
+  --float: rgb(18 18 18 / 0.96);
+  --shadow: 0 8px 24px rgb(0 0 0 / 0.6);
+
+  /* Formes, densité, typo */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --h-ctl: 26px;
+  --h-ctl-sm: 22px;
+  --space: 4px;
+  --font: 'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
+  --fs: 12px;
+  --fs-sm: 11px;
+  --fs-xs: 10px;
+  --dur: 80ms;
+
+  /* Alias de migration (supprimés au lot 13) */
+  --violet: var(--sel);
+  --violet-soft: var(--sel-soft);
+  --cyan: var(--next);
+  --cyan-soft: var(--next-soft);
+
+  color-scheme: dark;
+}
+
+/* Thème clair (réglage appearance.theme). Un jaune vif est illisible en texte sur fond clair :
+   les accents y sont foncés et portent un texte blanc. Hors de ce bloc, les tokens restent ceux du sombre. */
+:root[data-theme='light'] {
+  --bg: #e6e6e6;
+  --panel: #f4f4f4;
+  --panel-2: #ffffff;
+  --panel-3: #e0e0e0;
+  --border: #cccccc;
+  --border-strong: #9a9a9a;
+  --border-soft: #dddddd;
+  --text: #141414;
+  --text-2: #474747;
+  --text-3: #5e5e5e;
+  --on-accent: #ffffff;
+  --on-live: #ffffff;
+
+  --sel: #7a5a00;
+  --prog: #a33f00;
+  --run: #17703a;
+  --next: #0a5fb0;
+  --live: #c62a20;
+  --warn: #8a5000;
+  --err-text: #b3261e;
+  --sel-soft: rgb(255 194 26 / 0.3);
+  --prog-soft: rgb(255 122 26 / 0.2);
+  --run-soft: rgb(23 112 58 / 0.12);
+  --next-soft: rgb(10 95 176 / 0.12);
+  --warn-soft: rgb(138 80 0 / 0.1);
+  --err-soft: rgb(198 42 32 / 0.12);
+
+  --fam-intensity: #8a7000;
+  --fam-position: #0a5fb0;
+  --fam-color: #9b2fd0;
+  --fam-beam: #12806a;
+  --fam-focus: #4a5bd0;
+  --fam-control: #6e6e6e;
+
+  --win-pool: #efe4c2;
+  --win-sheet: #d7e3f0;
+  --win-encoder: #f0dccb;
+  --win-view: #e0e0e0;
+
+  --scrim: rgb(0 0 0 / 0.4);
+  --float: rgb(244 244 244 / 0.96);
+  --shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+
+  color-scheme: light;
+}

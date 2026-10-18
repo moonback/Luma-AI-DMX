@@ -1,0 +1,8 @@
+/* Timeline */
+.tl { position: relative; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); user-select: none; }
+.tl-ruler { position: sticky; top: 0; height: 24px; background: var(--panel-3); border-bottom: 1px solid var(--border-strong); z-index: 2; font-family: var(--mono); }
+.tl-lane { position: relative; height: 44px; border-bottom: 1px solid var(--border-soft); }
+.tl-ev { position: absolute; top: 6px; height: 32px; border-radius: var(--radius); padding: 3px 7px; font-size: var(--fs-sm); overflow: hidden; white-space: nowrap; cursor: grab; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); }
+.tl-ev.sel { outline: 2px solid var(--sel); }
+.tl-ev .handle { position: absolute; right: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
+.tl-head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--live); z-index: 3; pointer-events: none; }
