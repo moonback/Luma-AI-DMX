@@ -1,11 +1,11 @@
 {
   "src/renderer/App.tsx": 1,
   "src/renderer/api.ts": 5,
-  "src/renderer/components/ui.tsx": 5,
+  "src/renderer/components/ui.tsx": 3,
   "src/renderer/features/AiDirector.tsx": 21,
   "src/renderer/features/Audio.tsx": 63,
   "src/renderer/features/CameraLocate.tsx": 54,
-  "src/renderer/features/Cues.tsx": 49,
+  "src/renderer/features/Cues.tsx": 2,
   "src/renderer/features/Dashboard.tsx": 21,
   "src/renderer/features/Effects.tsx": 65,
   "src/renderer/features/Fixtures.tsx": 82,
