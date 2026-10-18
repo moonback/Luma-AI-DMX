@@ -25,7 +25,7 @@ Captures produites par le test de bout en bout (`npm run test:e2e`, sortie virtu
 
 | | |
 |---|---|
-| ![Écran de démarrage](docs/screenshots/accueil.png)<br>**Écran de démarrage** : nouveau projet, ouvrir, projets récents, démos | ![Dashboard](docs/screenshots/dashboard.png)<br>**Dashboard** : état des sorties, premiers pas |
+| ![Accueil](docs/screenshots/accueil.png)<br>**Accueil** : visite guidée, projets de démonstration | ![Dashboard](docs/screenshots/dashboard.png)<br>**Dashboard** : état des sorties, premiers pas |
 | ![Live Console](docs/screenshots/console.png)<br>**Live Console** : contrôles générés depuis les profils | ![Moniteur DMX](docs/screenshots/moniteur-dmx.png)<br>**DMX Output** : état calculé et trames transmises |
 | ![Proposition IA](docs/screenshots/ia-proposition.png)<br>**AI Lighting Director** : proposition validée avant application | ![Rapport IA](docs/screenshots/ia-rapport.png)<br>**Rapport d'exécution** de l'IA |
 | ![Cues](docs/screenshots/cues.png)<br>**Cues & Sequences** | ![Timeline](docs/screenshots/timeline.png)<br>**Timeline** |

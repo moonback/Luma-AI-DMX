@@ -658,6 +658,8 @@ test('intelligence musicale : import, analyse, Song-to-Show, lecture synchronis√
   await page.screenshot({ path: `${shots}/20b-musique-modale-section.png` });
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('section-editor')).toBeHidden();
+  // Playback starts at the selected section: back to the first one.
+  await page.getByTestId('music-sections').locator('tbody tr td.mono').first().click();
   // Synchronised playback (the timeline chase itself is covered by the timecode unit tests).
   await page.getByTestId('music-play').click();
   await expect(page.getByTestId('music-stop')).toBeVisible();
