@@ -1,4 +1,5 @@
 import type { MessageKey } from './fr';
+import { enScreens } from './en.screens';
 
 /** English catalogue. Typed against fr.ts: a missing or extra key does not compile. */
 export const en: Record<MessageKey, string> = {
@@ -470,4 +471,6 @@ export const en: Record<MessageKey, string> = {
   'cues.list.priority': 'Priority',
   'cues.list.priorityHint': '1–99. Higher priority overrides other lists; equal = HTP intensity / LTP others',
   'cues.list.loop': 'Loop at the end of the list',
+
+  ...enScreens,
 };

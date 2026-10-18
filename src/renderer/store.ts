@@ -79,7 +79,7 @@ interface State {
   toasts: Toast[];
   confirm: ConfirmRequest | null;
   /** Values shown by the visualizer instead of live values (AI or scene preview). */
-  preview: { label: string; values: FixtureValues } | null;
+  preview: { label: string; title?: string; values: FixtureValues } | null;
   /** Selected stage element (point, truss, performer, screen) and the kind being placed by a click on the stage. */
   sceneSel: SceneRef | null;
   placing: PlaceSpec | null;

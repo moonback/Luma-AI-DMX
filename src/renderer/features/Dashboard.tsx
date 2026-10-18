@@ -8,12 +8,13 @@ import { newProjectFlow } from '../App';
 import { PageHead, Panel } from '../components/ui';
 import { FirstSteps } from './Onboarding';
 
-const SRC: Record<string, string> = { persisted: 'persisté', measured: 'mesuré', computed: 'calculé', simulated: 'simulé', config: 'configuré', estimate: 'estimé' };
+type Src = 'persisted' | 'measured' | 'computed' | 'simulated' | 'config' | 'estimate';
 
-function Kpi({ label, value, sub, src, icon }: { label: string; value: ReactNode; sub?: ReactNode; src: keyof typeof SRC; icon?: ReactNode }) {
+function Kpi({ label, value, sub, src, icon }: { label: string; value: ReactNode; sub?: ReactNode; src: Src; icon?: ReactNode }) {
+  const tr = useT();
   return (
     <div className="panel kpi">
-      <span className="k">{icon}{label}<span className="grow" /><span className="tag-src" title="Origine de la donnée">{SRC[src]}</span></span>
+      <span className="k">{icon}{label}<span className="grow" /><span className="tag-src" title={tr('dash.src.title')}>{tr(`dash.src.${src}`)}</span></span>
       <span className="v">{value}</span>
       {sub && <span className="s">{sub}</span>}
     </div>
@@ -50,13 +51,14 @@ function SceneFromText() {
 }
 
 export function Dashboard() {
+  const tr = useT();
   const ps = useStore((s) => s.project)!;
   const rt = useStore((s) => s.runtime);
   const setPage = useStore((s) => s.setPage);
   const p = ps.project;
   const outputs = rt?.outputs ?? [];
   const real = outputs.filter((o) => o.real);
-  const protocols = [...new Set(outputs.filter((o) => o.enabled).map((o) => ({ virtual: 'Virtuelle', artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[o.kind]))];
+  const protocols = [...new Set(outputs.filter((o) => o.enabled).map((o) => ({ virtual: tr('dash.proto.virtual'), artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[o.kind]))];
   const active = rt?.engine.playbacks.filter((pb) => pb.state !== 'idle') ?? [];
   const universesUsed = new Set(p.patch.map((f) => f.universe)).size;
   const m = rt?.engine.metrics;
@@ -64,32 +66,32 @@ export function Dashboard() {
 
   return (
     <div className="page">
-      <PageHead title="Dashboard" subtitle={`${p.meta.name}${p.meta.show ? ` — ${p.meta.show}` : ''}`} />
+      <PageHead title={tr('nav.dashboard')} subtitle={`${p.meta.name}${p.meta.show ? ` — ${p.meta.show}` : ''}`} />
       <FirstSteps />
       <div className="grid g4" style={{ marginBottom: 12 }}>
-        <Kpi label="Projecteurs" src="persisted" value={p.patch.length} sub={`${p.groups.length} groupe(s) · ${ps.issues.length ? `${ps.issues.length} problème(s) de patch` : 'patch valide'}`} icon={<Lightbulb size={13} />} />
-        <Kpi label="Univers" src="persisted" value={p.show.universes} sub={`${universesUsed} utilisé(s) par le patch`} />
-        <Kpi label="Sortie" src="measured" value={rt?.liveMode ? 'LIVE' : 'Simulation'} sub={real.length ? `${real.filter((o) => o.armed).length}/${real.length} sortie(s) réelle(s) armée(s)` : 'Aucune sortie réelle configurée'} icon={<Cable size={13} />} />
-        <Kpi label="Protocoles" src="config" value={protocols.length ? protocols.join(' · ') : '—'} sub={`${outputs.filter((o) => o.state === 'error').length} en erreur`} />
-        <Kpi label="Cue actif" src="computed" value={active[0]?.cueName ?? '—'} sub={active.length ? `${p.cueLists.find((l) => l.id === active[0]!.cueListId)?.name ?? ''} · ${Math.round(active[0]!.progress * 100)} %` : `${p.cueLists.reduce((n, l) => n + l.cues.length, 0)} cue(s) programmé(s)`} />
-        <Kpi label="BPM" src={rt?.engine.bpmSource === 'audio' ? 'estimate' : 'persisted'} value={rt?.engine.bpm.toFixed(0) ?? '–'} sub={rt?.engine.bpmSource === 'audio' ? `Estimation audio (confiance ${Math.round((audio?.bpmConfidence ?? 0) * 100)} %)` : 'Défini manuellement / tap tempo'} />
-        <Kpi label="Charge moteur" src="measured" value={m ? `${(m.load * 100).toFixed(1)} %` : '–'} sub={m ? `${m.measuredHz} Hz mesurés · tick ${m.avgTickMs} ms · ${m.overruns} dépassement(s)` : ''} />
-        <Kpi label="Assistant IA" src="config" value={rt?.ai.provider === 'openrouter' ? (rt.ai.hasKey ? 'OpenRouter' : 'OpenRouter (sans clé)') : 'Local'} sub={rt?.ai.lastError ? `Dernière erreur : ${rt.ai.lastError}` : rt?.ai.provider === 'local' ? 'Règles et modèles déterministes' : rt?.ai.model} icon={<Bot size={13} />} />
+        <Kpi label={tr('dash.fixtures')} src="persisted" value={p.patch.length} sub={tr('dash.fixturesSub', { groups: p.groups.length, issues: ps.issues.length ? tr('dash.patchIssues', { n: ps.issues.length }) : tr('dash.patchOk') })} icon={<Lightbulb size={13} />} />
+        <Kpi label={tr('dash.universes')} src="persisted" value={p.show.universes} sub={tr('dash.universesSub', { n: universesUsed })} />
+        <Kpi label={tr('dash.output')} src="measured" value={rt?.liveMode ? 'LIVE' : tr('dash.simulation')} sub={real.length ? tr('dash.armed', { armed: real.filter((o) => o.armed).length, total: real.length }) : tr('dash.noReal')} icon={<Cable size={13} />} />
+        <Kpi label={tr('dash.protocols')} src="config" value={protocols.length ? protocols.join(' · ') : '—'} sub={tr('dash.inError', { n: outputs.filter((o) => o.state === 'error').length })} />
+        <Kpi label={tr('dash.activeCue')} src="computed" value={active[0]?.cueName ?? '—'} sub={active.length ? `${p.cueLists.find((l) => l.id === active[0]!.cueListId)?.name ?? ''} · ${Math.round(active[0]!.progress * 100)} %` : tr('dash.cuesProgrammed', { n: p.cueLists.reduce((n, l) => n + l.cues.length, 0) })} />
+        <Kpi label="BPM" src={rt?.engine.bpmSource === 'audio' ? 'estimate' : 'persisted'} value={rt?.engine.bpm.toFixed(0) ?? '–'} sub={rt?.engine.bpmSource === 'audio' ? tr('dash.bpmAudio', { n: Math.round((audio?.bpmConfidence ?? 0) * 100) }) : tr('dash.bpmManual')} />
+        <Kpi label={tr('dash.load')} src="measured" value={m ? `${(m.load * 100).toFixed(1)} %` : '–'} sub={m ? tr('dash.loadSub', { hz: m.measuredHz, ms: m.avgTickMs, n: m.overruns }) : ''} />
+        <Kpi label={tr('dash.ai')} src="config" value={rt?.ai.provider === 'openrouter' ? (rt.ai.hasKey ? 'OpenRouter' : tr('dash.aiNoKey')) : tr('dash.aiLocal')} sub={rt?.ai.lastError ? tr('dash.aiLastError', { msg: rt.ai.lastError }) : rt?.ai.provider === 'local' ? tr('dash.aiLocalSub') : rt?.ai.model} icon={<Bot size={13} />} />
       </div>
       <SceneFromText />
       <div className="grid g2">
-        <Panel title="Actions rapides">
+        <Panel title={tr('dash.quick')}>
           <div className="grid g3">
-            <button className="btn lg" onClick={() => newProjectFlow()}><FilePlus size={16} />Créer un projet</button>
-            <button className="btn lg" onClick={() => setPage('fixtures')}><Lightbulb size={16} />Ajouter des projecteurs</button>
-            <button className="btn lg" onClick={() => setPage('output')}><Cable size={16} />Configurer la sortie</button>
-            <button className="btn lg" onClick={() => setPage('programmer')}><Palette size={16} />Créer une scène</button>
-            <button className="btn lg primary" onClick={() => setPage('ai')}><Bot size={16} />Générer avec l’IA</button>
-            <button className="btn lg" onClick={() => setPage('console')}><SlidersHorizontal size={16} />Console live</button>
+            <button className="btn lg" onClick={() => newProjectFlow()}><FilePlus size={16} />{tr('dash.qNew')}</button>
+            <button className="btn lg" onClick={() => setPage('fixtures')}><Lightbulb size={16} />{tr('dash.qFixtures')}</button>
+            <button className="btn lg" onClick={() => setPage('output')}><Cable size={16} />{tr('dash.qOutput')}</button>
+            <button className="btn lg" onClick={() => setPage('programmer')}><Palette size={16} />{tr('dash.qScene')}</button>
+            <button className="btn lg primary" onClick={() => setPage('ai')}><Bot size={16} />{tr('dash.qAi')}</button>
+            <button className="btn lg" onClick={() => setPage('console')}><SlidersHorizontal size={16} />{tr('dash.qConsole')}</button>
           </div>
-          {audio?.active && <p className="small muted" style={{ marginBottom: 0 }}>Source audio active : {audio.source === 'simulated' ? 'SIMULÉE (aucun micro)' : 'entrée réelle'}.</p>}
+          {audio?.active && <p className="small muted" style={{ marginBottom: 0 }}>{tr(audio.source === 'simulated' ? 'dash.audioSim' : 'dash.audioReal')}</p>}
         </Panel>
-        <Panel title="Alertes et erreurs récentes" actions={<button className="btn ghost sm" onClick={() => useStore.getState().toggleDiag()}>Tout voir</button>}>
+        <Panel title={tr('dash.alerts')} actions={<button className="btn ghost sm" onClick={() => useStore.getState().toggleDiag()}>{tr('dash.seeAll')}</button>}>
           {rt?.alerts.length ? (
             <div className="col" style={{ gap: 6, maxHeight: 240, overflow: 'auto' }}>
               {[...rt.alerts].reverse().slice(0, 12).map((a) => (
@@ -101,7 +103,7 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <p className="muted" style={{ margin: 0 }}>Aucune alerte. Les erreurs réseau, déconnexions et refus de sécurité apparaissent ici.</p>
+            <p className="muted" style={{ margin: 0 }}>{tr('dash.noAlerts')}</p>
           )}
           {ps.issues.length > 0 && (
             <div className="col small" style={{ marginTop: 10 }}>

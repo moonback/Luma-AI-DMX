@@ -21,21 +21,35 @@ function usePlayback() {
 }
 
 function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; selected: number; onSelect: (i: number) => void; pos: number | null }) {
+  const t = useT();
   const a = track.analysis;
+  const now = pos === null ? -1 : a.sections.findIndex((s) => pos >= s.start && pos < s.end);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * a.duration);
   return (
-    <div style={{ position: 'relative' }}>
-      <div className="row" style={{ gap: 2, height: 46 }} data-testid="section-strip">
-        {a.sections.map((s, i) => (
-          <button key={i} title={`${SECTION_NAMES[s.label]} · ${fmt(s.start)}–${fmt(s.end)} · énergie ${Math.round(s.energy * 100)} %`} onClick={() => onSelect(i)}
-            style={{ flex: `${s.end - s.start} 0 0`, height: '100%', minWidth: 6, border: i === selected ? '2px solid #fff' : '1px solid transparent', borderRadius: 4, background: LABEL_COLOR[s.label], opacity: 0.45 + 0.55 * s.energy, color: '#fff', fontSize: 11, overflow: 'hidden', padding: '0 4px', cursor: 'pointer' }}>
-            {SECTION_NAMES[s.label]}
-          </button>
+    <div className="sec-timeline">
+      <div className="sec-track">
+        <div className="sec-strip" data-testid="section-strip">
+          {a.sections.map((s, i) => (
+            <button key={i} className={`sec-btn ${i === selected ? 'sel' : ''} ${i === now ? 'now' : ''}`} aria-pressed={i === selected} onClick={() => onSelect(i)}
+              title={t('music.strip.title', { label: SECTION_NAMES[s.label], from: fmt(s.start), to: fmt(s.end), energy: Math.round(s.energy * 100) })}
+              style={{ flex: `${s.end - s.start} 0 0`, background: LABEL_COLOR[s.label] }}>
+              <span className="sec-name">{SECTION_NAMES[s.label]}</span>
+              <span className="sec-time" aria-hidden>{fmt(s.start)}{track.plan?.sections[i]?.locked && <Lock size={9} aria-label={t('music.strip.locked')} />}</span>
+              <span className="sec-energy" style={{ width: `${s.energy * 100}%` }} aria-hidden />
+            </button>
+          ))}
+        </div>
+        {a.events.map((e, i) => e.kind !== 'silence' && (
+          <span key={i} className={`sec-event ${e.kind}`} title={t(`music.event.${e.kind}`)} style={{ left: `${(e.t / a.duration) * 100}%`, width: e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : 2, background: EVENT_STYLE[e.kind][1] }} />
         ))}
+        {pos !== null && <span className="sec-playhead" style={{ left: `${Math.min(100, (pos / a.duration) * 100)}%` }} />}
       </div>
-      {a.events.map((e, i) => e.kind !== 'silence' && (
-        <span key={i} title={EVENT_STYLE[e.kind][0]} style={{ position: 'absolute', top: e.kind === 'vocal' ? 48 : -6, left: `${(e.t / a.duration) * 100}%`, width: e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : 2, height: 4, background: EVENT_STYLE[e.kind][1], borderRadius: 2 }} />
-      ))}
-      {pos !== null && <span style={{ position: 'absolute', top: -4, bottom: -4, width: 2, background: '#fff', left: `${Math.min(100, (pos / a.duration) * 100)}%` }} />}
+      <div className="sec-ruler" aria-hidden>{ticks.map((x) => <span key={x} style={{ left: `${(x / a.duration) * 100}%` }}>{fmt(x)}</span>)}</div>
+      <div className="sec-legend small dim">
+        <span>{t('music.event.legend')}</span>
+        {(Object.keys(EVENT_STYLE) as (keyof typeof EVENT_STYLE)[]).map((k) => <span key={k} className="row" style={{ gap: 4 }}><i style={{ background: EVENT_STYLE[k][1] }} />{t(`music.event.${k}`)}</span>)}
+        {now >= 0 && <span className="badge cyan">{t('music.strip.now')} : {SECTION_NAMES[a.sections[now]!.label]}</span>}
+      </div>
     </div>
   );
 }
@@ -56,6 +70,7 @@ export function MusicPage() {
   const file = useRef<HTMLInputElement>(null);
   const { playing, pos } = usePlayback();
   const track = tracks.find((t) => t.id === trackId) ?? tracks[0] ?? null;
+  const nowIdx = track && playing?.trackId === track.id ? track.analysis.sections.findIndex((s) => pos >= s.start && pos < s.end) : -1;
   const planIntent = track?.plan?.intent ?? '';
   useEffect(() => { if (planIntent) setIntent(planIntent); }, [track?.id, planIntent]);
   const hash = track?.hash;
@@ -70,10 +85,10 @@ export function MusicPage() {
       } else {
         const known = tracks.find((t) => t.hash === r.hash);
         if (known) setTrackId(known.id);
-        useStore.getState().toast({ kind: 'info', title: 'Morceau déjà analysé', detail: 'Analyse reprise du projet ; le fichier audio est enregistré pour la lecture.' });
+        useStore.getState().toast({ kind: 'info', title: t('music.known'), detail: t('music.knownDetail') });
       }
     } catch (err) {
-      useStore.getState().toast({ kind: 'error', title: 'Import impossible', detail: err instanceof Error ? err.message : String(err) });
+      useStore.getState().toast({ kind: 'error', title: t('music.importError'), detail: err instanceof Error ? err.message : String(err) });
     } finally {
       setProgress(null);
     }
@@ -92,19 +107,19 @@ export function MusicPage() {
     setBusy(false);
     if (r) setNotices(r.notices);
   };
-  const play = (t: MusicTrack) => {
+  const play = (tk: MusicTrack) => {
     try {
-      musicPlayer.play(t, t.analysis.sections[selected]?.start ?? 0);
+      musicPlayer.play(tk, tk.analysis.sections[selected]?.start ?? 0);
     } catch (err) {
-      useStore.getState().toast({ kind: 'error', title: 'Lecture impossible', detail: (err as Error).message });
+      useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
   };
 
   return (
     <div className="page">
-      <PageHead title="Musique — Song-to-Show" subtitle="Analyse d’un morceau (tempo, premiers temps, sections, tonalité) puis programmation automatique d’un show calé sur la structure">
+      <PageHead title={t('music.page.title')} subtitle={t('music.page.subtitle')}>
         <input ref={file} type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" style={{ display: 'none' }} data-testid="music-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
-        <button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()} data-testid="music-import"><Upload size={14} />Importer un morceau</button>
+        <button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()} data-testid="music-import"><Upload size={14} />{t('music.import')}</button>
       </PageHead>
       {progress && (
         <Panel title={`${progress.step}…`}>
@@ -112,55 +127,55 @@ export function MusicPage() {
         </Panel>
       )}
       {!track ? (
-        <Empty icon={<Music2 size={32} />} title="Aucun morceau">Importez un fichier audio (WAV, MP3, FLAC…). Il est analysé sur cette machine ; l’analyse est enregistrée dans le projet et le son sur cette machine.</Empty>
+        <Empty icon={<Music2 size={32} />} title={t('music.empty')}>{t('music.emptyHint')}</Empty>
       ) : (
         <div className="col gap-lg">
           {tracks.length > 1 && (
-            <div className="chips">{tracks.map((t) => <button key={t.id} className={`chip ${t.id === track.id ? 'on' : ''}`} onClick={() => { setTrackId(t.id); setSelected(0); setNotices([]); }}>{t.name}</button>)}</div>
+            <div className="chips">{tracks.map((tk) => <button key={tk.id} className={`chip ${tk.id === track.id ? 'on' : ''}`} onClick={() => { setTrackId(tk.id); setSelected(0); setNotices([]); }}>{tk.name}</button>)}</div>
           )}
           <Panel title={track.name} actions={
             <div className="row">
               {musicPlayer.hasAudio(track.hash) ? (
                 playing?.trackId === track.id
-                  ? <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />Stop {fmt(pos)}</button>
-                  : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />Lecture synchronisée</button>
-              ) : <span className="small dim">Réimportez le fichier pour la lecture (son absent de cette machine)</span>}
-              <button className="btn ghost sm" onClick={() => void act({ type: 'music.removeTrack', id: track.id })}>Retirer</button>
+                  ? <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
+                  : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
+              ) : <span className="small dim">{t('music.noAudio')}</span>}
+              <button className="btn ghost sm" onClick={() => void act({ type: 'music.removeTrack', id: track.id })}>{t('music.remove')}</button>
             </div>
           }>
             <div className="row wrap" style={{ gap: 18, marginBottom: 12 }} data-testid="music-summary">
-              <span><span className="small muted">Tempo </span><b className="mono">{track.analysis.bpm.toFixed(1)}</b> BPM {track.analysis.tempoStable ? '' : <span className="badge warn">variable</span>}</span>
-              <span><span className="small muted">Tonalité </span><b>{KEY_NAMES[track.analysis.key.tonic]} {track.analysis.key.mode === 'major' ? 'majeur' : 'mineur'}</b> <span className="small dim">({Math.round(track.analysis.key.confidence * 100)} %)</span></span>
-              <span><span className="small muted">Durée </span><b className="mono">{fmt(track.analysis.duration)}</b></span>
-              <span><span className="small muted">Sections </span><b>{track.analysis.sections.length}</b></span>
-              <span className="small dim">{track.analysis.events.filter((e) => e.kind === 'impact').length} impacts · {track.analysis.events.filter((e) => e.kind === 'riser').length} montées · {Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0))} s de voix</span>
+              <span><span className="small muted">{t('music.tempo')} </span><b className="mono">{track.analysis.bpm.toFixed(1)}</b> BPM {track.analysis.tempoStable ? '' : <span className="badge warn">{t('music.variable')}</span>}</span>
+              <span><span className="small muted">{t('music.key')} </span><b>{KEY_NAMES[track.analysis.key.tonic]} {t(track.analysis.key.mode === 'major' ? 'music.major' : 'music.minor')}</b> <span className="small dim">({Math.round(track.analysis.key.confidence * 100)} %)</span></span>
+              <span><span className="small muted">{t('music.duration')} </span><b className="mono">{fmt(track.analysis.duration)}</b></span>
+              <span><span className="small muted">{t('music.sections')} </span><b>{track.analysis.sections.length}</b></span>
+              <span className="small dim">{t('music.eventsSummary', { impacts: track.analysis.events.filter((e) => e.kind === 'impact').length, risers: track.analysis.events.filter((e) => e.kind === 'riser').length, vocal: Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0)) })}</span>
             </div>
             <SectionStrip track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} pos={playing?.trackId === track.id ? pos : null} />
-            <p className="small dim" style={{ marginBottom: 0 }}>Étiquettes estimées par répétition et énergie (pas de modèle entraîné) : cliquez sur une section pour la corriger, le show suivra.</p>
+            <p className="small dim" style={{ marginBottom: 0 }}>{t('music.strip.hint')}</p>
           </Panel>
 
-          <Panel title="Intention" actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : 'Règles locales'} · variante {track.plan.variant}</span> : null}>
+          <Panel title={t('music.intent')} actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : t('music.localRules')} · {t('music.variantN', { n: track.plan.variant })}</span> : null}>
             <div className="col">
-              <textarea className="input" rows={2} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder="Ex. : concert pop, sobre sur les couplets, explosion sur les refrains, pas de strobe" data-testid="music-intent" />
+              <textarea className="input" rows={2} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
               <div className="row">
-                <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{track.plan ? 'Régénérer le show' : 'Générer le show'}</button>
-                <button className="btn" disabled={busy || !track.plan} onClick={() => void generate(true)} title="Nouvelle variante des sections non verrouillées"><Shuffle size={14} />Variante</button>
-                {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>Ouvrir la timeline</button>}
+                <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>
+                <button className="btn" disabled={busy || !track.plan} onClick={() => void generate(true)} title={t('music.variantHint')}><Shuffle size={14} />{t('music.variant')}</button>
+                {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>{t('music.openTimeline')}</button>}
               </div>
               {track.plan && <p className="small" style={{ margin: 0 }} data-testid="music-plan-summary"><Sparkles size={12} /> {track.plan.summary}</p>}
               {notices.map((n, i) => <div key={i} className="small" style={{ color: '#fcd34d' }}>{n}</div>)}
-              <p className="small dim" style={{ margin: 0 }}>Avec OpenRouter, seule la structure symbolique est envoyée (sections, durées, énergie, tempo, tonalité, composition du kit) : jamais le son.</p>
+              <p className="small dim" style={{ margin: 0 }}>{t('music.privacy')}</p>
             </div>
           </Panel>
 
-          <Panel title="Sections" flush>
+          <Panel title={t('music.sections')} flush>
             <table className="table small" data-testid="music-sections">
-              <thead><tr><th>#</th><th>Section</th><th>Début</th><th>Énergie</th><th>Plan lumière</th><th>Consigne</th><th /></tr></thead>
+              <thead><tr><th>#</th><th>{t('music.col.section')}</th><th>{t('music.col.start')}</th><th>{t('music.col.energy')}</th><th>{t('music.col.plan')}</th><th>{t('music.col.instruction')}</th><th /></tr></thead>
               <tbody>
                 {track.analysis.sections.map((s, i) => {
                   const p = track.plan?.sections[i];
                   return (
-                    <tr key={i} className={i === selected ? 'selected' : ''} onClick={() => setSelected(i)}>
+                    <tr key={i} className={`clickable ${i === selected ? 'sel' : ''} ${i === nowIdx ? 'active' : ''}`} onClick={() => setSelected(i)}>
                       <td className="mono">{i + 1}</td>
                       <td>
                         <select className="select" value={s.label} onChange={(e) => void act({ type: 'music.setSection', trackId: track.id, index: i, label: e.target.value as SectionLabel })}>
@@ -172,24 +187,24 @@ export function MusicPage() {
                       <td>
                         {p ? (<>
                           <span className="row" style={{ gap: 6 }}>
-                            <span className="mono" title="Énergie du plan (0–5)">{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
+                            <span className="mono" title={t('music.planEnergy')}>{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
                             {p.palette.map((c) => <span key={c} style={{ width: 12, height: 12, borderRadius: 3, background: c, display: 'inline-block' }} />)}
                             <span>{EFFECT_NAMES[p.effect]}{p.effect !== 'none' ? ` ${p.effectBeats} t` : ''}</span>
-                            <span className="dim">· {MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}{p.focus ? ` · vers ${p.focus === 'audience' ? 'le public' : markers.find((m) => m.id === p.focus)?.name ?? 'un repère'}` : ''}</span>
+                            <span className="dim">· {MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}{p.focus ? (p.focus === 'audience' ? t('music.towardAudience') : t('music.towardMarker', { name: markers.find((m) => m.id === p.focus)?.name ?? t('music.aMarker') })) : ''}</span>
                             {p.groups.length > 0 && <span className="dim">· {p.groups.map((g) => groups.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}</span>}
                             {p.extras.length > 0 && <span className="dim">· {p.extras.map((x) => EXTRA_NAMES[x]).join(', ')}</span>}
                             {p.note && <span className="badge">{p.note}</span>}
                           </span>
-                          {p.why && <div className="small dim" style={{ marginTop: 2 }} data-testid="music-section-why">Pourquoi : {p.why}</div>}
+                          {p.why && <div className="small dim" style={{ marginTop: 2 }} data-testid="music-section-why">{t('music.edit.why', { why: p.why })}</div>}
                         </>) : <span className="dim">—</span>}
                       </td>
                       <td style={{ width: 200 }}>
-                        <input className="input" disabled={!p} placeholder="plus chaud, plus calme, en rouge, prisme…" value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
+                        <input className="input" disabled={!p} placeholder={t('music.instrPlaceholder')} value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
                       </td>
                       <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                         <button className="btn ghost sm icon" title={t('music.edit.open')} onClick={(e) => { e.stopPropagation(); setEditing(i); }} data-testid="section-edit"><Pencil size={12} /></button>
-                        <button className="btn ghost sm icon" disabled={!p || busy} title="Régénérer cette section (avec la consigne si elle est remplie)" onClick={() => void regenerate(i)}><RefreshCw size={12} /></button>
-                        <button className={`btn ghost sm icon ${p?.locked ? 'on' : ''}`} disabled={!p} title={p?.locked ? 'Déverrouiller' : 'Verrouiller (conservée lors des régénérations)'} onClick={() => void act({ type: 'music.setSection', trackId: track.id, index: i, locked: !p?.locked })}>{p?.locked ? <Lock size={12} /> : <LockOpen size={12} />}</button>
+                        <button className="btn ghost sm icon" disabled={!p || busy} title={t('music.regenSection')} onClick={() => void regenerate(i)}><RefreshCw size={12} /></button>
+                        <button className={`btn ghost sm icon ${p?.locked ? 'on' : ''}`} disabled={!p} title={t(p?.locked ? 'music.unlock' : 'music.lock')} onClick={() => void act({ type: 'music.setSection', trackId: track.id, index: i, locked: !p?.locked })}>{p?.locked ? <Lock size={12} /> : <LockOpen size={12} />}</button>
                       </td>
                     </tr>
                   );

@@ -5,7 +5,7 @@ import { Field, Modal } from '../../components/ui';
 import { useT } from '../../i18n';
 import { SECTION_NAMES } from '../../../core/music/analyze';
 import { SECTION_LABELS, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS, type MusicTrack, type SectionLabel, type ShowSectionPlan } from '../../../core/model/schemas';
-import { BEAM_NAMES, EFFECT_NAMES, EXTRA_NAMES, fmt, MOVE_NAMES } from './names';
+import { BEAM_NAMES, EFFECT_NAMES, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './names';
 
 type Patch = Partial<Pick<ShowSectionPlan, 'energy' | 'palette' | 'effect' | 'effectBeats' | 'movement' | 'beam' | 'extras' | 'accents' | 'locked'>>;
 const BEATS = [0.5, 1, 2, 4, 8, 16];
@@ -44,7 +44,11 @@ export function SectionEditor({ track, index, onClose, onNotices }: { track: Mus
     <Modal wide title={t('music.edit.title', { n: index + 1, label: SECTION_NAMES[sec.label] })} onClose={onClose}
       footer={<><button className="btn" onClick={onClose}>{t('music.edit.cancel')}</button><button className="btn primary" disabled={busy} onClick={() => void save()} data-testid="section-save">{t('music.edit.save')}</button></>}>
       <div className="col" data-testid="section-editor">
-        <div className="small muted">{t('music.edit.info', { from: fmt(sec.start), to: fmt(sec.end), energy: Math.round(sec.energy * 100) })}</div>
+        <div className="row small muted" style={{ gap: 8 }}>
+          <span className="sec-swatch" style={{ background: LABEL_COLOR[label] }} aria-hidden />
+          {t('music.edit.info', { from: fmt(sec.start), to: fmt(sec.end), energy: Math.round(sec.energy * 100) })}
+          {draft?.locked && <span className="badge warn">{t('music.strip.locked')}</span>}
+        </div>
         {plan?.why && <div className="small dim">{t('music.edit.why', { why: plan.why })}</div>}
         <Field label={t('music.edit.label')} hint={t('music.edit.labelHint')}>
           <select className="select" value={label} onChange={(e) => setLabel(e.target.value as SectionLabel)} data-testid="section-label">

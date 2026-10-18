@@ -1,3 +1,5 @@
+import { frScreens } from './fr.screens';
+
 /**
  * French catalogue: the reference language. Every key here must exist in the other catalogues (en.ts is typed against
  * this one). Placeholders: {name}.
@@ -471,6 +473,8 @@ export const fr = {
   'cues.list.priority': 'Priorité',
   'cues.list.priorityHint': '1–99. Priorité supérieure = remplace les autres listes ; égale = HTP intensité / LTP reste',
   'cues.list.loop': 'Boucler à la fin de la liste',
+
+  ...frScreens,
 } as const;
 
 export type MessageKey = keyof typeof fr;
