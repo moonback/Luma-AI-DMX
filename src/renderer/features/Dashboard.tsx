@@ -68,15 +68,30 @@ export function Dashboard() {
     <div className="page">
       <PageHead title={tr('nav.dashboard')} subtitle={`${p.meta.name}${p.meta.show ? ` — ${p.meta.show}` : ''}`} />
       <FirstSteps />
-      <div className="grid g4" style={{ marginBottom: 12 }}>
-        <Kpi label={tr('dash.fixtures')} src="persisted" value={p.patch.length} sub={tr('dash.fixturesSub', { groups: p.groups.length, issues: ps.issues.length ? tr('dash.patchIssues', { n: ps.issues.length }) : tr('dash.patchOk') })} icon={<Lightbulb size={13} />} />
-        <Kpi label={tr('dash.universes')} src="persisted" value={p.show.universes} sub={tr('dash.universesSub', { n: universesUsed })} />
-        <Kpi label={tr('dash.output')} src="measured" value={rt?.liveMode ? 'LIVE' : tr('dash.simulation')} sub={real.length ? tr('dash.armed', { armed: real.filter((o) => o.armed).length, total: real.length }) : tr('dash.noReal')} icon={<Cable size={13} />} />
-        <Kpi label={tr('dash.protocols')} src="config" value={protocols.length ? protocols.join(' · ') : '—'} sub={tr('dash.inError', { n: outputs.filter((o) => o.state === 'error').length })} />
-        <Kpi label={tr('dash.activeCue')} src="computed" value={active[0]?.cueName ?? '—'} sub={active.length ? `${p.cueLists.find((l) => l.id === active[0]!.cueListId)?.name ?? ''} · ${Math.round(active[0]!.progress * 100)} %` : tr('dash.cuesProgrammed', { n: p.cueLists.reduce((n, l) => n + l.cues.length, 0) })} />
-        <Kpi label="BPM" src={rt?.engine.bpmSource === 'audio' ? 'estimate' : 'persisted'} value={rt?.engine.bpm.toFixed(0) ?? '–'} sub={rt?.engine.bpmSource === 'audio' ? tr('dash.bpmAudio', { n: Math.round((audio?.bpmConfidence ?? 0) * 100) }) : tr('dash.bpmManual')} />
-        <Kpi label={tr('dash.load')} src="measured" value={m ? `${(m.load * 100).toFixed(1)} %` : '–'} sub={m ? tr('dash.loadSub', { hz: m.measuredHz, ms: m.avgTickMs, n: m.overruns }) : ''} />
-        <Kpi label={tr('dash.ai')} src="config" value={rt?.ai.provider === 'openrouter' ? (rt.ai.hasKey ? 'OpenRouter' : tr('dash.aiNoKey')) : tr('dash.aiLocal')} sub={rt?.ai.lastError ? tr('dash.aiLastError', { msg: rt.ai.lastError }) : rt?.ai.provider === 'local' ? tr('dash.aiLocalSub') : rt?.ai.model} icon={<Bot size={13} />} />
+      <div className="grid g2 kpi-groups">
+        <section className="kpi-group wide" aria-labelledby="kpi-grp-hw">
+          <h2 id="kpi-grp-hw">{tr('dash.grp.hardware')}</h2>
+          <div className="grid g4">
+            <Kpi label={tr('dash.fixtures')} src="persisted" value={p.patch.length} sub={tr('dash.fixturesSub', { groups: p.groups.length, issues: ps.issues.length ? tr('dash.patchIssues', { n: ps.issues.length }) : tr('dash.patchOk') })} icon={<Lightbulb size={13} />} />
+            <Kpi label={tr('dash.universes')} src="persisted" value={p.show.universes} sub={tr('dash.universesSub', { n: universesUsed })} />
+            <Kpi label={tr('dash.output')} src="measured" value={rt?.liveMode ? 'LIVE' : tr('dash.simulation')} sub={real.length ? tr('dash.armed', { armed: real.filter((o) => o.armed).length, total: real.length }) : tr('dash.noReal')} icon={<Cable size={13} />} />
+            <Kpi label={tr('dash.protocols')} src="config" value={protocols.length ? protocols.join(' · ') : '—'} sub={tr('dash.inError', { n: outputs.filter((o) => o.state === 'error').length })} />
+          </div>
+        </section>
+        <section className="kpi-group" aria-labelledby="kpi-grp-show">
+          <h2 id="kpi-grp-show">{tr('dash.grp.show')}</h2>
+          <div className="grid g2">
+            <Kpi label={tr('dash.activeCue')} src="computed" value={active[0]?.cueName ?? '—'} sub={active.length ? `${p.cueLists.find((l) => l.id === active[0]!.cueListId)?.name ?? ''} · ${Math.round(active[0]!.progress * 100)} %` : tr('dash.cuesProgrammed', { n: p.cueLists.reduce((n, l) => n + l.cues.length, 0) })} />
+            <Kpi label="BPM" src={rt?.engine.bpmSource === 'audio' ? 'estimate' : 'persisted'} value={rt?.engine.bpm.toFixed(0) ?? '–'} sub={rt?.engine.bpmSource === 'audio' ? tr('dash.bpmAudio', { n: Math.round((audio?.bpmConfidence ?? 0) * 100) }) : tr('dash.bpmManual')} />
+          </div>
+        </section>
+        <section className="kpi-group" aria-labelledby="kpi-grp-sys">
+          <h2 id="kpi-grp-sys">{tr('dash.grp.system')}</h2>
+          <div className="grid g2">
+            <Kpi label={tr('dash.load')} src="measured" value={m ? `${(m.load * 100).toFixed(1)} %` : '–'} sub={m ? tr('dash.loadSub', { hz: m.measuredHz, ms: m.avgTickMs, n: m.overruns }) : ''} />
+            <Kpi label={tr('dash.ai')} src="config" value={rt?.ai.provider === 'openrouter' ? (rt.ai.hasKey ? 'OpenRouter' : tr('dash.aiNoKey')) : tr('dash.aiLocal')} sub={rt?.ai.lastError ? tr('dash.aiLastError', { msg: rt.ai.lastError }) : rt?.ai.provider === 'local' ? tr('dash.aiLocalSub') : rt?.ai.model} icon={<Bot size={13} />} />
+          </div>
+        </section>
       </div>
       <SceneFromText />
       <div className="grid g2">

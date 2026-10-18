@@ -168,6 +168,10 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .kpi .k { font-size: 11px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
 .kpi .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .kpi .s { font-size: 11px; color: var(--text-3); }
+.kpi-groups { margin-bottom: 12px; }
+.kpi-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kpi-group.wide { grid-column: 1 / -1; }
+.kpi-group > h2 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-3); font-weight: 650; }
 .tag-src { font-size: 9.5px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; }
 
 .progress { height: 6px; border-radius: 6px; background: var(--panel-3); overflow: hidden; }
