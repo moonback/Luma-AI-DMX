@@ -163,6 +163,7 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'music.intentPlaceholder': 'E.g.: pop concert, restrained verses, explosive choruses, no strobe',
   'music.regenerateShow': 'Regenerate the show',
   'music.generateShow': 'Generate the show',
+  'music.generating': 'Generating the show…',
   'music.variant': 'Variant',
   'music.variantHint': 'New variant of the unlocked sections',
   'music.restore': 'Back to the previous show',

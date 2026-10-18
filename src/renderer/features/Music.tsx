@@ -73,6 +73,30 @@ function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; s
   );
 }
 
+/** Blocking modal while the show is generated (not closable: the command cannot be cancelled). */
+function GeneratingModal() {
+  const t = useT();
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    // shortcut: music.generate reports no progress, so the bar eases toward 95 % over time; upgrade if the handler emits steps.
+    const t0 = Date.now();
+    const id = setInterval(() => setP(0.95 * (1 - Math.exp(-(Date.now() - t0) / 8000))), 100);
+    return () => clearInterval(id);
+  }, []);
+  const pct = Math.round(p * 100);
+  return (
+    <div className="overlay">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={t('music.generating')} data-testid="music-generating">
+        <div className="modal-head">{t('music.generating')}</div>
+        <div className="modal-body col">
+          <div className="meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><div style={{ width: `${pct}%` }} /></div>
+          <span className="small dim mono">{pct} %</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MusicPage() {
   const project = useStore((s) => s.project!.project);
   const tracks = project.music.tracks;
@@ -83,6 +107,7 @@ export function MusicPage() {
   const [history, setHistory] = useState(loadHistory);
   const [mood, setMood] = useState(NO_MOOD);
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
   const [editing, setEditing] = useState(-1); // index of the section open in the editor
@@ -119,7 +144,9 @@ export function MusicPage() {
   const generate = async (nextVariant: boolean) => {
     if (!track) return;
     setBusy(true);
+    setGenerating(true);
     const r = await act({ type: 'music.generate', trackId: track.id, intent, nextVariant, mood });
+    setGenerating(false);
     setBusy(false);
     if (r && intent.trim()) setHistory(remember(intent.trim()));
     if (r) setNotices(r.notices);
@@ -152,6 +179,7 @@ export function MusicPage() {
         <input ref={file} type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" style={{ display: 'none' }} data-testid="music-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
         <button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()} data-testid="music-import"><Upload size={14} />{t('music.import')}</button>
       </PageHead>
+      {generating && <GeneratingModal />}
       {progress && (
         <Panel title={`${progress.step}…`}>
           <div className="meter" data-testid="music-progress"><div style={{ width: `${Math.round(progress.p * 100)}%` }} /></div>

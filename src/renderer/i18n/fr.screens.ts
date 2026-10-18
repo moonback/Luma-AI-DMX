@@ -161,6 +161,7 @@ export const frScreens = {
   'music.intentPlaceholder': 'Ex. : concert pop, sobre sur les couplets, explosion sur les refrains, pas de strobe',
   'music.regenerateShow': 'Régénérer le show',
   'music.generateShow': 'Générer le show',
+  'music.generating': 'Génération du show en cours…',
   'music.variant': 'Variante',
   'music.variantHint': 'Nouvelle variante des sections non verrouillées',
   'music.restore': 'Revenir au show précédent',

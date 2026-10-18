@@ -14,6 +14,8 @@ export const StageVisualizer3D = () => <StagePage mode="3d" />;
 
 export const DETACHED_STAGE_HASH = '#stage3d';
 
+export const openDetachedStage = () => window.open(location.href.split('#')[0] + DETACHED_STAGE_HASH, 'luma-stage3d');
+
 /** Chrome-less live 3D view for a second screen, opened by the "Détacher" button. F11 : plein écran. */
 export function DetachedStage3D() {
   const tr = useT();
@@ -55,7 +57,7 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
           <option value="">{tr('stagePage.allGroups')}</option>
           {project.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        {mode === '3d' && <button className="btn" data-testid="stage3d-detach" onClick={() => window.open(location.href.split('#')[0] + DETACHED_STAGE_HASH, 'luma-stage3d')} title={tr('stagePage.detachHint')}><ExternalLink size={14} />{tr('stagePage.detach')}</button>}
+        {mode === '3d' && <button className="btn" data-testid="stage3d-detach" onClick={openDetachedStage} title={tr('stagePage.detachHint')}><ExternalLink size={14} />{tr('stagePage.detach')}</button>}
       </PageHead>
       {preview && (
         <div className="panel row" style={{ padding: '8px 12px', marginBottom: 10, borderColor: 'rgba(139,92,246,.6)' }}>

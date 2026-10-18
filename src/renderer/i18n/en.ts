@@ -223,6 +223,7 @@ export const en: Record<MessageKey, string> = {
   'settings.general.autosave': 'Automatic recovery save (minutes)',
   'settings.general.autosaveHint': '0 = off. Written to the data folder, never over your file.',
   'settings.general.confirmDangerous': 'Confirm dangerous actions',
+  'settings.general.detachStage3d': 'Open the detached 3D Stage when a project is opened, created or resumed',
   'settings.general.openUnsaved': 'Open without saving the current project?',
   'settings.updates.title': 'Version and updates',
   'settings.updates.installed': 'Installed version',

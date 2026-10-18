@@ -225,6 +225,7 @@ export const fr = {
   'settings.general.autosave': 'Sauvegarde automatique de récupération (minutes)',
   'settings.general.autosaveHint': '0 = désactivée. Écrite dans le dossier de données, sans écraser votre fichier.',
   'settings.general.confirmDangerous': 'Confirmer les actions dangereuses',
+  'settings.general.detachStage3d': 'Ouvrir la Scène 3D détachée à l’ouverture, la création ou la reprise d’un projet',
   'settings.general.openUnsaved': 'Ouvrir sans enregistrer le projet actuel ?',
   'settings.updates.title': 'Version et mises à jour',
   'settings.updates.installed': 'Version installée',

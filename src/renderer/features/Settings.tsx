@@ -292,6 +292,7 @@ export function SettingsPage() {
             <div className="grid g2">
               <Field label={tr('settings.general.autosave')} hint={tr('settings.general.autosaveHint')}><NumberInput value={s.general.autosaveMinutes} min={0} max={60} onChange={(v) => set('general', { autosaveMinutes: v })} /></Field>
               <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
+              <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
               <Field label={tr('start.recent')}>
                 <div className="col small">{s.general.recentProjects.length ? s.general.recentProjects.map((p) => <button key={p} className="btn ghost sm" style={{ justifyContent: 'flex-start' }} onClick={async () => (!project.dirty || (await confirmAction({ title: tr('project.unsavedTitle'), message: tr('settings.general.openUnsaved'), confirmLabel: tr('common.open') }))) && void act({ type: 'project.open', path: p })}><FolderOpen size={12} />{p}</button>) : <span className="dim">{tr('settings.none')}</span>}</div>
               </Field>

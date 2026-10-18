@@ -53,8 +53,10 @@ export const settingsSchema = z.object({
       /** « beta » also receives pre-releases. Updates are installed when the application quits, never during a show. */
       updateChannel: z.enum(['stable', 'beta']).default('stable'),
       autoUpdate: z.boolean().default(true),
+      /** Opens the detached 3D stage window (second screen) once the first project of the session is opened, created or resumed. */
+      detachStage3dOnStart: z.boolean().default(false),
     })
-    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true }),
+    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false }),
   /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
   onboarding: z
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })

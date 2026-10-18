@@ -18,7 +18,7 @@ import { Cues } from './features/Cues';
 import { Effects } from './features/Effects';
 import { TimelinePage } from './features/Timeline';
 import { AiDirector } from './features/AiDirector';
-import { StageVisualizer3D, Visualizer } from './features/Visualizer';
+import { DETACHED_STAGE_HASH, openDetachedStage, StageVisualizer3D, Visualizer } from './features/Visualizer';
 import { AudioPage } from './features/Audio';
 import { MusicPage } from './features/Music';
 import { OutputPage } from './features/Output';
@@ -48,10 +48,22 @@ async function guardUnsaved(): Promise<boolean> {
   return confirmAction({ title: t('project.unsavedTitle'), message: t('project.unsavedMessage'), confirmLabel: t('project.unsavedConfirm') });
 }
 
+/** Set at startup from the settings; cleared once the detached 3D window has been opened. */
+let detachStageOnOpen = false;
+
+/** Opens the detached 3D window once, when the setting asks for it and a project is opened, created or kept. */
+export function detachStageIfWanted(): void {
+  if (!detachStageOnOpen) return;
+  detachStageOnOpen = false;
+  openDetachedStage();
+}
+
 /** Opens a project file (dialog when no path); true when a project was opened. */
 export async function openProject(path?: string): Promise<boolean> {
   if (!(await guardUnsaved())) return false;
-  return !!(await act({ type: 'project.open', ...(path ? { path } : {}) }))?.opened;
+  const opened = !!(await act({ type: 'project.open', ...(path ? { path } : {}) }))?.opened;
+  if (opened) detachStageIfWanted();
+  return opened;
 }
 
 function NewProjectDialog({ onClose }: { onClose: () => void }) {
@@ -59,7 +71,9 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(() => t('project.defaultName'));
   const create = async () => {
     if (!(await guardUnsaved())) return;
-    if (await act({ type: 'project.new', name: name.trim() || t('project.defaultName') })) onClose();
+    if (!(await act({ type: 'project.new', name: name.trim() || t('project.defaultName') }))) return;
+    detachStageIfWanted();
+    onClose();
   };
   return (
     <Modal title={tr('project.new')} onClose={onClose} footer={<><button className="btn" onClick={onClose}>{tr('common.cancel')}</button><button className="btn primary" onClick={() => void create()}>{tr('common.create')}</button></>}>
@@ -332,5 +346,7 @@ export async function bootstrap(): Promise<void> {
   if (firstRun) markWhatsNewSeen();
   useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
   void externalControl.configure(settings.control);
+  // bootstrap also runs in the detached window itself: only the main window opens it, after the first project opened.
+  detachStageOnOpen = settings.general.detachStage3dOnStart && location.hash !== DETACHED_STAGE_HASH;
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }
