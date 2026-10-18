@@ -68,6 +68,8 @@ interface State {
   cueListId: string | null;
   diagOpen: boolean;
   newProjectOpen: boolean;
+  /** Recent project paths while the startup chooser is shown (first run shows the welcome tour instead). */
+  startScreen: string[] | null;
   /** User overrides of keyboard shortcuts (from settings). */
   shortcuts: Record<string, string>;
   /** Interface language (Settings › Apparence); catalogues in ./i18n. */
@@ -120,6 +122,7 @@ export const useStore = create<State>((set, get) => ({
   cueListId: null,
   diagOpen: false,
   newProjectOpen: false,
+  startScreen: null,
   shortcuts: {},
   language: 'fr',
   capturingShortcut: false,

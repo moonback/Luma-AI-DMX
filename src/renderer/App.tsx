@@ -24,6 +24,7 @@ import { OutputPage } from './features/Output';
 import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
 import { HelpButton, OnboardingHost } from './features/Onboarding';
+import { StartScreen } from './features/StartScreen';
 import { t, useT } from './i18n';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
@@ -44,8 +45,10 @@ async function guardUnsaved(): Promise<boolean> {
   return confirmAction({ title: t('project.unsavedTitle'), message: t('project.unsavedMessage'), confirmLabel: t('project.unsavedConfirm') });
 }
 
-export async function openProject(): Promise<void> {
-  if (await guardUnsaved()) await act({ type: 'project.open' });
+/** Opens a project file (dialog when no path); true when a project was opened. */
+export async function openProject(path?: string): Promise<boolean> {
+  if (!(await guardUnsaved())) return false;
+  return !!(await act({ type: 'project.open', ...(path ? { path } : {}) }))?.opened;
 }
 
 function NewProjectDialog({ onClose }: { onClose: () => void }) {
@@ -309,6 +312,7 @@ export function App() {
       <DiagnosticsDrawer />
       <Toasts />
       <OnboardingHost />
+      <StartScreen />
       <ConfirmHost />
     </div>
   );
@@ -318,7 +322,7 @@ export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
   document.documentElement.style.zoom = String(settings.appearance.uiScale);
-  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: settings.onboarding.completed ? null : 'welcome' });
+  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: settings.onboarding.completed ? null : 'welcome', startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
   void externalControl.configure(settings.control);
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }
