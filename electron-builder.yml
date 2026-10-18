@@ -5,6 +5,8 @@ directories:
   buildResources: resources
 files:
   - out/**
+  # Window icon, referenced at runtime by the main process (?asset import).
+  - resources/icon.png
   - package.json
 # Native serial-port bindings must stay outside the asar archive.
 asarUnpack:

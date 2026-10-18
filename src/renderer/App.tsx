@@ -4,6 +4,7 @@ import {
   Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
+import logo from '../../public/logo.png';
 import { PAGES, useStore, confirmAction, type PageId } from './store';
 import { act, call } from './api';
 import { ConfirmHost, Modal, Field } from './components/ui';
@@ -99,7 +100,7 @@ function TopBar() {
 
   return (
     <header className="topbar">
-      <div className="brand"><div className="brand-mark" />{BRAND.productName}</div>
+      <div className="brand"><img className="brand-logo" src={logo} alt={BRAND.productName} /></div>
       <div className="top-project" title={project?.path ?? tr('project.unsaved')}>
         <b>{project?.project.meta.name ?? '…'}{project?.dirty ? ' •' : ''}</b>
         <span className="small muted">{project?.project.meta.show || (pb ? tr('project.cue', { name: pb.cueName ?? '–' }) : tr('project.noCue'))}</span>

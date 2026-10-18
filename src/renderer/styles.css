@@ -56,8 +56,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app.collapsed { grid-template-columns: 56px 1fr; }
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .brand { display: flex; align-items: center; gap: 9px; min-width: 188px; font-weight: 650; letter-spacing: 0.2px; }
-.brand-mark { width: 26px; height: 26px; border-radius: 7px; background: conic-gradient(from 210deg, var(--violet), var(--cyan), var(--violet)); display: grid; place-items: center; }
-.brand-mark::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); box-shadow: 0 0 0 3px rgba(255,255,255,0.12); }
+.brand-logo { height: 30px; width: auto; display: block; border-radius: 6px; }
 .top-project { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .top-project b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
 .top-sep { width: 1px; height: 28px; background: var(--border); }

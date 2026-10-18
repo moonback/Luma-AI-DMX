@@ -7,6 +7,7 @@ import { BRAND } from '../shared/brand';
 import { createSecretStore } from './secrets';
 import { createUpdater } from './updates';
 import type { Logger } from '../core/log/logger';
+import icon from '../../resources/icon.png?asset';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.ELECTRON_RENDERER_URL;
@@ -123,16 +124,16 @@ function createWindow(): BrowserWindow {
     show: false,
     backgroundColor: '#0B0D12',
     title: BRAND.productName,
+    icon,
     autoHideMenuBar: true,
     webPreferences,
   });
-  w.once('ready-to-show', () => w.show());
   // Navigation is restricted to the app itself; external https links open in the system browser.
   guardNavigation(w);
   w.webContents.setWindowOpenHandler(({ url }) => {
     // Detachable 3D stage view (second screen): same renderer, same locked-down preferences.
     if (isTrustedSender(url) && url.endsWith('#stage3d')) {
-      return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 720, backgroundColor: '#0B0D12', title: 'Stage 3D', autoHideMenuBar: true, webPreferences } };
+      return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 720, backgroundColor: '#0B0D12', title: 'Stage 3D', icon, autoHideMenuBar: true, webPreferences } };
     }
     if (url.startsWith('https://')) void shell.openExternal(url);
     return { action: 'deny' };
@@ -169,6 +170,28 @@ function createWindow(): BrowserWindow {
   return w;
 }
 
+/** Frameless window playing the intro video; resolves once the video ends (or fails, or after a safety timeout). */
+function showSplash(): { win: BrowserWindow; done: Promise<void> } {
+  const s = new BrowserWindow({
+    width: 880,
+    height: 220,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: '#000415',
+    icon,
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  guardNavigation(s);
+  const load = DEV_URL ? s.loadURL(`${DEV_URL}/splash.html`) : s.loadFile(path.join(here, '../renderer/splash.html'));
+  const ended = load.then(() => s.webContents.executeJavaScript(
+    `new Promise((r) => { const v = document.querySelector('video'); if (!v || v.ended || v.error) r(); else v.onended = v.onerror = () => r(); })`,
+  ));
+  const timeout = new Promise<void>((r) => setTimeout(r, 10_000));
+  return { win: s, done: Promise.race([ended, timeout]).catch(() => undefined) };
+}
+
 function logFatal(source: string, err: unknown): void {
   const message = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
   if (service) service.logger.error(source, message);
@@ -182,6 +205,7 @@ app.on('child-process-gone', (_e, details) => {
 });
 
 app.whenReady().then(async () => {
+  const splash = process.env.LUMA_E2E ? null : showSplash();
   // Only the microphone (audio-reactive input, LTC) and MIDI (controllers, MTC) may be requested by the renderer.
   const allowed = new Set(['media', 'midi', 'midiSysex']);
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
@@ -211,7 +235,12 @@ app.whenReady().then(async () => {
   service.on('log', forward('log'));
   service.on('locatePhoto', forward('locatePhoto'));
 
-  win = createWindow();
+  const w = createWindow();
+  win = w;
+  const ready = new Promise<void>((r) => w.once('ready-to-show', () => r()));
+  await Promise.all([ready, splash?.done]);
+  if (splash && !splash.win.isDestroyed()) splash.win.destroy();
+  if (!w.isDestroyed()) w.show();
 });
 
 app.on('second-instance', () => {

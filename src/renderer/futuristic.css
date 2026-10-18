@@ -55,15 +55,6 @@
 @keyframes scan-line { to { background-position: -200% 0; } }
 
 .brand { letter-spacing: 0.6px; }
-.brand-mark { position: relative; overflow: hidden; box-shadow: 0 0 18px rgba(139, 92, 246, 0.45); }
-.brand-mark::before {
-  content: ''; position: absolute; inset: -30%;
-  background: conic-gradient(from 0deg, var(--violet), var(--cyan), #f472b6, var(--violet));
-  animation: spin 7s linear infinite;
-}
-.brand-mark::after { position: relative; z-index: 1; animation: breathe 3.2s ease-in-out infinite; }
-@keyframes spin { to { transform: rotate(1turn); } }
-@keyframes breathe { 50% { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22), 0 0 12px rgba(34, 211, 238, 0.6); } }
 
 .led.ok { animation: led-breathe 2.4s ease-in-out infinite; }
 .led.err { animation: led-breathe 1s ease-in-out infinite; }
