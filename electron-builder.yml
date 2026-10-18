@@ -24,6 +24,7 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: ${productName}-Setup-${version}.${ext}
+  # No spaces: GitHub turns them into dots on upload, which breaks the url in latest.yml.
+  artifactName: Luma-AI-DMX-Setup-${version}.${ext}
 # macOS and Linux targets are not built in CI yet: they come back once Windows is stable
 # (report level 2, item 16), so that nothing is promised that has never been built.
