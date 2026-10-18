@@ -6,12 +6,15 @@ import { act } from '../api';
 import { Empty, PageHead, Panel } from '../components/ui';
 import { musicPlayer } from '../musicPlayer';
 import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
-import { SECTION_LABELS, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
+import { SECTION_LABELS, type Mood, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
 import { BEAM_NAMES, EFFECT_NAMES, EVENT_STYLE, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
 import { SectionEditor } from './music/SectionEditor';
 import { usePlayback } from './music/MiniPlayer';
 
 // Kept in French whatever the UI language: the local rules (parseIntent) only read French.
+const NO_MOOD: Mood = { energy: 0, colors: 0, movement: 0, strobe: 0 };
+const MOOD_KEYS = ['energy', 'colors', 'movement', 'strobe'] as const;
+
 const HISTORY_KEY = 'luma.intentHistory';
 function loadHistory(): string[] {
   try {
@@ -78,6 +81,7 @@ export function MusicPage() {
   const [progress, setProgress] = useState<{ p: number; step: string } | null>(null);
   const [intent, setIntent] = useState('');
   const [history, setHistory] = useState(loadHistory);
+  const [mood, setMood] = useState(NO_MOOD);
   const [busy, setBusy] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
@@ -90,6 +94,8 @@ export function MusicPage() {
   const nowIdx = track && playing?.trackId === track.id ? track.analysis.sections.findIndex((s) => pos >= s.start && pos < s.end) : -1;
   const planIntent = track?.plan?.intent ?? '';
   useEffect(() => { if (planIntent) setIntent(planIntent); }, [track?.id, planIntent]);
+  const planMood = track?.plan?.mood;
+  useEffect(() => { setMood(planMood ?? NO_MOOD); }, [track?.id, planMood]);
   const hash = track?.hash;
   useEffect(() => { if (hash) musicPlayer.restore(hash).catch(() => undefined); }, [hash]);
 
@@ -113,7 +119,7 @@ export function MusicPage() {
   const generate = async (nextVariant: boolean) => {
     if (!track) return;
     setBusy(true);
-    const r = await act({ type: 'music.generate', trackId: track.id, intent, nextVariant });
+    const r = await act({ type: 'music.generate', trackId: track.id, intent, nextVariant, mood });
     setBusy(false);
     if (r && intent.trim()) setHistory(remember(intent.trim()));
     if (r) setNotices(r.notices);
@@ -190,6 +196,17 @@ export function MusicPage() {
                     {history.map((h) => <option key={h} value={h}>{h}</option>)}
                   </select>
                 )}
+              </div>
+              <div className="mood-grid" data-testid="music-mood">
+                {MOOD_KEYS.map((k) => (
+                  <label key={k} className="mood-slider small">
+                    <span className="muted">{t(`music.mood.${k}`)}</span>
+                    <span className="dim">{t(`music.mood.${k}.low`)}</span>
+                    <input type="range" min={-1} max={1} step={1} value={mood[k]} onChange={(e) => setMood({ ...mood, [k]: Number(e.target.value) })} data-testid={`mood-${k}`} />
+                    <span className="dim">{t(`music.mood.${k}.high`)}</span>
+                    <b className={mood[k] ? '' : 'dim'}>{mood[k] ? t(`music.mood.${k}.${mood[k] < 0 ? 'low' : 'high'}`) : t('music.mood.auto')}</b>
+                  </label>
+                ))}
               </div>
               <div className="row">
                 <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>

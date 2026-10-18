@@ -252,6 +252,10 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .sec-ruler span:last-child { transform: translateX(-100%); }
 .sec-legend { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
 .sec-swatch { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.mood-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 6px 24px; }
+.mood-slider { display: grid; grid-template-columns: 80px 70px 1fr 70px 80px; align-items: center; gap: 8px; }
+.mood-slider input { width: 100%; accent-color: var(--cyan); }
+.mood-slider > span:nth-of-type(2) { text-align: right; }
 .mini-player { position: fixed; right: 14px; bottom: 36px; z-index: 59; width: 340px; padding: 10px 12px 8px; border-radius: var(--radius); background: var(--panel-2); border: 1px solid var(--border-strong); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); animation: fade-in var(--dur); }
 .mini-player .sec-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: middle; }
 .mini-player-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

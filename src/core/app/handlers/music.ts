@@ -2,8 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { showSectionPlanSchema, type Project, type MusicTrack, type ShowPlan, type ShowSectionPlan } from '../../model/schemas';
-import { adjustSection, compileShow, planLocally, rigInfo, type RigInfo } from '../../music/songToShow';
+import { showSectionPlanSchema, type Mood, type Project, type MusicTrack, type ShowPlan, type ShowSectionPlan } from '../../model/schemas';
+import { adjustSection, compileShow, planLocally, rigInfo, withMood, type RigInfo } from '../../music/songToShow';
 import { KEY_NAMES, SECTION_NAMES } from '../../music/analyze';
 import { DEFAULT_OPENROUTER_MODEL, planSectionWithOpenRouter, planShowWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
 import { ResponseCache } from '../../ai/responseCache';
@@ -55,7 +55,7 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
     case 'music.generate': {
       const t = track(app, cmd.trackId);
       const variant = cmd.nextVariant ? (t.plan?.variant ?? 0) + 1 : t.plan?.variant ?? 0;
-      const { plan, notices } = await planShow(app, t, cmd.intent, variant);
+      const { plan, notices } = await planShow(app, t, cmd.intent, variant, cmd.mood);
       return applyShow(app, t, plan, notices);
     }
     case 'music.updateSection': {
@@ -158,9 +158,11 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
 }
 
 /** Plan with OpenRouter when configured (validated, cached, local fallback), else with the local rules. */
-export async function planShow(app: AppService, t: MusicTrack, intent: string, variant: number): Promise<{ plan: ShowPlan; notices: string[] }> {
+export async function planShow(app: AppService, t: MusicTrack, userIntent: string, variant: number, mood?: Mood): Promise<{ plan: ShowPlan; notices: string[] }> {
   const rig = rigInfo(app.index, app.settings.ai.allowStrobe);
-  const local = planLocally(t.analysis, intent, rig, variant, t.plan);
+  // Planned with the sliders in words; the plan keeps the operator's own text and the sliders apart for the panel.
+  const intent = withMood(userIntent, mood);
+  const local = { ...planLocally(t.analysis, intent, rig, variant, t.plan), intent: userIntent.slice(0, 500), mood };
   const notices: string[] = [];
   const structure = songStructure(t, rig);
   // The variant number reaches the model, so « Variante » asks for another take instead of replaying the cache.
@@ -170,7 +172,7 @@ export async function planShow(app: AppService, t: MusicTrack, intent: string, v
   if (!r) return { plan: local, notices };
   // Locked sections are kept from the previous plan.
   const sections = r.sections.map((s, i) => (t.plan?.sections[i]?.locked && t.plan.sections.length === r.sections.length ? t.plan.sections[i]! : s));
-  return { plan: { intent: intent.slice(0, 500), provider: 'openrouter', model: r.model, variant, summary: r.summary, sections }, notices: r.notices };
+  return { plan: { intent: userIntent.slice(0, 500), provider: 'openrouter', model: r.model, variant, summary: r.summary, sections, mood }, notices: r.notices };
 }
 
 /**
@@ -180,10 +182,11 @@ export async function planShow(app: AppService, t: MusicTrack, intent: string, v
 async function planSection(app: AppService, t: MusicTrack, plan: ShowPlan, index: number, instruction: string): Promise<{ section: ShowSectionPlan; notices: string[] }> {
   const rig = rigInfo(app.index, app.settings.ai.allowStrobe);
   const s = plan.sections[index]!;
-  const local = instruction ? adjustSection(s, instruction, rig) : { ...planLocally(t.analysis, plan.intent, rig, plan.variant + 1 + index).sections[index]!, locked: s.locked };
+  const intent = withMood(plan.intent, plan.mood);
+  const local = instruction ? adjustSection(s, instruction, rig) : { ...planLocally(t.analysis, intent, rig, plan.variant + 1 + index).sections[index]!, locked: s.locked };
   const notices: string[] = [];
   const structure = songStructure(t, rig);
-  const req = { intent: plan.intent, instruction, structure, index, current: s, prev: plan.sections[index - 1], next: plan.sections[index + 1] };
+  const req = { intent, instruction, structure, index, current: s, prev: plan.sections[index - 1], next: plan.sections[index + 1] };
   const r = await askOpenRouter(app, { kind: 'section', hash: t.hash, ...req }, cachedSectionSchema, notices,
     (o) => planSectionWithOpenRouter(req, o, local, { groups: rig.groups, markers: rig.markers }));
   return r ? { section: { ...r.section, locked: s.locked }, notices: r.notices } : { section: local, notices };

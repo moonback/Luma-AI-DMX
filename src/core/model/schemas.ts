@@ -437,17 +437,17 @@ export const showSectionPlanSchema = z.object({
   note: z.string().max(200).default(''),
   /** Why this look, shown to the operator (planner rules or the LLM's own words). */ why: z.string().max(300).default(''),
 });
-export type ShowSectionPlan = z.infer<typeof showSectionPlanSchema>;
-export type ShowExtra = (typeof SHOW_EXTRAS)[number];
+export type ShowSectionPlan = z.infer<typeof showSectionPlanSchema>; export type ShowExtra = (typeof SHOW_EXTRAS)[number];
+/** Ambience sliders of the Intention panel: -1 / 0 (auto) / +1 for energy (calm…energetic), colours (cold…warm), movement, strobe. */ export const moodSchema = z.object({ energy: z.number().int().min(-1).max(1), colors: z.number().int().min(-1).max(1), movement: z.number().int().min(-1).max(1), strobe: z.number().int().min(-1).max(1) });
 export const showPlanSchema = z.object({
   intent: z.string().max(500),
   provider: z.enum(['local', 'openrouter']),
   model: z.string().max(150).nullable(),
   variant: z.number().int().min(0).max(1000),
   summary: z.string().max(1000),
-  sections: z.array(showSectionPlanSchema).max(300),
+  sections: z.array(showSectionPlanSchema).max(300), mood: moodSchema.optional(),
 });
-export type ShowPlan = z.infer<typeof showPlanSchema>;
+export type ShowPlan = z.infer<typeof showPlanSchema>; export type Mood = z.infer<typeof moodSchema>;
 export const musicTrackSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(200),

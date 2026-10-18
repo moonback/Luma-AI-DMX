@@ -3,7 +3,7 @@ import { analyzeAudio } from '../../src/core/music/analyze';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo } from '../../src/core/music/songToShow';
+import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo, withMood } from '../../src/core/music/songToShow';
 import { effectFlashViolation } from '../../src/core/safety/flashGuard';
 import { colorToAttributes } from '../../src/core/fixtures/color';
 import { hexToRgb } from '../../src/core/util/math';
@@ -196,6 +196,23 @@ describe('Song-to-Show', () => {
     const scene = p.scenes.find((s) => s.id === p.music.tracks[0]!.created.sceneIds[0])!;
     expect(Object.values(scene.values).some((v) => v.dimmer === 1 && v.red === 1)).toBe(true);
     await expect(svc.execute({ type: 'music.updateSection', trackId: id, index: 99, patch: {} })).rejects.toThrow(/introuvable/);
+    await svc.dispose();
+  });
+
+  it('curseurs d’ambiance : mis en mots pour la planification, gardés à part dans le plan', async () => {
+    expect(withMood('concert pop', { energy: 1, colors: -1, movement: 1, strobe: -1 })).toBe('concert pop, ambiance énergique, couleurs froides, beaucoup de mouvement, pas de strobe');
+    expect(withMood('  ', { energy: 0, colors: 1, movement: 0, strobe: 0 })).toBe('couleurs chaudes');
+    expect(parseIntent(withMood('', { energy: 0, colors: 0, movement: 1, strobe: 1 }))).toMatchObject({ moreMovement: true, strobe: 'want' });
+    const rig = { wash: 4, moving: 2, bars: 0, allowStrobe: true };
+    const moves = (intent: string) => planLocally(analysis, intent, rig).sections.map((s) => s.movement);
+    expect(moves('beaucoup de mouvement')).not.toEqual(moves(''));
+    const { svc, id } = await setup();
+    const mood = { energy: 0, colors: -1, movement: 0, strobe: 0 };
+    await svc.execute({ type: 'music.generate', trackId: id, intent: 'concert pop', nextVariant: false, mood });
+    const plan = svc.getProject().music.tracks[0]!.plan!;
+    expect(plan.intent).toBe('concert pop');
+    expect(plan.mood).toEqual(mood);
+    expect(plan.summary).toMatch(/palette froide/);
     await svc.dispose();
   });
 

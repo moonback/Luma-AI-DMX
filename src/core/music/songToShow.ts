@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Effect, FixtureValues, Scene, ShowPlan, ShowSectionPlan, SongAnalysis, Timeline, TimelineEvent } from '../model/schemas';
+import type { Effect, FixtureValues, Mood, Scene, ShowPlan, ShowSectionPlan, SongAnalysis, Timeline, TimelineEvent } from '../model/schemas';
 import { effectParamsSchema, type SectionLabel, type ShowExtra } from '../model/schemas';
 import type { ProjectIndex } from '../engine/resolve';
 import type { ResolvedFixture } from '../fixtures/profiles';
@@ -58,6 +58,7 @@ export interface Intent {
   globalShift: number;
   strobe: 'forbid' | 'want' | 'auto';
   noMovement: boolean;
+  moreMovement: boolean;
   colors: string[];
   warmth: 'warm' | 'cold' | null;
   noHaze: boolean;
@@ -68,6 +69,18 @@ export interface Intent {
 }
 
 const has = (t: string, re: RegExp) => re.test(t);
+
+const MOOD_WORDS: Record<keyof Mood, [string, string]> = {
+  energy: ['ambiance calme', 'ambiance énergique'],
+  colors: ['couleurs froides', 'couleurs chaudes'],
+  movement: ['sans mouvement', 'beaucoup de mouvement'],
+  strobe: ['pas de strobe', 'avec strobe'],
+};
+/** The intent as planned: the operator's text plus the ambience sliders, in words both the rules and the LLM read. */
+export function withMood(intent: string, mood?: Mood): string {
+  const words = mood ? (Object.keys(MOOD_WORDS) as (keyof Mood)[]).filter((k) => mood[k]).map((k) => MOOD_WORDS[k][mood[k] < 0 ? 0 : 1]) : [];
+  return [intent.trim(), ...words].filter(Boolean).join(', ');
+}
 
 export function parseIntent(text: string): Intent {
   const t = normalize(text);
@@ -84,8 +97,9 @@ export function parseIntent(text: string): Intent {
     globalShift: !verseCalm && !peakBig ? (has(t, calm) ? -1 : has(t, big) ? 1 : 0) : 0,
     strobe: noStrobe ? 'forbid' : has(t, /\bstrobe\b/) ? 'want' : 'auto',
     noMovement: has(t, /\b(sans|pas de|aucun)\s+mouvements?\b|\bfixes?\b/),
+    moreMovement: has(t, /\bbeaucoup de mouvements?\b|\btres mobiles?\b/),
     colors,
-    warmth: has(t, /\b(chaud|chaude|chaleureu\w*|warm)\b/) ? 'warm' : has(t, /\b(froid|froide|glacial\w*|cold)\b/) ? 'cold' : null,
+    warmth: has(t, /\b(chauds?|chaudes?|chaleureu\w*|warm)\b/) ? 'warm' : has(t, /\b(froids?|froides?|glacial\w*|cold)\b/) ? 'cold' : null,
     noHaze: has(t, /\b(sans|pas de|aucune?)\s+(fumee|haze|brouillard)\b/),
     noFollow: has(t, /\b(sans|pas de|aucune?)\s+poursuites?\b/),
     bassFollow: has(t, /\b(suit|suivent|sur|calee?s? sur) (les |la )?basses?\b/),
@@ -114,7 +128,8 @@ function sectionPlan(index: number, energy: number, palette: string[], rig: RigI
   // With a singer on stage: shower on them in the calm parts (still heads), sweep the audience on the peaks.
   const singer = rig.moving > 0 ? singerMarker(rig.markers ?? []) : null;
   const focus: ShowSectionPlan['focus'] = !singer ? null : peak ? 'audience' : energy <= 3 ? singer.id : null;
-  let movement: ShowSectionPlan['movement'] = intent.noMovement || energy <= 1 ? 'none' : energy === 2 ? 'slow' : energy === 3 ? 'sweep' : energy === 4 ? (alt ? 'fast' : 'fan') : alt ? 'ballyhoo' : 'fast';
+  const me = intent.moreMovement ? Math.min(5, energy + 1) : energy; // « beaucoup de mouvement »: heads one step livelier
+  let movement: ShowSectionPlan['movement'] = intent.noMovement || me <= 1 ? 'none' : me === 2 ? 'slow' : me === 3 ? 'sweep' : me === 4 ? (alt ? 'fast' : 'fan') : alt ? 'ballyhoo' : 'fast';
   if (focus && focus !== 'audience') movement = 'none';
   let effect: ShowSectionPlan['effect'] = 'none', effectBeats = 4;
   if (energy === 2) { effect = 'wave'; effectBeats = 8; }
@@ -190,7 +205,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
   const peaks = analysis.sections.filter((s) => s.label === 'chorus' || s.label === 'drop').length;
   return {
     intent: intentText.slice(0, 500), provider: 'local', model: null, variant,
-    summary: `${sections.length} sections, ${peaks} temps fort(s) ; palette ${intent.colors.length ? 'demandée' : intent.warmth ?? (analysis.key.mode === 'minor' ? 'froide (tonalité mineure)' : 'chaude (tonalité majeure)')}${intent.strobe === 'forbid' ? ', sans strobe' : ''}${intent.noMovement ? ', sans mouvement' : ''}${byLabel.size ? `, groupes : ${[...byLabel].map(([l, ids]) => `${SECTION_NAMES[l].toLowerCase()} → ${ids.map((id) => rig.groups!.find((g) => g.id === id)!.name).join(' + ')}`).join(', ')}` : ''}.`,
+    summary: `${sections.length} sections, ${peaks} temps fort(s) ; palette ${intent.colors.length ? 'demandée' : (intent.warmth && { warm: 'chaude', cold: 'froide' }[intent.warmth]) ?? (analysis.key.mode === 'minor' ? 'froide (tonalité mineure)' : 'chaude (tonalité majeure)')}${intent.strobe === 'forbid' ? ', sans strobe' : ''}${intent.noMovement ? ', sans mouvement' : ''}${byLabel.size ? `, groupes : ${[...byLabel].map(([l, ids]) => `${SECTION_NAMES[l].toLowerCase()} → ${ids.map((id) => rig.groups!.find((g) => g.id === id)!.name).join(' + ')}`).join(', ')}` : ''}.`,
     sections,
   };
 }

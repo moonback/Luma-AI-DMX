@@ -3,7 +3,7 @@ import {
   addressSchema, attributeKeySchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
   stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema, propSchema,
-  hexColorSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS,
+  hexColorSchema, moodSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -185,7 +185,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('music.loadAudio'), hash: z.string().regex(/^[0-9a-f]{64}$/) }),
   z.object({ type: z.literal('music.removeTrack'), id: idSchema }),
   z.object({ type: z.literal('music.setSection'), trackId: idSchema, index: z.number().int().min(0).max(300), label: z.enum(SECTION_LABELS).optional(), locked: z.boolean().optional() }),
-  z.object({ type: z.literal('music.generate'), trackId: idSchema, intent: z.string().max(500), nextVariant: z.boolean().default(false) }),
+  z.object({ type: z.literal('music.generate'), trackId: idSchema, intent: z.string().max(500), nextVariant: z.boolean().default(false), mood: moodSchema.optional() }),
   /** Hand edit of one section of the plan (only the fields given change). */
   z.object({
     type: z.literal('music.updateSection'), trackId: idSchema, index: z.number().int().min(0).max(300),
