@@ -9,11 +9,26 @@ import type { SceneLayout } from './templates';
 
 /** Ready-made descriptions offered on the home page (each one is fully understood, see the unit test). */
 export const TEXT_SCENE_EXAMPLES: { label: string; text: string }[] = [
-  { label: 'Concert', text: 'Plateau de 12 x 8, une grille de 10 m sur 6 à 7 m, 8 lyres et 6 wash, 2 totems de 2,5 m avec une lyre dessus, un praticable de 3 x 2, 2 enceintes, 3 retours, un écran 6x3,5' },
-  { label: 'Conférence', text: 'Plateau de 8 x 5, un pont de 8 m à 5 m, 6 par, un pupitre, une table, 2 micros, un écran 4x2,25, 2 enceintes' },
-  { label: 'Club / DJ', text: 'Une grille de 6 m sur 4 à 4 m suspendue, 4 lyres, 4 strobes, 2 barres led, un praticable de 2 x 1, une table, un écran 5x3' },
-  { label: 'Gala / mariage', text: 'Un pont de 8 m à 4 m, 8 par, 4 totems de 2,5 m avec une lyre dessus, un pupitre, un micro, un rideau, 2 colonnes' },
-  { label: 'Théâtre', text: 'Plateau de 10 x 8, 3 ponts de 10 m à 7 m, 12 par, 4 lyres, un rideau, 2 comédiens, des marches' },
+  {
+    label: 'Concert',
+    text: 'Créer une scène de concert avec un plateau de 12 m de largeur sur 8 m de profondeur. Installer grille de 10 x 6 m à environ 4 m de hauteur. Ajouter 2 totems de 2,5 m, chacun surmonté d’une lyre, un praticable de 3 x 2 m, 2 enceintes de façade, 3 retours de scène et un écran LED de 6 x 3,5 m en fond de scène.',
+  },
+  {
+    label: 'Conférence',
+    text: 'Créer une scène de conférence avec un plateau de 8 x 5 m et un pont lumière de 8 m de largeur suspendu à 5 m de hauteur. Installer 6 projecteurs PAR pour éclairer la scène, un pupitre côté jardin, une table pour les intervenants, 2 micros et un écran de projection de 4 x 2,25 m en fond de scène. Prévoir 2 enceintes de diffusion de part et d’autre du plateau.',
+  },
+  {
+    label: 'Club / DJ',
+    text: 'Créer une scène DJ avec un plateau de 6 x 4 m et une grille technique de 6 x 4 m suspendue à 4 m de hauteur. Équiper la structure de 4 lyres asservies, 4 strobes et 2 barres LED. Installer un praticable de 2 x 1 m pour surélever la table DJ, ainsi qu’un écran LED de 5 x 3 m en arrière-plan. Prévoir une disposition symétrique des équipements autour du DJ.',
+  },
+  {
+    label: 'Gala / mariage',
+    text: 'Créer une scène élégante pour un gala ou un mariage, avec un pont lumière de 8 m de largeur à 4 m de hauteur et 8 projecteurs PAR. Installer 4 totems de 2,5 m répartis de manière symétrique, chacun équipé d’une lyre asservie. Ajouter un pupitre, un micro, un rideau de fond de scène et 2 colonnes décoratives de chaque côté du plateau.',
+  },
+  {
+    label: 'Théâtre',
+    text: 'Créer une scène de théâtre avec un plateau de 10 x 8 m et 3 ponts techniques de 10 m de largeur, positionnés à 7 m de hauteur et répartis au-dessus du plateau. Installer 12 projecteurs PAR et 4 lyres asservies pour l’éclairage scénique. Ajouter un rideau de fond de scène, des marches d’accès et 2 emplacements pour les comédiens. Conserver un espace central dégagé pour le jeu et prévoir une implantation adaptée aux changements de décor.',
+  },
 ];
 
 /** Fixtures to patch, hung on the totems or on the other structures. */
