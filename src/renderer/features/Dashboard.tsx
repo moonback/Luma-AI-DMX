@@ -1,5 +1,8 @@
-import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2 } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { useT } from '../i18n';
+import { buildSceneFromText } from '../sceneActions';
+import { TEXT_SCENE_EXAMPLES } from '../../core/visualizer/sceneFromText';
 import { useStore } from '../store';
 import { newProjectFlow } from '../App';
 import { PageHead, Panel } from '../components/ui';
@@ -14,6 +17,35 @@ function Kpi({ label, value, sub, src, icon }: { label: string; value: ReactNode
       <span className="v">{value}</span>
       {sub && <span className="s">{sub}</span>}
     </div>
+  );
+}
+
+/** Home card: describe the stage in words (structures, fixtures, set) and build it in one go. */
+function SceneFromText() {
+  const tr = useT();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const build = async () => {
+    setBusy(true);
+    try { if (await buildSceneFromText(text)) setText(''); } finally { setBusy(false); }
+  };
+  return (
+    <Panel title={tr('textScene.title')}>
+      <div className="col" style={{ gap: 8 }}>
+        <div className="chips" role="group" aria-label={tr('textScene.examples')}>
+          <span className="small muted">{tr('textScene.examples')}</span>
+          {TEXT_SCENE_EXAMPLES.map((ex, i) => (
+            <button key={ex.label} className={`chip ${text === ex.text ? 'on' : ''}`} onClick={() => setText(ex.text)} title={ex.text} data-testid={`text-scene-ex-${i}`}>{ex.label}</button>
+          ))}
+        </div>
+        <textarea className="input" rows={3} value={text} placeholder={tr('textScene.example')} aria-label={tr('textScene.title')} data-testid="text-scene"
+          onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim()) void build(); }} style={{ resize: 'vertical', minHeight: 64, padding: 8 }} />
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn primary" disabled={!text.trim() || busy} onClick={() => void build()} data-testid="text-scene-build"><Wand2 size={14} />{tr('textScene.build')}</button>
+          <span className="small muted grow">{tr('textScene.hint')}</span>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
@@ -44,6 +76,7 @@ export function Dashboard() {
         <Kpi label="Charge moteur" src="measured" value={m ? `${(m.load * 100).toFixed(1)} %` : '–'} sub={m ? `${m.measuredHz} Hz mesurés · tick ${m.avgTickMs} ms · ${m.overruns} dépassement(s)` : ''} />
         <Kpi label="Assistant IA" src="config" value={rt?.ai.provider === 'openrouter' ? (rt.ai.hasKey ? 'OpenRouter' : 'OpenRouter (sans clé)') : 'Local'} sub={rt?.ai.lastError ? `Dernière erreur : ${rt.ai.lastError}` : rt?.ai.provider === 'local' ? 'Règles et modèles déterministes' : rt?.ai.model} icon={<Bot size={13} />} />
       </div>
+      <SceneFromText />
       <div className="grid g2">
         <Panel title="Actions rapides">
           <div className="grid g3">

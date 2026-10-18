@@ -6,11 +6,14 @@ import { confirmAction, useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
 import { hangHeight, nearestOnTruss, snapTrussEnds, type P2 } from '../core/visualizer/truss';
-import type { Fixture, Project, Truss } from '../core/model/schemas';
+import { MAX_UNIVERSES, type Fixture, type Project, type Truss } from '../core/model/schemas';
+import { ProfileLibrary, channelCount } from '../core/fixtures/profiles';
+import { findFreeAddress } from '../core/fixtures/patch';
+import { sceneFromText } from '../core/visualizer/sceneFromText';
 import { libraryItem } from '../core/visualizer/library';
 import {
   SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
-  type SceneKind, type SceneRef,
+  type EquipFixture, type SceneKind, type SceneRef,
 } from '../core/visualizer/sceneEdit';
 
 /** Scene-element actions shared by the scene panel, the 2D plan and the 3D view (all undoable with Ctrl+Z). */
@@ -170,4 +173,37 @@ export async function sceneFromPhoto(v: Project['visualizer'], image: string): P
   for (const sc of v.screens) setScreenVideo(sc.id, null);
   const ok = await act({ type: 'project.update', visualizer: { stageWidth: r.stageWidth, stageDepth: r.stageDepth, trusses: r.trusses, props: r.props, screens: r.screens } });
   if (ok) toast(t('photo.done'), [found, ...r.notices].join(' · '));
+}
+
+/**
+ * Written description → whole stage: after confirmation, replaces the stage layout, patches the described fixtures
+ * (first universe with room for each rig) and hangs them: "dessus" rigs on the totems, the others on the structures.
+ */
+export async function buildSceneFromText(text: string): Promise<boolean> {
+  const ps = useStore.getState().project;
+  if (!ps) return false;
+  const lib = new ProfileLibrary([...(ps.library ?? []), ...ps.project.profiles]);
+  const plan = sceneFromText(text, lib.all(), newId);
+  if (!plan.lines.length) { toast(t('textScene.none'), plan.notices.join('\n') || t('textScene.noneDetail'), 'error'); return false; }
+  const v = ps.project.visualizer;
+  const message = [...plan.lines.map((l) => `• ${l}`), ...(plan.notices.length ? ['', ...plan.notices] : []), ...(hasSceneContent(v) ? ['', t('textScene.replace')] : [])].join('\n');
+  if (!(await confirmAction({ title: t('textScene.confirmTitle'), message, confirmLabel: t('textScene.confirm') }))) return false;
+  for (const sc of v.screens) setScreenVideo(sc.id, null);
+  if ((await act({ type: 'project.update', visualizer: plan.layout })) === undefined) return false;
+  const totems = plan.layout.trusses.filter((tr) => tr.shape === 'totem'), others = plan.layout.trusses.filter((tr) => tr.shape !== 'totem');
+  const onTotems: EquipFixture[] = [], onTrusses: EquipFixture[] = [];
+  for (const rig of plan.rigs) {
+    const patch = useStore.getState().project?.project.patch ?? [];
+    const chans = channelCount(lib.get(rig.profileId)!, rig.mode);
+    const universe = Array.from({ length: MAX_UNIVERSES }, (_, i) => i + 1).find((u) => findFreeAddress(lib, patch, u, chans * rig.count) !== undefined) ?? 1;
+    const r = await act({ type: 'fixture.add', profileId: rig.profileId, mode: rig.mode, universe, address: null, count: rig.count, namePrefix: rig.prefix, tags: [] });
+    if (!r) return false;
+    (rig.target === 'totem' ? onTotems : onTrusses).push(...r.ids.map((id) => ({ id, movable: rig.movable })));
+  }
+  const placements = [...equipTrusses(onTotems, totems.length ? totems : others), ...equipTrusses(onTrusses, others.length ? others : totems)];
+  if (placements.length) await act({ type: 'fixture.place', placements });
+  const fixtures = onTotems.length + onTrusses.length;
+  toast(t('textScene.done'), t('textScene.doneDetail', { trusses: plan.layout.trusses.length, fixtures, props: plan.layout.props.length }));
+  useStore.getState().setPage('stage3d');
+  return true;
 }

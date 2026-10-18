@@ -719,3 +719,20 @@ test('onboarding : visite guidée complète, premiers pas, projet de démonstrat
   await nav('stage3d');
   await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
 });
+
+test('accueil : construire la scène complète depuis une description écrite', async () => {
+  await nav('dashboard');
+  await page.getByTestId('text-scene-ex-1').click();
+  await expect(page.getByTestId('text-scene')).toHaveValue(/pupitre/);
+  await page.screenshot({ path: `${shots}/26-exemples-description.png` });
+  await page.getByTestId('text-scene').fill('cree un grille de 10m sur 4 sur 3m ajoutes 2 totem de 2m avec lyre poser dessu ajouter 5 ingite300 et 4 mhl1942 puprite et 2 pied micro sur 5m2 de praticable');
+  await page.getByTestId('text-scene-build').click();
+  await expect(page.getByText('Grille 10 × 4 m à 3 m (sur pieds)')).toBeVisible();
+  await page.screenshot({ path: `${shots}/26b-scene-depuis-texte.png` });
+  await page.getByRole('button', { name: 'Construire', exact: true }).click();
+  await expect(page.getByText('6 structure(s), 11 projecteur(s) accroché(s), 3 élément(s) de décor')).toBeVisible();
+  await expect(page.getByTestId('nav-stage3d')).toHaveClass(/active/);
+  await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${shots}/27-scene-texte-3d.png` });
+});
