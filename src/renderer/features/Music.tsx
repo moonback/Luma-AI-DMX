@@ -1,21 +1,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Lock, LockOpen, Music2, Play, RefreshCw, Shuffle, Sparkles, Square, Upload, Wand2 } from 'lucide-react';
+import { Lock, LockOpen, Music2, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
+import { useT } from '../i18n';
 import { act } from '../api';
 import { Empty, PageHead, Panel } from '../components/ui';
 import { musicPlayer } from '../musicPlayer';
 import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
 import { SECTION_LABELS, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
-
-const LABEL_COLOR: Record<SectionLabel, string> = {
-  intro: '#475569', verse: '#2563eb', prechorus: '#7c3aed', build: '#a855f7', chorus: '#db2777', drop: '#e11d48', break: '#0f766e', bridge: '#ca8a04', outro: '#334155',
-};
-const EFFECT_NAMES = { none: '—', wave: 'Vague', pulse: 'Pulsation', chase: 'Chase', rainbow: 'Arc-en-ciel', strobe: 'Strobe', colorChase: 'Chase couleur' } as const;
-const MOVE_NAMES = { none: 'fixe', slow: 'lent', sweep: 'balayage', fast: 'rapide', fan: 'éventail', ballyhoo: 'ballyhoo' } as const;
-const EXTRA_NAMES = { ramp: 'montée progressive', blinder: 'blinder', breathe: 'zoom qui respire', bassFollow: 'suit les basses', colorFollow: 'couleur suit la brillance' } as const;
-const EVENT_STYLE = { impact: ['Impact', '#fde047'], riser: ['Montée', '#22d3ee'], vocal: ['Voix', '#f472b6'] } as const;
-const BEAM_NAMES = { open: '', gobo: 'gobo', prism: 'gobo + prisme', frost: 'frost' } as const;
-const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+import { BEAM_NAMES, EFFECT_NAMES, EVENT_STYLE, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
+import { SectionEditor } from './music/SectionEditor';
 
 function usePlayback() {
   useSyncExternalStore((l) => musicPlayer.subscribe(l), () => musicPlayer.revision);
@@ -57,6 +50,8 @@ export function MusicPage() {
   const [busy, setBusy] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
+  const [editing, setEditing] = useState(-1); // index of the section open in the editor
+  const t = useT();
   const [instr, setInstr] = useState<Record<number, string>>({});
   const file = useRef<HTMLInputElement>(null);
   const { playing, pos } = usePlayback();
@@ -140,8 +135,8 @@ export function MusicPage() {
               <span><span className="small muted">Sections </span><b>{track.analysis.sections.length}</b></span>
               <span className="small dim">{track.analysis.events.filter((e) => e.kind === 'impact').length} impacts · {track.analysis.events.filter((e) => e.kind === 'riser').length} montées · {Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0))} s de voix</span>
             </div>
-            <SectionStrip track={track} selected={selected} onSelect={setSelected} pos={playing?.trackId === track.id ? pos : null} />
-            <p className="small dim" style={{ marginBottom: 0 }}>Étiquettes estimées par répétition et énergie (pas de modèle entraîné) : corrigez-les dans le tableau si besoin, le show suivra.</p>
+            <SectionStrip track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} pos={playing?.trackId === track.id ? pos : null} />
+            <p className="small dim" style={{ marginBottom: 0 }}>Étiquettes estimées par répétition et énergie (pas de modèle entraîné) : cliquez sur une section pour la corriger, le show suivra.</p>
           </Panel>
 
           <Panel title="Intention" actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : 'Règles locales'} · variante {track.plan.variant}</span> : null}>
@@ -192,6 +187,7 @@ export function MusicPage() {
                         <input className="input" disabled={!p} placeholder="plus chaud, plus calme, en rouge, prisme…" value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
                       </td>
                       <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                        <button className="btn ghost sm icon" title={t('music.edit.open')} onClick={(e) => { e.stopPropagation(); setEditing(i); }} data-testid="section-edit"><Pencil size={12} /></button>
                         <button className="btn ghost sm icon" disabled={!p || busy} title="Régénérer cette section (avec la consigne si elle est remplie)" onClick={() => void regenerate(i)}><RefreshCw size={12} /></button>
                         <button className={`btn ghost sm icon ${p?.locked ? 'on' : ''}`} disabled={!p} title={p?.locked ? 'Déverrouiller' : 'Verrouiller (conservée lors des régénérations)'} onClick={() => void act({ type: 'music.setSection', trackId: track.id, index: i, locked: !p?.locked })}>{p?.locked ? <Lock size={12} /> : <LockOpen size={12} />}</button>
                       </td>
@@ -202,6 +198,9 @@ export function MusicPage() {
             </table>
           </Panel>
         </div>
+      )}
+      {track && track.analysis.sections[editing] && (
+        <SectionEditor key={`${track.id}:${editing}`} track={track} index={editing} onClose={() => setEditing(-1)} onNotices={setNotices} />
       )}
     </div>
   );

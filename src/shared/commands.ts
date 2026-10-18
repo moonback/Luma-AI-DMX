@@ -3,6 +3,7 @@ import {
   addressSchema, attributeKeySchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
   stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema, propSchema,
+  hexColorSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -185,6 +186,14 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('music.removeTrack'), id: idSchema }),
   z.object({ type: z.literal('music.setSection'), trackId: idSchema, index: z.number().int().min(0).max(300), label: z.enum(SECTION_LABELS).optional(), locked: z.boolean().optional() }),
   z.object({ type: z.literal('music.generate'), trackId: idSchema, intent: z.string().max(500), nextVariant: z.boolean().default(false) }),
+  /** Hand edit of one section of the plan (only the fields given change). */
+  z.object({
+    type: z.literal('music.updateSection'), trackId: idSchema, index: z.number().int().min(0).max(300),
+    patch: z.object({
+      energy: z.number().int().min(0).max(5), palette: z.array(hexColorSchema).min(1).max(4), effect: z.enum(SHOW_EFFECTS), effectBeats: z.number().min(0.5).max(16),
+      movement: z.enum(SHOW_MOVEMENTS), beam: z.enum(SHOW_BEAMS), extras: z.array(z.enum(SHOW_EXTRAS)).max(SHOW_EXTRAS.length), accents: z.boolean(), locked: z.boolean(),
+    }).partial(),
+  }),
   z.object({ type: z.literal('music.regenerateSection'), trackId: idSchema, index: z.number().int().min(0).max(300), instruction: z.string().max(200).default('') }),
   empty('timeline.stop'),
   z.object({ type: z.literal('timeline.seek'), seconds: z.number().min(0).max(86400) }),
@@ -385,6 +394,7 @@ export interface CommandResults {
   'music.setSection': Void;
   'music.generate': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.regenerateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
+  'music.updateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'timeline.stop': Void;
   'timeline.seek': Void;
   'engine.master': Void;

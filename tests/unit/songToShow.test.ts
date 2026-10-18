@@ -182,6 +182,21 @@ describe('Song-to-Show', () => {
     await svc.dispose();
   });
 
+  it('modification à la main d’une section : seuls les champs donnés changent, le show est recompilé', async () => {
+    const { svc, id } = await setup();
+    await svc.execute({ type: 'music.generate', trackId: id, intent: '', nextVariant: false });
+    const before = svc.getProject().music.tracks[0]!.plan!;
+    await svc.execute({ type: 'music.updateSection', trackId: id, index: 0, patch: { energy: 5, palette: ['#FF0000'], locked: true } });
+    const p = svc.getProject();
+    const after = p.music.tracks[0]!.plan!.sections[0]!;
+    expect(after).toMatchObject({ energy: 5, palette: ['#FF0000'], locked: true, effect: before.sections[0]!.effect, movement: before.sections[0]!.movement });
+    expect(after.why).toMatch(/^Modifié à la main/);
+    const scene = p.scenes.find((s) => s.id === p.music.tracks[0]!.created.sceneIds[0])!;
+    expect(Object.values(scene.values).some((v) => v.dimmer === 1 && v.red === 1)).toBe(true);
+    await expect(svc.execute({ type: 'music.updateSection', trackId: id, index: 99, patch: {} })).rejects.toThrow(/introuvable/);
+    await svc.dispose();
+  });
+
   it('explique chaque look : énergie mesurée, répétition, retouche', () => {
     const rig = { wash: 4, moving: 2, bars: 0, allowStrobe: false };
     const plan = planLocally(analysis, 'sobre sur les couplets', rig);

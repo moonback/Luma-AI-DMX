@@ -58,6 +58,17 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       const { plan, notices } = await planShow(app, t, cmd.intent, variant);
       return applyShow(app, t, plan, notices);
     }
+    case 'music.updateSection': {
+      const t = track(app, cmd.trackId);
+      if (!t.plan) throw new UserError('Générez d’abord le show de ce morceau');
+      const plan: ShowPlan = structuredClone(t.plan);
+      const s = plan.sections[cmd.index];
+      if (!s) throw new UserError('Section introuvable');
+      const patch = Object.fromEntries(Object.entries(cmd.patch).filter(([, v]) => v !== undefined));
+      const why = s.why.startsWith('Modifié à la main') ? s.why : `Modifié à la main${s.why ? ` ; ${s.why}` : ''}`.slice(0, 300);
+      plan.sections[cmd.index] = { ...s, ...patch, why };
+      return applyShow(app, t, plan, []);
+    }
     case 'music.regenerateSection': {
       const t = track(app, cmd.trackId);
       if (!t.plan) throw new UserError('Générez d’abord le show de ce morceau');
