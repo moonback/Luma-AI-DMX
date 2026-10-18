@@ -9,7 +9,7 @@
   "src/renderer/features/Dashboard.tsx": 21,
   "src/renderer/features/Effects.tsx": 65,
   "src/renderer/features/Fixtures.tsx": 82,
-  "src/renderer/features/LiveConsole.tsx": 59,
+  "src/renderer/features/LiveConsole.tsx": 50,
   "src/renderer/features/Music.tsx": 36,
   "src/renderer/features/Onboarding.tsx": 61,
   "src/renderer/features/Output.tsx": 111,
