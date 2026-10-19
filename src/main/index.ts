@@ -204,7 +204,7 @@ function createWindow(): BrowserWindow {
   return w;
 }
 
-/** Frameless window playing the intro video; resolves once the video ends (or fails, or after a safety timeout). */
+/** Frameless window playing the intro video; resolves after 8 seconds. */
 function showSplash(): { win: BrowserWindow; done: Promise<void> } {
   const s = new BrowserWindow({
     width: 880,
@@ -218,12 +218,11 @@ function showSplash(): { win: BrowserWindow; done: Promise<void> } {
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
   guardNavigation(s);
-  const load = DEV_URL ? s.loadURL(`${DEV_URL}/splash.html`) : s.loadFile(path.join(here, '../renderer/splash.html'));
-  const ended = load.then(() => s.webContents.executeJavaScript(
-    `new Promise((r) => { const v = document.querySelector('video'); if (!v || v.ended || v.error) r(); else v.onended = v.onerror = () => r(); })`,
-  ));
-  const timeout = new Promise<void>((r) => setTimeout(r, 10_000));
-  return { win: s, done: Promise.race([ended, timeout]).catch(() => undefined) };
+  if (DEV_URL) void s.loadURL(`${DEV_URL}/splash.html`);
+  else void s.loadFile(path.join(here, '../renderer/splash.html'));
+  // Fixed duration: the splash lasts 8 s whatever the video length (a shorter video holds its last frame).
+  const done = new Promise<void>((r) => setTimeout(r, 8_000));
+  return { win: s, done };
 }
 
 /** Small window with a progress bar shown while the app shuts down to install a downloaded update. */
@@ -235,12 +234,15 @@ function showInstallWindow(version: string | null): BrowserWindow {
     resizable: false,
     alwaysOnTop: true,
     center: true,
+    // Prevents a white flash while updating.html loads: the window stays hidden until ready-to-show.
+    show: false,
     backgroundColor: '#0B0D12',
     title: BRAND.productName,
     icon,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
   guardNavigation(w);
+  w.once('ready-to-show', () => { if (!w.isDestroyed()) w.show(); });
   const load = DEV_URL ? w.loadURL(`${DEV_URL}/updating.html`) : w.loadFile(path.join(here, '../renderer/updating.html'));
   if (version) void load.then(() => w.webContents.executeJavaScript(`document.getElementById('title').textContent = ${JSON.stringify(`Installation de la version ${version}…`)}`)).catch(() => undefined);
   return w;
@@ -308,12 +310,14 @@ app.on('window-all-closed', () => {
 });
 
 let disposed = false;
+// Kept alive until quitAndInstall terminates the process — prevents GC from closing the window prematurely.
+let installWin: BrowserWindow | null = null;
 app.on('before-quit', (e) => {
   quitting = true;
   if (disposed || !service) return;
   e.preventDefault();
   const update = updater?.status();
-  if (update?.state === 'ready') showInstallWindow(update.version);
+  if (update?.state === 'ready') installWin = showInstallWindow(update.version);
   // Clean shutdown: stop the engine, send sACN stream-terminated packets, close sockets/serial ports.
   void service.dispose().finally(() => {
     disposed = true;
