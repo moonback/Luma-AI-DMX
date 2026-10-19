@@ -19,7 +19,7 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       const existing = app.project.music.tracks.find((t) => t.hash === cmd.hash);
       if (existing) return { id: existing.id, cached: true };
       const id = randomUUID();
-      app.mutate((d) => { d.music.tracks.push({ id, name: cmd.name, hash: cmd.hash, analysis: cmd.analysis, plan: null, created: { sceneIds: [], effectIds: [], timelineId: null } }); });
+      app.mutate((d) => { d.music.tracks.push({ id, name: cmd.name, hash: cmd.hash, analysis: cmd.analysis, plan: null, created: { sceneIds: [], effectIds: [], timelineId: null, cueListIds: [] } }); });
       const a = cmd.analysis;
       app.logger.info('Musique', `« ${cmd.name} » analysé : ${a.bpm.toFixed(1)} BPM, ${KEY_NAMES[a.key.tonic]} ${a.key.mode === 'major' ? 'majeur' : 'mineur'}, ${a.sections.length} sections`);
       return { id, cached: false };
@@ -100,6 +100,8 @@ export function removeGenerated(app: AppService, d: Project, t: MusicTrack): voi
   d.scenes = d.scenes.filter((s) => !scenes.has(s.id));
   d.effects = d.effects.filter((e) => !effects.has(e.id));
   if (t.created.timelineId) d.timelines = d.timelines.filter((x) => x.id !== t.created.timelineId);
+  const cueLists = new Set(t.created.cueListIds);
+  d.cueLists = d.cueLists.filter((c) => !cueLists.has(c.id));
 }
 
 /** The song as the LLM sees it. Only the symbolic structure leaves the machine: no audio. */
@@ -215,9 +217,10 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
     d.scenes.push(...c.scenes);
     d.effects.push(...c.effects);
     d.timelines.push(c.timeline);
+    d.cueLists.push(c.cueList);
     track.previousPlan = track.plan; // so restoring twice swaps back (redo)
     track.plan = plan;
-    track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id };
+    track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id, cueListIds: [c.cueList.id] };
   });
   const all = [...notices, ...c.notices];
   app.logger.info('Musique', `Show généré pour « ${t.name} » (${plan.provider === 'openrouter' ? `OpenRouter · ${plan.model}` : 'règles locales'}) : ${c.scenes.length} scènes, ${c.effects.length} effets, timeline « ${c.timeline.name} »`);

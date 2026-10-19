@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Effect, FixtureValues, Mood, Scene, ShowPlan, ShowSectionPlan, SongAnalysis, Timeline, TimelineEvent } from '../model/schemas';
+import type { Cue, CueList, Effect, FixtureValues, Mood, Scene, ShowPlan, ShowSectionPlan, SongAnalysis, Timeline, TimelineEvent } from '../model/schemas';
 import { effectParamsSchema, type SectionLabel, type ShowExtra } from '../model/schemas';
 import type { ProjectIndex } from '../engine/resolve';
 import type { ResolvedFixture } from '../fixtures/profiles';
@@ -256,6 +256,8 @@ export interface CompileResult {
   scenes: Scene[];
   effects: Effect[];
   timeline: Timeline;
+  /** GO list of the show: one cue per section, plus one per phrase in long sections. */
+  cueList: CueList;
   notices: string[];
 }
 
@@ -457,6 +459,9 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   const breaths = analysis.sections.flatMap((s, i) => (breathBefore(analysis.sections, i) && s.start - analysis.sections[i - 1]!.start > 4 * beat ? [{ t: s.start - beat, duration: beat }] : []));
 
   let lastLook: TimelineEvent | undefined;
+  // GO list: each cue fires at a time (section start or phrase start) and holds the look until the next one.
+  const cueSteps: { t: number; fade: number; sceneId: string; effectIds: string[]; label: string }[] = [];
+  const altOf = new Map<string, string>(); // primary effect id → its flipped copy (phrase-alternated)
   analysis.sections.forEach((sec, i) => {
     const p = plan.sections[i];
     if (!p) return;
@@ -513,7 +518,10 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
       effects.push(e);
       const alt = (e === main || e === move) && e.params.phaseSpread > 0 && starts.length > 1
         ? { ...e, id: randomUUID(), name: `${e.name} B`.slice(0, 80), params: { ...e.params, direction: flip[e.params.direction]! } } : null;
-      if (alt) effects.push(alt);
+      if (alt) {
+        effects.push(alt);
+        altOf.set(e.id, alt.id);
+      }
       starts.forEach((t, j) => {
         if (!alt && j) return;
         const end = alt ? starts[j + 1] ?? sec.end : sec.end;
@@ -521,6 +529,13 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
         events.push(ev({ kind: 'effect', refId: ref.id, start: t, duration: end - t, fade: 0, label: ref.name.slice(-40), lane: 1 }));
       });
     }
+    // GO cues: the first one carries the section look and its movement; each later phrase re-fires the look and
+    // switches to the flipped movement, like the timeline does.
+    const primaryIds = [main, move].flatMap((e) => (e ? [e.id] : []));
+    starts.forEach((t, j) => {
+      const effectIds = primaryIds.map((id) => (j % 2 && altOf.has(id) ? altOf.get(id)! : id));
+      cueSteps.push({ t, fade: j ? 0 : fades[i]!, sceneId: scene.id, effectIds, label: j ? `${label} · phrase ${j + 1}` : label });
+    });
   });
 
   scenes.push(...overlays);
@@ -576,5 +591,12 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     cut.push(...pieces.filter((p) => p.duration >= 0.05));
   }
   const timeline: Timeline = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), duration: Math.max(1, Math.ceil(analysis.duration)), loop: false, events: cut };
-  return { scenes, effects, timeline, notices };
+  // Follow trigger: a cue waits `wait` after the previous cue's fade, so the previous look holds until its step ends.
+  const cues: Cue[] = cueSteps.map((s, k) => {
+    const prev = cueSteps[k - 1];
+    const trigger: Cue['trigger'] = prev ? { type: 'follow', wait: Math.max(0, s.t - prev.t - prev.fade) } : { type: 'manual' };
+    return { id: randomUUID(), number: k + 1, name: s.label.slice(0, 80), description: '', sceneId: s.sceneId, fade: s.fade, delay: 0, curve: 'linear', trigger, effectIds: s.effectIds };
+  });
+  const cueList: CueList = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), priority: 50, loop: false, cues: cues.slice(0, 999) };
+  return { scenes, effects, timeline, cueList, notices };
 }

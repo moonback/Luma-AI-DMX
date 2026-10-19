@@ -14,7 +14,7 @@ const analysis: SongAnalysis = {
 const track = (withPlan: boolean): MusicTrack => ({
   id: 'trk', name: 'Démo', hash: 'a'.repeat(64), analysis,
   plan: withPlan ? planLocally(analysis, '', { wash: 2, moving: 0, bars: 0, allowStrobe: false }) : null,
-  created: { sceneIds: [], effectIds: [], timelineId: null },
+  created: { sceneIds: [], effectIds: [], timelineId: null, cueListIds: [] },
 });
 const sent = () => invoke.mock.calls.map((c) => c[0] as { type: string });
 
