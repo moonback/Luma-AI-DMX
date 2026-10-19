@@ -46,7 +46,7 @@ describe('session matériel', () => {
     h.onState(o, 'ready', 'error', 22_000);
     expect(h.reconnects.map((r) => r.seconds)).toEqual([3.5, 12]);
     const md = h.report({
-      app: { name: 'Luma AI DMX', version: '1.3.0', platform: 'win32', arch: 'x64', versions: {} },
+      app: { name: 'Luma AI DMX', version: '1.4.0', platform: 'win32', arch: 'x64', versions: {} },
       metrics: { rateHz: 40, measuredHz: 40, avgTickMs: 0.2, maxTickMs: 1, jitterMs: 0.3, overruns: 0, ticks: 100 } as never,
       outputs: [{ id: 'an', name: 'Nœud', kind: 'artnet', real: true, enabled: true, armed: true, state: 'ready', detail: '', stats: { framesSent: 10, packetsSent: 10, bytesSent: 0, errors: 2, lastError: null, lastErrorAt: null, lastSendAt: null, measuredFps: 40 } }],
       testPattern: null,
