@@ -39,7 +39,7 @@ const rock: DemoSpec = {
     { name: 'Chase sol', type: 'chase', rigs: ['PAR'], params: { bpmSync: true, beatsPerCycle: 1, phaseSpread: 1, barSync: true }, blend: 'scale' },
     { name: 'Balayage spots', type: 'panTilt', rigs: ['SPOT'], params: { bpmSync: true, beatsPerCycle: 8, amplitude: 0.45, phaseSpread: 0.5, shape: 'pan', barSync: true } },
     { name: 'Pulse wash', type: 'pulse', rigs: ['WASH'], params: { bpmSync: true, beatsPerCycle: 1, offset: 0.7, amplitude: 0.5 }, blend: 'scale' },
-    { name: 'Strobe refrain', type: 'strobe', rigs: ['STR'], params: { speed: 7 } },
+    { name: 'Strobe refrain', type: 'strobe', rigs: ['STR'], params: { speed: 4 } },
   ],
   cueLists: [{ name: 'Set rock', cues: [
     { name: 'Noir salle', look: null, fade: 3 },
@@ -54,7 +54,7 @@ const rock: DemoSpec = {
   timeline: { name: 'Ouverture', duration: 60, events: [
     { at: 0, dur: 16, look: 'Intro', fade: 4 },
     { at: 16, dur: 28, look: 'Riff' }, { at: 16, dur: 28, effect: 'Chase sol' }, { at: 16, dur: 28, effect: 'Balayage spots' },
-    { at: 44, dur: 16, look: 'Refrain' }, { at: 44, dur: 16, effect: 'Strobe refrain' },
+    { at: 44, dur: 16, look: 'Refrain' }, { at: 44, dur: 3, effect: 'Strobe refrain' },
   ] },
   notes: 'Démo : régler la plage de tempo audio sur 130–160 (rock). Strobe plafonné par les paramètres de sécurité.',
 };
@@ -99,13 +99,13 @@ const halloween: DemoSpec = {
     { name: 'Visite de la crypte', look: 'Crypte', fade: 4, effects: ['Flamme crypte'] },
     { name: 'Bal des vampires', look: 'Bal des vampires', fade: 3, effects: ['Chase cabine'] },
     { name: 'Danse macabre', look: 'Danse macabre', fade: 1, effects: ['Cycle maléfique', 'Lyres errantes', 'Chase cabine'] },
-    { name: 'Orage', look: 'Crypte', fade: 0, follow: 6, effects: ['Éclairs'], description: 'Éclairs pendant 6 s puis coup de minuit' },
+    { name: 'Orage', look: 'Crypte', fade: 0, follow: 3, effects: ['Éclairs'], description: 'Éclairs brefs pendant 3 s puis coup de minuit' },
     { name: 'Coup de minuit', look: 'Minuit', fade: 0.5 },
     { name: 'Fin de nuit', look: 'Fin de nuit', fade: 10 },
   ] }],
   timeline: { name: 'Coup de minuit', duration: 40, events: [
     { at: 0, dur: 20, look: 'Crypte', fade: 3 }, { at: 0, dur: 20, effect: 'Flamme crypte' },
-    { at: 20, dur: 8, effect: 'Éclairs' },
+    { at: 20, dur: 3, effect: 'Éclairs' },
     { at: 28, dur: 12, look: 'Minuit', fade: 0.5 },
   ] },
   notes: 'Démo : les éclairs restent soumis au limiteur de flashs (paramètres de sécurité). Prévoir une machine à brume pour les faisceaux.',
@@ -241,7 +241,7 @@ const launch: DemoSpec = {
     { name: 'Respiration attente', type: 'pulse', rigs: ['BAR'], params: { speed: 0.2, offset: 0.6, amplitude: 0.4, phaseSpread: 0.5 }, blend: 'scale' },
     { name: 'Balayage teaser', type: 'panTilt', rigs: ['SPOT'], params: { bpmSync: true, beatsPerCycle: 16, amplitude: 0.4, phaseSpread: 0.5, shape: 'pan' } },
     { name: 'Vague plateau', type: 'dimmerWave', rigs: ['BAR'], params: { bpmSync: true, beatsPerCycle: 4, phaseSpread: 1, offset: 0.6, amplitude: 0.8 }, blend: 'scale' },
-    { name: 'Flash révélation', type: 'strobe', rigs: ['STR'], params: { speed: 6 } },
+    { name: 'Flash révélation', type: 'strobe', rigs: ['STR'], params: { speed: 4 } },
   ],
   cueLists: [{ name: 'Conférence de presse', cues: [
     { name: 'Attente invités', look: 'Attente', fade: 4, effects: ['Respiration attente'] },
