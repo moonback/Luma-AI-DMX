@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
+  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
   Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
@@ -19,7 +19,7 @@ import { Effects } from './features/Effects';
 import { QuickActionsPage } from './features/QuickActions';
 import { TimelinePage } from './features/Timeline';
 import { AiDirector } from './features/AiDirector';
-import { DETACHED_STAGE_HASH, openDetachedStage, StageVisualizer3D, Visualizer } from './features/Visualizer';
+import { DETACHED_STAGE_HASH, openDetachedStage, Visualizer } from './features/Visualizer';
 import { AudioPage } from './features/Audio';
 import { MusicPage } from './features/Music';
 import { OutputPage } from './features/Output';
@@ -33,11 +33,11 @@ import { t, useT } from './i18n';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
-  timeline: ChartGantt, ai: Bot, visualizer: Theater, stage3d: Box, audio: AudioLines, music: Music2, output: Cable, settings: SettingsIcon,
+  timeline: ChartGantt, ai: Bot, visualizer: Theater, audio: AudioLines, music: Music2, output: Cable, settings: SettingsIcon,
 };
 const VIEWS: Record<PageId, ComponentType> = {
   dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
-  timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, stage3d: StageVisualizer3D, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
+  timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
 };
 
 export function newProjectFlow(): void {
@@ -286,6 +286,8 @@ function Toasts() {
 export function runShortcut(action: ShortcutAction): boolean {
   const s = useStore.getState();
   const list = s.cueListId;
+  // Former Stage 3D shortcut: the same page, opened in 3D.
+  if (action === 'page:stage3d') { s.setStageMode('3d'); s.setPage('visualizer'); return true; }
   if (action.startsWith('page:')) {
     s.setPage(action.slice(5) as PageId);
     return true;
@@ -306,7 +308,7 @@ export function runShortcut(action: ShortcutAction): boolean {
     case 'undo':
     case 'redo':
       // The stage pages and the timeline editor keep their own Ctrl+Z / Ctrl+Y (scene layout, local edits).
-      if (s.page === 'visualizer' || s.page === 'stage3d' || s.page === 'timeline') return false;
+      if (s.page === 'visualizer' || s.page === 'timeline') return false;
       void historyStep(action);
       return true;
     case 'save': void act({ type: 'project.save' }); return true;

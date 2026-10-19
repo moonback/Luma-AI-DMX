@@ -204,6 +204,7 @@ export async function buildSceneFromText(text: string): Promise<boolean> {
   if (placements.length) await act({ type: 'fixture.place', placements });
   const fixtures = onTotems.length + onTrusses.length;
   toast(t('textScene.done'), t('textScene.doneDetail', { trusses: plan.layout.trusses.length, fixtures, props: plan.layout.props.length }));
-  useStore.getState().setPage('stage3d');
+  useStore.getState().setStageMode('3d');
+  useStore.getState().setPage('visualizer');
   return true;
 }

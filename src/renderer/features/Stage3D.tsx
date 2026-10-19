@@ -208,12 +208,12 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         <div className="grow" />
         <div className="chips" role="group">
           <button className="chip" onClick={frameSelection} title={t('stage3d.frameSel')} aria-label={t('stage3d.frameSel')} data-testid="frame-sel"><Focus size={12} /></button>
-          <button className={`chip ${spin ? 'on' : ''}`} onClick={() => setSpin(!spin)} title={t('stage3d.spinTitle')} aria-pressed={spin} data-testid="spin"><Orbit size={12} /> {t('stage3d.spin')}</button>
-          <button className={`chip ${solo ? 'on' : ''}`} onClick={() => setSolo(!solo)} title={t('stage3d.soloTitle')} aria-pressed={solo} data-testid="solo"><ScanEye size={12} /> {t('stage3d.solo')}</button>
-          <button className={`chip ${prefs.room > 0 ? 'on' : ''}`} onClick={() => setPrefs({ room: prefs.room > 0 ? 0 : 0.7 })} title={t('stage3d.lightTitle')} aria-pressed={prefs.room > 0} data-testid="room-light"><SunMedium size={12} /> {t('stage3d.light')}</button>
+          <button className={`chip ${spin ? 'on' : ''}`} onClick={() => setSpin(!spin)} title={t('stage3d.spinTitle')} aria-pressed={spin} data-testid="spin"><Orbit size={12} /> <span className="lbl">{t('stage3d.spin')}</span></button>
+          <button className={`chip ${solo ? 'on' : ''}`} onClick={() => setSolo(!solo)} title={t('stage3d.soloTitle')} aria-pressed={solo} data-testid="solo"><ScanEye size={12} /> <span className="lbl">{t('stage3d.solo')}</span></button>
+          <button className={`chip ${prefs.room > 0 ? 'on' : ''}`} onClick={() => setPrefs({ room: prefs.room > 0 ? 0 : 0.7 })} title={t('stage3d.lightTitle')} aria-pressed={prefs.room > 0} data-testid="room-light"><SunMedium size={12} /> <span className="lbl">{t('stage3d.light')}</span></button>
         </div>
         <span className="stage3d-sep" />
-        <button className={`chip ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title="Édition directe : déplacer et pivoter projecteurs et structures" data-testid="edit3d"><Move3d size={12} /> Éditer</button>
+        <button className={`chip ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title="Édition directe : déplacer et pivoter projecteurs et structures" data-testid="edit3d"><Move3d size={12} /> <span className="lbl">Éditer</span></button>
         {edit && (
           <>
             <div className="chips" role="group" aria-label="Outil">
@@ -228,7 +228,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           </>
         )}
         <span className="stage3d-sep" />
-        <button className={`chip ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)} aria-expanded={menu} title="Brume, halo, taches, fumée, ombres, ambiance, sol, noms" data-testid="render-menu"><SlidersHorizontal size={12} /> Rendu</button>
+        <button className={`chip ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)} aria-expanded={menu} title="Brume, halo, taches, fumée, ombres, ambiance, sol, noms" data-testid="render-menu"><SlidersHorizontal size={12} /> <span className="lbl">Rendu</span></button>
         <button className="chip" onClick={() => api.current?.capture()} title="Capture d’image (PNG)" aria-label="Capture d’image" data-testid="capture"><ImageDown size={12} /></button>
         <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} aria-label={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
         <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)" aria-label="Plein écran"><Expand size={12} /></button>

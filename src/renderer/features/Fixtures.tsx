@@ -252,6 +252,18 @@ export function Fixtures() {
     } else if (e.ctrlKey || e.metaKey) setSelection(selection.includes(id) ? selection.filter((x) => x !== id) : [...selection, id]);
     else setSelection([id]);
   };
+  const toggleCheckbox = (id: string) => {
+    setSelection(selection.includes(id) ? selection.filter((x) => x !== id) : [...selection, id]);
+  };
+  const allShownSelected = shown.length > 0 && shown.every((rf) => selection.includes(rf.fixture.id));
+  const someShownSelected = shown.some((rf) => selection.includes(rf.fixture.id));
+  const toggleAll = () => {
+    if (allShownSelected) {
+      setSelection(selection.filter((id) => !shown.some((rf) => rf.fixture.id === id)));
+    } else {
+      setSelection([...new Set([...selection, ...shown.map((rf) => rf.fixture.id)])]);
+    }
+  };
   const remove = async () => {
     if (await confirmAction({ title: 'Supprimer des projecteurs', message: `Supprimer ${selection.length} projecteur(s) ? Ils seront aussi retirés des groupes, scènes et effets.`, confirmLabel: 'Supprimer' })) {
       await act({ type: 'fixture.remove', ids: selection });
@@ -308,12 +320,36 @@ export function Fixtures() {
           ) : (
             <div style={{ maxHeight: 'calc(100vh - 230px)', overflow: 'auto' }}>
               <table className="table" data-testid="patch-table">
-                <thead><tr><th>Nom</th><th>Profil</th><th>Mode</th><th>Univ.</th><th>Adresses</th><th>Tags</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th style={{ width: 32, paddingLeft: 10 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Tout sélectionner"
+                        checked={allShownSelected}
+                        ref={(el) => { if (el) el.indeterminate = !allShownSelected && someShownSelected; }}
+                        onChange={toggleAll}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th>Nom</th><th>Profil</th><th>Mode</th><th>Univ.</th><th>Adresses</th><th>Tags</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {shown.map((rf) => {
                     const n = rf.mode.channels.length;
+                    const isSelected = selection.includes(rf.fixture.id);
                     return (
-                      <tr key={rf.fixture.id} className={`clickable ${selection.includes(rf.fixture.id) ? 'sel' : ''}`} onClick={(e) => toggle(rf.fixture.id, e)}>
+                      <tr key={rf.fixture.id} className={`clickable ${isSelected ? 'sel' : ''}`} onClick={(e) => toggle(rf.fixture.id, e)}>
+                        <td style={{ paddingLeft: 10 }} onClick={(e) => { e.stopPropagation(); toggleCheckbox(rf.fixture.id); }}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Sélectionner ${rf.fixture.name}`}
+                            checked={isSelected}
+                            onChange={() => toggleCheckbox(rf.fixture.id)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </td>
                         <td>{issueIds.has(rf.fixture.id) && <span title="Conflit" style={{ color: '#ef4444' }}>⚠ </span>}{rf.fixture.name}</td>
                         <td>{rf.profile.name} {rf.profile.fictional && <span className="badge" title="Profil de démonstration fictif">fictif</span>}</td>
                         <td className="muted">{rf.fixture.mode}</td>
@@ -329,7 +365,7 @@ export function Fixtures() {
           )}
         </Panel>
         {selection.length === 1 ? <Editor id={selection[0]!} /> : (
-          <Panel title="Propriétés"><p className="muted" style={{ margin: 0 }}>{selection.length ? `${selection.length} projecteurs sélectionnés (Maj/Ctrl+clic). Utilisez la console live pour les piloter ensemble.` : 'Sélectionnez un projecteur pour modifier son adressage, sa position et ses tags.'}</p></Panel>
+          <Panel title="Propriétés"><p className="muted" style={{ margin: 0 }}>{selection.length ? `${selection.length} projecteur(s) sélectionné(s). Utilisez la console live pour les piloter ensemble, ou le bouton Supprimer pour les effacer.` : 'Sélectionnez un ou plusieurs projecteurs via les cases à cocher pour modifier, dupliquer ou supprimer.'}</p></Panel>
         )}
       </div>
       <div style={{ marginTop: 12 }}><LibraryPanel /></div>

@@ -364,7 +364,21 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 
 /* Stage page: scene builder panel beside the 2D / 3D view */
 .stage-layout { flex: 1; min-height: 320px; display: flex; gap: 10px; }
-.stage-view { flex: 1; min-width: 0; position: relative; }
+.stage-view { flex: 1; min-width: 0; position: relative; animation: stage-in 220ms ease-out; }
+@keyframes stage-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* View switch: plan / 3D / both. Split mode puts the plan and the 3D side by side (stacked on narrow windows). */
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); }
+.seg button { border: 0; background: transparent; color: var(--text-3); font: inherit; font-size: 12px; padding: 4px 12px; border-radius: 999px; cursor: pointer; transition: background var(--dur), color var(--dur), box-shadow var(--dur); }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--violet-soft); color: var(--text); box-shadow: 0 0 12px rgba(139, 92, 246, 0.35); }
+.seg button:focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
+.stage-split { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.stage-pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border); }
+.stage-pane .stage3d-toolbar { gap: 4px; }
+.stage-pane .stage3d-toolbar .chip { padding: 3px 6px; }
+.stage-pane .stage3d-toolbar .lbl, .stage-pane .stage3d-status > .small { display: none; }
+@media (max-width: 1100px) { .stage-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .stage-view { animation: none; } }
 .stage-empty { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100% - 40px); padding: 8px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.92); border: 1px solid var(--border-strong); z-index: 3; }
 .scene-panel { width: 300px; flex: none; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .scene-panel-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 12px; border-bottom: 1px solid var(--border); }
