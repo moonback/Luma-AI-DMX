@@ -7,7 +7,7 @@ import type { NamedRef } from '../../music/showRig';
 import { normalize } from '../local/interpreter';
 import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
-import { coarseChannel } from '../../fixtures/profiles';
+import { coarseChannel, modeCells } from '../../fixtures/profiles';
 import { BRAND } from '../../../shared/brand';
 import type { AiUsage } from '../usage';
 
@@ -23,6 +23,7 @@ const target = z.object({
   groupNames: z.array(z.string()).optional(),
   fixtureNames: z.array(z.string()).optional(),
   fixtureTypes: z.array(z.enum(FIXTURE_TYPES)).optional(),
+  tags: z.array(z.string()).optional(),
   limit: z.number().optional(),
   module: z.string().optional(),
 });
@@ -74,6 +75,8 @@ Rules:
 ${JSON.stringify(PLAN_JSON_SCHEMA)}
 - Values are normalized 0..1 (level, pan, tilt, amplitude, offset, phaseSpread). Colours are "#RRGGBB". Fades/holds are seconds. speed is cycles per second.
 - Target fixtures only by the exact group names, fixture names or fixture types listed in the rig description. {"all": true} targets the whole rig.
+- Fixtures may carry "tags" (e.g. backlight, face, audience): target them with { "tags": ["backlight"] }.
+- Each fixture gives its stage "position" (x: left/right in metres, y: depth), "height" and "side" (left, right or center). Use them for spatial requests (left to right chases, "vise le chanteur"). Moving heads give "pan_degrees", "tilt_degrees" and "beam_angle": size pan/tilt sweeps to what the fixture can do. "cells" = addressable pixels of a bar; "colorWheelSlots" = the exact colours of its wheel.
 - Multi-head fixtures list their "modules" (e.g. main head + LED ring). Add "module": "<module name>" to a target to change only that head's colour/intensity.
 - Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove, fan) need pan/tilt. Colour effects (including brightnessColor) need colour attributes.
 - fan spreads moving heads symmetrically from the centre and folds them back. bassFollow (dimmer follows the bass, amplitude = depth) and brightnessColor (colour from colors[0] when the music is dark to colors[1] when it is bright) only react while live audio or a track is analysed: say so in "understanding".
@@ -98,18 +101,37 @@ export function describeRig(index: ProjectIndex, allowStrobe: boolean, bpm: numb
     bpm,
     fixtures: [...index.fixtures.values()].map((rf) => {
       const now = live?.current[rf.fixture.id];
+      const { x, y } = rf.fixture.position;
       const gobos = coarseChannel(rf.mode, 'gobo')?.ranges.filter((r) => r.kind === 'gobo').length;
+      const cells = modeCells(rf.mode).length;
+      const wheel = coarseChannel(rf.mode, 'colorWheel')?.ranges.filter((r) => r.kind === 'color' && r.color).map((r) => ({ label: r.label, color: r.color }));
+      const phys = rf.profile.physical;
       return {
         name: rf.fixture.name,
         type: rf.profile.type,
+        position: { x, y },
+        height: rf.fixture.height,
+        side: x < -1 ? 'left' : x > 1 ? 'right' : 'center',
+        ...(rf.fixture.tags.length ? { tags: rf.fixture.tags } : {}),
         attributes: [...new Set(rf.attributes.map(baseAttribute))].filter((a) => a !== 'control' && a !== 'macro'),
         ...(rf.profile.modules.length ? { modules: rf.profile.modules.map((m) => m.name) } : {}),
+        ...(phys.panRange > 0 ? { pan_degrees: phys.panRange, tilt_degrees: phys.tiltRange, beam_angle: phys.beamAngle, ...(phys.panTiltTime ? { move_seconds_540: phys.panTiltTime } : {}) } : {}),
         ...(gobos ? { gobos } : {}),
+        ...(cells ? { cells } : {}),
+        ...(wheel?.length ? { colorWheelSlots: wheel } : {}),
         ...(now && now.level > 0.01 ? { now: { color: now.color, level: Math.round(now.level * 100) / 100 } } : {}),
       };
     }),
     ...(live ? { runningAiEffects: live.aiEffects } : {}),
-    groups: [...index.groups.values()].map((g) => ({ name: g.name, size: g.fixtureIds.length })),
+    groups: [...index.groups.values()].map((g) => {
+      const members = g.fixtureIds.flatMap((id) => { const m = index.fixtures.get(id); return m ? [m] : []; });
+      return {
+        name: g.name,
+        size: g.fixtureIds.length,
+        types: [...new Set(members.map((m) => m.profile.type))],
+        attributes: [...new Set(members.flatMap((m) => m.attributes.map(baseAttribute)))].filter((a) => a !== 'control' && a !== 'macro'),
+      };
+    }),
     scenes: [...index.scenes.values()].map((s) => s.name),
     cueLists: [...index.cueLists.values()].map((c) => c.name),
   });
