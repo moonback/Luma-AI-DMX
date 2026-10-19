@@ -158,10 +158,16 @@ function ReleaseFamily({ ids, classes }: { ids: string[]; classes: AttributeClas
 function FamilyPalettes({ kind, ids }: { kind: Palette['kind']; ids: string[] }) {
   const tr = useT();
   const palettes = useStore((s) => s.project!.project.palettes).filter((p) => p.kind === kind);
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  const defaultName = () => tr('console.pal.defaultName', { kind: tr(`prog.kind.${kind}`), n: palettes.length + 1 });
+  const open = () => { setName(defaultName()); setNaming(true); };
   const store = async () => {
-    const name = tr('console.pal.defaultName', { kind: tr(`prog.kind.${kind}`), n: palettes.length + 1 });
-    const r = await act({ type: 'palette.recordFromProgrammer', name, kind, fixtureId: ids[0]! });
-    if (r) useStore.getState().toast({ kind: 'success', title: tr('console.pal.stored', { name }), detail: tr('console.pal.storedDetail') });
+    const label = name.trim() || defaultName();
+    const r = await act({ type: 'palette.recordFromProgrammer', name: label, kind, fixtureId: ids[0]! });
+    if (!r) return;
+    setNaming(false);
+    useStore.getState().toast({ kind: 'success', title: tr('console.pal.stored', { name: label }), detail: tr('console.pal.storedDetail') });
   };
   return (
     <div className="chips" role="group" aria-label={tr('console.pal.aria', { kind: tr(`prog.kind.${kind}`) })}>
@@ -170,7 +176,12 @@ function FamilyPalettes({ kind, ids }: { kind: Palette['kind']; ids: string[] })
           {p.color && <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: p.color, marginRight: 5 }} />}{p.name}
         </button>
       ))}
-      <button className="chip add" title={tr('console.pal.storeHint')} onClick={() => void store()}><Plus size={12} />{tr('console.pal.store')}</button>
+      <button className="chip add" title={tr('console.pal.storeHint')} onClick={open}><Plus size={12} />{tr('console.pal.store')}</button>
+      {naming && (
+        <Modal title={tr('console.pal.dialogTitle')} onClose={() => setNaming(false)} footer={<><button className="btn" onClick={() => setNaming(false)}>{tr('common.cancel')}</button><button className="btn primary" onClick={() => void store()}>{tr('console.rec.save')}</button></>}>
+          <Field label={tr('console.pal.name')} hint={tr('console.pal.storeHint')}><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void store()} /></Field>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -290,6 +290,8 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'console.pal.aria': '{kind} palettes',
   'console.pal.store': 'Store',
   'console.pal.storeHint': 'Save this family’s values (first selected fixture) as a palette',
+  'console.pal.dialogTitle': 'Store as palette',
+  'console.pal.name': 'Palette name',
   'console.pal.defaultName': '{kind} {n}',
   'console.pal.stored': 'Palette “{name}” stored',
   'console.pal.storedDetail': 'Rename or remove it in Programmer.',

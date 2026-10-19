@@ -288,6 +288,8 @@ export const frScreens = {
   'console.pal.aria': 'Palettes {kind}',
   'console.pal.store': 'Mémoriser',
   'console.pal.storeHint': 'Enregistrer les valeurs de cette famille (premier projecteur sélectionné) comme palette',
+  'console.pal.dialogTitle': 'Mémoriser comme palette',
+  'console.pal.name': 'Nom de la palette',
   'console.pal.defaultName': '{kind} {n}',
   'console.pal.stored': 'Palette « {name} » enregistrée',
   'console.pal.storedDetail': 'Renommez-la ou supprimez-la dans Programmer.',
