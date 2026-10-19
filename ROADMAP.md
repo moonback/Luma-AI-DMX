@@ -6,6 +6,8 @@
 
 Ce document fixe l’ordre et le contenu des travaux à mener sur **Luma AI DMX**, logiciel de bureau Electron de contrôle d’éclairage DMX assisté par IA. Il repose exclusivement sur l’état réel du code : ce qui fonctionne et est vérifié, ce qui est fragile, ce qui est présent mais inaccessible, et ce qui manque. Chaque élément est rédigé pour qu’un développeur, ou un agent de programmation, puisse le prendre, relire ses preuves, et commencer sans deviner l’intention.
 
+**Avancement au 19/10/2026** : 30 élément(s) terminé(s), 3 partiel(s), 51 à faire. Le statut affiché est le statut actuel ; celui constaté à l’audit est rappelé dans chaque fiche modifiée.
+
 Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identifiants sont stables : un élément terminé garde son numéro, et un élément abandonné est marqué comme tel au lieu d’être renuméroté.
 
 ## 2. Règles de lecture et méthode de preuve
@@ -70,6 +72,17 @@ Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identi
 - Le rendu 3D (`src/renderer/features/stage3d/*`) et une partie des pages (Effects, Timeline, Fixtures, Onboarding) ont été parcourus de façon ciblée, sans audit ligne à ligne.
 - Les mesures de performance proviennent d’une seule machine Windows 10 : elles signalent un écart, pas une valeur universelle.
 - L’élément LUMA-024 (plein écran) reste à confirmer par un essai sur une build empaquetée.
+
+**Vérifications après implémentation (19/10/2026)**
+
+| Commande | Résultat |
+|---|---|
+| npx tsc -p tsconfig.json --noEmit | Succès. |
+| npm run lint (eslint, taille des fichiers, i18n) | Succès ; textes en dur : 782 (inchangé). |
+| npx vitest run | Succès : 38 fichiers, 347 tests (26 nouveaux tests de régression et de composant). |
+| npx vitest run --coverage | Succès 4 fois sur 5 ; `src/core` : 92,4 % des lignes. Un échec intermittent (test non identifié dans la sortie filtrée) lors d’une passe, non reproduit sur 3 passes suivantes. |
+| npx vitest run --config vitest.perf.config.ts | Succès 2 fois sur 2 (3 tests). |
+| npm run test:e2e | Non exécuté (build et fenêtres Electron sur le poste). |
 
 ## 4. Résumé de l’état technique réel de Luma AI DMX
 
@@ -142,6 +155,8 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 ## 6. Inventaire synthétique des systèmes existants
 
+Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis sont marqués dans les fiches et dans l’index (section 15).
+
 | Système | Statut | Éléments principaux (preuves) | Éléments de la roadmap |
 |---|---|---|---|
 | Bus de commandes IPC typé (preload, Zod, routage par domaine) | IMPLÉMENTÉ ET VÉRIFIÉ | `src/shared/commands.ts:52-273`, `src/core/app/routes.ts:21-31` (routage exhaustif à la compilation), `src/main/index.ts:237-248`, E2E de sécurité `tests/e2e/app.spec.ts:41` | [LUMA-032](#luma-032) |
@@ -209,11 +224,11 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 | Statut | Éléments |
 |---|---|
-| IMPLÉMENTÉ ET VÉRIFIÉ | 0 |
-| IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 10 |
-| PARTIELLEMENT IMPLÉMENTÉ | 51 |
-| PRÉSENT MAIS NON RACCORDÉ | 2 |
-| ABSENT | 20 |
+| IMPLÉMENTÉ ET VÉRIFIÉ | 25 |
+| IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 14 |
+| PARTIELLEMENT IMPLÉMENTÉ | 29 |
+| PRÉSENT MAIS NON RACCORDÉ | 0 |
+| ABSENT | 15 |
 | À INVESTIGUER | 1 |
 
 **Répartition par nature de travaux**
@@ -232,17 +247,17 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 **Éléments (9).**
 
-| ID | Titre | Priorité | Statut | Effort |
-|---|---|---|---|---|
-| [LUMA-001](#luma-001) | Empêcher la double exécution des commandes MIDI quand la fenêtre 3D détachée est ouverte | P0 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-002](#luma-002) | Corriger le limiteur de cadence par sortie, qui divise par deux la fréquence DMX effective | P1 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-003](#luma-003) | Libérer la séquence de localisation caméra et la mire de test quand le rendu disparaît | P1 | ABSENT | S |
-| [LUMA-004](#luma-004) | Supprimer la lecture et le déchiffrement synchrones de la clé API dix fois par seconde | P1 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-005](#luma-005) | Limiter le flot d’erreurs répétées du moteur dans le journal et les alertes | P1 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-006](#luma-006) | Garantir que l’analyse audio réactive continue quand la fenêtre principale est masquée ou réduite | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S |
-| [LUMA-007](#luma-007) | Ramener la gigue de l’ordonnanceur sous le seuil du test de performance (p95 < 2 ms) | P1 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-008](#luma-008) | Mettre en place une intégration continue Windows (typecheck, lint, tests, conventions de commit) | P1 | ABSENT | S |
-| [LUMA-009](#luma-009) | Rendre `npm run test:coverage` fiable (délai des hooks sous instrumentation) | P1 | PARTIELLEMENT IMPLÉMENTÉ | XS |
+| ID | Titre | Priorité | Statut | Effort | Avancement |
+|---|---|---|---|---|---|
+| [LUMA-001](#luma-001) | Empêcher la double exécution des commandes MIDI quand la fenêtre 3D détachée est ouverte | P0 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-002](#luma-002) | Corriger le limiteur de cadence par sortie, qui divise par deux la fréquence DMX effective | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-003](#luma-003) | Libérer la séquence de localisation caméra et la mire de test quand le rendu disparaît | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-004](#luma-004) | Supprimer la lecture et le déchiffrement synchrones de la clé API dix fois par seconde | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-005](#luma-005) | Limiter le flot d’erreurs répétées du moteur dans le journal et les alertes | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-006](#luma-006) | Garantir que l’analyse audio réactive continue quand la fenêtre principale est masquée ou réduite | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | ✅ Terminé |
+| [LUMA-007](#luma-007) | Ramener la gigue de l’ordonnanceur sous le seuil du test de performance (p95 < 2 ms) | P1 | PARTIELLEMENT IMPLÉMENTÉ | M | 🟡 Partiel |
+| [LUMA-008](#luma-008) | Mettre en place une intégration continue Windows (typecheck, lint, tests, conventions de commit) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | ✅ Terminé |
+| [LUMA-009](#luma-009) | Rendre `npm run test:coverage` fiable (délai des hooks sous instrumentation) | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
 
 **Dépendances principales.** Aucune dépendance vers une phase ultérieure. Les éléments de cette phase sont pour la plupart indépendants et parallélisables. LUMA-007 attend LUMA-004 et LUMA-005, et LUMA-008 attend LUMA-009.
 
@@ -258,29 +273,29 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 **Éléments (21).**
 
-| ID | Titre | Priorité | Statut | Effort |
-|---|---|---|---|---|
-| [LUMA-010](#luma-010) | Raccorder la commande « Tout relâcher » (`engine.releaseAll`) à l’interface, à l’OSC et à la télécommande | P1 | PRÉSENT MAIS NON RACCORDÉ | S |
-| [LUMA-011](#luma-011) | Proposer la récupération du travail au démarrage après une fermeture anormale | P1 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-012](#luma-012) | Permettre l’annulation d’une requête IA ou d’une génération de show en cours | P2 | ABSENT | M |
-| [LUMA-013](#luma-013) | Remplacer la barre de progression simulée de la génération de show par une progression réelle | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-014](#luma-014) | Protéger la génération de show contre les modifications concurrentes du projet pendant l’appel IA | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-015](#luma-015) | Nettoyer les réactions audio qui pointent vers une liste de cues supprimée | P2 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-016](#luma-016) | Rendre annulable l’application des positions issues de la localisation caméra | P2 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-017](#luma-017) | Éviter l’écrasement de paramètres modifiés ailleurs lors de `settings.update` | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-018](#luma-018) | Sérialiser les écritures atomiques concurrentes sur un même fichier | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-019](#luma-019) | Signaler un échec d’enregistrement déclenché par la fermeture de la fenêtre | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-020](#luma-020) | Permettre de supprimer un profil de la bibliothèque utilisateur depuis l’interface | P2 | PRÉSENT MAIS NON RACCORDÉ | S |
-| [LUMA-021](#luma-021) | Reconstituer l’état des listes de cues après un saut de timeline (seek ou poursuite de timecode) | P2 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-022](#luma-022) | Ne plus accumuler dans le projet les définitions d’effets créées par chaque proposition IA | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-023](#luma-023) | Rendre l’application d’une proposition IA atomique et annulable en une étape | P2 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-024](#luma-024) | Vérifier et corriger le plein écran F11 de la fenêtre 3D détachée face au filtre de permissions | P2 | À INVESTIGUER | XS |
-| [LUMA-025](#luma-025) | Supprimer une timeline n’arrête que la lecture de cette timeline | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-026](#luma-026) | Retirer du moteur les playbacks de listes de cues supprimées | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-027](#luma-027) | Revalider une proposition IA contre l’état courant du projet au moment de l’appliquer | P3 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-028](#luma-028) | Ne pas marquer le projet comme modifié pour une simple requête IA non appliquée | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-029](#luma-029) | Retirer de la boîte d’import le filtre QLC+ annoncé mais refusé | P3 | ABSENT | XS |
-| [LUMA-030](#luma-030) | Nettoyer les fichiers audio, le cache IA et les copies de récupération orphelins | P3 | ABSENT | M |
+| ID | Titre | Priorité | Statut | Effort | Avancement |
+|---|---|---|---|---|---|
+| [LUMA-010](#luma-010) | Raccorder la commande « Tout relâcher » (`engine.releaseAll`) à l’interface, à l’OSC et à la télécommande | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-011](#luma-011) | Proposer la récupération du travail au démarrage après une fermeture anormale | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
+| [LUMA-012](#luma-012) | Permettre l’annulation d’une requête IA ou d’une génération de show en cours | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
+| [LUMA-013](#luma-013) | Remplacer la barre de progression simulée de la génération de show par une progression réelle | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-014](#luma-014) | Protéger la génération de show contre les modifications concurrentes du projet pendant l’appel IA | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-015](#luma-015) | Nettoyer les réactions audio qui pointent vers une liste de cues supprimée | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-016](#luma-016) | Rendre annulable l’application des positions issues de la localisation caméra | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-017](#luma-017) | Éviter l’écrasement de paramètres modifiés ailleurs lors de `settings.update` | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-018](#luma-018) | Sérialiser les écritures atomiques concurrentes sur un même fichier | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-019](#luma-019) | Signaler un échec d’enregistrement déclenché par la fermeture de la fenêtre | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | ✅ Terminé |
+| [LUMA-020](#luma-020) | Permettre de supprimer un profil de la bibliothèque utilisateur depuis l’interface | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | ✅ Terminé |
+| [LUMA-021](#luma-021) | Reconstituer l’état des listes de cues après un saut de timeline (seek ou poursuite de timecode) | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
+| [LUMA-022](#luma-022) | Ne plus accumuler dans le projet les définitions d’effets créées par chaque proposition IA | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-023](#luma-023) | Rendre l’application d’une proposition IA atomique et annulable en une étape | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
+| [LUMA-024](#luma-024) | Vérifier et corriger le plein écran F11 de la fenêtre 3D détachée face au filtre de permissions | P2 | À INVESTIGUER | XS | 🟡 Partiel |
+| [LUMA-025](#luma-025) | Supprimer une timeline n’arrête que la lecture de cette timeline | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-026](#luma-026) | Retirer du moteur les playbacks de listes de cues supprimées | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-027](#luma-027) | Revalider une proposition IA contre l’état courant du projet au moment de l’appliquer | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-028](#luma-028) | Ne pas marquer le projet comme modifié pour une simple requête IA non appliquée | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-029](#luma-029) | Retirer de la boîte d’import le filtre QLC+ annoncé mais refusé | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-030](#luma-030) | Nettoyer les fichiers audio, le cache IA et les copies de récupération orphelins | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
 
 **Dépendances principales.** Aucune dépendance vers une phase ultérieure. LUMA-013 dépend de LUMA-012 (même infrastructure d’opération en cours).
 
@@ -296,31 +311,31 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 **Éléments (23).**
 
-| ID | Titre | Priorité | Statut | Effort |
-|---|---|---|---|---|
-| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M |
-| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | ABSENT | M |
-| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | L |
-| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S |
-| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S |
-| [LUMA-035](#luma-035) | Étendre la couverture et les tests de composants au code de rendu | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | L |
-| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M |
-| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S |
-| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | ABSENT | S |
-| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-045](#luma-045) | Récupérer partiellement un fichier de paramètres invalide au lieu de tout réinitialiser | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S |
-| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | ABSENT | S |
-| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | ABSENT | XS |
-| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
+| ID | Titre | Priorité | Statut | Effort | Avancement |
+|---|---|---|---|---|---|
+| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M | À faire |
+| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | ABSENT | M | À faire |
+| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | L | À faire |
+| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
+| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
+| [LUMA-035](#luma-035) | Étendre la couverture et les tests de composants au code de rendu | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | L | À faire |
+| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M | À faire |
+| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
+| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | ABSENT | S | À faire |
+| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | PARTIELLEMENT IMPLÉMENTÉ | S | 🟡 Partiel |
+| [LUMA-045](#luma-045) | Récupérer partiellement un fichier de paramètres invalide au lieu de tout réinitialiser | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
+| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | ABSENT | S | À faire |
+| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
+| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
+| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | ABSENT | XS | À faire |
+| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | XS | ✅ Terminé |
+| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
+| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
 
 **Dépendances principales.** Cette phase s’appuie sur [LUMA-009](#luma-009), [LUMA-002](#luma-002), [LUMA-018](#luma-018), [LUMA-008](#luma-008), [LUMA-007](#luma-007), [LUMA-021](#luma-021), [LUMA-005](#luma-005) (phases antérieures). La phase suppose la CI de la phase 0 (LUMA-008) et la fiabilité de la couverture (LUMA-009).
 
@@ -336,27 +351,27 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 **Éléments (19).**
 
-| ID | Titre | Priorité | Statut | Effort |
-|---|---|---|---|---|
-| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | PARTIELLEMENT IMPLÉMENTÉ | L |
-| [LUMA-054](#luma-054) | Internationaliser les messages du cœur et les dialogues du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | L |
-| [LUMA-055](#luma-055) | Résorber les 782 textes d’interface écrits en dur dans le rendu | P2 | PARTIELLEMENT IMPLÉMENTÉ | L |
-| [LUMA-056](#luma-056) | Mesurer et améliorer la compréhension des requêtes en anglais par l’interpréteur local | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M |
-| [LUMA-057](#luma-057) | Découvrir automatiquement les nœuds Art-Net du réseau (ArtPoll et ArtPollReply) | P2 | ABSENT | M |
-| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | ABSENT | S |
-| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-060](#luma-060) | Exporter et importer un projet « paquet » qui embarque les fichiers audio des morceaux | P2 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | ABSENT | S |
-| [LUMA-073](#luma-073) | Réduire le coût de chaque mutation (clonage et revalidation complète du projet) | P2 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-062](#luma-062) | Étendre le MIDI : faders vers niveaux de playback et d’effets, et retour d’état vers les contrôleurs | P3 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-064](#luma-064) | Implémenter la découverte d’univers sACN (E1.31 §8) et la synchronisation optionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-065](#luma-065) | Importer une implantation MVR (patch et positions) depuis Capture, Vectorworks ou grandMA3 | P3 | ABSENT | L |
-| [LUMA-066](#luma-066) | Appairer la télécommande par QR code | P3 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS |
-| [LUMA-068](#luma-068) | Proposer un mode « tracking » optionnel pour les listes de cues | P3 | ABSENT | M |
-| [LUMA-069](#luma-069) | Rendre le plan de scène 2D utilisable au clavier et par les lecteurs d’écran | P3 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | PARTIELLEMENT IMPLÉMENTÉ | S |
+| ID | Titre | Priorité | Statut | Effort | Avancement |
+|---|---|---|---|---|---|
+| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | PARTIELLEMENT IMPLÉMENTÉ | L | À faire |
+| [LUMA-054](#luma-054) | Internationaliser les messages du cœur et les dialogues du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | L | À faire |
+| [LUMA-055](#luma-055) | Résorber les 782 textes d’interface écrits en dur dans le rendu | P2 | PARTIELLEMENT IMPLÉMENTÉ | L | À faire |
+| [LUMA-056](#luma-056) | Mesurer et améliorer la compréhension des requêtes en anglais par l’interpréteur local | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M | À faire |
+| [LUMA-057](#luma-057) | Découvrir automatiquement les nœuds Art-Net du réseau (ArtPoll et ArtPollReply) | P2 | ABSENT | M | À faire |
+| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | ABSENT | S | À faire |
+| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-060](#luma-060) | Exporter et importer un projet « paquet » qui embarque les fichiers audio des morceaux | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | ABSENT | S | À faire |
+| [LUMA-073](#luma-073) | Réduire le coût de chaque mutation (clonage et revalidation complète du projet) | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-062](#luma-062) | Étendre le MIDI : faders vers niveaux de playback et d’effets, et retour d’état vers les contrôleurs | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-064](#luma-064) | Implémenter la découverte d’univers sACN (E1.31 §8) et la synchronisation optionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-065](#luma-065) | Importer une implantation MVR (patch et positions) depuis Capture, Vectorworks ou grandMA3 | P3 | ABSENT | L | À faire |
+| [LUMA-066](#luma-066) | Appairer la télécommande par QR code | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
+| [LUMA-068](#luma-068) | Proposer un mode « tracking » optionnel pour les listes de cues | P3 | ABSENT | M | À faire |
+| [LUMA-069](#luma-069) | Rendre le plan de scène 2D utilisable au clavier et par les lecteurs d’écran | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
 
 **Dépendances principales.** Cette phase s’appuie sur [LUMA-031](#luma-031), [LUMA-041](#luma-041), [LUMA-042](#luma-042), [LUMA-001](#luma-001) (phases antérieures). L’annulation globale (LUMA-053) s’appuie sur la couverture du handler de programmation (LUMA-031) et sur la réduction du coût des mutations (LUMA-073), placée dans cette phase pour cette raison.
 
@@ -372,15 +387,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 **Éléments (7).**
 
-| ID | Titre | Priorité | Statut | Effort |
-|---|---|---|---|---|
-| [LUMA-071](#luma-071) | Isoler le moteur temps réel et les sorties DMX hors de la boucle d’événements du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | XL |
-| [LUMA-072](#luma-072) | Diffuser des changements incrémentaux du projet au lieu de l’état complet à chaque mutation | P2 | PARTIELLEMENT IMPLÉMENTÉ | L |
-| [LUMA-074](#luma-074) | Déporter l’analyse musicale dans un Web Worker | P3 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-075](#luma-075) | Migrer le décodage LTC et l’analyse audio en direct vers un AudioWorklet | P3 | PARTIELLEMENT IMPLÉMENTÉ | M |
-| [LUMA-076](#luma-076) | Réduire le coût par tick de la surveillance photosensible | P3 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-077](#luma-077) | Centraliser les modifications de `app.settings` dans une seule fonction transactionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | S |
-| [LUMA-078](#luma-078) | Prendre en charge le RDM via l’interface Enttec DMX USB Pro | P3 | ABSENT | L |
+| ID | Titre | Priorité | Statut | Effort | Avancement |
+|---|---|---|---|---|---|
+| [LUMA-071](#luma-071) | Isoler le moteur temps réel et les sorties DMX hors de la boucle d’événements du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | XL | À faire |
+| [LUMA-072](#luma-072) | Diffuser des changements incrémentaux du projet au lieu de l’état complet à chaque mutation | P2 | PARTIELLEMENT IMPLÉMENTÉ | L | À faire |
+| [LUMA-074](#luma-074) | Déporter l’analyse musicale dans un Web Worker | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-075](#luma-075) | Migrer le décodage LTC et l’analyse audio en direct vers un AudioWorklet | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-076](#luma-076) | Réduire le coût par tick de la surveillance photosensible | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-077](#luma-077) | Centraliser les modifications de `app.settings` dans une seule fonction transactionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-078](#luma-078) | Prendre en charge le RDM via l’interface Enttec DMX USB Pro | P3 | ABSENT | L | À faire |
 
 **Dépendances principales.** Cette phase s’appuie sur [LUMA-004](#luma-004), [LUMA-005](#luma-005), [LUMA-007](#luma-007), [LUMA-036](#luma-036), [LUMA-073](#luma-073), [LUMA-006](#luma-006), [LUMA-017](#luma-017), [LUMA-018](#luma-018), [LUMA-037](#luma-037), [LUMA-038](#luma-038) (phases antérieures). LUMA-071 ne s’engage que si les corrections locales de la phase 0 (LUMA-004, LUMA-005, LUMA-007) ne suffisent pas.
 
@@ -396,13 +411,13 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 
 **Éléments (5).**
 
-| ID | Titre | Priorité | Statut | Effort |
-|---|---|---|---|---|
-| [LUMA-079](#luma-079) | Lire plusieurs timelines simultanément (couches indépendantes) | P3 | ABSENT | L |
-| [LUMA-080](#luma-080) | Ajouter un mode « show verrouillé » qui interdit les éditions pendant l’exploitation | P3 | ABSENT | S |
-| [LUMA-081](#luma-081) | Proposer une redondance de sortie par machine de secours sACN | P3 | ABSENT | L |
-| [LUMA-082](#luma-082) | Construire et valider les versions macOS et Linux | P3 | ABSENT | L |
-| [LUMA-083](#luma-083) | Importer les profils QLC+ (`.qxf`) | P3 | ABSENT | M |
+| ID | Titre | Priorité | Statut | Effort | Avancement |
+|---|---|---|---|---|---|
+| [LUMA-079](#luma-079) | Lire plusieurs timelines simultanément (couches indépendantes) | P3 | ABSENT | L | À faire |
+| [LUMA-080](#luma-080) | Ajouter un mode « show verrouillé » qui interdit les éditions pendant l’exploitation | P3 | ABSENT | S | À faire |
+| [LUMA-081](#luma-081) | Proposer une redondance de sortie par machine de secours sACN | P3 | ABSENT | L | À faire |
+| [LUMA-082](#luma-082) | Construire et valider les versions macOS et Linux | P3 | ABSENT | L | À faire |
+| [LUMA-083](#luma-083) | Importer les profils QLC+ (`.qxf`) | P3 | ABSENT | M | À faire |
 
 **Dépendances principales.** Cette phase s’appuie sur [LUMA-021](#luma-021), [LUMA-071](#luma-071), [LUMA-064](#luma-064), [LUMA-008](#luma-008), [LUMA-038](#luma-038), [LUMA-029](#luma-029) (phases antérieures). Ces éléments supposent les fondations des phases 0 à 4 (CI multiplateforme, moteur isolé, découverte sACN).
 
@@ -422,12 +437,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Empêcher la double exécution des commandes MIDI quand la fenêtre 3D détachée est ouverte
 - **Catégorie** : Contrôle externe (MIDI / timecode)
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P0
 - **Type** : correction de bug
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** La fenêtre 3D détachée charge le même bundle de rendu que la fenêtre principale. `main.tsx` appelle `bootstrap()` sans condition, et `bootstrap()` appelle `externalControl.configure(settings.control)`, qui ouvre Web MIDI et attache `onmidimessage` sur toutes les entrées. Chaque fenêtre possède donc sa propre instance d’`ExternalControl`, et chaque note MIDI mappée appelle `runShortcut()` dans les deux fenêtres. Dans la fenêtre détachée, `cueListId` vaut la première liste du projet (fixé au bootstrap), pas la liste sélectionnée par l’opérateur. Quand la source de timecode vaut `ltc`, l’entrée audio est aussi ouverte deux fois.
+**Réalisation (19/10/2026).** Seule la fenêtre principale configure MIDI/timecode (`src/renderer/App.tsx`, `bootstrap`). Test : `tests/components/bootstrap.test.tsx`. E2E multi-fenêtres non exécuté.
+
+**Constat technique (à l’audit).** La fenêtre 3D détachée charge le même bundle de rendu que la fenêtre principale. `main.tsx` appelle `bootstrap()` sans condition, et `bootstrap()` appelle `externalControl.configure(settings.control)`, qui ouvre Web MIDI et attache `onmidimessage` sur toutes les entrées. Chaque fenêtre possède donc sa propre instance d’`ExternalControl`, et chaque note MIDI mappée appelle `runShortcut()` dans les deux fenêtres. Dans la fenêtre détachée, `cueListId` vaut la première liste du projet (fixé au bootstrap), pas la liste sélectionnée par l’opérateur. Quand la source de timecode vaut `ltc`, l’entrée audio est aussi ouverte deux fois.
 
 **Preuves dans le code.**
 
@@ -474,12 +492,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Corriger le limiteur de cadence par sortie, qui divise par deux la fréquence DMX effective
 - **Catégorie** : Sorties DMX (OutputManager)
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : correction de bug
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `OutputManager.sendFrames` saute une trame quand `now - last < 1000 / maxFps - 1`, avec `Date.now()` à la milliseconde. Valeurs par défaut : moteur à 40 Hz (période 25 ms) et `maxFps` à 40 (seuil 24 ms). Une trame en avance de plus de 1 ms est sautée, et l’envoi suivant n’a lieu qu’au tick d’après, environ 50 ms plus tard. À `rateHz = 44` (valeur maximale autorisée) avec `maxFps = 40`, l’intervalle de 22,7 ms est toujours inférieur à 24 ms : une trame sur deux est envoyée, soit environ 22 fps. Le test de performance mesure une gigue p95 d’environ 4 ms sur cette machine.
+**Réalisation (19/10/2026).** Échéance glissante par sortie (`OutputManager.sendFrames`, `nextDue`). Tests : `tests/unit/regressions.test.ts` (gigue ±3 ms ≥ 38 fps, 44 Hz → 38–41 fps, plafond 10 fps).
+
+**Constat technique (à l’audit).** `OutputManager.sendFrames` saute une trame quand `now - last < 1000 / maxFps - 1`, avec `Date.now()` à la milliseconde. Valeurs par défaut : moteur à 40 Hz (période 25 ms) et `maxFps` à 40 (seuil 24 ms). Une trame en avance de plus de 1 ms est sautée, et l’envoi suivant n’a lieu qu’au tick d’après, environ 50 ms plus tard. À `rateHz = 44` (valeur maximale autorisée) avec `maxFps = 40`, l’intervalle de 22,7 ms est toujours inférieur à 24 ms : une trame sur deux est envoyée, soit environ 22 fps. Le test de performance mesure une gigue p95 d’environ 4 ms sur cette machine.
 
 **Preuves dans le code.**
 
@@ -522,12 +543,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Libérer la séquence de localisation caméra et la mire de test quand le rendu disparaît
 - **Catégorie** : Sécurité scène / localisation caméra
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : sécurité
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** La localisation caméra pose une couche externe `locate` de priorité 1000 qui éteint tout le kit sauf les projecteurs éclairés en blanc (jusqu’à 60 %). Elle n’est retirée que par `locate.end`, que le rendu envoie au démontage du composant `CameraLocate`. Si le rendu plante ou est rechargé, `render-process-gone` est seulement journalisé. La couche reste active et la scène reste figée sur la mire de localisation. La mire de test brute (`output.testPattern`) n’a pas non plus de libération automatique.
+**Réalisation (19/10/2026).** `rendererLost` (`src/core/app/monitor.ts`) appelé sur `render-process-gone` et rechargement de la fenêtre principale ; minuteur d’inactivité `LOCATE_IDLE_MS` (5 min) dans `handlers/locate.ts`. Tests : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** La localisation caméra pose une couche externe `locate` de priorité 1000 qui éteint tout le kit sauf les projecteurs éclairés en blanc (jusqu’à 60 %). Elle n’est retirée que par `locate.end`, que le rendu envoie au démontage du composant `CameraLocate`. Si le rendu plante ou est rechargé, `render-process-gone` est seulement journalisé. La couche reste active et la scène reste figée sur la mire de localisation. La mire de test brute (`output.testPattern`) n’a pas non plus de libération automatique.
 
 **Preuves dans le code.**
 
@@ -572,12 +596,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Supprimer la lecture et le déchiffrement synchrones de la clé API dix fois par seconde
 - **Catégorie** : Performance du processus principal
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : performance
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `runtimeState()` calcule `hasKey: !!this.opts.secrets.get(OPENROUTER_KEY)`. Il est appelé à chaque émission `runtime`, soit toutes les 100 ms depuis `onFrame`, et aussi à chaque image de localisation. `createSecretStore().get()` fait un `readFileSync` de `secrets.json`, un `JSON.parse` et un `safeStorage.decryptString` (DPAPI) à chaque appel, sur le thread qui fait aussi tourner le moteur temps réel.
+**Réalisation (19/10/2026).** `SecretStore.has` sur cache mémoire (`src/main/secrets.ts`) utilisé par `runtimeState`. Test : `tests/unit/regressions.test.ts` (aucun `get` appelé). Le magasin Electron lui-même reste sans test unitaire (LUMA-032).
+
+**Constat technique (à l’audit).** `runtimeState()` calcule `hasKey: !!this.opts.secrets.get(OPENROUTER_KEY)`. Il est appelé à chaque émission `runtime`, soit toutes les 100 ms depuis `onFrame`, et aussi à chaque image de localisation. `createSecretStore().get()` fait un `readFileSync` de `secrets.json`, un `JSON.parse` et un `safeStorage.decryptString` (DPAPI) à chaque appel, sur le thread qui fait aussi tourner le moteur temps réel.
 
 **Preuves dans le code.**
 
@@ -619,12 +646,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Limiter le flot d’erreurs répétées du moteur dans le journal et les alertes
 - **Catégorie** : Moteur temps réel / observabilité
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : fiabilité
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Quand `Engine.tick` lève une exception, il émet `error` à chaque tick, soit 40 fois par seconde. `AppService` transforme chaque erreur en `logger.error`, qui est écrit de façon synchrone par `FileLogSink` (`appendFileSync`), poussé dans les alertes et diffusé à toutes les fenêtres. Aucune déduplication ni temporisation n’existe. Pendant ces ticks, aucune trame n’est envoyée : le `sendFrames` se trouve dans le même bloc `try`.
+**Réalisation (19/10/2026).** `onEngineError` (déduplication 5 s par message) et réémission de la dernière trame complète, compteur `metrics().errors`. Test : `tests/unit/regressions.test.ts` (400 ticks en erreur → ≤ 3 lignes, 400 trames).
+
+**Constat technique (à l’audit).** Quand `Engine.tick` lève une exception, il émet `error` à chaque tick, soit 40 fois par seconde. `AppService` transforme chaque erreur en `logger.error`, qui est écrit de façon synchrone par `FileLogSink` (`appendFileSync`), poussé dans les alertes et diffusé à toutes les fenêtres. Aucune déduplication ni temporisation n’existe. Pendant ces ticks, aucune trame n’est envoyée : le `sendFrames` se trouve dans le même bloc `try`.
 
 **Preuves dans le code.**
 
@@ -671,8 +701,11 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P1
 - **Type** : fiabilité
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : IMPLÉMENTÉ, VALIDATION INSUFFISANTE)
 
-**Constat technique.** La boucle d’analyse audio (`AudioEngine.loop`) est cadencée par `requestAnimationFrame` dans le rendu de la fenêtre principale, et c’est elle qui envoie `audio.features` au processus principal. Chromium suspend `requestAnimationFrame` dans une fenêtre réduite ou masquée, et `webPreferences` ne désactive pas `backgroundThrottling`. Le cas d’usage « vue 3D détachée en plein écran, fenêtre principale réduite » coupe donc les réactions audio : `AudioReactive` les relâche après 1 s sans données (`STALE_MS`).
+**Réalisation (19/10/2026).** Analyse cadencée par minuteur (`FRAME_MS`) au lieu de `requestAnimationFrame`, `backgroundThrottling: false` pour la fenêtre principale, alerte `onStale` et commande `audio.release` pour l’arrêt volontaire. Test unitaire de l’alerte : `tests/unit/regressions.test.ts`. Comportement fenêtre réduite non vérifié en E2E.
+
+**Constat technique (à l’audit).** La boucle d’analyse audio (`AudioEngine.loop`) est cadencée par `requestAnimationFrame` dans le rendu de la fenêtre principale, et c’est elle qui envoie `audio.features` au processus principal. Chromium suspend `requestAnimationFrame` dans une fenêtre réduite ou masquée, et `webPreferences` ne désactive pas `backgroundThrottling`. Le cas d’usage « vue 3D détachée en plein écran, fenêtre principale réduite » coupe donc les réactions audio : `AudioReactive` les relâche après 1 s sans données (`STALE_MS`).
 
 **Preuves dans le code.**
 
@@ -719,8 +752,11 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P1
 - **Type** : performance
 - **Phase** : 0
+- **Avancement** : 🟡 Partiel
 
-**Constat technique.** Le test `tests/perf/engine.perf.test.ts` échoue de façon reproductible sur la machine d’audit : p95 de la gigue à 4,01 ms (seuil 2 ms), avec deux échecs sur la seconde exécution. `npm run check` inclut `test:perf`, et la porte qualité complète est donc rouge. `scripts/release.mjs` n’exécute pas `test:perf` et ne voit pas la régression.
+**Réalisation (19/10/2026).** `npm run test:perf` vert 2 fois sur 2 après LUMA-004 et LUMA-005 (aucune modification de l’ordonnanceur). Le critère « 10 passes consécutives » et le profilage restent à faire.
+
+**Constat technique (à l’audit).** Le test `tests/perf/engine.perf.test.ts` échoue de façon reproductible sur la machine d’audit : p95 de la gigue à 4,01 ms (seuil 2 ms), avec deux échecs sur la seconde exécution. `npm run check` inclut `test:perf`, et la porte qualité complète est donc rouge. `scripts/release.mjs` n’exécute pas `test:perf` et ne voit pas la régression.
 
 **Preuves dans le code.**
 
@@ -763,12 +799,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Mettre en place une intégration continue Windows (typecheck, lint, tests, conventions de commit)
 - **Catégorie** : Qualité / livraison
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** Le dossier `.github` ne contient qu’un modèle de pull request, sans workflow. Le script `scripts/check-commits.mjs` existe mais rien ne l’appelle (ni hook, ni CI, ni script npm). Les vérifications ne sont lancées qu’à la main ou par `npm run release`.
+**Réalisation (19/10/2026).** `.github/workflows/ci.yml` : typecheck, lint, couverture, Conventional Commits sur PR ; E2E et performance nocturnes (performance non bloquante). Jamais exécuté sur GitHub à ce jour.
+
+**Constat technique (à l’audit).** Le dossier `.github` ne contient qu’un modèle de pull request, sans workflow. Le script `scripts/check-commits.mjs` existe mais rien ne l’appelle (ni hook, ni CI, ni script npm). Les vérifications ne sont lancées qu’à la main ou par `npm run release`.
 
 **Preuves dans le code.**
 
@@ -810,12 +849,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Rendre `npm run test:coverage` fiable (délai des hooks sous instrumentation)
 - **Catégorie** : Tests
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 0
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `vitest.config.ts` fixe `testTimeout` à 20 s, mais pas `hookTimeout`, qui reste à 10 s par défaut. Sous instrumentation V8, le `beforeAll` de `tests/unit/richShow.test.ts` (analyse de trois morceaux synthétiques) dépasse 10 s : la suite échoue et ses 10 tests sont ignorés. Avec `--hookTimeout=60000`, les 36 fichiers passent (321 tests).
+**Réalisation (19/10/2026).** `hookTimeout: 60_000` dans `vitest.config.ts`. `npm run test:coverage` vert 4 fois sur 5 ; un échec intermittent non identifié a été observé une fois (voir section 3).
+
+**Constat technique (à l’audit).** `vitest.config.ts` fixe `testTimeout` à 20 s, mais pas `hookTimeout`, qui reste à 10 s par défaut. Sous instrumentation V8, le `beforeAll` de `tests/unit/richShow.test.ts` (analyse de trois morceaux synthétiques) dépasse 10 s : la suite échoue et ses 10 tests sont ignorés. Avec `--hookTimeout=60000`, les 36 fichiers passent (321 tests).
 
 **Preuves dans le code.**
 
@@ -857,12 +899,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Raccorder la commande « Tout relâcher » (`engine.releaseAll`) à l’interface, à l’OSC et à la télécommande
 - **Catégorie** : Contrôle du show
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PRÉSENT MAIS NON RACCORDÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : fonctionnalité
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PRÉSENT MAIS NON RACCORDÉ)
 
-**Constat technique.** Le processus principal implémente `engine.releaseAll`, qui relâche le programmeur et la couche IA et arrête effets, playbacks et timeline. Aucun composant du rendu ne l’envoie, aucune adresse OSC ne le déclenche, et aucun test ne le couvre. Le bouton « Tout relâcher » de la Live Console envoie en réalité `programmer.release`, comme le précise son infobulle.
+**Réalisation (19/10/2026).** Bouton « Tout relâcher » (confirmation) dans la barre supérieure, raccourci `releaseAll`, OSC `/luma/releaseall`, bouton de télécommande ; libellé de la Live Console corrigé. Test : `tests/unit/regressions.test.ts`. Pas d’E2E du bouton.
+
+**Constat technique (à l’audit).** Le processus principal implémente `engine.releaseAll`, qui relâche le programmeur et la couche IA et arrête effets, playbacks et timeline. Aucun composant du rendu ne l’envoie, aucune adresse OSC ne le déclenche, et aucun test ne le couvre. Le bouton « Tout relâcher » de la Live Console envoie en réalité `programmer.release`, comme le précise son infobulle.
 
 **Preuves dans le code.**
 
@@ -908,12 +953,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Proposer la récupération du travail au démarrage après une fermeture anormale
 - **Catégorie** : Persistance / reprise après crash
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : fiabilité
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Une copie de récupération est écrite toutes les `autosaveMinutes` dans `<userData>/autosave/<projectId>.luma.json` quand le projet est modifié. Elle n’est supprimée qu’après un enregistrement. Au démarrage, rien n’indique à l’utilisateur qu’une copie plus récente existe : la liste n’est visible que dans l’onglet Paramètres › Sauvegardes. Après `project.openRecovery`, `projectPath` vaut `null`, et le lien avec le fichier d’origine est perdu.
+**Réalisation (19/10/2026).** Métadonnées `<id>.meta.json`, commande `project.recoveryCandidates`, dialogue au démarrage (`offerRecovery`), réenregistrement dans le fichier d’origine, abandon de la copie sur « Quitter sans enregistrer ». Test : `tests/unit/regressions.test.ts`. Dialogue non vérifié en E2E.
+
+**Constat technique (à l’audit).** Une copie de récupération est écrite toutes les `autosaveMinutes` dans `<userData>/autosave/<projectId>.luma.json` quand le projet est modifié. Elle n’est supprimée qu’après un enregistrement. Au démarrage, rien n’indique à l’utilisateur qu’une copie plus récente existe : la liste n’est visible que dans l’onglet Paramètres › Sauvegardes. Après `project.openRecovery`, `projectPath` vaut `null`, et le lien avec le fichier d’origine est perdu.
 
 **Preuves dans le code.**
 
@@ -957,12 +1005,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Permettre l’annulation d’une requête IA ou d’une génération de show en cours
 - **Catégorie** : IA / opérations longues
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** Les appels OpenRouter (`ai.propose`, `ai.sceneFromPhoto`, `music.generate`, `music.regenerateSection`) ne s’interrompent qu’à l’expiration du délai (`timeoutSec`, jusqu’à 300 s). L’`AbortController` reste interne à `request()`. Aucune commande d’annulation n’existe. Le modal de génération musicale ne peut pas être fermé, et un commentaire indique que la commande ne peut pas être annulée. Le verrou `aiBusy` bloque toute autre requête pendant ce temps.
+**Réalisation (19/10/2026).** `OpenRouterOptions.signal`, `AppService.aiAbort`, commande `ai.cancel`, boutons Annuler (IA Director, génération musicale). Test : `tests/unit/regressions.test.ts` (génération annulée, projet inchangé).
+
+**Constat technique (à l’audit).** Les appels OpenRouter (`ai.propose`, `ai.sceneFromPhoto`, `music.generate`, `music.regenerateSection`) ne s’interrompent qu’à l’expiration du délai (`timeoutSec`, jusqu’à 300 s). L’`AbortController` reste interne à `request()`. Aucune commande d’annulation n’existe. Le modal de génération musicale ne peut pas être fermé, et un commentaire indique que la commande ne peut pas être annulée. Le verrou `aiBusy` bloque toute autre requête pendant ce temps.
 
 **Preuves dans le code.**
 
@@ -1006,12 +1057,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Remplacer la barre de progression simulée de la génération de show par une progression réelle
 - **Catégorie** : Musique (Song-to-Show) / UX
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : amélioration
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Le modal de génération affiche une barre qui tend vers 95 % selon une exponentielle du temps écoulé, avec des libellés d’étapes déduits de ce pourcentage. Le handler `music.generate` n’émet aucune progression. Un commentaire `shortcut:` signale cette limite.
+**Réalisation (19/10/2026).** Événement `progress` (plan, cache, request, compile) relayé aux fenêtres ; la fenêtre de génération affiche l’étape réelle. Test des étapes : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Le modal de génération affiche une barre qui tend vers 95 % selon une exponentielle du temps écoulé, avec des libellés d’étapes déduits de ce pourcentage. Le handler `music.generate` n’émet aucune progression. Un commentaire `shortcut:` signale cette limite.
 
 **Preuves dans le code.**
 
@@ -1053,12 +1107,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Protéger la génération de show contre les modifications concurrentes du projet pendant l’appel IA
 - **Catégorie** : Musique (Song-to-Show) / concurrence
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `music.generate` capture le morceau `t` avant l’`await planShow(...)`, qui peut durer jusqu’à `timeoutSec`. Pendant ce temps, d’autres commandes restent acceptées, y compris `music.removeTrack` ou l’ouverture d’un autre projet. `applyShow` compile ensuite avec l’index courant et fait `d.music.tracks.find((x) => x.id === t.id)!`. Si le morceau a disparu, l’assertion non nulle provoque une `TypeError` non gérée. Si un autre projet a été ouvert, le show est compilé contre le mauvais kit.
+**Réalisation (19/10/2026).** `applyShow` revérifie le morceau dans le projet courant ; `aiPropose` revalide contre le projet après l’appel. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `music.generate` capture le morceau `t` avant l’`await planShow(...)`, qui peut durer jusqu’à `timeoutSec`. Pendant ce temps, d’autres commandes restent acceptées, y compris `music.removeTrack` ou l’ouverture d’un autre projet. `applyShow` compile ensuite avec l’index courant et fait `d.music.tracks.find((x) => x.id === t.id)!`. Si le morceau a disparu, l’assertion non nulle provoque une `TypeError` non gérée. Si un autre projet a été ouvert, le show est compilé contre le mauvais kit.
 
 **Preuves dans le code.**
 
@@ -1099,12 +1156,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Nettoyer les réactions audio qui pointent vers une liste de cues supprimée
 - **Catégorie** : Intégrité des références du projet
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Le nettoyage de `audio.reactions.energyRiseGo.cueListId` se trouve dans le traitement de `effect.remove`, et non dans celui de `cueList.remove`. Supprimer une liste de cues laisse donc `energyRiseGo.cueListId` et `dropGo.cueListId` pointer vers une liste inexistante. `dropGo` n’est nettoyé nulle part. Le schéma Zod ne vérifie pas l’intégrité référentielle.
+**Réalisation (19/10/2026).** Nettoyage déplacé dans `cueList.remove`, `dropGo` inclus. Test : `tests/unit/regressions.test.ts`. `validateReferences` au chargement non réalisé.
+
+**Constat technique (à l’audit).** Le nettoyage de `audio.reactions.energyRiseGo.cueListId` se trouve dans le traitement de `effect.remove`, et non dans celui de `cueList.remove`. Supprimer une liste de cues laisse donc `energyRiseGo.cueListId` et `dropGo.cueListId` pointer vers une liste inexistante. `dropGo` n’est nettoyé nulle part. Le schéma Zod ne vérifie pas l’intégrité référentielle.
 
 **Preuves dans le code.**
 
@@ -1145,12 +1205,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Rendre annulable l’application des positions issues de la localisation caméra
 - **Catégorie** : Historique de scène
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** L’historique de scène couvre les champs `position`, `height`, `rotation`, `mount`, `mountTilt` et `trussId` : `fixture.update` et `fixture.place` passent par `sceneMutate`. `locate.apply`, qui réécrit justement `position` et `height` de jusqu’à 2 048 projecteurs, utilise `mutate`. Cette modification massive n’est donc pas annulable.
+**Réalisation (19/10/2026).** `locate.apply` passe par `sceneMutate`. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** L’historique de scène couvre les champs `position`, `height`, `rotation`, `mount`, `mountTilt` et `trussId` : `fixture.update` et `fixture.place` passent par `sceneMutate`. `locate.apply`, qui réécrit justement `position` et `height` de jusqu’à 2 048 projecteurs, utilise `mutate`. Cette modification massive n’est donc pas annulable.
 
 **Preuves dans le code.**
 
@@ -1190,12 +1253,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Éviter l’écrasement de paramètres modifiés ailleurs lors de `settings.update`
 - **Catégorie** : Paramètres / concurrence
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `settings.update` remplace tout l’objet `app.settings` par la copie envoyée par la page Paramètres, en ne préservant que `sacn`. Pendant que cette page est ouverte, le processus principal peut modifier lui-même `general.recentProjects` (ouverture ou enregistrement, `addRecent`) et `onboarding` (`onboarding.update`). L’enregistrement de la page restaure alors les anciennes valeurs. `output.configure` écrit aussi `settings.outputs` par un autre chemin.
+**Réalisation (19/10/2026).** Approche retenue : les champs gérés par le processus principal (`recentProjects`, `onboarding`) ne sont plus écrasés par `settings.update` ; le retrait d’un récent passe par `settings.forgetRecent`. La révision optimiste n’a pas été nécessaire. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `settings.update` remplace tout l’objet `app.settings` par la copie envoyée par la page Paramètres, en ne préservant que `sacn`. Pendant que cette page est ouverte, le processus principal peut modifier lui-même `general.recentProjects` (ouverture ou enregistrement, `addRecent`) et `onboarding` (`onboarding.update`). L’enregistrement de la page restaure alors les anciennes valeurs. `output.configure` écrit aussi `settings.outputs` par un autre chemin.
 
 **Preuves dans le code.**
 
@@ -1237,12 +1303,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Sérialiser les écritures atomiques concurrentes sur un même fichier
 - **Catégorie** : Persistance
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fiabilité
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `writeFileAtomic` écrit toujours dans le même fichier temporaire `<file>.tmp`, puis le renomme. Deux appels concurrents sur la même cible partagent ce fichier : la seconde écriture peut tronquer le temporaire pendant que la première le renomme, ou provoquer un `ENOENT` au second renommage. `persistSettings` est appelé en mode « fire-and-forget » par `addRecent`, et peut chevaucher un autre `persistSettings` (`onboarding.update`, `settings.update`, `output.configure`).
+**Réalisation (19/10/2026).** File d’écriture par chemin dans `writeFileAtomic` ; copie `.invalid` aussi sur JSON illisible. Test de 50 écritures concurrentes : `tests/unit/regressions.test.ts` (le défaut avait été reproduit par un test : rename ENOENT).
+
+**Constat technique (à l’audit).** `writeFileAtomic` écrit toujours dans le même fichier temporaire `<file>.tmp`, puis le renomme. Deux appels concurrents sur la même cible partagent ce fichier : la seconde écriture peut tronquer le temporaire pendant que la première le renomme, ou provoquer un `ENOENT` au second renommage. `persistSettings` est appelé en mode « fire-and-forget » par `addRecent`, et peut chevaucher un autre `persistSettings` (`onboarding.update`, `settings.update`, `output.configure`).
 
 **Preuves dans le code.**
 
@@ -1285,12 +1354,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Signaler un échec d’enregistrement déclenché par la fermeture de la fenêtre
 - **Catégorie** : Cycle de vie de l’application
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
 - **Priorité** : P2
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** À la fermeture avec des modifications non enregistrées, le choix « Enregistrer » appelle `service.execute({ type: "project.save" }).then(...)` sans `catch`. Si l’enregistrement échoue (disque plein, fichier verrouillé, droits), la promesse rejetée devient un `unhandledRejection` journalisé. La fenêtre reste ouverte sans message expliquant pourquoi.
+**Réalisation (19/10/2026).** Échec d’enregistrement à la fermeture : boîte d’erreur avec « Enregistrer sous… », « Quitter sans enregistrer », « Annuler » (`src/main/index.ts`). Flux non extrait ni testé unitairement.
+
+**Constat technique (à l’audit).** À la fermeture avec des modifications non enregistrées, le choix « Enregistrer » appelle `service.execute({ type: "project.save" }).then(...)` sans `catch`. Si l’enregistrement échoue (disque plein, fichier verrouillé, droits), la promesse rejetée devient un `unhandledRejection` journalisé. La fenêtre reste ouverte sans message expliquant pourquoi.
 
 **Preuves dans le code.**
 
@@ -1328,12 +1400,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Permettre de supprimer un profil de la bibliothèque utilisateur depuis l’interface
 - **Catégorie** : Profils de projecteurs
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PRÉSENT MAIS NON RACCORDÉ
+- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PRÉSENT MAIS NON RACCORDÉ)
 
-**Constat technique.** La commande `profile.remove` est implémentée : elle refuse un profil utilisé, le retire de `profiles.json` et des profils intégrés au projet, et elle est testée. Aucun composant du rendu ne l’appelle. Les profils importés (GDTF, grandMA2, OFL, Luma) s’accumulent donc sans moyen de les retirer.
+**Réalisation (19/10/2026).** Panneau « Bibliothèque de profils » dans Fixtures (`LibraryPanel`), suppression désactivée si le profil est utilisé. La commande est testée ; l’interface n’a pas de test de composant.
+
+**Constat technique (à l’audit).** La commande `profile.remove` est implémentée : elle refuse un profil utilisé, le retire de `profiles.json` et des profils intégrés au projet, et elle est testée. Aucun composant du rendu ne l’appelle. Les profils importés (GDTF, grandMA2, OFL, Luma) s’accumulent donc sans moyen de les retirer.
 
 **Preuves dans le code.**
 
@@ -1375,12 +1450,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Reconstituer l’état des listes de cues après un saut de timeline (seek ou poursuite de timecode)
 - **Catégorie** : Timeline / timecode
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Les événements `cue` d’une timeline ne sont déclenchés qu’au franchissement de leur instant entre deux ticks (`fire(prev, next)`). `seek` déplace seulement la tête de lecture. La poursuite de timecode (`timelineChase`) fait un `seek` dès que l’écart dépasse 80 ms. Après un saut en arrière ou en avant, les listes de cues pilotées par la timeline restent sur le dernier cue déclenché, et non sur celui qui correspond à la nouvelle position.
+**Réalisation (19/10/2026).** `TimelineTransport.cueStateAt` et `Engine.syncTimelineCues` après `timelineSeek`/poursuite de timecode ; `goto(…, instant)`. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Les événements `cue` d’une timeline ne sont déclenchés qu’au franchissement de leur instant entre deux ticks (`fire(prev, next)`). `seek` déplace seulement la tête de lecture. La poursuite de timecode (`timelineChase`) fait un `seek` dès que l’écart dépasse 80 ms. Après un saut en arrière ou en avant, les listes de cues pilotées par la timeline restent sur le dernier cue déclenché, et non sur celui qui correspond à la nouvelle position.
 
 **Preuves dans le code.**
 
@@ -1422,12 +1500,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Ne plus accumuler dans le projet les définitions d’effets créées par chaque proposition IA
 - **Catégorie** : IA Director / données du projet
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : dette technique
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Chaque action `startEffect` appliquée crée une nouvelle définition `Effect` (`origin: "ai"`), poussée dans `project.effects`, puis démarrée. `ai.release` et l’action `releaseAi` arrêtent les instances, mais ne retirent jamais ces définitions. Une session de travail avec l’IA laisse donc des dizaines d’effets « IA » persistés et enregistrés dans le fichier.
+**Réalisation (19/10/2026).** `Effect.transient` (optionnel), élagage `pruneTransientEffects` (`src/core/ai/transient.ts`) au relâchement de l’IA et à « Tout relâcher », bouton « Conserver » dans Effects. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Chaque action `startEffect` appliquée crée une nouvelle définition `Effect` (`origin: "ai"`), poussée dans `project.effects`, puis démarrée. `ai.release` et l’action `releaseAi` arrêtent les instances, mais ne retirent jamais ces définitions. Une session de travail avec l’IA laisse donc des dizaines d’effets « IA » persistés et enregistrés dans le fichier.
 
 **Preuves dans le code.**
 
@@ -1468,12 +1549,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Rendre l’application d’une proposition IA atomique et annulable en une étape
 - **Catégorie** : IA Director
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fiabilité
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `executeProposal` exécute les actions une par une, et chaque action qui crée un objet appelle `ctx.mutate` séparément. Une erreur au milieu (refus de validation du projet) est consignée comme « ignorée » mais laisse les objets déjà créés. Aucune annulation n’est proposée : l’historique d’annulation ne couvre que l’implantation de scène.
+**Réalisation (19/10/2026).** Brouillon unique validé une fois, démarrage différé des effets, commande `ai.undoApply` et bouton « Défaire ». Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `executeProposal` exécute les actions une par une, et chaque action qui crée un objet appelle `ctx.mutate` séparément. Une erreur au milieu (refus de validation du projet) est consignée comme « ignorée » mais laisse les objets déjà créés. Aucune annulation n’est proposée : l’historique d’annulation ne couvre que l’implantation de scène.
 
 **Preuves dans le code.**
 
@@ -1518,8 +1602,11 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : 🟡 Partiel
 
-**Constat technique.** La fenêtre détachée gère F11 via `document.documentElement.requestFullscreen()`. Le processus principal installe des gestionnaires de permissions qui n’autorisent que `media`, `midi` et `midiSysex`. Dans Electron, la demande de plein écran HTML passe par le type de permission `fullscreen` : elle est probablement refusée. Aucun test ne couvre F11.
+**Réalisation (19/10/2026).** Permission `fullscreen` ajoutée à la liste autorisée (`src/main/index.ts`). Effet réel de F11 à vérifier sur une build empaquetée.
+
+**Constat technique (à l’audit).** La fenêtre détachée gère F11 via `document.documentElement.requestFullscreen()`. Le processus principal installe des gestionnaires de permissions qui n’autorisent que `media`, `midi` et `midiSysex`. Dans Electron, la demande de plein écran HTML passe par le type de permission `fullscreen` : elle est probablement refusée. Aucun test ne couvre F11.
 
 **Preuves dans le code.**
 
@@ -1558,12 +1645,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Supprimer une timeline n’arrête que la lecture de cette timeline
 - **Catégorie** : Timeline
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : correction de bug
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `timeline.remove` appelle `e.timelineStop()` sans vérifier quelle timeline est en lecture. Supprimer une timeline inactive arrête donc la timeline en cours, par exemple celle d’un morceau en lecture.
+**Réalisation (19/10/2026).** Seule la timeline supprimée en cours de lecture est arrêtée. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `timeline.remove` appelle `e.timelineStop()` sans vérifier quelle timeline est en lecture. Supprimer une timeline inactive arrête donc la timeline en cours, par exemple celle d’un morceau en lecture.
 
 **Preuves dans le code.**
 
@@ -1600,12 +1690,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Retirer du moteur les playbacks de listes de cues supprimées
 - **Catégorie** : Moteur temps réel
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : dette technique
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `Engine.setIndex` purge le programmeur et les instances d’effets orphelins, mais pas `this.playbacks`. Une liste supprimée (par `project.open`, par import ou par une suppression directe ailleurs que dans `cueList.remove`) laisse une entrée dans la map. `snapshot()` expose ces playbacks avec `cueId: null`, et `tick` appelle `stop()` à chaque passage.
+**Réalisation (19/10/2026).** `Engine.setIndex` retire les playbacks des listes disparues. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `Engine.setIndex` purge le programmeur et les instances d’effets orphelins, mais pas `this.playbacks`. Une liste supprimée (par `project.open`, par import ou par une suppression directe ailleurs que dans `cueList.remove`) laisse une entrée dans la map. `snapshot()` expose ces playbacks avec `cueId: null`, et `tick` appelle `stop()` à chaque passage.
 
 **Preuves dans le code.**
 
@@ -1643,12 +1736,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Revalider une proposition IA contre l’état courant du projet au moment de l’appliquer
 - **Catégorie** : IA Director
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : fiabilité
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Une proposition est validée au moment de `ai.propose`, puis conservée (au plus 20) et appliquée plus tard par `ai.apply` sans nouvelle validation. Les `fixtureIds` résolus à la création sont réutilisés (`immediateValues` les filtre par `allowed`). Si le patch a changé entre-temps (projecteurs supprimés ou readressés, groupes renommés), l’aperçu montré à l’utilisateur ne correspond plus à ce qui est appliqué.
+**Réalisation (19/10/2026).** Empreinte `basis` (patch, groupes, noms de scènes) mémorisée et comparée à l’application : refus « proposition périmée ». Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Une proposition est validée au moment de `ai.propose`, puis conservée (au plus 20) et appliquée plus tard par `ai.apply` sans nouvelle validation. Les `fixtureIds` résolus à la création sont réutilisés (`immediateValues` les filtre par `allowed`). Si le patch a changé entre-temps (projecteurs supprimés ou readressés, groupes renommés), l’aperçu montré à l’utilisateur ne correspond plus à ce qui est appliqué.
 
 **Preuves dans le code.**
 
@@ -1687,12 +1783,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Ne pas marquer le projet comme modifié pour une simple requête IA non appliquée
 - **Catégorie** : IA Director / état du document
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `aiPropose` termine par `app.mutate(...)` pour mémoriser le prompt dans `d.ai.recentPrompts`. `mutate` incrémente `revision`, et le projet devient « modifié » (`dirty`). Une simple question à l’IA déclenche donc la boîte « modifications non enregistrées » à la fermeture et une autosauvegarde.
+**Réalisation (19/10/2026).** Mémoriser le prompt ne rend plus le projet « modifié ». Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `aiPropose` termine par `app.mutate(...)` pour mémoriser le prompt dans `d.ai.recentPrompts`. `mutate` incrémente `revision`, et le projet devient « modifié » (`dirty`). Une simple question à l’IA déclenche donc la boîte « modifications non enregistrées » à la fermeture et une autosauvegarde.
 
 **Preuves dans le code.**
 
@@ -1730,12 +1829,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Retirer de la boîte d’import le filtre QLC+ annoncé mais refusé
 - **Catégorie** : Profils de projecteurs / UX
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** La boîte de dialogue d’import propose un filtre « QLC+ (bientôt) » (`.qxf`), et le handler refuse ensuite explicitement ce format. L’utilisateur peut donc choisir un fichier pour se voir répondre que le format n’est pas pris en charge.
+**Réalisation (19/10/2026).** Filtre `.qxf` retiré de la boîte d’import (`src/main/index.ts`).
+
+**Constat technique (à l’audit).** La boîte de dialogue d’import propose un filtre « QLC+ (bientôt) » (`.qxf`), et le handler refuse ensuite explicitement ce format. L’utilisateur peut donc choisir un fichier pour se voir répondre que le format n’est pas pris en charge.
 
 **Preuves dans le code.**
 
@@ -1772,12 +1874,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Nettoyer les fichiers audio, le cache IA et les copies de récupération orphelins
 - **Catégorie** : Gestion des fichiers locaux
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : dette technique
 - **Phase** : 1
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** Les fichiers audio importés sont copiés dans `<userData>/music/<sha256>`, jusqu’à 500 Mo chacun. `music.removeTrack` ne les supprime pas. Le cache de réponses IA (`ai-cache/`) n’a aucune éviction, comme l’indique un commentaire `shortcut:`. Les copies de récupération `autosave/<projectId>.luma.json` des projets abandonnés sans enregistrement restent indéfiniment.
+**Réalisation (19/10/2026).** `ResponseCache` borné (50 Mo, éviction des plus anciens), commandes `storage.report` et `storage.purge`, panneau « Stockage local » (onglet Sauvegardes). Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Les fichiers audio importés sont copiés dans `<userData>/music/<sha256>`, jusqu’à 500 Mo chacun. `music.removeTrack` ne les supprime pas. Le cache de réponses IA (`ai-cache/`) n’a aucune éviction, comme l’indique un commentaire `shortcut:`. Les copies de récupération `autosave/<projectId>.luma.json` des projets abandonnés sans enregistrement restent indéfiniment.
 
 **Preuves dans le code.**
 
@@ -1825,6 +1930,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Couverture mesurée lors de l’audit (V8, `src/core`) : `src/core/app/handlers/programming.ts` est couvert à 28,9 % des lignes, 20,5 % des branches et 16,7 % des fonctions. C’est le handler qui contient le plus de règles d’intégrité (nettoyage des références à la suppression, validation des références de cues et timelines). Le défaut LUMA-015 se trouve précisément dans ce code non testé.
 
@@ -1870,6 +1976,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** La couverture est limitée à `src/core/**`. Les trois fichiers du processus principal (`index.ts`, `secrets.ts`, `updates.ts`), qui portent la frontière de confiance (vérification de l’origine IPC, validation Zod, gestion des erreurs `UserError`) et le chiffrement de la clé API, n’ont aucun test unitaire. Seul l’E2E vérifie l’absence de Node dans le rendu.
 
@@ -1917,6 +2024,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Le code déclare lui-même que les implémentations Enttec Pro, Open DMX et RDM n’ont pas été vérifiées sur du matériel réel. L’outillage de campagne existe : mire `signature`, rapport `hardware.report` avec critères (8 h, reconnexion en moins de 10 s, zéro erreur), et l’E2E « campagne matériel » en simulation. Aucun résultat de campagne réelle n’est enregistré dans un artefact non Markdown du dépôt.
 
@@ -1964,6 +2072,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `src/core/app/files.ts` est couvert à 36,4 % des lignes et 0 % des branches. La logique d’autosauvegarde (intervalle, désactivation à 0, `force`, erreur d’écriture journalisée) et la liste des récents (déduplication, limite de 10) ne sont pas vérifiées.
 
@@ -2007,6 +2116,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `src/core/audio/reactive.ts` est couvert à 53,9 % des lignes et 43,6 % des branches. Les suiveurs de basses et de brillance, le mouvement selon les attaques et la planification du GO sur drop prédit (conversion d’horloge, retrait de prédiction) sont peu ou pas testés.
 
@@ -2051,6 +2161,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Le rendu compte environ 10 000 lignes (`src/renderer`), mais il est absent de la couverture et ne dispose que de 4 fichiers de tests de composants, soit 16 tests (console, éditeur de section, écran d’accueil, espaces). Les pages critiques en exploitation (Output avec armement et confirmation, Cues, Music, Settings) ne sont vérifiées que par l’E2E, plus lent et non lancé en CI.
 
@@ -2097,6 +2208,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `OutputAdapter` gère les états `connecting`, `ready`, `error` et `disarmed`, avec une reconnexion à backoff exponentiel plafonné à 10 s, et `OutputManager` gère l’armement. Couverture des branches : 59,1 % pour `types.ts` et 65,3 % pour `OutputManager.ts`. Les courses (fermeture pendant le minuteur de reconnexion, `configure` d’une sortie armée en erreur) ne sont pas testées.
 
@@ -2142,6 +2254,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `EnttecProOutput` importe directement `serialport` dans `doOpen`, sans fabrique injectable. Il est couvert à 42,1 % des lignes et 21,4 % des fonctions. `OpenDmxOutput` accepte déjà une `PortFactory` (86 % des lignes). Le traitement « trame ignorée si occupé », la déconnexion et la fermeture ne sont pas vérifiés.
 
@@ -2186,6 +2299,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : fiabilité
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `request()` transforme toute réponse non OK en `OpenRouterError` sans nouvelle tentative, y compris le 429 (limite de débit, message « réessayez plus tard »), les 502 et 503, et les coupures réseau. Le repli local masque l’échec, mais l’utilisateur perd la qualité du modèle distant sur un incident d’une seconde.
 
@@ -2232,6 +2346,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Le banc d’évaluation (175 cas, dont 33 adverses) ne mesure que l’interpréteur local déterministe (`proposeLocally`). La chaîne distante (prompt système, description du kit, extraction du JSON, réparation `clean`, validation stricte, garde-fou photosensible) n’est évaluée sur aucun corpus. Les tests unitaires utilisent des réponses simulées ponctuelles.
 
@@ -2277,6 +2392,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : sécurité
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Chaque paquet OSC mal formé émet un `error`, transformé en `logger.warn`, ajouté aux alertes et écrit de façon synchrone dans le fichier de journal. En mode `0.0.0.0` (réseau local, sans authentification), un émetteur malveillant ou défaillant peut saturer le journal et les alertes. Chaque message reçoit aussi une réponse `/luma/ack`, ce qui permet un effet de réflexion vers une adresse usurpée.
 
@@ -2323,8 +2439,11 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : fiabilité
 - **Phase** : 2
+- **Avancement** : 🟡 Partiel
 
-**Constat technique.** `writeFileAtomic` écrit le temporaire puis le renomme, sans `fsync` du fichier ni du dossier. Après une coupure de courant, le renommage peut être visible alors que le contenu est vide (selon le système de fichiers). Sous Windows, `rename` échoue en `EPERM` ou `EBUSY` quand un antivirus ou un indexeur tient le fichier, et l’erreur remonte directement, sans nouvelle tentative.
+**Réalisation (19/10/2026).** La mise en file des écritures (LUMA-018) supprime la collision de temporaires. `fsync` et la reprise sur EPERM/EBUSY restent à faire.
+
+**Constat technique (à l’audit).** `writeFileAtomic` écrit le temporaire puis le renomme, sans `fsync` du fichier ni du dossier. Après une coupure de courant, le renommage peut être visible alors que le contenu est vide (selon le système de fichiers). Sous Windows, `rename` échoue en `EPERM` ou `EBUSY` quand un antivirus ou un indexeur tient le fichier, et l’erreur remonte directement, sans nouvelle tentative.
 
 **Preuves dans le code.**
 
@@ -2362,12 +2481,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Récupérer partiellement un fichier de paramètres invalide au lieu de tout réinitialiser
 - **Catégorie** : Paramètres / compatibilité
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fiabilité
 - **Phase** : 2
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Au démarrage, si `settingsSchema.safeParse` échoue sur une seule valeur (par exemple un champ écrit par une version plus récente, ou une valeur hors bornes), tous les paramètres repassent aux valeurs par défaut : sorties, contrôles, raccourcis, jeton. Une copie `.invalid` est faite, mais rien ne propose de restaurer ce qui était valide. Le schéma a une `version: 1` sans mécanisme de migration.
+**Réalisation (19/10/2026).** `salvageSettings` : seules les sections invalides reprennent leurs valeurs par défaut, et elles sont listées dans l’avertissement. Test : `tests/unit/regressions.test.ts`. La table de migrations de paramètres reste à créer quand une v2 apparaîtra.
+
+**Constat technique (à l’audit).** Au démarrage, si `settingsSchema.safeParse` échoue sur une seule valeur (par exemple un champ écrit par une version plus récente, ou une valeur hors bornes), tous les paramètres repassent aux valeurs par défaut : sorties, contrôles, raccourcis, jeton. Une copie `.invalid` est faite, mais rien ne propose de restaurer ce qui était valide. Le schéma a une `version: 1` sans mécanisme de migration.
 
 **Preuves dans le code.**
 
@@ -2411,6 +2533,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : sécurité
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `scripts/release.mjs` exécute `typecheck`, `lint`, `test` et `package`, mais ni `test:perf`, ni `test:e2e`, ni `test:coverage`. La signature de code est facultative : sans `CSC_LINK`, l’installeur est produit non signé, et rien ne bloque une release publique non signée. Le canal de mise à jour automatique télécharge et installe ce binaire.
 
@@ -2456,6 +2579,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Le cœur est testé en unitaire : `timeline.timecode` donne `chasing`, avec une tolérance de 80 ms. Les décodeurs MTC et LTC du rendu, l’envoi limité à 10 Hz, la pause après 500 ms de perte de signal (`monitor.ts`) et la résistance à un timecode qui recule ne sont pas testés dans la chaîne complète.
 
@@ -2501,6 +2625,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Quand la réponse JSON du modèle ne respecte pas `llmPlanSchema`, `proposeWithOpenRouter` lève immédiatement une erreur. Le handler bascule alors sur le mode local, si le repli est activé. Il n’y a aucune tentative de correction, alors que l’erreur Zod précise le champ fautif.
 
@@ -2544,6 +2669,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : correction de bug
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `readZip` vérifie la signature des entrées centrales mais lit `b.readUInt32LE(e.offset)` et les longueurs locales sans contrôler que `offset + 30` reste dans le tampon. Un fichier GDTF tronqué lève une `RangeError` Node, qui sera journalisée comme erreur interne et non comme un message utilisateur.
 
@@ -2586,6 +2712,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : sécurité
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Le diagnostic masque les clés sensibles (jeton, secret, mot de passe, clé API) et les jetons dans les URL. Il inclut en revanche l’objet `settings` complet, dont `general.recentProjects` (chemins absolus du type `C:\Users\<nom>\…`), ainsi que les 2 000 dernières lignes de journal, qui peuvent contenir des noms de fichiers.
 
@@ -2629,6 +2756,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `Engine.metrics()` donne des valeurs instantanées : la moyenne glissante du tick, un `maxTick` remis à zéro chaque seconde et des dépassements cumulés. Les statistiques de sortie sont cumulatives. Rien n’est conservé dans le temps : après un incident pendant un show (saccade à 21 h 14), impossible de savoir ce qui s’est passé.
 
@@ -2674,6 +2802,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** Le gestionnaire `luma:cmd` journalise les erreurs internes, mais ne mesure pas la durée des commandes. Les commandes potentiellement lourdes (`project.open` avec validation complète, `music.addTrack` avec une analyse volumineuse, `music.storeAudio` jusqu’à 500 Mo, `fixture.add` en série) bloquent le thread du moteur sans trace.
 
@@ -2712,12 +2841,15 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Titre** : Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible
 - **Catégorie** : Secrets
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
 - **Priorité** : P3
 - **Type** : fiabilité
 - **Phase** : 2
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Quand `secrets.json` est corrompu, `read()` renvoie `{}` sans le signaler. Le `set()` suivant réécrit alors un fichier qui ne contient que le nouveau secret : les autres sont perdus sans trace. Aujourd’hui, un seul secret existe (la clé OpenRouter), mais le magasin est générique.
+**Réalisation (19/10/2026).** Un `secrets.json` illisible est renommé en `.corrupt` avec un avertissement (`src/main/secrets.ts`). Sans test unitaire (dépend de LUMA-032).
+
+**Constat technique (à l’audit).** Quand `secrets.json` est corrompu, `read()` renvoie `{}` sans le signaler. Le `set()` suivant réécrit alors un fichier qui ne contient que le nouveau secret : les autres sont perdus sans trace. Aujourd’hui, un seul secret existe (la clé OpenRouter), mais le magasin est générique.
 
 **Preuves dans le code.**
 
@@ -2759,6 +2891,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : sécurité
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** `RemoteLimiter` garde une entrée par adresse IP dans `failures` et dans `buckets`. Les entrées de `buckets` ne sont jamais supprimées, et celles de `failures` ne le sont qu’au prochain passage de la même IP. Sur un réseau où des clients changent d’adresse, ou face à des requêtes usurpées depuis de nombreuses adresses, les maps croissent sans limite pendant toute la durée de vie du serveur.
 
@@ -2800,6 +2933,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : sécurité
 - **Phase** : 2
+- **Avancement** : À faire
 
 **Constat technique.** La Content-Security-Policy du rendu, stricte par ailleurs (`script-src "self"`, `object-src "none"`, `form-action "none"`), autorise `connect-src "self" ws://localhost:*` dans tous les builds. Ce droit ne sert qu’au rechargement à chaud de Vite en développement.
 
@@ -2845,6 +2979,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P1
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** L’historique d’annulation ne couvre que l’implantation de scène : positions, accroches, structures et réglages du visualiseur, jusqu’à 100 étapes. Les suppressions de scènes, de listes de cues, d’effets, de groupes, de projecteurs du patch, les éditions de cues et les créations par l’IA ne sont pas annulables. Seule la musique propose un « plan précédent » (`music.restorePrevious`).
 
@@ -2895,6 +3030,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : amélioration
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** L’interface propose le français et l’anglais (catalogues `fr` et `en` complets et identiques en clés : 458 et 287 clés vérifiées lors de l’audit). En revanche, tous les messages produits par le cœur sont rédigés en dur en français : erreurs `UserError`, journal, notices IA, alertes, rapport matériel. Il en va de même pour les dialogues natifs du processus principal et pour le titre des toasts d’erreur.
 
@@ -2944,6 +3080,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : dette technique
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Le script `check-i18n.mjs` (cliquet) compte 782 textes en dur dans `src/renderer` lors de l’audit. Les fichiers les plus chargés sont `Output.tsx` (111), `visualizer/sceneCards.tsx` (93), `Fixtures.tsx` (82), `Effects.tsx` (65), `Audio.tsx` (63) et `Onboarding.tsx` (60). Ces textes restent en français quand l’interface est en anglais.
 
@@ -2989,6 +3126,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : amélioration
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** L’interpréteur local contient quelques formes anglaises (par exemple `blue` et `red` dans la table des couleurs), mais le banc d’évaluation ne comprend que 8 requêtes de forme anglaise sur 175, d’après un repérage par mots-clés lors de l’audit. La qualité en anglais n’est donc pas mesurée, alors que l’interface est proposée en anglais et que le mode local est le mode par défaut (`provider: "local"`).
 
@@ -3034,6 +3172,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** La sortie Art-Net ne fait qu’émettre des paquets ArtDmx vers une adresse IPv4 saisie à la main. Aucune requête ArtPoll n’est émise et aucun ArtPollReply n’est interprété : l’utilisateur doit connaître l’adresse IP et les univers de chaque nœud. Le RDM sur Art-Net est déjà implémenté.
 
@@ -3081,6 +3220,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** `completeJson` n’extrait de la réponse que `model` et `choices`. Le champ `usage` renvoyé par l’API (jetons d’entrée et de sortie, coût) est ignoré. Les statistiques d’usage locales ne comptent que des types de commandes et des erreurs. L’utilisateur n’a aucune visibilité sur la dépense, alors que des requêtes peuvent atteindre `max_tokens: 8000` avec un raisonnement réglable.
 
@@ -3127,6 +3267,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Chaque `ai.propose` envoie un seul message utilisateur (le prompt) avec la description du kit et l’état en direct (`liveState` : couleurs, intensités et effets IA en cours). Les prompts récents sont mémorisés dans le projet (`recentPrompts`), mais ils ne sont pas transmis au modèle, pas plus que la compréhension et les actions de la proposition précédente. Une demande comme « non, plutôt l’inverse » ou « garde ça mais plus lent sur les lyres seulement » repose donc uniquement sur l’état observé.
 
@@ -3174,6 +3315,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** L’audio des morceaux est stocké par machine (`<userData>/music/<sha256>`) et non dans le fichier de projet, volontairement d’après le commentaire. Un projet copié sur l’ordinateur de régie perd donc la lecture synchronisée : `play()` lève « Fichier audio non chargé : réimportez-le ». Un écrivain ZIP existe déjà (`writeZip`), utilisé pour l’export MVR.
 
@@ -3221,6 +3363,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : sécurité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** En mode `0.0.0.0`, le serveur OSC accepte les commandes de n’importe quelle machine du réseau, sans authentification : GO, BACK, blackout, grand master, relâche, arrêt des émissions. Le journal le signale à l’activation. La télécommande HTTP, elle, exige un jeton.
 
@@ -3267,6 +3410,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : performance
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** `mutate` clone tout le projet (`structuredClone`), applique la modification, réintègre les profils utilisés, revalide tout le document avec Zod (schémas avec plafonds jusqu’à 40 000 éléments), puis reconstruit entièrement `ProjectIndex`, profils résolus compris. Le coût est proportionnel à la taille du projet, et pas à celle de la modification.
 
@@ -3313,6 +3457,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Les mappages MIDI associent une note ou un CC soit à une action de raccourci, soit au grand master. Aucun mappage ne pilote une valeur continue autre que le master (vitesse d’effet, BPM, fader de liste), et aucun message MIDI n’est renvoyé : LED de GO, motorisation, état du blackout.
 
@@ -3359,6 +3504,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Le serveur OSC renvoie seulement `/luma/ack <adresse> <ok>` à l’émetteur de chaque message. Aucun état n’est publié (cue en cours, master, blackout, BPM) : une surface OSC ne peut pas afficher l’état réel, contrairement à la télécommande HTTP, qui reçoit `RemoteState` par SSE.
 
@@ -3402,6 +3548,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** L’émetteur sACN produit des paquets de données conformes (CID stable, priorité, terminaison de flux en 3 paquets), mais pas de paquets de découverte d’univers, et l’adresse de synchronisation vaut toujours 0. Les récepteurs et les outils de diagnostic sACN ne voient donc pas la liste des univers émis, et les grandes installations ne peuvent pas verrouiller plusieurs univers sur la même trame.
 
@@ -3445,6 +3592,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** L’export MVR est implémenté (scène et matrices, profils référencés par nom) et testé. Aucun import MVR n’existe, alors que le lecteur ZIP et l’import GDTF sont disponibles, et que `fast-xml-parser` est déjà une dépendance (utilisée pour grandMA2).
 
@@ -3490,6 +3638,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Les Paramètres affichent l’URL de la télécommande sous forme de texte (`http://<ip>:<port>/?t=<jeton>`) pour chaque interface, avec un bouton de régénération du jeton. Il faut recopier à la main sur le téléphone une URL qui contient un UUID.
 
@@ -3532,6 +3681,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** `RemoteState` contient le master, le blackout, l’indicateur d’émission, le BPM, les listes et la localisation, mais pas l’état des sorties (erreur, reconnexion), ni le garde-fou photosensible, ni les alertes. Un opérateur en salle avec la tablette ne voit pas qu’une sortie est tombée.
 
@@ -3575,6 +3725,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Le playback est volontairement « non-tracking » : les intensités absentes du cue suivant descendent à 0, les autres attributs gardent leur valeur. C’est documenté dans le code. Le mode tracking (seules les valeurs modifiées sont enregistrées, les autres persistent d’un cue à l’autre), standard sur les consoles théâtre, n’existe pas.
 
@@ -3619,6 +3770,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Le rendu contient environ 108 attributs `aria-*` ou `role`, et les dialogues et toasts ont des rôles. En revanche, le canevas 2D de scène (`StageCanvas`), qui sert à sélectionner et déplacer les projecteurs, n’a aucun gestionnaire clavier ni `tabIndex` : sélection et placement sont réservés à la souris.
 
@@ -3662,6 +3814,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 3
+- **Avancement** : À faire
 
 **Constat technique.** Le moteur connaît des types d’effets plus récents que ceux du contrat IA v1, comme le précise `AI_EFFECT_TYPES`. Le mécanisme de versionnage et de migration du contrat est en place (`AI_ACTIONS_VERSION`, `AI_ACTION_MIGRATIONS`, échantillons figés et test de contrat), mais aucune v2 n’existe encore.
 
@@ -3710,6 +3863,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : performance
 - **Phase** : 4
+- **Avancement** : À faire
 
 **Constat technique.** Le moteur (ordonnanceur `setTimeout` + `setImmediate`), les sorties UDP et série, le traitement de toutes les commandes IPC (validation Zod, `structuredClone` et revalidation complète du projet à chaque mutation), les écritures synchrones du journal, les serveurs OSC et HTTP et la diffusion des événements vers les fenêtres partagent tous le même thread du processus principal. Toute commande lourde retarde donc les ticks DMX.
 
@@ -3760,6 +3914,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P2
 - **Type** : performance
 - **Phase** : 4
+- **Avancement** : À faire
 
 **Constat technique.** Chaque mutation émet l’événement `project` avec le `ProjectState` complet : projet entier, y compris les analyses musicales (temps, temps forts, événements), bibliothèque de profils, et problèmes de patch recalculés par `validatePatch`. Il est sérialisé vers toutes les fenêtres (principale et détachée). Le rendu remplace alors tout `project` dans le store.
 
@@ -3807,6 +3962,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : performance
 - **Phase** : 4
+- **Avancement** : À faire
 
 **Constat technique.** L’analyse d’un morceau importé (tempo, temps, sections, tonalité, voix) s’exécute dans le thread du rendu par tranches coopératives (`yieldFn` avec `setTimeout(0)`). Un commentaire `shortcut:` indique que le Worker sous `file://` avec la CSP stricte n’a pas été testé.
 
@@ -3850,6 +4006,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : dette technique
 - **Phase** : 4
+- **Avancement** : À faire
 
 **Constat technique.** Le décodage LTC utilise `ScriptProcessorNode`, déprécié par la plateforme (commentaire `shortcut:`). L’analyse en direct lit un `AnalyserNode` à chaque `requestAnimationFrame`. Les deux traitements sont cadencés par le thread de l’interface.
 
@@ -3894,6 +4051,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : performance
 - **Phase** : 4
+- **Avancement** : À faire
 
 **Constat technique.** À chaque tick moteur (40 Hz), `watchFlashes` reconstruit le modèle visuel complet de tout le kit (`buildVisualModel`), puis calcule la luminance de scène, dès que le garde-fou n’est pas sur `off`. Il est sur `warn` par défaut. En mode `limit`, `limitFlashes` parcourt aussi tous les projecteurs.
 
@@ -3939,6 +4097,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : dette technique
 - **Phase** : 4
+- **Avancement** : À faire
 
 **Constat technique.** `app.settings` est un champ public muté directement à cinq endroits : `settings.update`, `output.configure`, `onboarding.update`, `addRecent` et `init`. Chacun gère ou oublie à sa façon la persistance et la réapplication (moteur, sorties, contrôles, mises à jour). Le commentaire d’`AppService` reconnaît que ces champs sont un état partagé par les handlers.
 
@@ -3983,6 +4142,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 4
+- **Avancement** : À faire
 
 **Constat technique.** Le RDM (découverte, identification, changement d’adresse) n’est disponible que via des nœuds Art-Net. Le handler et l’interface indiquent explicitement que le RDM Enttec n’est pas implémenté.
 
@@ -4030,6 +4190,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 5
+- **Avancement** : À faire
 
 **Constat technique.** Le moteur ne possède qu’un seul `TimelineTransport` : lancer une timeline remplace la précédente. Le Song-to-Show génère une timeline par morceau, et les timelines manuelles partagent le même transport.
 
@@ -4074,6 +4235,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 5
+- **Avancement** : À faire
 
 **Constat technique.** Le réglage `confirmDangerous` demande une confirmation pour les fonctions spéciales, et l’armement des sorties exige `confirmed: true`. En revanche, aucun mode n’empêche les modifications accidentelles du projet en cours de représentation : suppression d’une liste, déplacement d’un projecteur, édition d’une scène. Proposition nouvelle.
 
@@ -4120,6 +4282,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 5
+- **Avancement** : À faire
 
 **Constat technique.** La sortie sACN expose une priorité configurable (0 à 200) et un CID stable par installation : c’est la base du basculement normalisé entre deux sources. Aucune fonction n’aide à configurer une machine de secours, ni ne surveille la présence de l’autre source. Proposition nouvelle.
 
@@ -4165,6 +4328,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 5
+- **Avancement** : À faire
 
 **Constat technique.** Seule la cible Windows NSIS x64 est configurée. Un commentaire de configuration précise que macOS et Linux ne sont pas construits tant que Windows n’est pas stable. Le code contient quelques éléments déjà multiplateformes : `safeStorage` (Keychain, libsecret), chemins via `path`, `serialport` natif.
 
@@ -4209,6 +4373,7 @@ Le dossier `userData` contient `settings.json`, `secrets.json` (chiffré par l�
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 5
+- **Avancement** : À faire
 
 **Constat technique.** L’import de profils gère les profils Luma (JSON), GDTF, grandMA2 (XML) et Open Fixture Library (en ligne ou fichier). QLC+ est explicitement refusé. Le parseur XML (`fast-xml-parser`) et le mécanisme de fusion de modes (`mergeProfileModes`) sont déjà présents.
 
@@ -4371,90 +4536,90 @@ LUMA-029 → LUMA-083
 
 ## 15. Index des éléments
 
-| ID | Titre | Priorité | Statut | Phase | Effort |
-|---|---|---|---|---|---|
-| [LUMA-001](#luma-001) | Empêcher la double exécution des commandes MIDI quand la fenêtre 3D détachée est ouverte | P0 | PARTIELLEMENT IMPLÉMENTÉ | 0 | S |
-| [LUMA-002](#luma-002) | Corriger le limiteur de cadence par sortie, qui divise par deux la fréquence DMX effective | P1 | PARTIELLEMENT IMPLÉMENTÉ | 0 | S |
-| [LUMA-003](#luma-003) | Libérer la séquence de localisation caméra et la mire de test quand le rendu disparaît | P1 | ABSENT | 0 | S |
-| [LUMA-004](#luma-004) | Supprimer la lecture et le déchiffrement synchrones de la clé API dix fois par seconde | P1 | PARTIELLEMENT IMPLÉMENTÉ | 0 | XS |
-| [LUMA-005](#luma-005) | Limiter le flot d’erreurs répétées du moteur dans le journal et les alertes | P1 | PARTIELLEMENT IMPLÉMENTÉ | 0 | S |
-| [LUMA-006](#luma-006) | Garantir que l’analyse audio réactive continue quand la fenêtre principale est masquée ou réduite | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 0 | S |
-| [LUMA-007](#luma-007) | Ramener la gigue de l’ordonnanceur sous le seuil du test de performance (p95 < 2 ms) | P1 | PARTIELLEMENT IMPLÉMENTÉ | 0 | M |
-| [LUMA-008](#luma-008) | Mettre en place une intégration continue Windows (typecheck, lint, tests, conventions de commit) | P1 | ABSENT | 0 | S |
-| [LUMA-009](#luma-009) | Rendre `npm run test:coverage` fiable (délai des hooks sous instrumentation) | P1 | PARTIELLEMENT IMPLÉMENTÉ | 0 | XS |
-| [LUMA-010](#luma-010) | Raccorder la commande « Tout relâcher » (`engine.releaseAll`) à l’interface, à l’OSC et à la télécommande | P1 | PRÉSENT MAIS NON RACCORDÉ | 1 | S |
-| [LUMA-011](#luma-011) | Proposer la récupération du travail au démarrage après une fermeture anormale | P1 | PARTIELLEMENT IMPLÉMENTÉ | 1 | M |
-| [LUMA-012](#luma-012) | Permettre l’annulation d’une requête IA ou d’une génération de show en cours | P2 | ABSENT | 1 | M |
-| [LUMA-013](#luma-013) | Remplacer la barre de progression simulée de la génération de show par une progression réelle | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S |
-| [LUMA-014](#luma-014) | Protéger la génération de show contre les modifications concurrentes du projet pendant l’appel IA | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S |
-| [LUMA-015](#luma-015) | Nettoyer les réactions audio qui pointent vers une liste de cues supprimée | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | XS |
-| [LUMA-016](#luma-016) | Rendre annulable l’application des positions issues de la localisation caméra | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | XS |
-| [LUMA-017](#luma-017) | Éviter l’écrasement de paramètres modifiés ailleurs lors de `settings.update` | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S |
-| [LUMA-018](#luma-018) | Sérialiser les écritures atomiques concurrentes sur un même fichier | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S |
-| [LUMA-019](#luma-019) | Signaler un échec d’enregistrement déclenché par la fermeture de la fenêtre | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S |
-| [LUMA-020](#luma-020) | Permettre de supprimer un profil de la bibliothèque utilisateur depuis l’interface | P2 | PRÉSENT MAIS NON RACCORDÉ | 1 | S |
-| [LUMA-021](#luma-021) | Reconstituer l’état des listes de cues après un saut de timeline (seek ou poursuite de timecode) | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | M |
-| [LUMA-022](#luma-022) | Ne plus accumuler dans le projet les définitions d’effets créées par chaque proposition IA | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S |
-| [LUMA-023](#luma-023) | Rendre l’application d’une proposition IA atomique et annulable en une étape | P2 | PARTIELLEMENT IMPLÉMENTÉ | 1 | M |
-| [LUMA-024](#luma-024) | Vérifier et corriger le plein écran F11 de la fenêtre 3D détachée face au filtre de permissions | P2 | À INVESTIGUER | 1 | XS |
-| [LUMA-025](#luma-025) | Supprimer une timeline n’arrête que la lecture de cette timeline | P3 | PARTIELLEMENT IMPLÉMENTÉ | 1 | XS |
-| [LUMA-026](#luma-026) | Retirer du moteur les playbacks de listes de cues supprimées | P3 | PARTIELLEMENT IMPLÉMENTÉ | 1 | XS |
-| [LUMA-027](#luma-027) | Revalider une proposition IA contre l’état courant du projet au moment de l’appliquer | P3 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S |
-| [LUMA-028](#luma-028) | Ne pas marquer le projet comme modifié pour une simple requête IA non appliquée | P3 | PARTIELLEMENT IMPLÉMENTÉ | 1 | XS |
-| [LUMA-029](#luma-029) | Retirer de la boîte d’import le filtre QLC+ annoncé mais refusé | P3 | ABSENT | 1 | XS |
-| [LUMA-030](#luma-030) | Nettoyer les fichiers audio, le cache IA et les copies de récupération orphelins | P3 | ABSENT | 1 | M |
-| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | M |
-| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | ABSENT | 2 | M |
-| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S |
-| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S |
-| [LUMA-035](#luma-035) | Étendre la couverture et les tests de composants au code de rendu | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | L |
-| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | M |
-| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S |
-| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | L |
-| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | ABSENT | 2 | S |
-| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | ABSENT | 2 | S |
-| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M |
-| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S |
-| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S |
-| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS |
-| [LUMA-045](#luma-045) | Récupérer partiellement un fichier de paramètres invalide au lieu de tout réinitialiser | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S |
-| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S |
-| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS |
-| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M |
-| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | ABSENT | 2 | XS |
-| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS |
-| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS |
-| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S |
-| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L |
-| [LUMA-054](#luma-054) | Internationaliser les messages du cœur et les dialogues du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L |
-| [LUMA-055](#luma-055) | Résorber les 782 textes d’interface écrits en dur dans le rendu | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L |
-| [LUMA-056](#luma-056) | Mesurer et améliorer la compréhension des requêtes en anglais par l’interpréteur local | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 3 | M |
-| [LUMA-057](#luma-057) | Découvrir automatiquement les nœuds Art-Net du réseau (ArtPoll et ArtPollReply) | P2 | ABSENT | 3 | M |
-| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | ABSENT | 3 | S |
-| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M |
-| [LUMA-060](#luma-060) | Exporter et importer un projet « paquet » qui embarque les fichiers audio des morceaux | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M |
-| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | ABSENT | 3 | S |
-| [LUMA-062](#luma-062) | Étendre le MIDI : faders vers niveaux de playback et d’effets, et retour d’état vers les contrôleurs | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M |
-| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S |
-| [LUMA-064](#luma-064) | Implémenter la découverte d’univers sACN (E1.31 §8) et la synchronisation optionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S |
-| [LUMA-065](#luma-065) | Importer une implantation MVR (patch et positions) depuis Capture, Vectorworks ou grandMA3 | P3 | ABSENT | 3 | L |
-| [LUMA-066](#luma-066) | Appairer la télécommande par QR code | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S |
-| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | XS |
-| [LUMA-068](#luma-068) | Proposer un mode « tracking » optionnel pour les listes de cues | P3 | ABSENT | 3 | M |
-| [LUMA-069](#luma-069) | Rendre le plan de scène 2D utilisable au clavier et par les lecteurs d’écran | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M |
-| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S |
-| [LUMA-071](#luma-071) | Isoler le moteur temps réel et les sorties DMX hors de la boucle d’événements du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 4 | XL |
-| [LUMA-072](#luma-072) | Diffuser des changements incrémentaux du projet au lieu de l’état complet à chaque mutation | P2 | PARTIELLEMENT IMPLÉMENTÉ | 4 | L |
-| [LUMA-073](#luma-073) | Réduire le coût de chaque mutation (clonage et revalidation complète du projet) | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M |
-| [LUMA-074](#luma-074) | Déporter l’analyse musicale dans un Web Worker | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | M |
-| [LUMA-075](#luma-075) | Migrer le décodage LTC et l’analyse audio en direct vers un AudioWorklet | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | M |
-| [LUMA-076](#luma-076) | Réduire le coût par tick de la surveillance photosensible | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | S |
-| [LUMA-077](#luma-077) | Centraliser les modifications de `app.settings` dans une seule fonction transactionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | S |
-| [LUMA-078](#luma-078) | Prendre en charge le RDM via l’interface Enttec DMX USB Pro | P3 | ABSENT | 4 | L |
-| [LUMA-079](#luma-079) | Lire plusieurs timelines simultanément (couches indépendantes) | P3 | ABSENT | 5 | L |
-| [LUMA-080](#luma-080) | Ajouter un mode « show verrouillé » qui interdit les éditions pendant l’exploitation | P3 | ABSENT | 5 | S |
-| [LUMA-081](#luma-081) | Proposer une redondance de sortie par machine de secours sACN | P3 | ABSENT | 5 | L |
-| [LUMA-082](#luma-082) | Construire et valider les versions macOS et Linux | P3 | ABSENT | 5 | L |
-| [LUMA-083](#luma-083) | Importer les profils QLC+ (`.qxf`) | P3 | ABSENT | 5 | M |
-| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS |
+| ID | Titre | Priorité | Statut | Phase | Effort | Avancement |
+|---|---|---|---|---|---|---|
+| [LUMA-001](#luma-001) | Empêcher la double exécution des commandes MIDI quand la fenêtre 3D détachée est ouverte | P0 | IMPLÉMENTÉ ET VÉRIFIÉ | 0 | S | ✅ Terminé |
+| [LUMA-002](#luma-002) | Corriger le limiteur de cadence par sortie, qui divise par deux la fréquence DMX effective | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 0 | S | ✅ Terminé |
+| [LUMA-003](#luma-003) | Libérer la séquence de localisation caméra et la mire de test quand le rendu disparaît | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 0 | S | ✅ Terminé |
+| [LUMA-004](#luma-004) | Supprimer la lecture et le déchiffrement synchrones de la clé API dix fois par seconde | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 0 | XS | ✅ Terminé |
+| [LUMA-005](#luma-005) | Limiter le flot d’erreurs répétées du moteur dans le journal et les alertes | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 0 | S | ✅ Terminé |
+| [LUMA-006](#luma-006) | Garantir que l’analyse audio réactive continue quand la fenêtre principale est masquée ou réduite | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 0 | S | ✅ Terminé |
+| [LUMA-007](#luma-007) | Ramener la gigue de l’ordonnanceur sous le seuil du test de performance (p95 < 2 ms) | P1 | PARTIELLEMENT IMPLÉMENTÉ | 0 | M | 🟡 Partiel |
+| [LUMA-008](#luma-008) | Mettre en place une intégration continue Windows (typecheck, lint, tests, conventions de commit) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 0 | S | ✅ Terminé |
+| [LUMA-009](#luma-009) | Rendre `npm run test:coverage` fiable (délai des hooks sous instrumentation) | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 0 | XS | ✅ Terminé |
+| [LUMA-010](#luma-010) | Raccorder la commande « Tout relâcher » (`engine.releaseAll`) à l’interface, à l’OSC et à la télécommande | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | S | ✅ Terminé |
+| [LUMA-011](#luma-011) | Proposer la récupération du travail au démarrage après une fermeture anormale | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | M | ✅ Terminé |
+| [LUMA-012](#luma-012) | Permettre l’annulation d’une requête IA ou d’une génération de show en cours | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | M | ✅ Terminé |
+| [LUMA-013](#luma-013) | Remplacer la barre de progression simulée de la génération de show par une progression réelle | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | S | ✅ Terminé |
+| [LUMA-014](#luma-014) | Protéger la génération de show contre les modifications concurrentes du projet pendant l’appel IA | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | S | ✅ Terminé |
+| [LUMA-015](#luma-015) | Nettoyer les réactions audio qui pointent vers une liste de cues supprimée | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
+| [LUMA-016](#luma-016) | Rendre annulable l’application des positions issues de la localisation caméra | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
+| [LUMA-017](#luma-017) | Éviter l’écrasement de paramètres modifiés ailleurs lors de `settings.update` | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | S | ✅ Terminé |
+| [LUMA-018](#luma-018) | Sérialiser les écritures atomiques concurrentes sur un même fichier | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | S | ✅ Terminé |
+| [LUMA-019](#luma-019) | Signaler un échec d’enregistrement déclenché par la fermeture de la fenêtre | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 1 | S | ✅ Terminé |
+| [LUMA-020](#luma-020) | Permettre de supprimer un profil de la bibliothèque utilisateur depuis l’interface | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 1 | S | ✅ Terminé |
+| [LUMA-021](#luma-021) | Reconstituer l’état des listes de cues après un saut de timeline (seek ou poursuite de timecode) | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | M | ✅ Terminé |
+| [LUMA-022](#luma-022) | Ne plus accumuler dans le projet les définitions d’effets créées par chaque proposition IA | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | S | ✅ Terminé |
+| [LUMA-023](#luma-023) | Rendre l’application d’une proposition IA atomique et annulable en une étape | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | M | ✅ Terminé |
+| [LUMA-024](#luma-024) | Vérifier et corriger le plein écran F11 de la fenêtre 3D détachée face au filtre de permissions | P2 | À INVESTIGUER | 1 | XS | 🟡 Partiel |
+| [LUMA-025](#luma-025) | Supprimer une timeline n’arrête que la lecture de cette timeline | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
+| [LUMA-026](#luma-026) | Retirer du moteur les playbacks de listes de cues supprimées | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
+| [LUMA-027](#luma-027) | Revalider une proposition IA contre l’état courant du projet au moment de l’appliquer | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | S | ✅ Terminé |
+| [LUMA-028](#luma-028) | Ne pas marquer le projet comme modifié pour une simple requête IA non appliquée | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
+| [LUMA-029](#luma-029) | Retirer de la boîte d’import le filtre QLC+ annoncé mais refusé | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
+| [LUMA-030](#luma-030) | Nettoyer les fichiers audio, le cache IA et les copies de récupération orphelins | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | M | ✅ Terminé |
+| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | M | À faire |
+| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | ABSENT | 2 | M | À faire |
+| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
+| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
+| [LUMA-035](#luma-035) | Étendre la couverture et les tests de composants au code de rendu | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | L | À faire |
+| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | M | À faire |
+| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
+| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | L | À faire |
+| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | ABSENT | 2 | S | À faire |
+| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | ABSENT | 2 | S | À faire |
+| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M | À faire |
+| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S | À faire |
+| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S | 🟡 Partiel |
+| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
+| [LUMA-045](#luma-045) | Récupérer partiellement un fichier de paramètres invalide au lieu de tout réinitialiser | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
+| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S | À faire |
+| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
+| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M | À faire |
+| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | ABSENT | 2 | XS | À faire |
+| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | XS | ✅ Terminé |
+| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
+| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
+| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
+| [LUMA-054](#luma-054) | Internationaliser les messages du cœur et les dialogues du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
+| [LUMA-055](#luma-055) | Résorber les 782 textes d’interface écrits en dur dans le rendu | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
+| [LUMA-056](#luma-056) | Mesurer et améliorer la compréhension des requêtes en anglais par l’interpréteur local | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 3 | M | À faire |
+| [LUMA-057](#luma-057) | Découvrir automatiquement les nœuds Art-Net du réseau (ArtPoll et ArtPollReply) | P2 | ABSENT | 3 | M | À faire |
+| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | ABSENT | 3 | S | À faire |
+| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
+| [LUMA-060](#luma-060) | Exporter et importer un projet « paquet » qui embarque les fichiers audio des morceaux | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
+| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | ABSENT | 3 | S | À faire |
+| [LUMA-062](#luma-062) | Étendre le MIDI : faders vers niveaux de playback et d’effets, et retour d’état vers les contrôleurs | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
+| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
+| [LUMA-064](#luma-064) | Implémenter la découverte d’univers sACN (E1.31 §8) et la synchronisation optionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
+| [LUMA-065](#luma-065) | Importer une implantation MVR (patch et positions) depuis Capture, Vectorworks ou grandMA3 | P3 | ABSENT | 3 | L | À faire |
+| [LUMA-066](#luma-066) | Appairer la télécommande par QR code | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
+| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | XS | À faire |
+| [LUMA-068](#luma-068) | Proposer un mode « tracking » optionnel pour les listes de cues | P3 | ABSENT | 3 | M | À faire |
+| [LUMA-069](#luma-069) | Rendre le plan de scène 2D utilisable au clavier et par les lecteurs d’écran | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
+| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
+| [LUMA-071](#luma-071) | Isoler le moteur temps réel et les sorties DMX hors de la boucle d’événements du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 4 | XL | À faire |
+| [LUMA-072](#luma-072) | Diffuser des changements incrémentaux du projet au lieu de l’état complet à chaque mutation | P2 | PARTIELLEMENT IMPLÉMENTÉ | 4 | L | À faire |
+| [LUMA-073](#luma-073) | Réduire le coût de chaque mutation (clonage et revalidation complète du projet) | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
+| [LUMA-074](#luma-074) | Déporter l’analyse musicale dans un Web Worker | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | M | À faire |
+| [LUMA-075](#luma-075) | Migrer le décodage LTC et l’analyse audio en direct vers un AudioWorklet | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | M | À faire |
+| [LUMA-076](#luma-076) | Réduire le coût par tick de la surveillance photosensible | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | S | À faire |
+| [LUMA-077](#luma-077) | Centraliser les modifications de `app.settings` dans une seule fonction transactionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | 4 | S | À faire |
+| [LUMA-078](#luma-078) | Prendre en charge le RDM via l’interface Enttec DMX USB Pro | P3 | ABSENT | 4 | L | À faire |
+| [LUMA-079](#luma-079) | Lire plusieurs timelines simultanément (couches indépendantes) | P3 | ABSENT | 5 | L | À faire |
+| [LUMA-080](#luma-080) | Ajouter un mode « show verrouillé » qui interdit les éditions pendant l’exploitation | P3 | ABSENT | 5 | S | À faire |
+| [LUMA-081](#luma-081) | Proposer une redondance de sortie par machine de secours sACN | P3 | ABSENT | 5 | L | À faire |
+| [LUMA-082](#luma-082) | Construire et valider les versions macOS et Linux | P3 | ABSENT | 5 | L | À faire |
+| [LUMA-083](#luma-083) | Importer les profils QLC+ (`.qxf`) | P3 | ABSENT | 5 | M | À faire |
+| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
 
