@@ -72,7 +72,7 @@ function TemplatePicker({ vis }: { vis: Vis }) {
 }
 
 /** Side panel shared by the 2D and 3D views: build the scene (template, library, elements) or inspect the selection. */
-export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
+export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
   const tr = useT();
   const tab = useStore((s) => s.scenePanel) ?? 'build';
   const setTab = useStore((s) => s.setScenePanel);
@@ -208,7 +208,7 @@ function LibraryPicker() {
 const MAX_FIXTURE_CARDS = 12;
 
 /** Inspector tab: the cards of what is selected in the 2D / 3D view. */
-function SelectionTab({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
+function SelectionTab({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
   const selection = useStore((s) => s.selection);
   const sceneSel = useStore((s) => s.sceneSel);
   const values = useStore((s) => s.preview?.values ?? s.values);

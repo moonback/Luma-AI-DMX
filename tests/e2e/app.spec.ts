@@ -34,6 +34,9 @@ test.afterAll(async () => {
 });
 
 const nav = (id: string) => page.getByTestId(`nav-${id}`).click();
+/** Stage page in plan or 3D view (the view choice is remembered between sessions, so it is set explicitly). */
+const nav2d = async () => { await nav('visualizer'); await page.getByTestId('stage-mode-2d').click(); };
+const nav3d = async () => { await nav('visualizer'); await page.getByTestId('stage-mode-3d').click(); };
 /** Opens the scene panel unless it already is (it stays open while the page does not change). */
 const openScenePanel = async () => { if (!(await page.getByTestId('stage-settings').isVisible())) await page.getByTestId('stage-settings-toggle').click(); };
 const channel = (ch: number) => page.locator(`.dmx-cell[data-ch="${ch}"]`);
@@ -101,7 +104,7 @@ test('patch → console → sortie virtuelle → IA → rapport', async () => {
   await expect(channel(10)).toHaveAttribute('data-v', '255'); // PAR 2 blue (bleu)
 
   // Visualizer reflects the look
-  await nav('visualizer');
+  await nav2d();
   await expect(page.getByTestId('stage-canvas')).toBeVisible();
   await page.screenshot({ path: `${shots}/07-visualizer.png` });
 
@@ -254,7 +257,7 @@ test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection
   await inv({ type: 'effect.start', id: 'mvt' });
   await inv({ type: 'effect.start', id: 'rbw' });
 
-  await nav('stage3d');
+  await nav3d();
   await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
   await expect(page.getByTestId('fps')).not.toHaveText('0 i/s', { timeout: 5000 });
   await page.waitForTimeout(800);
@@ -269,7 +272,7 @@ test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection
   // Select a moving head (shared selection with the console) → info panel shows its live data.
   await nav('console');
   await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
-  await nav('stage3d');
+  await nav3d();
   await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
   await expect(page.getByTestId('stage3d-info')).toContainText('prisme');
   await expect(page.getByTestId('stage3d-info')).toContainText('gobo 2');
@@ -279,7 +282,7 @@ test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection
   const [detached] = await Promise.all([app.waitForEvent('window'), page.getByTestId('stage3d-detach').click()]);
   await expect(detached.getByTestId('stage-3d').locator('canvas')).toBeVisible();
   await expect(detached.getByTestId('fps')).not.toHaveText('0 i/s', { timeout: 5000 });
-  await expect(detached.getByTestId('nav-stage3d')).toHaveCount(0);
+  await expect(detached.getByTestId('nav-visualizer')).toHaveCount(0);
   await detached.screenshot({ path: `${shots}/16e-visualizer-3d-detache.png` });
   await detached.close();
   await inv({ type: 'effect.stopAll' });
@@ -292,7 +295,7 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
   page.on('console', (m) => { if (m.type() === 'error' && /shader|WebGLProgram|THREE/i.test(m.text())) shaderErrors.push(m.text()); });
 
   // Stage layout and stage point from the 2D settings panel.
-  await nav('visualizer');
+  await nav2d();
   await openScenePanel();
   await page.getByTestId('shape-thrust').click();
   await page.getByTestId('marker-add').click();
@@ -304,11 +307,11 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
   const lyres = state.project.patch.filter((f) => f.name.startsWith('Lyre')).map((f) => f.id);
   await inv({ type: 'programmer.set', fixtureIds: lyres, values: { dimmer: 1, pan: 0.5, tilt: 0.78, prism: 0 }, confirmSpecial: false });
   // Lyre 1 may still be selected by the previous scenario: a tile click toggles, so only click when needed.
-  await nav('stage3d');
+  await nav3d();
   if (!(await page.getByTestId('stage3d-info').isVisible())) {
     await nav('console');
     await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
-    await nav('stage3d');
+    await nav3d();
   }
   await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
   await expect(page.getByTestId('glare')).toContainText('Éblouissement public');
@@ -362,17 +365,17 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
   const lyre1 = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch.find((f) => f.name === 'Lyre 1')!;
 
   // A straight truss from the scene panel (10 m, 4 m upstage, 6 m high).
-  await nav('visualizer');
+  await nav2d();
   await openScenePanel();
   await page.getByTestId('truss-add').click();
   await expect(page.getByTestId('truss-row')).toHaveCount(1);
 
   // Hang Lyre 1 on it from the 3D info panel.
-  await nav('stage3d');
+  await nav3d();
   if (!(await page.getByTestId('stage3d-info').isVisible())) {
     await nav('console');
     await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
-    await nav('stage3d');
+    await nav3d();
   }
   await page.getByTestId('fixture-truss').selectOption({ label: 'Structure 1' });
   await expect.poll(async () => (await lyre1()).trussId).toBeTruthy();
@@ -381,7 +384,7 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
   expect(hung.height).toBeCloseTo(5.8);
 
   // Moving the truss carries the fixture; undo / redo walk it back and forth.
-  await nav('visualizer');
+  await nav2d();
   await openScenePanel();
   const yField = page.getByTestId('truss-row').locator('input.mono').nth(2); // L, X, Y, H, rotation
   await yField.fill('5');
@@ -395,11 +398,11 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
 
   // Direct editing: top view, drag the gizmo centre of Lyre 1 sideways along its truss.
   // Editing the truss card selected the truss (one selection at a time): select Lyre 1 again.
-  await nav('stage3d');
+  await nav3d();
   if (!(await page.getByTestId('stage3d-info').isVisible())) {
     await nav('console');
     await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
-    await nav('stage3d');
+    await nav3d();
   }
   await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
   await page.getByTestId('edit3d').click();
@@ -435,7 +438,7 @@ test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol'
   page.on('console', onConsole);
 
   // Two performers (one on the stage point), a drum kit and a pixel-mapped LED screen, from the scene panel.
-  await nav('visualizer');
+  await nav2d();
   await openScenePanel();
   await page.getByTestId('performer-add').click();
   await page.getByTestId('performer-add').click();
@@ -455,7 +458,7 @@ test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol'
   await inv({ type: 'programmer.set', fixtureIds: ids, values: { dimmer: 1 }, confirmSpecial: false });
   await inv({ type: 'programmer.set', fixtureIds: patch.filter((f) => f.name.startsWith('Lyre')).map((f) => f.id), values: { tilt: 0.5, pan: 0.5, gobo: 0, prism: 0 }, confirmSpecial: false });
   await inv({ type: 'effect.start', id: 'rbw' }); // rainbow on the LED bars → pixel-mapped screen
-  await nav('stage3d');
+  await nav3d();
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${shots}/19b-interpretes-ecrans-3d.png` });
 
@@ -493,7 +496,7 @@ test('création rapide : équiper les structures, poser au clic, dupliquer, supp
   type Fx = { name: string; trussId?: string | null; mount?: string };
   const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
   const patch = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch;
-  await nav('visualizer');
+  await nav2d();
   await openScenePanel();
 
   // Equip without a selection (a click on an empty corner clears it): the hung fixtures spread over the trusses,
@@ -535,7 +538,7 @@ test('bibliothèque : totems, pièces de truss et décor, au clic ou glissés en
   type Vis = { trusses: { id: string; shape: string; height: number; x: number; y: number }[]; props: { kind: string }[] };
   const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
   const vis = async () => ((await inv({ type: 'project.get' })).data as { project: { visualizer: Vis } }).project.visualizer;
-  await nav('visualizer');
+  await nav2d();
   await openScenePanel();
 
   // Library tile then a click on the plan: a 3 m totem lands there.
@@ -555,7 +558,7 @@ test('bibliothèque : totems, pièces de truss et décor, au clic ou glissés en
   await expect(page.getByTestId('prop-row')).toHaveCount(props + 1);
   await page.screenshot({ path: `${shots}/21-bibliotheque-2d.png` });
 
-  await nav('stage3d');
+  await nav3d();
   await openScenePanel();
   await page.getByTestId('lib-group-decor').click();
   const box3 = (await page.getByTestId('stage-3d').boundingBox())!;
@@ -724,7 +727,7 @@ test('onboarding : visite guidée complète, premiers pas, projet de démonstrat
   await page.screenshot({ path: `${shots}/25-premiers-pas.png` });
   // The demo is playable: GO on its first cue list.
   await page.keyboard.press('Space');
-  await nav('stage3d');
+  await nav3d();
   await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
 });
 
@@ -739,7 +742,7 @@ test('accueil : construire la scène complète depuis une description écrite', 
   await page.screenshot({ path: `${shots}/26b-scene-depuis-texte.png` });
   await page.getByRole('button', { name: 'Construire', exact: true }).click();
   await expect(page.getByText('6 structure(s), 11 projecteur(s) accroché(s), 3 élément(s) de décor')).toBeVisible();
-  await expect(page.getByTestId('nav-stage3d')).toHaveClass(/active/);
+  await expect(page.getByTestId('nav-visualizer')).toHaveClass(/active/);
   await expect(page.getByTestId('stage-3d').locator('canvas')).toBeVisible();
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${shots}/27-scene-texte-3d.png` });

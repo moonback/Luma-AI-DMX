@@ -18,14 +18,25 @@ export const PAGES = [
   { id: 'quick', label: 'Quick Actions' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'ai', label: 'AI Lighting Director' },
-  { id: 'visualizer', label: 'Stage Visualizer' },
-  { id: 'stage3d', label: 'Stage 3D' },
+  { id: 'visualizer', label: 'Stage' },
   { id: 'audio', label: 'Audio Reactive' },
   { id: 'music', label: 'Musique' },
   { id: 'output', label: 'DMX Output' },
   { id: 'settings', label: 'Settings' },
 ] as const;
 export type PageId = (typeof PAGES)[number]['id'];
+
+/** Stage page view: top-down plan, 3D, or both side by side. Remembered between sessions. */
+export type StageMode = '2d' | '3d' | 'split';
+const STAGE_MODES: readonly StageMode[] = ['2d', '3d', 'split'];
+const stageModeSaved = (): StageMode => {
+  try {
+    const v = localStorage.getItem('luma.stageMode') as StageMode | null;
+    return v && STAGE_MODES.includes(v) ? v : '2d';
+  } catch {
+    return '2d';
+  }
+};
 
 export interface Toast {
   id: number;
@@ -104,6 +115,8 @@ interface State {
   help: 'welcome' | 'tour' | 'demos' | 'stage' | 'whatsnew' | null;
   setHelp(h: State['help']): void;
   setPage(p: PageId): void;
+  stageMode: StageMode;
+  setStageMode(m: StageMode): void;
   toggleCollapsed(): void;
   setSelection(ids: string[]): void;
   setCueList(id: string | null): void;
@@ -152,6 +165,11 @@ export const useStore = create<State>((set, get) => ({
   setPage: (page) => {
     set({ page });
     savePrefs({ page, collapsed: get().collapsed });
+  },
+  stageMode: stageModeSaved(),
+  setStageMode: (stageMode) => {
+    set({ stageMode });
+    try { localStorage.setItem('luma.stageMode', stageMode); } catch { /* storage unavailable: not persisted */ }
   },
   toggleCollapsed: () => {
     const collapsed = !get().collapsed;

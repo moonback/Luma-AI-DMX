@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Crosshair, ExternalLink, MousePointer2, Move, Settings2, Theater, X } from 'lucide-react';
-import { useStore } from '../store';
+import { useStore, type StageMode } from '../store';
 import { useT } from '../i18n';
 import { PageHead, useResolved } from '../components/ui';
 import { Stage3D } from './Stage3D';
@@ -8,9 +8,7 @@ import { useSceneShortcuts } from '../sceneActions';
 import { ScenePanel, SceneHistory } from './visualizer/ScenePanel';
 import { StageCanvas } from './visualizer/StageCanvas';
 
-export const Visualizer = () => <StagePage mode="2d" />;
-
-export const StageVisualizer3D = () => <StagePage mode="3d" />;
+export const Visualizer = () => <StagePage />;
 
 export const DETACHED_STAGE_HASH = '#stage3d';
 
@@ -34,9 +32,18 @@ export function DetachedStage3D() {
   return <div style={{ height: '100vh' }}>{ready ? <Stage3D /> : <div className="empty">{tr('stagePage.connecting')}</div>}</div>;
 }
 
-function StagePage({ mode }: { mode: '2d' | '3d' }) {
+/** Plan, 3D, or both (the view choice is remembered in the store). */
+const MODES = [
+  { id: '2d', key: 'stagePage.modePlan' },
+  { id: '3d', key: 'stagePage.mode3d' },
+  { id: 'split', key: 'stagePage.modeSplit' },
+] as const satisfies readonly { id: StageMode; key: string }[];
+
+function StagePage() {
   const tr = useT();
   const { fixtures } = useResolved();
+  const mode = useStore((s) => s.stageMode);
+  const setMode = useStore((s) => s.setStageMode);
   const selCount = useStore((s) => (s.sceneSel ? 1 : s.selection.length));
   const project = useStore((s) => s.project!.project);
   const preview = useStore((s) => s.preview);
@@ -49,15 +56,18 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
   useSceneShortcuts();
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <PageHead title={tr(mode === '3d' ? 'stagePage.title3d' : 'stagePage.title2d')} subtitle={tr(mode === '3d' ? 'stagePage.sub3d' : 'stagePage.sub2d')}>
+      <PageHead title={tr('stagePage.title')} subtitle={tr('stagePage.sub')}>
+        <div className="seg" role="group" aria-label={tr('stagePage.modeAria')} data-testid="stage-mode">
+          {MODES.map((m) => <button key={m.id} className={mode === m.id ? 'on' : ''} aria-pressed={mode === m.id} onClick={() => setMode(m.id)} data-testid={`stage-mode-${m.id}`}>{tr(m.key)}</button>)}
+        </div>
         <button className={`btn ${panel === 'build' ? 'on' : ''}`} onClick={() => setPanel(panel === 'build' ? null : 'build')} title={tr('stagePage.sceneHint')} data-testid="stage-settings-toggle"><Settings2 size={14} />{tr('stagePage.scene')}</button>
-        {mode === '2d' && <button className={`btn ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title={tr('stagePage.positionHint')}><Move size={14} />{tr('stagePage.position')}</button>}
+        {mode !== '3d' && <button className={`btn ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title={tr('stagePage.positionHint')}><Move size={14} />{tr('stagePage.position')}</button>}
         <SceneHistory />
         <select className="select" style={{ width: 160 }} value={group ?? ''} onChange={(e) => setGroup(e.target.value || null)} aria-label={tr('stagePage.groupFilter')}>
           <option value="">{tr('stagePage.allGroups')}</option>
           {project.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        {mode === '3d' && <button className="btn" data-testid="stage3d-detach" onClick={openDetachedStage} title={tr('stagePage.detachHint')}><ExternalLink size={14} />{tr('stagePage.detach')}</button>}
+        {mode !== '2d' && <button className="btn" data-testid="stage3d-detach" onClick={openDetachedStage} title={tr('stagePage.detachHint')}><ExternalLink size={14} />{tr('stagePage.detach')}</button>}
       </PageHead>
       {preview && (
         <div className="panel row" style={{ padding: '8px 12px', marginBottom: 10, borderColor: 'rgba(139,92,246,.6)' }}>
@@ -76,7 +86,14 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
           </nav>
         )}
         <div className="stage-view">
-          {mode === '3d' ? <Stage3D values={preview?.values} groupFilter={group} /> : <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />}
+          {mode === '2d' && <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />}
+          {mode === '3d' && <Stage3D values={preview?.values} groupFilter={group} />}
+          {mode === 'split' && (
+            <div className="stage-split">
+              <div className="stage-pane"><StageCanvas values={preview?.values} editable={edit} groupFilter={group} /></div>
+              <div className="stage-pane"><Stage3D values={preview?.values} groupFilter={group} /></div>
+            </div>
+          )}
           {placing && (
             <div className="stage-empty stage-placing" data-testid="placing">
               <Crosshair size={16} />

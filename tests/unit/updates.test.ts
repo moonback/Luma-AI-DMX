@@ -26,7 +26,7 @@ describe('mises à jour', () => {
     const { updater, calls } = fakeUpdater();
     const svc = new AppService({
       dataDir: tempDir(), autoStart: false, updater,
-      appInfo: { name: 'Luma AI DMX', version: '1.3.0', platform: 'win32', arch: 'x64', versions: {} },
+      appInfo: { name: 'Luma AI DMX', version: '1.4.0', platform: 'win32', arch: 'x64', versions: {} },
       dialogs: { openProject: async () => null, saveProject: async () => null, openProfile: async () => null },
       secrets: { get: () => null, set: () => undefined },
     });
@@ -35,7 +35,7 @@ describe('mises à jour', () => {
     const s = svc.getSettings();
     await svc.execute({ type: 'settings.update', settings: { ...s, general: { ...s.general, updateChannel: 'beta', autoUpdate: false } } });
     expect(calls.at(-1)).toEqual({ channel: 'beta', auto: false });
-    expect(await svc.execute({ type: 'app.info' })).toMatchObject({ version: '1.3.0', updates: { state: 'idle' } });
+    expect(await svc.execute({ type: 'app.info' })).toMatchObject({ version: '1.4.0', updates: { state: 'idle' } });
     expect(await svc.execute({ type: 'app.checkUpdates' })).toMatchObject({ state: 'up-to-date' });
     await svc.dispose();
   });

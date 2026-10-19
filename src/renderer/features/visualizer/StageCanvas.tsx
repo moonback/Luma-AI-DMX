@@ -73,8 +73,10 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     if (!c || !el || !view.scale) return;
     const r = el.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    c.width = r.width * dpr;
-    c.height = r.height * dpr;
+    // Assigning width/height reallocates the bitmap: only when the size changes (this effect runs on every DMX update).
+    const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
     const g = c.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawStage(g, r, { W, D, thrust, vis, view, compact, group, model, selection, sceneSel, toScreen, pos, at, markerPos, performerPos });
