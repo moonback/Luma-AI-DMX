@@ -77,19 +77,20 @@ export function parsePhotoScene(raw: unknown, id: () => string): PhotoScene {
   };
 }
 
-/** Sends the photo (data URL) to a vision model and returns the validated scene. */
-export async function sceneFromPhotoWithOpenRouter(image: string, opts: OpenRouterOptions, id: () => string): Promise<PhotoScene & { model: string; notices: string[] }> {
-  const user = [
-    { type: 'text', text: 'Rebuild the structures of this stage.' },
-    { type: 'image_url', image_url: { url: image } },
-  ];
-  let r: Awaited<ReturnType<typeof completeJson>>;
+/** Sends a text prompt and photos (data URLs) to a vision model and returns its raw JSON answer. */
+export async function visionJson(system: string, text: string, images: readonly string[], schemaName: string, jsonSchema: unknown, opts: OpenRouterOptions): ReturnType<typeof completeJson> {
+  const user = [{ type: 'text', text }, ...images.map((url) => ({ type: 'image_url', image_url: { url } }))];
   try {
-    r = await completeJson(PHOTO_SYSTEM, user, 'stage_from_photo', PHOTO_JSON_SCHEMA, opts);
+    return await completeJson(system, user, schemaName, jsonSchema, opts);
   } catch (err) {
     // Text-only models reject image parts with a 4xx: say which setting to change.
     if (err instanceof OpenRouterError && (err.status === 400 || err.status === 404)) throw new OpenRouterError(`${err.message} — choisissez un modèle compatible avec les images (vision) dans Paramètres › IA`, err.status);
     throw err;
   }
+}
+
+/** Sends the photo (data URL) to a vision model and returns the validated scene. */
+export async function sceneFromPhotoWithOpenRouter(image: string, opts: OpenRouterOptions, id: () => string): Promise<PhotoScene & { model: string; notices: string[] }> {
+  const r = await visionJson(PHOTO_SYSTEM, 'Rebuild the structures of this stage.', [image], 'stage_from_photo', PHOTO_JSON_SCHEMA, opts);
   return { ...parsePhotoScene(r.json, id), model: r.model, notices: r.notices };
 }

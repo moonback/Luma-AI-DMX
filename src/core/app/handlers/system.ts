@@ -3,15 +3,20 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writeFileAtomic } from '../../project/store';
 import { applyControl } from '../control';
+import { purgeStorage, storageReport } from '../storage';
+import { metricsHistory } from '../monitor';
 import { DISABLED_UPDATES } from '../updates';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Audio input, settings, logs and the diagnostic export. */
-export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app' | 'usage' | 'feedback'>): Promise<unknown> {
+export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app' | 'usage' | 'feedback' | 'storage'>): Promise<unknown> {
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'audio.features':
       app.audio.push(cmd.features, cmd.source);
+      return ok;
+    case 'audio.release':
+      app.audio.release();
       return ok;
     case 'audio.armDrop':
       app.audio.armDrop(cmd.on);
@@ -23,7 +28,8 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
     case 'settings.get': return app.getSettings();
     case 'settings.update': {
       const outputsChanged = JSON.stringify(cmd.settings.outputs) !== JSON.stringify(app.settings.outputs);
-      app.settings = { ...cmd.settings, sacn: app.settings.sacn };
+      // The Settings page sends the copy it loaded: fields the main process changes on its own must not be rolled back.
+      app.settings = { ...cmd.settings, sacn: app.settings.sacn, onboarding: app.settings.onboarding, general: { ...cmd.settings.general, recentProjects: app.settings.general.recentProjects } };
       app.settings.control.remote.token ??= randomUUID();
       await app.persistSettings();
       app.logger.level = app.settings.logs.level;
@@ -35,7 +41,13 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
       app.logger.info('Paramètres', 'Paramètres enregistrés');
       return ok;
     }
+    case 'settings.forgetRecent':
+      app.settings.general.recentProjects = app.settings.general.recentProjects.filter((p) => !cmd.paths.includes(p));
+      await app.persistSettings();
+      return ok;
     case 'logs.recent': return app.logger.recent();
+    case 'storage.report': return storageReport(app);
+    case 'storage.purge': return { removed: await purgeStorage(app, cmd) };
     case 'diagnostic.export': {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/gu, '-');
       const file = cmd.path ?? (await app.opts.dialogs.saveDiagnostic?.(`luma-diagnostic-${stamp}.json`)) ?? null;
@@ -86,5 +98,6 @@ export function diagnostic(app: AppService) {
     outputs: app.outputs.status().map((o) => ({ ...o })),
     logs: app.logSink?.tail(2000) ?? app.logger.recent(2000).map((e) => JSON.stringify(e)),
     crashDumps: listCrashDumps(app.opts.crashDir),
+    metrics: metricsHistory(app),
   });
 }

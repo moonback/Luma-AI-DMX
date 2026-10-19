@@ -419,3 +419,56 @@ describe('Song-to-Show', () => {
     expect(busy(0.5)).toBeGreaterThan(busy(2));
   });
 });
+
+describe('Song-to-Show · liste de cues', () => {
+  it('génère un cue par section (départ manuel, puis follow) calé sur les débuts de section', () => {
+    const p = demoProject();
+    const index = new ProjectIndex(p);
+    const plan = planLocally(analysis, '', rigInfo(index, false));
+    const c = compileShow(index, 'T', analysis, plan, { maxStrobeHz: 10, allowStrobe: false });
+    const { cues } = c.cueList;
+    expect(cues.length).toBeGreaterThanOrEqual(analysis.sections.length);
+    expect(cues[0]!.trigger).toEqual({ type: 'manual' });
+    expect(cues.slice(1).every((q) => q.trigger.type === 'follow')).toBe(true);
+    // Each section's first cue points at that section's scene and fires at the section start.
+    let t = 0;
+    let fired = 0;
+    cues.forEach((q, k) => {
+      if (k > 0) t += cues[k - 1]!.fade + (q.trigger as { wait: number }).wait;
+      if (c.scenes[fired]?.id === q.sceneId && k === cues.findIndex((x) => x.sceneId === q.sceneId)) {
+        expect(t).toBeCloseTo(analysis.sections[fired]!.start, 5);
+        fired++;
+      }
+    });
+    expect(fired).toBe(analysis.sections.length);
+    expect(cues.every((q) => c.scenes.some((s) => s.id === q.sceneId))).toBe(true);
+  });
+});
+
+describe('Song-to-Show · liste de cues via OpenRouter', () => {
+  it('un show généré par OpenRouter reçoit sa liste de cues, remplacée à la régénération', async () => {
+    const { svc, secrets, id } = await setup();
+    secrets.set('openrouter-api-key', 'sk-or-v1-test');
+    await svc.execute({ type: 'settings.update', settings: { ...defaultSettings(), ai: { ...defaultSettings().ai, provider: 'openrouter' } } });
+    const sections = analysis.sections.map((_, i) => ({ index: i, energy: 3, palette: ['#00FF00'], layers: { wash: true, moving: true, bars: false }, movement: 'slow' as const, effect: 'pulse' as const, beam: 'gobo' as const, effectBeats: 2, accents: false, groups: [], focus: null, extras: [], locked: false, note: '', why: '' }));
+    vi.mocked(openrouter.planShowWithOpenRouter).mockResolvedValueOnce({ summary: 'OR', model: 'test/model', notices: [], sections });
+    await svc.execute({ type: 'music.generate', trackId: id, intent: 'tout en vert', nextVariant: false });
+    const p1 = svc.getProject();
+    const t1 = p1.music.tracks[0]!;
+    expect(t1.plan!.provider).toBe('openrouter');
+    expect(t1.created.cueListIds).toHaveLength(1);
+    const list1 = p1.cueLists.find((l) => l.id === t1.created.cueListIds[0])!;
+    expect(list1.cues.length).toBeGreaterThanOrEqual(analysis.sections.length);
+    expect(list1.cues[0]!.trigger).toEqual({ type: 'manual' });
+    expect(list1.cues.every((q) => p1.scenes.some((s) => s.id === q.sceneId))).toBe(true);
+
+    // Regenerating replaces the cue list: no stale list is left behind.
+    vi.mocked(openrouter.planShowWithOpenRouter).mockResolvedValueOnce({ summary: 'OR2', model: 'test/model', notices: [], sections: sections.map((s) => ({ ...s, energy: 5 })) });
+    await svc.execute({ type: 'music.generate', trackId: id, intent: 'explosion', nextVariant: true });
+    const p2 = svc.getProject();
+    const t2 = p2.music.tracks[0]!;
+    expect(p2.cueLists.filter((l) => l.name.startsWith('Show'))).toHaveLength(1);
+    expect(p2.cueLists.some((l) => l.id === list1.id)).toBe(false);
+    expect(t2.created.cueListIds).toHaveLength(1);
+  });
+});

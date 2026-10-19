@@ -134,6 +134,10 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
       app.mutate((d) => {
         d.cueLists = d.cueLists.filter((l) => l.id !== cmd.id);
         for (const t of d.timelines) t.events = t.events.filter((ev) => !(ev.kind === 'cue' && ev.refId === cmd.id));
+        // Audio reactions aimed at this list would otherwise fire GO into nothing, silently.
+        const r = d.audio.reactions;
+        if (r.energyRiseGo.cueListId === cmd.id) r.energyRiseGo.cueListId = null;
+        if (r.dropGo.cueListId === cmd.id) r.dropGo.cueListId = null;
       });
       return ok;
     case 'cue.go': return { ok: e.cueGo(cmd.listId) };
@@ -151,7 +155,6 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
         d.effects = d.effects.filter((x) => x.id !== cmd.id);
         for (const l of d.cueLists) for (const c of l.cues) c.effectIds = c.effectIds.filter((x) => x !== cmd.id);
         for (const t of d.timelines) t.events = t.events.filter((ev) => !(ev.kind === 'effect' && ev.refId === cmd.id));
-        if (d.audio.reactions.energyRiseGo.cueListId && !d.cueLists.some((l) => l.id === d.audio.reactions.energyRiseGo.cueListId)) d.audio.reactions.energyRiseGo.cueListId = null;
       });
       return ok;
     case 'effect.start': {
@@ -170,7 +173,7 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
       app.mutate((d) => { d.timelines = d.timelines.some((t) => t.id === cmd.timeline.id) ? d.timelines.map((t) => (t.id === cmd.timeline.id ? cmd.timeline : t)) : [...d.timelines, cmd.timeline]; });
       return ok;
     case 'timeline.remove':
-      e.timelineStop();
+      if (e.snapshot().timeline.timelineId === cmd.id) e.timelineStop();
       app.mutate((d) => { d.timelines = d.timelines.filter((t) => t.id !== cmd.id); });
       return ok;
     case 'timeline.play':

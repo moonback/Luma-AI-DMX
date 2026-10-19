@@ -29,7 +29,7 @@ export interface SerialPortInfo {
   ftdi: boolean;
 }
 
-interface SerialLike {
+export interface SerialLike {
   write(data: Buffer, cb: (err: Error | null | undefined) => void): void;
   close(cb: (err: Error | null) => void): void;
   on(event: 'close' | 'error', cb: (err?: Error) => void): void;
@@ -59,21 +59,29 @@ export async function listSerialPorts(): Promise<{ ports: SerialPortInfo[]; erro
 
 type EnttecConfig = Extract<OutputConfig, { kind: 'enttec-pro' }>;
 
+export type SerialFactory = (path: string) => Promise<SerialLike>;
+
+const defaultSerial: SerialFactory = async (path) => {
+  const { SerialPort } = await import('serialport');
+  return new Promise<SerialLike>((resolve, reject) => {
+    const p = new SerialPort({ path, baudRate: 57600, autoOpen: false });
+    p.open((err) => (err ? reject(err) : resolve(p as unknown as SerialLike)));
+  });
+};
+
 export class EnttecProOutput extends OutputAdapter {
   private port: SerialLike | null = null;
   private busy = false;
+  /** Frames dropped because the previous one was still being written (link slower than the engine). */
+  dropped = 0;
 
-  constructor(config: EnttecConfig) {
+  constructor(config: EnttecConfig, private readonly factory: SerialFactory = defaultSerial) {
     super(config);
   }
 
   protected async doOpen(): Promise<void> {
-    const { SerialPort } = await import('serialport');
     const path = (this.config as EnttecConfig).path;
-    const port = await new Promise<SerialLike>((resolve, reject) => {
-      const p = new SerialPort({ path, baudRate: 57600, autoOpen: false });
-      p.open((err) => (err ? reject(err) : resolve(p as unknown as SerialLike)));
-    });
+    const port = await this.factory(path);
     port.on('close', () => {
       if (!this.closing) this.fail(new Error(`Périphérique ${path} déconnecté`));
     });
@@ -89,7 +97,10 @@ export class EnttecProOutput extends OutputAdapter {
 
   protected doSend(_universe: number, data: Uint8Array): void {
     if (!this.port) throw new Error('Port série fermé');
-    if (this.busy) return; // drop frame rather than queueing unbounded writes on a slow link
+    if (this.busy) {
+      this.dropped++; // drop the frame rather than queueing unbounded writes on a slow link
+      return;
+    }
     this.busy = true;
     this.port.write(buildEnttecProPacket(data), (err) => {
       this.busy = false;

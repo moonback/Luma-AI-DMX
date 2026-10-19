@@ -11,7 +11,7 @@ import { validatePatch } from '../fixtures/patch';
 import { createProject } from '../project/format';
 import { embedUsedProfiles, loadLibrary } from './library';
 import { writeFileAtomic } from '../project/store';
-import { defaultSettings, settingsSchema, type Settings } from '../settings/settings';
+import { defaultSettings, salvageSettings, settingsSchema, type Settings } from '../settings/settings';
 import { Logger, type LogEntry } from '../log/logger';
 import { FileLogSink } from '../log/fileSink';
 import type { AppInfo } from '../log/diagnostic';
@@ -32,14 +32,16 @@ import { endLocate, onLocatePhoto } from './handlers/locate';
 import { configureUpdates } from './handlers/system';
 import { ROUTES, UNCOUNTED, type CommandDomain } from './routes';
 import { applyControl, onOsc, remoteState } from './control';
-import { onFrame, onOutputStatus } from './monitor';
+import { beginCommand, clearHistory, historyState, recordStep } from './history';
+import { METRICS_EVERY_MS, onEngineError, onFrame, onOutputStatus, rendererLost, sampleMetrics } from './monitor';
 import { autosave } from './files';
-import type { Alert, Command, CommandOf, CommandResults, CommandType, LocatePhoto, ProjectState, RuntimeState, ValuesFrame } from '../../shared/commands';
+import type { Alert, Command, CommandOf, CommandResults, CommandType, LocatePhoto, Progress, ProjectState, RuntimeState, ValuesFrame } from '../../shared/commands';
 
 export interface Dialogs {
   openProject(): Promise<string | null>;
   saveProject(defaultName: string): Promise<string | null>;
   openProfile(): Promise<string | null>;
+  saveProfiles?(defaultName: string): Promise<string | null>;
   saveDiagnostic?(defaultName: string): Promise<string | null>;
   savePatchSheet?(defaultName: string, format: 'csv' | 'pdf'): Promise<string | null>;
   saveFeedback?(defaultName: string): Promise<string | null>;
@@ -49,6 +51,8 @@ export interface Dialogs {
 export interface SecretStore {
   get(name: string): string | null;
   set(name: string, value: string | null): void;
+  /** Presence without decryption (polled 10× per second by the runtime state). */
+  has?(name: string): boolean;
 }
 
 export interface AppServiceOptions {
@@ -79,7 +83,7 @@ export type { CommandDomain, CommandIn } from './routes';
  * Commands are handled per domain in `./handlers/*`; the fields below are the shared state those handlers work on,
  * not an API for other layers (main and renderer only use `execute`, the events and the lifecycle methods).
  */
-export class AppService extends EventEmitter<{ project: [ProjectState]; runtime: [RuntimeState]; values: [ValuesFrame]; log: [LogEntry]; locatePhoto: [LocatePhoto] }> {
+export class AppService extends EventEmitter<{ project: [ProjectState]; runtime: [RuntimeState]; values: [ValuesFrame]; log: [LogEntry]; locatePhoto: [LocatePhoto]; progress: [Progress] }> {
   readonly logger = new Logger();
   readonly outputs: OutputManager;
   readonly engine: Engine;
@@ -98,6 +102,10 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   readonly proposals = new Map<string, AiProposal>();
   aiBusy = false;
   aiLastError: string | null = null;
+  /** Cancels the AI request in flight (`ai.cancel`). */
+  aiAbort: AbortController | null = null;
+  /** Project before the last applied AI proposal, for `ai.undoApply` (valid while nothing else changed). */
+  lastAiUndo: { proposalId: string; project: Project; revision: number } | null = null;
   lastAiApply = 0;
   readonly alerts: Alert[] = [];
   readonly timers: NodeJS.Timeout[] = [];
@@ -141,7 +149,8 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       }
       this.emit('log', e);
     });
-    this.engine.on('error', (err) => this.logger.error('Moteur', err.message));
+    this.audio.onStale = (source) => this.logger.warn('Audio', `Données audio interrompues (source ${source}) : réactions audio relâchées. Fenêtre principale masquée, entrée débranchée ?`);
+    this.engine.on('error', (err) => onEngineError(this, err.message));
     this.engine.on('frame', () => onFrame(this));
     this.outputs.on('status', () => onOutputStatus(this));
     this.osc.on('message', (m, ack) => void onOsc(this, m).then(ack, (err: Error) => { this.logger.warn('OSC', `${m.address} : ${err.message}`); ack(false); }));
@@ -171,10 +180,16 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       if (parsed.success) this.settings = parsed.data;
       else {
         await fs.copyFile(this.settingsFile, `${this.settingsFile}.invalid`).catch(() => undefined);
-        this.logger.warn('Paramètres', `Fichier de paramètres invalide, valeurs par défaut utilisées (copie : settings.json.invalid) — ${parsed.error.issues[0]?.message ?? ''}`);
+        // Only the invalid sections fall back to their defaults: one bad value must not wipe the outputs or the token.
+        const { settings, reset } = salvageSettings(raw);
+        this.settings = settings;
+        this.logger.warn('Paramètres', `Fichier de paramètres invalide (copie : settings.json.invalid) : section(s) réinitialisée(s) : ${reset.join(', ') || '—'}`);
       }
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') this.logger.warn('Paramètres', `Lecture impossible : ${(err as Error).message}`);
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        await fs.copyFile(this.settingsFile, `${this.settingsFile}.invalid`).catch(() => undefined);
+        this.logger.warn('Paramètres', `Lecture impossible, valeurs par défaut utilisées (copie : settings.json.invalid) : ${(err as Error).message}`);
+      }
     }
     if (!this.settings.sacn) this.settings.sacn = { cid: randomUUID() };
     this.settings.control.remote.token ??= randomUUID();
@@ -184,16 +199,23 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.logger.level = this.settings.logs.level;
     this.engine.updateSettings(this.engineSettings());
     await this.outputs.configure(this.settings.outputs);
+    if (this.settings.general.autoArmOnStart) void this.outputs.armAllEnabledReal();
     configureUpdates(this);
     await applyControl(this);
     if (this.opts.autoStart !== false) this.engine.start();
     this.timers.push(setInterval(() => void autosave(this), 15000));
+    this.timers.push(setInterval(() => sampleMetrics(this), METRICS_EVERY_MS));
     await this.usage.load();
     this.usage.enabled = this.settings.telemetry.usage;
     this.usage.session();
     this.timers.push(setInterval(() => void this.usage.flush().catch(() => undefined), 60_000));
     this.logger.info('Application', 'Démarrage terminé — sorties réelles désarmées par défaut');
     this.emitProject();
+  }
+
+  /** The main window crashed or reloaded (see `rendererLost`). */
+  onRendererLost(reason: string): void {
+    rendererLost(this, reason);
   }
 
   async dispose(): Promise<void> {
@@ -231,6 +253,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     return {
       project: this.project, library: this.userProfiles, path: this.projectPath, dirty: this.dirty, revision: this.revision, issues: validatePatch(this.index.lib, this.project.patch),
       sceneHistory: { undo: this.sceneUndo.length, redo: this.sceneRedo.length },
+      history: historyState(this),
     };
   }
 
@@ -240,7 +263,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       outputs: this.outputs.status(),
       transmitting: this.outputs.transmitting,
       liveMode: this.outputs.liveMode,
-      ai: { provider: this.settings.ai.provider, hasKey: !!this.opts.secrets.get(OPENROUTER_KEY), busy: this.aiBusy, lastError: this.aiLastError, model: this.settings.ai.model },
+      ai: { provider: this.settings.ai.provider, hasKey: this.opts.secrets.has?.(OPENROUTER_KEY) ?? !!this.opts.secrets.get(OPENROUTER_KEY), busy: this.aiBusy, lastError: this.aiLastError, model: this.settings.ai.model },
       audio: this.audio.status(),
       alerts: [...this.alerts],
       safety: { flashGuard: this.settings.engine.flashGuard, ...this.flash },
@@ -259,13 +282,15 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   /* ------------------------------------------------------------------ */
 
   /** Applies a mutation on a draft, re-validates the whole document, then swaps it in. Invalid drafts are rejected. */
-  mutate(fn: (draft: Project) => void): void {
+  /** `history: false`: bookkeeping that is not an edit of the show (not an undo step). */
+  mutate(fn: (draft: Project) => void, opts: { history?: boolean } = {}): void {
     const draft = structuredClone(this.project);
     fn(draft);
     embedUsedProfiles(draft, this.userProfiles);
     draft.meta.modifiedAt = new Date().toISOString();
     const parsed = projectSchema.safeParse(draft);
     if (!parsed.success) throw new UserError(`Modification refusée : ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ')}`);
+    if (opts.history !== false) recordStep(this, this.project);
     this.setProject(parsed.data, false);
   }
 
@@ -273,6 +298,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.project = p;
     this.index = new ProjectIndex(p, this.userProfiles);
     if (reset) {
+      clearHistory(this);
       this.sceneUndo = [];
       this.sceneRedo = [];
       this.engine.stopAllPlaybacks();
@@ -282,6 +308,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       this.engine.releaseProgrammer();
       this.engine.bpm = p.show.bpm;
       this.proposals.clear();
+      this.lastAiUndo = null;
     }
     this.engine.setIndex(this.index);
     this.revision++;
@@ -340,17 +367,16 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   /** Routes a command to the handler of its domain (the part of the type before the dot). */
   async handle(cmd: Command): Promise<unknown> {
     if (!UNCOUNTED.has(cmd.type)) this.usage.command(cmd.type);
+    beginCommand(this, cmd.type);
     const domain = cmd.type.slice(0, cmd.type.indexOf('.')) as CommandDomain;
-    return (ROUTES[domain] as (app: AppService, c: Command) => unknown)(this, cmd);
+    // Handlers run synchronously up to their first await, on the engine's thread: that part is what can cause DMX jitter.
+    const t0 = performance.now();
+    const result = (ROUTES[domain] as (app: AppService, c: Command) => unknown)(this, cmd);
+    const ms = performance.now() - t0;
+    if (ms > 250) this.logger.warn('Commandes', `${cmd.type} a bloqué ${Math.round(ms)} ms`);
+    else if (ms > 50 && !UNCOUNTED.has(cmd.type)) this.logger.debug('Commandes', `${cmd.type} : ${Math.round(ms)} ms bloquants`);
+    return result;
   }
-
-  /* ------------------------------------------------------------------ */
-  /* Music (Song-to-Show)                                                */
-  /* ------------------------------------------------------------------ */
-
-  /* ------------------------------------------------------------------ */
-  /* External control (OSC)                                              */
-  /* ------------------------------------------------------------------ */
 
   /* ------------------------------------------------------------------ */
   /* AI                                                                  */
@@ -362,9 +388,5 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   interpretForTest(prompt: string) {
     return interpretLocally(prompt, interpreterContext(this.index, this.engine, this.settings.ai.allowStrobe));
   }
-
-  /* ------------------------------------------------------------------ */
-  /* Files                                                               */
-  /* ------------------------------------------------------------------ */
 
 }

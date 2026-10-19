@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Eraser, Plus, Save, SlidersHorizontal, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Columns2, Eraser, ExternalLink, GripHorizontal, Plus, Save, SlidersHorizontal, Users, X } from 'lucide-react';
 import { useStore, confirmAction, EMPTY_OBJ } from '../store';
 import { useT } from '../i18n';
 import { act, newId } from '../api';
@@ -158,10 +158,16 @@ function ReleaseFamily({ ids, classes }: { ids: string[]; classes: AttributeClas
 function FamilyPalettes({ kind, ids }: { kind: Palette['kind']; ids: string[] }) {
   const tr = useT();
   const palettes = useStore((s) => s.project!.project.palettes).filter((p) => p.kind === kind);
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  const defaultName = () => tr('console.pal.defaultName', { kind: tr(`prog.kind.${kind}`), n: palettes.length + 1 });
+  const open = () => { setName(defaultName()); setNaming(true); };
   const store = async () => {
-    const name = tr('console.pal.defaultName', { kind: tr(`prog.kind.${kind}`), n: palettes.length + 1 });
-    const r = await act({ type: 'palette.recordFromProgrammer', name, kind, fixtureId: ids[0]! });
-    if (r) useStore.getState().toast({ kind: 'success', title: tr('console.pal.stored', { name }), detail: tr('console.pal.storedDetail') });
+    const label = name.trim() || defaultName();
+    const r = await act({ type: 'palette.recordFromProgrammer', name: label, kind, fixtureId: ids[0]! });
+    if (!r) return;
+    setNaming(false);
+    useStore.getState().toast({ kind: 'success', title: tr('console.pal.stored', { name: label }), detail: tr('console.pal.storedDetail') });
   };
   return (
     <div className="chips" role="group" aria-label={tr('console.pal.aria', { kind: tr(`prog.kind.${kind}`) })}>
@@ -170,7 +176,12 @@ function FamilyPalettes({ kind, ids }: { kind: Palette['kind']; ids: string[] })
           {p.color && <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: p.color, marginRight: 5 }} />}{p.name}
         </button>
       ))}
-      <button className="chip add" title={tr('console.pal.storeHint')} onClick={() => void store()}><Plus size={12} />{tr('console.pal.store')}</button>
+      <button className="chip add" title={tr('console.pal.storeHint')} onClick={open}><Plus size={12} />{tr('console.pal.store')}</button>
+      {naming && (
+        <Modal title={tr('console.pal.dialogTitle')} onClose={() => setNaming(false)} footer={<><button className="btn" onClick={() => setNaming(false)}>{tr('common.cancel')}</button><button className="btn primary" onClick={() => void store()}>{tr('console.rec.save')}</button></>}>
+          <Field label={tr('console.pal.name')} hint={tr('console.pal.storeHint')}><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void store()} /></Field>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -192,8 +203,53 @@ function RecordSceneDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+const PANEL_IDS = ['intensity', 'color', 'cells', 'position', 'beam', 'dmx'];
+const ORDER_KEY = 'luma.console.order';
+const COLS_KEY = 'luma.console.cols';
+
+/** Palette order, persisted per browser; ids missing from storage keep their default place at the end. */
+function usePanelOrder() {
+  const [order, setOrder] = useState<string[]>(() => {
+    let saved: string[] = [];
+    try { const o = JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]'); if (Array.isArray(o)) saved = o.filter((i) => PANEL_IDS.includes(i)); } catch { /* storage unavailable: default order */ }
+    return [...saved, ...PANEL_IDS.filter((i) => !saved.includes(i))];
+  });
+  const move = (from: string, to: string) => {
+    if (from === to || !PANEL_IDS.includes(from)) return;
+    const next = order.filter((i) => i !== from);
+    next.splice(order.indexOf(to), 0, from);
+    setOrder(next);
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)); } catch { /* not persisted */ }
+  };
+  return { order, move };
+}
+
+/** Full-width palette that can be dragged by its grip and dropped on another one (placement via CSS `order`). */
+function Movable({ id, ord, children }: { id: string; ord: ReturnType<typeof usePanelOrder>; children: React.ReactNode }) {
+  const tr = useT();
+  const [armed, setArmed] = useState(false); // draggable only from the grip, so sliders keep working
+  const [over, setOver] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  return (
+    <div
+      className={`movable ${over ? 'over' : ''} ${dragging ? 'dragging' : ''}`}
+      style={{ order: ord.order.indexOf(id) + 1 }}
+      draggable={armed}
+      onDragStart={(e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; setDragging(true); }}
+      onDragEnd={() => { setDragging(false); setArmed(false); }}
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); ord.move(e.dataTransfer.getData('text/plain'), id); }}
+    >
+      <button className="grip" title={tr('console.drag')} aria-label={tr('console.drag')} onMouseDown={() => setArmed(true)} onMouseUp={() => setArmed(false)}><GripHorizontal size={14} /></button>
+      {children}
+    </div>
+  );
+}
+
 function Controls({ selected }: { selected: ResolvedFixture[] }) {
   const tr = useT();
+  const ord = usePanelOrder();
   const values = useStore((s) => s.values);
   const sources = useStore((s) => s.sources);
   const programmer = useStore((s) => s.runtime?.programmer ?? EMPTY_OBJ) as Record<string, Record<string, number>>;
@@ -238,13 +294,17 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
   const sendColor = useThrottled((hex: string) => void act({ type: 'programmer.setColor', fixtureIds: ids, color: hex, ...colorScope }), 40);
   const d = displayColor(first, values[first.fixture.id] ?? {});
 
+  const [cols, setCols] = useState(() => { try { return localStorage.getItem(COLS_KEY) === '1' ? 1 : 2; } catch { return 2; } });
+  const toggleCols = () => { const n = cols === 2 ? 1 : 2; setCols(n); try { localStorage.setItem(COLS_KEY, String(n)); } catch { /* not persisted */ } };
+
   return (
-    <div className="col gap-lg">
+    <div className="pal-grid" style={{ '--cols': cols } as React.CSSProperties}>
       <div className="sel-summary small" data-testid="selection-summary">
         <span className="muted">{tr('console.sel.controlling', { n: selected.length })}</span>
         {selected.slice(0, 6).map((rf) => <span key={rf.fixture.id} className="badge violet">{rf.fixture.name}</span>)}
         {selected.length > 6 && <span className="badge">{tr('console.sel.more', { n: selected.length - 6 })}</span>}
         <span className="grow" />
+        <button className="btn ghost sm" data-testid="console-cols" title={tr('console.cols')} onClick={toggleCols}><Columns2 size={13} />{cols}</button>
         <button className="btn ghost sm icon" title={tr('console.sel.clear')} aria-label={tr('console.sel.clear')} onClick={() => useStore.getState().setSelection([])}><X size={13} /></button>
       </div>
       {modules.length > 1 && (
@@ -254,6 +314,7 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
           ))}
         </div>
       )}
+      <Movable id="intensity" ord={ord}>
       <Panel title={tr('console.family.intensity')} className="fam fam-intensity" actions={<ReleaseFamily ids={ids} classes={['intensity']} />}>
         <div className="row" style={{ alignItems: 'flex-end', gap: 18 }}>
           <div className="fader">
@@ -276,9 +337,10 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
         </div>
         <FamilyPalettes kind="intensity" ids={ids} />
       </Panel>
+      </Movable>
 
       {colorCaps.size > 0 && !(colorCaps.size === 1 && colorCaps.has('none')) && (
-        <Panel title={tr('console.family.color')} className="fam fam-color" actions={<ReleaseFamily ids={ids} classes={['color']} />}>
+        <Movable id="color" ord={ord}><Panel title={tr('console.family.color')} className="fam fam-color" actions={<ReleaseFamily ids={ids} classes={['color']} />}>
           <div className="col">
             <div className="row">
               <input type="color" value={rgbToHex(d.color)} onChange={(e) => sendColor(e.target.value)} title={tr('console.colorHint')} />
@@ -287,15 +349,19 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
               </div>
             </div>
             {emitters.map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
-            {has('colorWheel') && channelFor('colorWheel') && <RangeChips channel={channelFor('colorWheel')!} attr="colorWheel" current={cur('colorWheel')} set={set} />}
+            {/* Slot chips when the profile documents them, plus a raw 0-255 slider (split colours, undocumented slots). */}
+            {has('colorWheel') && channelFor('colorWheel') && <>
+              {channelFor('colorWheel')!.ranges.length > 0 && <RangeChips channel={channelFor('colorWheel')!} attr="colorWheel" current={cur('colorWheel')} set={set} />}
+              <Slider label={channelFor('colorWheel')!.name} value={cur('colorWheel')} source={src('colorWheel')} touched={touched('colorWheel')} onChange={(v) => set('colorWheel', v)} />
+            </>}
             {['cyan', 'magenta', 'yellow', 'cto'].filter(has).map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
             <FamilyPalettes kind="color" ids={ids} />
           </div>
-        </Panel>
+        </Panel></Movable>
       )}
 
       {colorCells(first).length > 0 && (
-        <Panel title={tr('console.cells', { name: first.fixture.name })}>
+        <Movable id="cells" ord={ord}><Panel title={tr('console.cells', { name: first.fixture.name })}>
           <div className="col">
             <div className="row wrap">
               {cellColors(first, values[first.fixture.id] ?? {}).map(({ cell, color }) => (
@@ -307,11 +373,11 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
             </div>
             <span className="small dim">{tr('console.cellsNote')}</span>
           </div>
-        </Panel>
+        </Panel></Movable>
       )}
 
       {(has('pan') || has('tilt')) && (
-        <Panel title={tr('console.family.position')} className="fam fam-position" actions={<ReleaseFamily ids={ids} classes={['position']} />}>
+        <Movable id="position" ord={ord}><Panel title={tr('console.family.position')} className="fam fam-position" actions={<ReleaseFamily ids={ids} classes={['position']} />}>
           <div className="row" style={{ alignItems: 'flex-start', gap: 16 }}>
             <XYPad pan={cur('pan')} tilt={cur('tilt')} onChange={(p, t) => sendThrottled({ ...(has('pan') ? { pan: p } : {}), ...(has('tilt') ? { tilt: t } : {}) })} />
             <div className="col grow">
@@ -325,21 +391,21 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
             </div>
           </div>
           <FamilyPalettes kind="position" ids={ids} />
-        </Panel>
+        </Panel></Movable>
       )}
 
       {beam.length > 0 && (
-        <Panel title={tr('console.family.beam')} className="fam fam-beam" actions={<ReleaseFamily ids={ids} classes={['beam', 'special']} />}>
+        <Movable id="beam" ord={ord}><Panel title={tr('console.family.beam')} className="fam fam-beam" actions={<ReleaseFamily ids={ids} classes={['beam', 'special']} />}>
           {beam.map((a) => {
             const ch = channelFor(a);
             if (!ch) return null;
             return ch.ranges.length ? <RangeChips key={a} channel={ch} attr={a} current={cur(a)} set={set} /> : <Slider key={a} label={ch.name} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />;
           })}
           <FamilyPalettes kind="beam" ids={ids} />
-        </Panel>
+        </Panel></Movable>
       )}
 
-      <Panel title={tr('console.dmx', { name: first.fixture.name })}>
+      <Movable id="dmx" ord={ord}><Panel title={tr('console.dmx', { name: first.fixture.name })}>
         <table className="table small">
           <thead><tr><th>{tr('console.dmx.addr')}</th><th>{tr('console.dmx.channel')}</th><th>{tr('console.dmx.value')}</th><th>{tr('console.dmx.source')}</th></tr></thead>
           <tbody>
@@ -352,12 +418,24 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
           </tbody>
         </table>
         <p className="small dim" style={{ marginBottom: 0 }}>{tr('console.dmx.note')}</p>
-      </Panel>
+      </Panel></Movable>
     </div>
   );
 }
 
-export function LiveConsole() {
+export const DETACHED_CONSOLE_HASH = '#console';
+
+export const openDetachedConsole = () => window.open(location.href.split('#')[0] + DETACHED_CONSOLE_HASH, 'luma-console');
+
+/** Live Console alone in its own window (second screen), opened by the "Détacher" button. */
+export function DetachedConsole() {
+  const tr = useT();
+  const ready = useStore((s) => !!s.project);
+  useEffect(() => { document.title = 'Live Console'; }, []);
+  return <div style={{ height: '100vh', overflow: 'auto' }}>{ready ? <LiveConsole detached /> : <div className="empty">{tr('stagePage.connecting')}</div>}</div>;
+}
+
+export function LiveConsole({ detached = false }: { detached?: boolean }) {
   const tr = useT();
   const { fixtures, byId } = useResolved();
   const selection = useStore((s) => s.selection);
@@ -373,6 +451,7 @@ export function LiveConsole() {
           <input type="range" min={0} max={100} style={{ width: 140 }} aria-label={tr('console.masterHint')} value={Math.round((rt?.engine.master ?? 1) * 100)} onChange={(e) => master(Number(e.target.value) / 100)} />
           <span className="mono small">{Math.round((rt?.engine.master ?? 1) * 100)}%</span>
         </div>
+        {!detached && <button className="btn" data-testid="console-detach" onClick={openDetachedConsole} title={tr('console.detachHint')}><ExternalLink size={14} />{tr('console.detach')}</button>}
         <button className="btn" disabled={!selection.length} onClick={() => void act({ type: 'programmer.release', fixtureIds: selection })} title={tr('console.releaseSelHint')}><Eraser size={15} />{tr('console.releaseSel')}</button>
         <button className="btn" onClick={() => void act({ type: 'programmer.release' })} title={tr('console.releaseAllHint')}>{tr('console.releaseAll')}</button>
         <button className="btn primary" disabled={!rt?.engine.programmerCount} onClick={() => setRecording(true)}><Save size={15} />{tr('console.record')}</button>
@@ -380,9 +459,20 @@ export function LiveConsole() {
       {fixtures.length === 0 ? (
         <Empty icon={<SlidersHorizontal size={32} />} title={tr('console.noFixtures')} action={<button className="btn primary" onClick={() => useStore.getState().setPage('fixtures')}>{tr('console.openPatch')}</button>}>{tr('console.noFixturesHint')}</Empty>
       ) : (
-        <div className="split console-split">
-          <Panel title={tr('console.fixtures')}><FixtureTiles /></Panel>
-          {selected.length ? <Controls selected={selected} /> : <Panel title={tr('console.controls')}><p className="muted" style={{ margin: 0 }}>{tr('console.controlsEmpty')}</p></Panel>}
+        <div className="console-layout">
+          {/* Rail that expands over the content on hover / keyboard focus, then retracts by itself. */}
+          <aside className="console-side" data-testid="console-side" tabIndex={0} aria-label={tr('console.fixtures')}>
+            <div className="console-side-inner">
+              <div className="console-side-rail" title={tr('console.fixtures')}>
+                <Users size={18} />
+                <span className="badge violet mono">{selection.length}</span>
+              </div>
+              <div className="console-side-body"><FixtureTiles /></div>
+            </div>
+          </aside>
+          <div className="console-main">
+            {selected.length ? <Controls selected={selected} /> : <Panel title={tr('console.controls')}><p className="muted" style={{ margin: 0 }}>{tr('console.controlsEmpty')}</p></Panel>}
+          </div>
         </div>
       )}
       {recording && <RecordSceneDialog onClose={() => setRecording(false)} />}

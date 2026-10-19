@@ -7,8 +7,9 @@ import type { NamedRef } from '../../music/showRig';
 import { normalize } from '../local/interpreter';
 import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
-import { coarseChannel } from '../../fixtures/profiles';
+import { coarseChannel, modeCells } from '../../fixtures/profiles';
 import { BRAND } from '../../../shared/brand';
+import type { AiUsage } from '../usage';
 
 export const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 export const DEFAULT_OPENROUTER_MODEL = 'openrouter/auto';
@@ -22,6 +23,7 @@ const target = z.object({
   groupNames: z.array(z.string()).optional(),
   fixtureNames: z.array(z.string()).optional(),
   fixtureTypes: z.array(z.enum(FIXTURE_TYPES)).optional(),
+  tags: z.array(z.string()).optional(),
   limit: z.number().optional(),
   module: z.string().optional(),
 });
@@ -73,8 +75,11 @@ Rules:
 ${JSON.stringify(PLAN_JSON_SCHEMA)}
 - Values are normalized 0..1 (level, pan, tilt, amplitude, offset, phaseSpread). Colours are "#RRGGBB". Fades/holds are seconds. speed is cycles per second.
 - Target fixtures only by the exact group names, fixture names or fixture types listed in the rig description. {"all": true} targets the whole rig.
+- Fixtures may carry "tags" (e.g. backlight, face, audience): target them with { "tags": ["backlight"] }.
+- Each fixture gives its stage "position" (x: left/right in metres, y: depth), "height" and "side" (left, right or center). Use them for spatial requests (left to right chases, "vise le chanteur"). Moving heads give "pan_degrees", "tilt_degrees" and "beam_angle": size pan/tilt sweeps to what the fixture can do. "cells" = addressable pixels of a bar; "colorWheelSlots" = the exact colours of its wheel.
 - Multi-head fixtures list their "modules" (e.g. main head + LED ring). Add "module": "<module name>" to a target to change only that head's colour/intensity.
-- Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove) need pan/tilt. Colour effects need colour attributes.
+- Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove, fan) need pan/tilt. Colour effects (including brightnessColor) need colour attributes.
+- fan spreads moving heads symmetrically from the centre and folds them back. bassFollow (dimmer follows the bass, amplitude = depth) and brightnessColor (colour from colors[0] when the music is dark to colors[1] when it is bright) only react while live audio or a track is analysed: say so in "understanding".
 - Never touch reset, lamp or other special/control functions; they are not available to you.
 - Strobe effects are only allowed when the rig description says strobeAllowed: true.
 - setBeam changes beam attributes of fixtures that have them: gobo = slot number on the gobo wheel (0 = open, see "gobos" for the slot count), prism true/false, zoom 0 (narrow) .. 1 (wide), focus/frost/iris 0..1.
@@ -96,18 +101,37 @@ export function describeRig(index: ProjectIndex, allowStrobe: boolean, bpm: numb
     bpm,
     fixtures: [...index.fixtures.values()].map((rf) => {
       const now = live?.current[rf.fixture.id];
+      const { x, y } = rf.fixture.position;
       const gobos = coarseChannel(rf.mode, 'gobo')?.ranges.filter((r) => r.kind === 'gobo').length;
+      const cells = modeCells(rf.mode).length;
+      const wheel = coarseChannel(rf.mode, 'colorWheel')?.ranges.filter((r) => r.kind === 'color' && r.color).map((r) => ({ label: r.label, color: r.color }));
+      const phys = rf.profile.physical;
       return {
         name: rf.fixture.name,
         type: rf.profile.type,
+        position: { x, y },
+        height: rf.fixture.height,
+        side: x < -1 ? 'left' : x > 1 ? 'right' : 'center',
+        ...(rf.fixture.tags.length ? { tags: rf.fixture.tags } : {}),
         attributes: [...new Set(rf.attributes.map(baseAttribute))].filter((a) => a !== 'control' && a !== 'macro'),
         ...(rf.profile.modules.length ? { modules: rf.profile.modules.map((m) => m.name) } : {}),
+        ...(phys.panRange > 0 ? { pan_degrees: phys.panRange, tilt_degrees: phys.tiltRange, beam_angle: phys.beamAngle, ...(phys.panTiltTime ? { move_seconds_540: phys.panTiltTime } : {}) } : {}),
         ...(gobos ? { gobos } : {}),
+        ...(cells ? { cells } : {}),
+        ...(wheel?.length ? { colorWheelSlots: wheel } : {}),
         ...(now && now.level > 0.01 ? { now: { color: now.color, level: Math.round(now.level * 100) / 100 } } : {}),
       };
     }),
     ...(live ? { runningAiEffects: live.aiEffects } : {}),
-    groups: [...index.groups.values()].map((g) => ({ name: g.name, size: g.fixtureIds.length })),
+    groups: [...index.groups.values()].map((g) => {
+      const members = g.fixtureIds.flatMap((id) => { const m = index.fixtures.get(id); return m ? [m] : []; });
+      return {
+        name: g.name,
+        size: g.fixtureIds.length,
+        types: [...new Set(members.map((m) => m.profile.type))],
+        attributes: [...new Set(members.flatMap((m) => m.attributes.map(baseAttribute)))].filter((a) => a !== 'control' && a !== 'macro'),
+      };
+    }),
     scenes: [...index.scenes.values()].map((s) => s.name),
     cueLists: [...index.cueLists.values()].map((c) => c.name),
   });
@@ -160,24 +184,61 @@ export function parseModels(json: unknown): OpenRouterModel[] {
 }
 
 export class OpenRouterError extends Error {
-  constructor(message: string, readonly status: number | null) {
+  /** Delay asked by the provider before retrying (Retry-After), when given. */
+  retryAfterMs?: number;
+  constructor(message: string, readonly status: number | null, readonly cancelled = false, readonly network = false) {
     super(message);
+  }
+}
+
+/** Transient answers worth another attempt (rate limit, gateway errors); a network failure is too. */
+const RETRYABLE = new Set([429, 502, 503, 504]);
+export const MAX_ATTEMPTS = 3;
+
+const pause = (ms: number, cancel?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    cancel?.addEventListener('abort', () => { clearTimeout(t); reject(new OpenRouterError('Demande annulée', null, true)); }, { once: true });
+  });
+
+/**
+ * One API call with at most `MAX_ATTEMPTS` attempts on transient failures (exponential backoff with jitter, or the
+ * provider's Retry-After), all within the same overall `timeoutMs`. A cancelled or refused request is never retried.
+ */
+async function request(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number, cancel?: AbortSignal, stats?: { attempts: number }): Promise<unknown> {
+  const deadline = Date.now() + timeoutMs;
+  for (let attempt = 1; ; attempt++) {
+    if (stats) stats.attempts = attempt;
+    try {
+      return await requestOnce(fetchImpl, url, init, Math.max(1, deadline - Date.now()), cancel);
+    } catch (err) {
+      const e = err as OpenRouterError;
+      const transient = !e.cancelled && (e.status === null ? e.network : RETRYABLE.has(e.status));
+      const wait = e.retryAfterMs ?? 500 * 2 ** (attempt - 1) + Math.random() * 250;
+      if (!transient || attempt >= MAX_ATTEMPTS || Date.now() + wait >= deadline) throw err;
+      await pause(wait, cancel);
+    }
   }
 }
 
 type FetchLike = typeof fetch;
 
-async function request(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number): Promise<unknown> {
+async function requestOnce(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number, cancel?: AbortSignal): Promise<unknown> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const onCancel = () => ctrl.abort();
+  cancel?.addEventListener('abort', onCancel);
   let res: Response;
   try {
+    if (cancel?.aborted) throw Object.assign(new Error('annulée'), { name: 'AbortError' });
     res = await fetchImpl(url, { ...init, signal: ctrl.signal });
   } catch (err) {
+    if (cancel?.aborted) throw new OpenRouterError('Demande annulée', null, true);
     if ((err as Error).name === 'AbortError') throw new OpenRouterError('Délai dépassé', null);
-    throw new OpenRouterError(`Connexion impossible (réseau indisponible ?) : ${(err as Error).message}`, null);
+    throw new OpenRouterError(`Connexion impossible (réseau indisponible ?) : ${(err as Error).message}`, null, false, true);
   } finally {
     clearTimeout(t);
+    cancel?.removeEventListener('abort', onCancel);
   }
   const text = await res.text();
   let body: unknown = null;
@@ -189,7 +250,10 @@ async function request(fetchImpl: FetchLike, url: string, init: RequestInit, tim
   if (!res.ok) {
     const msg = (body as { error?: { message?: string } } | null)?.error?.message ?? text.slice(0, 200);
     const hint = res.status === 401 ? 'Clé API refusée' : res.status === 402 ? 'Crédits OpenRouter insuffisants' : res.status === 429 ? 'Limite de débit atteinte, réessayez plus tard' : res.status === 404 ? 'Modèle introuvable' : `Erreur API ${res.status}`;
-    throw new OpenRouterError(`${hint}${msg ? ` : ${msg}` : ''}`, res.status);
+    const e = new OpenRouterError(`${hint}${msg ? ` : ${msg}` : ''}`, res.status);
+    const retryAfter = Number(res.headers.get('retry-after'));
+    if (res.headers.has('retry-after') && Number.isFinite(retryAfter)) e.retryAfterMs = retryAfter * 1000;
+    throw e;
   }
   return body;
 }
@@ -211,6 +275,14 @@ export interface OpenRouterOptions {
   /** Capabilities of the chosen model when known (from the models list). */
   capabilities?: Pick<OpenRouterModel, 'structuredOutputs' | 'jsonMode' | 'reasoning'>;
   fetchImpl?: FetchLike;
+  /** Cancels the request (user « Annuler »); the error is an `OpenRouterError` with `cancelled`. */
+  signal?: AbortSignal;
+  /** One corrective request when the answer does not match the schema (default: on). */
+  repair?: boolean;
+  /** Tokens and cost of each completed call (OpenRouter `usage`). */
+  onUsage?: (u: AiUsage) => void;
+  /** Previous exchanges of the conversation, sent between the system prompt and the request. */
+  history?: { role: 'user' | 'assistant'; content: string }[];
 }
 
 export interface ProviderResult {
@@ -252,8 +324,10 @@ export async function completeJson(system: string, user: string | unknown[], sch
     model: opts.model,
     max_tokens: 8000,
     temperature: 0.3,
+    usage: { include: true },
     messages: [
       { role: 'system', content: system },
+      ...(opts.history ?? []),
       { role: 'user', content: user },
     ],
   };
@@ -262,12 +336,16 @@ export async function completeJson(system: string, user: string | unknown[], sch
   else if (caps?.jsonMode) body.response_format = { type: 'json_object' };
   if (caps?.reasoning) body.reasoning = { effort: opts.effort };
 
+  const stats = { attempts: 1 };
   const json = await request(opts.fetchImpl ?? fetch, `${OPENROUTER_URL}/chat/completions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json', 'X-Title': BRAND.productName },
     body: JSON.stringify(body),
-  }, opts.timeoutMs);
+  }, opts.timeoutMs, opts.signal, stats);
 
+  // The call is paid even if its content turns out unusable: record it first.
+  const usage = z.object({ usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number(), cost: z.number().optional() }) }).safeParse(json);
+  if (usage.success) opts.onUsage?.({ promptTokens: usage.data.usage.prompt_tokens, completionTokens: usage.data.usage.completion_tokens, cost: usage.data.usage.cost ?? null });
   const parsed = z
     .object({ model: z.string().optional(), choices: z.array(z.object({ finish_reason: z.string().nullable().optional(), message: z.object({ content: z.string().nullable().optional() }) })).min(1) })
     .safeParse(json);
@@ -282,13 +360,23 @@ export async function completeJson(system: string, user: string | unknown[], sch
   const notices: string[] = [];
   if (opts.model === DEFAULT_OPENROUTER_MODEL || model !== opts.model) notices.push(`Réponse servie par ${model}`);
   if (!caps) notices.push('Capacités du modèle inconnues : format JSON demandé par consigne uniquement.');
+  if (stats.attempts > 1) notices.push(`Réponse obtenue après ${stats.attempts} tentatives (incident passager du fournisseur).`);
   // Many models emit null for optional fields: drop them before validating.
   return { json: clean(extractJson(choice.message.content)), model, notices };
 }
 
 export async function proposeWithOpenRouter(prompt: string, rig: string, opts: OpenRouterOptions): Promise<ProviderResult> {
-  const r = await completeJson(`${SYSTEM_PROMPT}\n\nRig description:\n${rig}`, prompt, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
-  const plan = llmPlanSchema.safeParse(r.json);
+  const system = `${SYSTEM_PROMPT}\n\nRig description:\n${rig}`;
+  let r = await completeJson(system, prompt, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
+  let plan = llmPlanSchema.safeParse(r.json);
+  if (!plan.success && opts.repair !== false) {
+    // One second chance with the validation errors: weaker models often miss a single field (costs one more call).
+    const issues = plan.error.issues.slice(0, 5).map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    const retry = `${prompt}\n\nYour previous answer did not match the required JSON schema (${issues}).\nPrevious answer:\n${JSON.stringify(r.json).slice(0, 6000)}\nReturn only the corrected JSON object.`;
+    r = await completeJson(system, retry, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
+    plan = llmPlanSchema.safeParse(r.json);
+    if (plan.success) r.notices.push('Réponse corrigée par une seconde requête (format non conforme la première fois).');
+  }
   if (!plan.success) throw new OpenRouterError(`Réponse IA non conforme au schéma : ${plan.error.issues[0]?.path.join('.')} ${plan.error.issues[0]?.message}`, null);
   return { understanding: plan.data.understanding, actions: plan.data.actions, model: r.model, notices: r.notices };
 }

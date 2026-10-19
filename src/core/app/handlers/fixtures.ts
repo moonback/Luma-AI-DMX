@@ -121,6 +121,24 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       app.mutate((d) => { d.profiles = d.profiles.filter((p) => p.id !== cmd.id); });
       return ok;
     }
+    case 'profile.export': {
+      const profiles = cmd.ids ? app.userProfiles.filter((p) => cmd.ids!.includes(p.id)) : app.userProfiles;
+      if (!profiles.length) throw new UserError('Aucun profil à exporter');
+      const base = (profiles.length === 1 ? `${profiles[0]!.manufacturer} ${profiles[0]!.name}` : 'profils').replace(/[\\/:*?"<>|]/gu, '_');
+      const file = cmd.path ?? (await app.opts.dialogs.saveProfiles?.(`${base}.json`)) ?? null;
+      if (!file) return { path: null, count: 0 };
+      await fs.writeFile(file, `${JSON.stringify({ profiles }, null, 2)}\n`, 'utf8');
+      app.logger.info('Profils', `${profiles.length} profil(s) exporté(s) : ${path.basename(file)}`);
+      return { path: file, count: profiles.length };
+    }
+    case 'profile.save': {
+      const profile = cmd.profile;
+      if (BUILTIN_PROFILES.some((b) => b.id === profile.id)) throw new UserError(`Profil « ${profile.id} » : identifiant réservé à un profil intégré`);
+      await saveToLibrary(app, [profile]);
+      app.mutate((d) => { d.profiles = [...d.profiles.filter((x) => x.id !== profile.id), profile]; });
+      app.logger.info('Profils', `Profil enregistré : ${profile.manufacturer} ${profile.name} (${profile.modes.length} mode(s))`);
+      return { profileId: profile.id };
+    }
     case 'fixture.add': {
       const profile = app.index.lib.get(cmd.profileId);
       if (!profile) throw new UserError('Profil inconnu');

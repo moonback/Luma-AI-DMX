@@ -34,7 +34,8 @@ export async function handleLocate(app: AppService, cmd: CommandIn<'locate'>): P
     case 'locate.apply': {
       const ids = new Set(app.project.patch.map((f) => f.id));
       const updates = cmd.updates.filter((u) => ids.has(u.fixtureId));
-      app.mutate((d) => {
+      // One scene-history step: a bad calibration must be undoable (Ctrl+Z) like any layout edit.
+      app.sceneMutate((d) => {
         for (const u of updates) {
           const f = d.patch.find((x) => x.id === u.fixtureId)!;
           f.position = { x: Math.round(u.x * 100) / 100, y: Math.round(u.y * 100) / 100 };
@@ -68,10 +69,29 @@ export function showLocateFrame(app: AppService, index: number): void {
   }
   app.engine.setExternal('locate', { layer: { id: 'locate', label: 'Localisation caméra', kind: 'locate', priority: 1000, order: 0, values } });
   s.awaitingPhoto = s.photo;
+  armLocateWatchdog(app);
   app.emit('runtime', app.runtimeState());
 }
 
+/** A sequence with no new frame for this long has been abandoned (window gone, phone lost): the stage is released. */
+export const LOCATE_IDLE_MS = 5 * 60_000;
+const watchdogs = new WeakMap<AppService, NodeJS.Timeout>();
+
+function armLocateWatchdog(app: AppService): void {
+  clearTimeout(watchdogs.get(app));
+  const t = setTimeout(() => {
+    if (!app.locate) return;
+    app.logger.warn('Localisation', `Séquence caméra sans activité depuis ${LOCATE_IDLE_MS / 60_000} min : arrêtée, projecteurs rendus aux autres sources`);
+    endLocate(app);
+    app.emit('runtime', app.runtimeState());
+  }, LOCATE_IDLE_MS);
+  t.unref?.();
+  watchdogs.set(app, t);
+}
+
 export function endLocate(app: AppService): void {
+  clearTimeout(watchdogs.get(app));
+  watchdogs.delete(app);
   app.engine.setExternal('locate', null);
   app.locate = null;
 }

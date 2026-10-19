@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, Copy, FileDown, Lightbulb, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { Camera, Copy, FileDown, Lightbulb, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { useT } from '../i18n';
@@ -8,6 +8,8 @@ import { channelCount, channelKey } from '../../core/fixtures/profiles';
 import { findFreeAddress } from '../../core/fixtures/patch';
 import { attributeLabel } from '../../core/fixtures/attributes';
 import { CameraLocate } from './CameraLocate';
+import { ProfileFromPhotoDialog } from './ProfileFromPhoto';
+import type { FixtureProfile } from '../../core/model/schemas';
 
 function AddDialog({ onClose }: { onClose: () => void }) {
   const { lib } = useResolved();
@@ -184,6 +186,47 @@ function Editor({ id }: { id: string }) {
   );
 }
 
+/** Imported profiles of the user library (every project); a profile still patched cannot be removed. */
+function LibraryPanel() {
+  const tr = useT();
+  const ps = useStore((s) => s.project!);
+  const [editing, setEditing] = useState(null as FixtureProfile | null);
+  if (!ps.library.length) return null;
+  const remove = async (id: string, name: string) => {
+    if (await confirmAction({ title: tr('fixtures.lib.removeTitle'), message: tr('fixtures.lib.removeMessage', { name }), confirmLabel: tr('fixtures.lib.remove') })) await act({ type: 'profile.remove', id });
+  };
+  return (
+    <Panel flush className="lib-panel" title={tr('fixtures.lib.title', { n: ps.library.length })}
+      actions={<button className="btn sm" data-testid="export-profiles" title={tr('fixtures.lib.exportAllTitle')} onClick={() => void act({ type: 'profile.export' })}><FileDown size={13} />{tr('fixtures.lib.exportAll')}</button>}>
+      <table className="table" data-testid="profile-library">
+        <thead><tr><th>{tr('fixtures.lib.name')}</th><th>{tr('fixtures.lib.manufacturer')}</th><th>{tr('fixtures.lib.modes')}</th><th>{tr('fixtures.lib.used')}</th><th /></tr></thead>
+        <tbody>
+          {ps.library.map((p) => {
+            const used = ps.project.patch.filter((f) => f.profileId === p.id).length;
+            return (
+              <tr key={p.id}>
+                <td>{p.name}</td>
+                <td className="muted">{p.manufacturer}</td>
+                <td className="mono">{p.modes.length}</td>
+                <td className="mono">{used}</td>
+                <td>
+                  <button className="btn ghost sm icon" data-testid={`edit-profile-${p.id}`} title={tr('pphoto.edit')} aria-label={tr('pphoto.edit')} onClick={() => setEditing(p)}><Pencil size={13} /></button>
+                  <button className="btn ghost sm icon" data-testid={`export-profile-${p.id}`} title={tr('fixtures.lib.export')} aria-label={tr('fixtures.lib.export')} onClick={() => void act({ type: 'profile.export', ids: [p.id] })}><FileDown size={13} /></button>
+                  <button className="btn ghost sm icon danger" disabled={used > 0} data-testid={`remove-profile-${p.id}`}
+                    title={used ? tr('fixtures.lib.inUse', { n: used }) : tr('fixtures.lib.remove')} aria-label={tr('fixtures.lib.remove')} onClick={() => void remove(p.id, p.name)}>
+                    <Trash2 size={13} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {editing && <ProfileFromPhotoDialog initial={editing} onClose={() => setEditing(null)} />}
+    </Panel>
+  );
+}
+
 export function Fixtures() {
   const tr = useT();
   const { fixtures } = useResolved();
@@ -194,6 +237,7 @@ export function Fixtures() {
   const [adding, setAdding] = useState(false);
   const [locating, setLocating] = useState(false);
   const [ofl, setOfl] = useState(false);
+  const [fromPhoto, setFromPhoto] = useState(false);
   const [universe, setUniverse] = useState<number | 'all'>('all');
   const issueIds = useMemo(() => new Set(ps.issues.flatMap((i) => i.fixtureIds)), [ps.issues]);
   const shown = fixtures.filter((rf) => {
@@ -225,6 +269,7 @@ export function Fixtures() {
       <PageHead title="Fixtures" subtitle="Patch DMX : profils, univers, adresses et positions">
         <button className="btn" onClick={() => void importProfiles()} title="Importer des profils : JSON Luma (docs/PROFILE_FORMAT.md) ou export grandMA2 (.xml, un fichier par mode)"><Upload size={15} />Importer des profils</button>
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
+        <button className="btn" data-testid="profile-from-photo" onClick={() => setFromPhoto(true)} title={tr('pphoto.buttonTitle')}><Camera size={15} />{tr('pphoto.button')}</button>
         <button className="btn" data-testid="patch-sheet-pdf" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'pdf' })} title="Feuille de patch imprimable (A4 paysage), par univers"><FileDown size={15} />Patch PDF</button>
         <button className="btn" data-testid="patch-sheet-csv" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'csv' })} title="Feuille de patch pour tableur (CSV « ; », UTF-8)"><FileDown size={15} />CSV</button>
         <button className="btn" data-testid="export-mvr" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'project.exportMvr' })} title={tr('fixtures.exportMvrTitle')}><FileDown size={15} />{tr('fixtures.exportMvr')}</button>
@@ -287,8 +332,10 @@ export function Fixtures() {
           <Panel title="Propriétés"><p className="muted" style={{ margin: 0 }}>{selection.length ? `${selection.length} projecteurs sélectionnés (Maj/Ctrl+clic). Utilisez la console live pour les piloter ensemble.` : 'Sélectionnez un projecteur pour modifier son adressage, sa position et ses tags.'}</p></Panel>
         )}
       </div>
+      <div style={{ marginTop: 12 }}><LibraryPanel /></div>
       {adding && <AddDialog onClose={() => setAdding(false)} />}
       {ofl && <OflDialog onClose={() => setOfl(false)} />}
+      {fromPhoto && <ProfileFromPhotoDialog onClose={() => setFromPhoto(false)} />}
     </div>
   );
 }

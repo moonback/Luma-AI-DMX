@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lock, LockOpen, Music2, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
+import { Lock, LockOpen, Music2, Pause, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -9,6 +9,7 @@ import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
 import { SECTION_LABELS, type Mood, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
 import { BEAM_NAMES, EFFECT_NAMES, EVENT_STYLE, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
 import { SectionEditor } from './music/SectionEditor';
+import type { Progress } from '../../shared/commands';
 import { usePlayback } from './music/MiniPlayer';
 
 // Kept in French whatever the UI language: the local rules (parseIntent) only read French.
@@ -73,18 +74,19 @@ function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; s
   );
 }
 
-const GEN_STEPS: MessageKey[] = ['music.genStep.analyze', 'music.genStep.sections', 'music.genStep.looks', 'music.genStep.moves', 'music.genStep.final'];
+/** Real steps reported by the main process (`progress` events) and where each one sits on the bar. */
+const GEN_STEPS: Record<Progress['step'], { key: MessageKey; p: number }> = {
+  plan: { key: 'music.genStep.plan', p: 0.15 },
+  request: { key: 'music.genStep.request', p: 0.45 },
+  cache: { key: 'music.genStep.cache', p: 0.7 },
+  compile: { key: 'music.genStep.compile', p: 0.9 },
+};
 
-/** Blocking modal while the show is generated (not closable: the command cannot be cancelled). */
+/** Modal while the show is generated; the OpenRouter request can be cancelled (nothing is applied then). */
 function GeneratingModal() {
   const t = useT();
-  const [p, setP] = useState(0);
-  useEffect(() => {
-    // shortcut: music.generate reports no progress, so the bar eases toward 95 % over time; upgrade if the handler emits steps.
-    const t0 = Date.now();
-    const id = setInterval(() => setP(0.95 * (1 - Math.exp(-(Date.now() - t0) / 8000))), 100);
-    return () => clearInterval(id);
-  }, []);
+  const step = useStore((s) => s.progress?.step ?? 'plan');
+  const { key, p } = GEN_STEPS[step];
   const pct = Math.round(p * 100);
   return (
     <div className="overlay">
@@ -102,9 +104,10 @@ function GeneratingModal() {
           </div>
           <div className="meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><div style={{ width: `${pct}%` }} /></div>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="small dim gen-step" aria-live="polite">{t(GEN_STEPS[Math.min(GEN_STEPS.length - 1, Math.floor(p * GEN_STEPS.length / 0.95))]!)}</span>
+            <span className="small dim gen-step" aria-live="polite">{t(key)}</span>
             <span className="small dim mono">{pct} %</span>
           </div>
+          {step === 'request' && <button className="btn sm" data-testid="music-cancel" onClick={() => void act({ type: 'ai.cancel' })}>{t('music.genCancel')}</button>}
         </div>
       </div>
     </div>
@@ -158,6 +161,7 @@ export function MusicPage() {
   const generate = async (nextVariant: boolean) => {
     if (!track) return;
     setBusy(true);
+    useStore.setState({ progress: null });
     setGenerating(true);
     const r = await act({ type: 'music.generate', trackId: track.id, intent, nextVariant, mood });
     setGenerating(false);
@@ -179,9 +183,9 @@ export function MusicPage() {
     setBusy(false);
     if (r) setNotices(r.notices);
   };
-  const play = (tk: MusicTrack) => {
+  const play = (tk: MusicTrack, from = tk.analysis.sections[selected]?.start ?? 0) => {
     try {
-      musicPlayer.play(tk, tk.analysis.sections[selected]?.start ?? 0);
+      musicPlayer.play(tk, from);
     } catch (err) {
       useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
@@ -209,9 +213,17 @@ export function MusicPage() {
           <Panel title={track.name} actions={
             <div className="row">
               {musicPlayer.hasAudio(track.hash) ? (
-                playing?.trackId === track.id
-                  ? <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
-                  : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
+                playing?.trackId === track.id ? (
+                  <>
+                    <button className="btn" onClick={() => musicPlayer.pause()} data-testid="music-pause"><Pause size={13} />{t('music.pause')}</button>
+                    <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
+                  </>
+                ) : musicPlayer.paused?.trackId === track.id ? (
+                  <>
+                    <button className="btn accent" onClick={() => play(track, musicPlayer.paused!.at)} data-testid="music-resume"><Play size={13} />{t('music.resume')}</button>
+                    <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(musicPlayer.paused.at) })}</button>
+                  </>
+                ) : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
               ) : <span className="small dim">{t('music.noAudio')}</span>}
               <button className="btn ghost sm" onClick={() => { if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop(); void act({ type: 'music.removeTrack', id: track.id }); }}>{t('music.remove')}</button>
             </div>
@@ -224,6 +236,9 @@ export function MusicPage() {
               <span className="small dim">{t('music.eventsSummary', { impacts: track.analysis.events.filter((e) => e.kind === 'impact').length, risers: track.analysis.events.filter((e) => e.kind === 'riser').length, vocal: Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0)) })}</span>
             </div>
             <SectionStrip track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} pos={playing?.trackId === track.id ? pos : null} />
+            {(playing?.trackId ?? musicPlayer.paused?.trackId) === track.id && (
+              <input type="range" className="mini-player-seek" min={0} max={track.analysis.duration} step={0.1} value={playing ? pos : musicPlayer.paused!.at} aria-label={t('music.seek')} data-testid="music-seek" onChange={(e) => play(track, Number(e.target.value))} />
+            )}
             <p className="small dim" style={{ marginBottom: 0 }}>{t('music.strip.hint')}</p>
           </Panel>
 

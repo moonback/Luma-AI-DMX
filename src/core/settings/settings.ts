@@ -9,6 +9,9 @@ export const SHORTCUT_ACTIONS = [
   { id: 'blackout', label: 'Blackout on/off', default: 'B' },
   { id: 'stopOutput', label: 'STOP OUTPUT : arrêt immédiat des émissions réelles', default: 'Shift+Escape' },
   { id: 'release', label: 'Relâcher le programmeur (reprise des playbacks)', default: 'Escape' },
+  { id: 'releaseAll', label: 'Tout relâcher : programmeur, IA, effets, playbacks et timeline', default: '' },
+  { id: 'undo', label: 'Annuler la dernière modification du projet', default: 'Ctrl+Z' },
+  { id: 'redo', label: 'Rétablir', default: 'Ctrl+Y' },
   { id: 'save', label: 'Enregistrer', default: 'Ctrl+S' },
   { id: 'saveAs', label: 'Enregistrer sous', default: 'Ctrl+Shift+S' },
   { id: 'open', label: 'Ouvrir un projet', default: 'Ctrl+O' },
@@ -20,6 +23,7 @@ export const SHORTCUT_ACTIONS = [
   { id: 'page:programmer', label: 'Espace Programmer', default: 'Ctrl+4' },
   { id: 'page:cues', label: 'Espace Cues & Sequences', default: 'Ctrl+5' },
   { id: 'page:effects', label: 'Espace Effects', default: 'Ctrl+6' },
+  { id: 'page:quick', label: 'Espace Actions rapides', default: '' },
   { id: 'page:timeline', label: 'Espace Timeline', default: 'Ctrl+7' },
   { id: 'page:ai', label: 'Espace AI Lighting Director', default: 'Ctrl+8' },
   { id: 'page:visualizer', label: 'Espace Stage Visualizer', default: 'Ctrl+9' },
@@ -55,8 +59,12 @@ export const settingsSchema = z.object({
       autoUpdate: z.boolean().default(true),
       /** Opens the detached 3D stage window (second screen) once the first project of the session is opened, created or resumed. */
       detachStage3dOnStart: z.boolean().default(false),
+      /** Same for the Live Console window. */
+      detachConsoleOnStart: z.boolean().default(false),
+      /** Re-arms the enabled real outputs at launch; one that cannot open (hardware absent) just stays in error. Off by default: real outputs start disarmed. */
+      autoArmOnStart: z.boolean().default(false),
     })
-    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false }),
+    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false, detachConsoleOnStart: false, autoArmOnStart: false }),
   /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
   onboarding: z
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })
@@ -89,8 +97,10 @@ export const settingsSchema = z.object({
       allowStrobe: z.boolean().default(false),
       /** Fall back to the local interpreter when the external provider fails. */
       fallbackToLocal: z.boolean().default(true),
+      /** Monthly OpenRouter spending cap in USD (null: none); calls are refused once reached. */
+      monthlyBudget: z.number().min(0).max(10_000).nullable().default(null),
     })
-    .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, fallbackToLocal: true }),
+    .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, fallbackToLocal: true, monthlyBudget: null }),
   audio: z.object({ deviceId: z.string().max(300).nullable().default(null) }).default({ deviceId: null }),
   /** External control: MIDI mappings (renderer, Web MIDI), OSC over UDP (main) and timecode chase of the timeline. */
   control: z
@@ -108,8 +118,14 @@ export const settingsSchema = z.object({
           port: z.number().int().min(1024).max(65535).default(8000),
           /** 127.0.0.1 = this machine only; 0.0.0.0 = local network (no authentication: trusted networks only). */
           bind: z.enum(['127.0.0.1', '0.0.0.0']).default('127.0.0.1'),
+          /** Reply `/luma/ack` to each message. */
+          ack: z.boolean().default(true),
+          /** Senders allowed in network mode (IPv4 or CIDR); empty = any, with a warning. 127.0.0.1 always is. */
+          allow: z.array(z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/u)).max(32).default([]),
+          /** Destinations of the state feedback (`/luma/state/*` on change). */
+          feedback: z.array(z.object({ host: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/u), port: z.number().int().min(1).max(65535) })).max(8).default([]),
         })
-        .default({ enabled: false, port: 8000, bind: '127.0.0.1' }),
+        .default({ enabled: false, port: 8000, bind: '127.0.0.1', ack: true, allow: [], feedback: [] }),
       timecode: z
         .object({ source: z.enum(['off', 'mtc', 'ltc']).default('off'), ltcDeviceId: z.string().max(300).nullable().default(null) })
         .default({ source: 'off', ltcDeviceId: null }),
@@ -124,7 +140,7 @@ export const settingsSchema = z.object({
         })
         .default({ enabled: false, port: 8080, bind: '0.0.0.0' }),
     })
-    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
+    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1', ack: true, allow: [], feedback: [] }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
   /** Opt-in, local usage statistics (command types and error counts only). Off until the user turns it on. */
   telemetry: z.object({ usage: z.boolean().default(false) }).default({ usage: false }),
@@ -134,3 +150,16 @@ export const settingsSchema = z.object({
 export type Settings = z.infer<typeof settingsSchema>;
 
 export const defaultSettings = (): Settings => settingsSchema.parse({});
+
+/** Keeps every valid top-level section of an invalid settings file; the others take their defaults (listed in `reset`). */
+export function salvageSettings(raw: unknown): { settings: Settings; reset: string[] } {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const kept: Record<string, unknown> = {};
+  const reset: string[] = [];
+  for (const [key, schema] of Object.entries(settingsSchema.shape)) {
+    const r = (schema as z.ZodType).safeParse(src[key]);
+    if (r.success) kept[key] = r.data;
+    else reset.push(key);
+  }
+  return { settings: settingsSchema.parse(kept), reset };
+}

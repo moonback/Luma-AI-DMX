@@ -193,4 +193,16 @@ describe('actions setBeam et adjustEffect', () => {
     expect(rig.runningAiEffects).toEqual([]);
     expect(llmPlanSchema.safeParse({ understanding: '', actions: [{ type: 'setBeam', gobo: 2 }, { type: 'adjustEffect', speedFactor: 0.5 }] }).success).toBe(true);
   });
+
+  it('OpenRouter reçoit position, côté, capacités physiques et cibles par tag', () => {
+    const { index } = ctx();
+    const rig = JSON.parse(describeRig(index, false, 120));
+    const spot = rig.fixtures.find((f: { name: string }) => f.name === 'Spot 1');
+    expect(spot.position).toEqual({ x: expect.any(Number), y: expect.any(Number) });
+    expect(['left', 'right', 'center']).toContain(spot.side);
+    expect(spot.pan_degrees).toBeGreaterThan(0);
+    expect(spot.tilt_degrees).toBeGreaterThan(0);
+    expect(spot.beam_angle).toBeGreaterThan(0);
+    expect(llmPlanSchema.safeParse({ understanding: '', actions: [{ type: 'setIntensity', target: { tags: ['backlight'] }, level: 1 }] }).success).toBe(true);
+  });
 });

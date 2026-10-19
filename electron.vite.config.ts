@@ -16,6 +16,7 @@ export default defineConfig({
   renderer: {
     root: resolve('src/renderer'),
     build: { rollupOptions: { input: { index: resolve('src/renderer/index.html'), splash: resolve('src/renderer/splash.html'), updating: resolve('src/renderer/updating.html') } } },
-    plugins: [react()],
+    // The dev server's hot reload needs ws://localhost in the CSP; a packaged build must not allow it.
+    plugins: [react(), { name: 'luma-csp-prod', apply: 'build', transformIndexHtml: (html: string) => html.replace(' ws://localhost:*', '') }],
   },
 });

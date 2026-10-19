@@ -6,6 +6,7 @@ import { Field, NumberInput, PageHead, Panel, Tabs } from '../components/ui';
 import { resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, type Settings } from '../../core/settings/settings';
 import { comboFromEvent } from '../shortcuts';
 import type { RecoveryEntry } from '../../core/project/store';
+import type { StorageReport } from '../../core/app/storage';
 import type { OpenRouterModel } from '../../core/ai/providers/openrouter';
 import { externalControl } from '../control';
 import { audioEngine } from '../audioEngine';
@@ -130,7 +131,7 @@ const OSC_ADDRESSES = [
   ['/luma/go [liste]', 'go'], ['/luma/back [liste]', 'back'], ['/luma/goto <cue> [liste]', 'goto'],
   ['/luma/pause [liste] · /luma/resume [liste]', 'pause'], ['/luma/blackout [0|1]', 'blackout'],
   ['/luma/master <0..1>', 'master'], ['/luma/bpm <bpm>', 'bpm'], ['/luma/release', 'release'],
-  ['/luma/stop', 'stop'], ['/luma/timecode <secondes>', 'timecode'],
+  ['/luma/stop', 'stop'], ['/luma/releaseall', 'releaseAll'], ['/luma/timecode <secondes>', 'timecode'],
 ] as const;
 
 /** Version, update channel and status. Updates install when the application quits, never during a show. */
@@ -214,6 +215,13 @@ function ControlTab({ value, onChange }: { value: Settings['control']; onChange:
               <option value="0.0.0.0">{tr('settings.bind.lan')}</option>
             </select>
           </Field>
+          <Field label={tr('settings.osc.allow')} hint={tr('settings.osc.allowHint')}>
+            <input className="input mono" data-testid="osc-allow" defaultValue={value.osc.allow.join(', ')} placeholder="192.168.1.0/24" onBlur={(e) => onChange({ ...value, osc: { ...value.osc, allow: e.target.value.split(/[\s,;]+/u).filter(Boolean) } })} />
+          </Field>
+          <Field label={tr('settings.osc.feedback')} hint={tr('settings.osc.feedbackHint')}>
+            <input className="input mono" data-testid="osc-feedback" defaultValue={value.osc.feedback.map((f) => `${f.host}:${f.port}`).join(', ')} placeholder="192.168.1.20:9000" onBlur={(e) => onChange({ ...value, osc: { ...value.osc, feedback: e.target.value.split(/[\s,;]+/u).filter(Boolean).map((x) => { const [host = '', port = ''] = x.split(':'); return { host, port: Number(port) }; }) } })} />
+          </Field>
+          <label className="check"><input type="checkbox" checked={value.osc.ack} onChange={(e) => onChange({ ...value, osc: { ...value.osc, ack: e.target.checked } })} />{tr('settings.osc.ackToggle')}</label>
         </div>
         <table className="table small"><tbody>{OSC_ADDRESSES.map(([a, d]) => <tr key={a}><td className="mono">{a}</td><td>{tr(`settings.osc.cmd.${d}`)}</td></tr>)}</tbody></table>
         <p className="small dim" style={{ marginBottom: 0 }}>{tr('settings.osc.ackBefore')}<span className="mono">{tr('settings.osc.ack')}</span>{tr('settings.osc.ackAfter')}</p>
@@ -287,6 +295,36 @@ function RecentPanel({ recent, onChange }: { recent: string[]; onChange: (list: 
   );
 }
 
+const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} Mo`;
+
+/** Disk used by imported audio, the AI cache and recovery copies; purges only what is no longer referenced. */
+function StoragePanel() {
+  const tr = useT();
+  const [r, setR] = useState<StorageReport | null>(null);
+  const load = () => void act({ type: 'storage.report' }).then((x) => setR(x ?? null));
+  useEffect(load, []);
+  const purge = async (what: 'music' | 'aiCache' | 'autosave') => {
+    if (!(await confirmAction({ title: tr('settings.storage.purgeTitle'), message: tr(`settings.storage.purge.${what}`), confirmLabel: tr('settings.storage.purge') }))) return;
+    await act({ type: 'storage.purge', [what]: true });
+    load();
+  };
+  if (!r) return null;
+  const rows = [
+    { id: 'music' as const, label: tr('settings.storage.music', { n: r.music.files, size: mb(r.music.bytes), orphans: r.music.orphans, orphanSize: mb(r.music.orphanBytes) }), can: r.music.orphans > 0 },
+    { id: 'aiCache' as const, label: tr('settings.storage.aiCache', { n: r.aiCache.files, size: mb(r.aiCache.bytes) }), can: r.aiCache.files > 0 },
+    { id: 'autosave' as const, label: tr('settings.storage.autosave', { n: r.autosave.files, size: mb(r.autosave.bytes), stale: r.autosave.stale }), can: r.autosave.stale > 0 },
+  ];
+  return (
+    <Panel title={tr('settings.storage.title')}>
+      <table className="table small" data-testid="storage-report"><tbody>
+        {rows.map((row) => (
+          <tr key={row.id}><td>{row.label}</td><td style={{ textAlign: 'right' }}><button className="btn sm" disabled={!row.can} onClick={() => void purge(row.id)}>{tr('settings.storage.purge')}</button></td></tr>
+        ))}
+      </tbody></table>
+    </Panel>
+  );
+}
+
 export function SettingsPage() {
   const tr = useT();
   const [s, setS] = useState<Settings | null>(null);
@@ -308,8 +346,9 @@ export function SettingsPage() {
   const tabs = TAB_IDS.map((id) => ({ id, label: tr(`settings.tab.${id}`) }));
   // Removing recent projects is saved at once, without committing the other pending edits.
   const forgetRecent = async (recentProjects: string[]) => {
+    const paths = s.general.recentProjects.filter((p) => !recentProjects.includes(p));
+    if (!paths.length || !(await act({ type: 'settings.forgetRecent', paths }))) return;
     const next = { ...saved!, general: { ...saved!.general, recentProjects } };
-    if (!(await act({ type: 'settings.update', settings: next }))) return;
     setSaved(next);
     setS({ ...s, general: { ...s.general, recentProjects } });
   };
@@ -329,6 +368,7 @@ export function SettingsPage() {
               <div className="col" style={{ gap: 10, paddingTop: 22 }}>
                 <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
+                <label className="check"><input type="checkbox" data-testid="detach-console-on-start" checked={s.general.detachConsoleOnStart} onChange={(e) => set('general', { detachConsoleOnStart: e.target.checked })} />{tr('settings.general.detachConsole')}</label>
               </div>
             </div>
           </Panel>
@@ -381,8 +421,9 @@ export function SettingsPage() {
             <table className="table small"><tbody>
               <tr><td>{tr('settings.network.outputs')}</td><td>{s.outputs.map((o) => o.name).join(', ')}</td></tr>
               <tr><td>{tr('settings.network.cid')}</td><td className="mono">{s.sacn?.cid ?? '—'}</td></tr>
-              <tr><td>{tr('settings.network.arming')}</td><td>{tr('settings.network.armingNever')}</td></tr>
             </tbody></table>
+            <label className="check" style={{ marginTop: 10 }}><input type="checkbox" data-testid="auto-arm-on-start" checked={s.general.autoArmOnStart} onChange={(e) => set('general', { autoArmOnStart: e.target.checked })} />{tr('settings.network.autoArm')}</label>
+            <p className="small dim" style={{ marginBottom: 0 }}>{tr('settings.network.armingNever')}</p>
           </Panel>
         )}
         {tab === 'ai' && (
@@ -396,6 +437,7 @@ export function SettingsPage() {
               </Field>
               <Field label={tr('settings.ai.timeout')}><NumberInput value={s.ai.timeoutSec} min={5} max={300} onChange={(v) => set('ai', { timeoutSec: v })} /></Field>
               <label className="check"><input type="checkbox" checked={s.ai.fallbackToLocal} onChange={(e) => set('ai', { fallbackToLocal: e.target.checked })} />{tr('settings.ai.fallback')}</label>
+              <Field label={tr('settings.ai.budget')} hint={tr('settings.ai.budgetHint')}><NumberInput value={s.ai.monthlyBudget ?? 0} min={0} max={10000} onChange={(v) => set('ai', { monthlyBudget: v > 0 ? v : null })} /></Field>
               <label className="check" title={tr('settings.ai.strobeTitle')}><input type="checkbox" checked={s.ai.allowStrobe} onChange={(e) => set('ai', { allowStrobe: e.target.checked })} />{tr('settings.ai.allowStrobe')}</label>
             </div>
             {s.ai.provider === 'openrouter' && (
@@ -460,6 +502,7 @@ export function SettingsPage() {
             <div className="row"><button className="btn" onClick={() => void act({ type: 'project.export' })}>{tr('settings.backups.export')}</button></div>
           </Panel>
         )}
+        {tab === 'backups' && <StoragePanel />}
       </div>
     </div>
   );

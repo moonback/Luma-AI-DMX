@@ -79,7 +79,7 @@ const club: DemoSpec = {
     { name: 'Chase PAR', type: 'chase', rigs: ['PAR'], params: { bpmSync: true, beatsPerCycle: 2, phaseSpread: 1, barSync: true }, blend: 'scale' },
     { name: 'Arc-en-ciel barres', type: 'rainbow', rigs: ['BAR'], params: { bpmSync: true, beatsPerCycle: 8, phaseSpread: 1 } },
     { name: 'Balayage lyres', type: 'panTilt', rigs: ['SPOT'], params: { bpmSync: true, beatsPerCycle: 8, amplitude: 0.5, phaseSpread: 0.5, shape: 'figure8', barSync: true } },
-    { name: 'Strobe drop', type: 'strobe', rigs: ['STR'], params: { speed: 6 } },
+    { name: 'Strobe drop', type: 'strobe', rigs: ['STR'], params: { speed: 4 } },
   ],
   cueLists: [{ name: 'Set DJ', cues: [
     { name: 'Ouverture des portes', look: 'Warm-up', fade: 5 },
@@ -250,7 +250,7 @@ const conference: DemoSpec = {
     { name: 'Pause', parts: [{ rigs: ['CONTRE'], colors: [C.teal, C.blue], level: 0.4 }, { rigs: ['BAR'], colors: [C.teal], level: 0.4 }] },
     { name: 'Remise des prix', parts: [{ rigs: ['FACE'], colors: [C.white], level: 1 }, { rigs: ['CONTRE'], colors: [C.gold], level: 0.8, tilt: 0.5 }, { rigs: ['BAR'], colors: [C.gold], level: 0.8 }] },
   ],
-  effects: [{ name: 'Respiration logo', type: 'pulse', rigs: ['BAR'], params: { speed: 0.15, offset: 0.7, amplitude: 0.4 }, blend: 'scale' }],
+  effects: [{ name: 'Respiration logo', type: 'pulse', rigs: ['BAR'], params: { speed: 0.15, offset: 0.7, amplitude: 0.2 }, blend: 'scale' }],
   cueLists: [{ name: 'Programme', cues: [
     { name: 'Accueil', look: 'Accueil', fade: 3, effects: ['Respiration logo'] },
     { name: 'Ouverture — keynote', look: 'Keynote', fade: 2 },
@@ -327,7 +327,7 @@ const festival: DemoSpec = {
     { name: 'Arc-en-ciel barres', type: 'rainbow', rigs: ['BAR'], params: { bpmSync: true, beatsPerCycle: 16, phaseSpread: 1 } },
     { name: 'Chase sol', type: 'chase', rigs: ['PAR'], params: { bpmSync: true, beatsPerCycle: 1, phaseSpread: 1, barSync: true }, blend: 'scale' },
     { name: 'Vague wash', type: 'dimmerWave', rigs: ['WASH'], params: { bpmSync: true, beatsPerCycle: 8, phaseSpread: 1, offset: 0.6, amplitude: 0.8 }, blend: 'scale' },
-    { name: 'Strobe final', type: 'strobe', rigs: ['STR'], params: { speed: 8 } },
+    { name: 'Strobe final', type: 'strobe', rigs: ['STR'], params: { speed: 4 } },
   ],
   cueLists: [{ name: 'Headliner', cues: [
     { name: 'Attente public', look: 'Attente', fade: 4 },
@@ -339,7 +339,12 @@ const festival: DemoSpec = {
   timeline: { name: 'Ouverture', duration: 90, events: [
     { at: 0, dur: 20, look: 'Attente', fade: 3 },
     { at: 20, dur: 25, look: 'Intro', fade: 8 }, { at: 20, dur: 25, effect: 'Spots aléatoires' },
-    { at: 45, dur: 45, look: 'Pleine scène' }, { at: 45, dur: 45, effect: 'Chase sol' }, { at: 45, dur: 45, effect: 'Arc-en-ciel barres' }, { at: 45, dur: 45, effect: 'Vague wash' },
+    { at: 45, dur: 45, look: 'Pleine scène' },
+    { at: 45, dur: 18, effect: 'Chase sol' },
+    { at: 48, dur: 30, effect: 'Arc-en-ciel barres' },
+    { at: 52, dur: 26, effect: 'Vague wash' },
+    { at: 78, dur: 12, look: 'Feu', fade: 3 },
+    { at: 87, dur: 3, effect: 'Strobe final' },
   ] },
   notes: 'Démo : univers 2 pour les barres et strobes (sortie Art-Net ou sACN à configurer).',
 };

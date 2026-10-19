@@ -27,5 +27,5 @@ export const ROUTES: { [D in CommandDomain]: (app: AppService, cmd: CommandIn<D>
   engine: handleOutput, output: handleOutput, rdm: handleOutput, hardware: handleOutput,
   ai: handleAi,
   audio: handleSystem, settings: handleSystem, logs: handleSystem, diagnostic: handleSystem, app: handleSystem,
-  usage: handleSystem, feedback: handleSystem,
+  usage: handleSystem, feedback: handleSystem, storage: handleSystem,
 };

@@ -2,6 +2,73 @@ import { stageLight } from '../safety/flashGuard';
 import { buildVisualModel } from '../visualizer/model';
 import type { ValuesFrame } from '../../shared/commands';
 import type { AppService } from './AppService';
+import { endLocate } from './handlers/locate';
+import { oscFeedback } from './control';
+
+/** The main window crashed or reloaded: nothing may stay stuck on stage waiting for it (camera pattern, raw test pattern). */
+export function rendererLost(app: AppService, reason: string): void {
+  if (!app.locate && !app.engine.testPattern) return;
+  endLocate(app);
+  app.engine.testPattern = null;
+  app.logger.warn('Sécurité', `Fenêtre principale perdue (${reason}) : localisation caméra et mire arrêtées`);
+  app.emit('runtime', app.runtimeState());
+}
+
+export interface MetricsSample {
+  t: string;
+  hz: number;
+  avgTickMs: number;
+  maxTickMs: number;
+  jitterMs: number;
+  /** Since the previous sample. */
+  overruns: number;
+  errors: number;
+  outputs: { id: string; state: string; fps: number; errors: number }[];
+}
+
+/** One sample every 10 s, 24 h kept: enough to tell, after the show, what happened at 21:14. */
+export const METRICS_EVERY_MS = 10_000;
+const METRICS_MAX = (24 * 3_600_000) / METRICS_EVERY_MS;
+const histories = new WeakMap<AppService, { samples: MetricsSample[]; overruns: number; errors: number; out: Map<string, number> }>();
+
+export function sampleMetrics(app: AppService, now = Date.now()): MetricsSample {
+  let h = histories.get(app);
+  if (!h) histories.set(app, (h = { samples: [], overruns: 0, errors: 0, out: new Map() }));
+  const m = app.engine.metrics();
+  const outputs = app.outputs.status().map((o) => {
+    const errors = o.stats.errors - (h.out.get(o.id) ?? 0);
+    h.out.set(o.id, o.stats.errors);
+    return { id: o.id, state: o.state, fps: o.stats.measuredFps, errors };
+  });
+  const s: MetricsSample = { t: new Date(now).toISOString(), hz: m.measuredHz, avgTickMs: m.avgTickMs, maxTickMs: m.maxTickMs, jitterMs: m.jitterMs, overruns: m.overruns - h.overruns, errors: m.errors - h.errors, outputs };
+  h.overruns = m.overruns;
+  h.errors = m.errors;
+  h.samples.push(s);
+  if (h.samples.length > METRICS_MAX) h.samples.shift();
+  return s;
+}
+
+export const metricsHistory = (app: AppService): MetricsSample[] => histories.get(app)?.samples ?? [];
+
+const engineErrors = new WeakMap<AppService, Map<string, { count: number; at: number }>>();
+
+/** Same engine error at most once per 5 s with an occurrence count (a failing tick repeats 40 times per second). */
+export function onEngineError(app: AppService, message: string, now = Date.now()): void {
+  let seen = engineErrors.get(app);
+  if (!seen || seen.size >= 100) engineErrors.set(app, (seen = new Map()));
+  const e = seen.get(message);
+  if (!e) {
+    seen.set(message, { count: 0, at: now });
+    app.logger.error('Moteur', message);
+    return;
+  }
+  e.count++;
+  if (now - e.at >= 5000) {
+    app.logger.error('Moteur', `${message} (× ${e.count} en ${Math.round((now - e.at) / 1000)} s)`);
+    e.count = 0;
+    e.at = now;
+  }
+}
 
 /* Per-frame work (throttled events to the UI, photosensitive watch, timecode loss) and output state changes. */
 
@@ -25,6 +92,7 @@ export function onFrame(app: AppService): void {
   if (now - app.lastRuntimeEmit >= 100) {
     app.lastRuntimeEmit = now;
     app.emit('runtime', app.runtimeState());
+    oscFeedback(app);
   }
 }
 

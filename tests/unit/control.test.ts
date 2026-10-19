@@ -58,7 +58,7 @@ describe('OSC', () => {
     const { svc } = makeService();
     await svc.init();
     const s = defaultSettings();
-    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, osc: { enabled: true, port: 18000 + Math.floor(Math.random() * 1000), bind: '127.0.0.1' } } } });
+    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, osc: { enabled: true, port: 18000 + Math.floor(Math.random() * 1000), bind: '127.0.0.1', ack: true, allow: [], feedback: [] } } } });
     const port = svc.osc.port!;
     const client = dgram.createSocket('udp4');
     await new Promise<void>((r) => client.bind(0, '127.0.0.1', () => r()));

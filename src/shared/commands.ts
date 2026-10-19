@@ -3,7 +3,7 @@ import {
   addressSchema, attributeKeySchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
   stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema, propSchema,
-  hexColorSchema, moodSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS,
+  hexColorSchema, moodSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS, profileSchema,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -24,6 +24,10 @@ import type { UsageData } from '../core/telemetry/usage';
 import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 import type { PhotoScene } from '../core/ai/sceneFromPhoto';
+import type { PhotoProfile } from '../core/ai/profileFromPhoto';
+import type { StorageReport } from '../core/app/storage';
+import type { AiUsageDay } from '../core/ai/usage';
+import type { HardwareSession } from '../core/app/hardware';
 
 /**
  * Single typed command bus between renderer and main. Every payload is validated with Zod in the main process
@@ -32,6 +36,8 @@ import type { PhotoScene } from '../core/ai/sceneFromPhoto';
 
 const empty = <T extends string>(type: T) => z.object({ type: z.literal(type) });
 const optPath = z.string().min(1).max(1000).optional();
+/** Downscaled photo as a data URL. */
+const photoSchema = z.string().max(8_000_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/);
 const fixturePatchSchema = z.object({
   name: nameSchema.optional(),
   profileId: idSchema.optional(),
@@ -81,7 +87,12 @@ export const commandSchema = z.discriminatedUnion('type', [
   /** Scene-layout history (positions, mounting, trusses, stage settings): independent from the other edits. */
   empty('scene.undo'),
   empty('scene.redo'),
+  /** Project-wide history: every edit of the show (patch, scenes, cues, effects, timelines, AI, layout). */
+  empty('project.undo'),
+  empty('project.redo'),
   empty('project.listRecovery'),
+  /** Autosaves newer than their saved file (offered at start-up after a crash). */
+  empty('project.recoveryCandidates'),
   z.object({ type: z.literal('project.openRecovery'), file: z.string().min(1).max(1000) }),
   /** Opens one of the built-in fictional demonstration projects (unsaved copy). */
   z.object({ type: z.literal('project.openDemo'), id: z.string().min(1).max(40) }),
@@ -89,6 +100,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   // Profiles
   z.object({ type: z.literal('profile.import'), path: optPath }),
   z.object({ type: z.literal('profile.remove'), id: idSchema }),
+  /** Writes library profiles (all when `ids` is omitted) as a Luma JSON file `{ profiles: [...] }`, re-importable by `profile.import`. */
+  z.object({ type: z.literal('profile.export'), ids: z.array(idSchema).min(1).max(500).optional(), path: optPath }),
+  /** Saves a profile built in the app (photo of the manual) to the library and the project. */
+  z.object({ type: z.literal('profile.save'), profile: profileSchema }),
   empty('ofl.manufacturers'),
   z.object({ type: z.literal('ofl.fixtures'), manufacturer: z.string().regex(/^[a-z0-9-]+$/) }),
   z.object({
@@ -219,13 +234,23 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rdm.setAddress'), outputId: z.string().min(1).max(64), universe: universeSchema, uid: z.string().regex(/^[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}$/), address: addressSchema, confirmed: z.literal(true) }),
   empty('output.interfaces'),
   // AI
-  z.object({ type: z.literal('ai.propose'), prompt: z.string().trim().min(1).max(2000) }),
+  /** `continueThread`: the last exchanges are sent to the remote model (follow-up requests). */
+  z.object({ type: z.literal('ai.propose'), prompt: z.string().trim().min(1).max(2000), continueThread: z.boolean().optional() }),
+  empty('ai.resetThread'),
+  /** OpenRouter tokens and cost of today and of the month, with the monthly budget. */
+  empty('ai.usage'),
   z.object({ type: z.literal('ai.revise'), proposalId: z.string().uuid(), actions: z.array(z.unknown()).max(50) }),
   z.object({ type: z.literal('ai.apply'), proposalId: z.string().uuid() }),
   empty('ai.release'),
+  /** Cancels the AI request in flight (proposal, photo, show planning): nothing is applied. */
+  empty('ai.cancel'),
+  /** Restores the project as it was before the last applied proposal and releases its AI layer and effects. */
+  empty('ai.undoApply'),
   z.object({ type: z.literal('ai.listModels'), refresh: z.boolean().default(false) }),
   /** Photo of a real stage (downscaled JPEG/PNG data URL) → trusses, set pieces and screens, for review before applying. */
-  z.object({ type: z.literal('ai.sceneFromPhoto'), image: z.string().max(8_000_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/) }),
+  z.object({ type: z.literal('ai.sceneFromPhoto'), image: photoSchema }),
+  /** Photos of a manual's DMX chart (consecutive pages) → fixture profile, for review before `profile.save`. */
+  z.object({ type: z.literal('ai.profileFromPhoto'), images: z.array(photoSchema).min(1).max(4) }),
   z.object({ type: z.literal('ai.setKey'), key: z.string().trim().min(10).max(500).nullable() }),
   // Audio
   z.object({
@@ -241,10 +266,14 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   /** Arms (or disarms) the predicted-drop GO for one shot. Never armed at start-up. */
   z.object({ type: z.literal('audio.armDrop'), on: z.boolean() }),
+  /** The renderer stopped its audio source on purpose (not an interruption). */
+  empty('audio.release'),
   z.object({ type: z.literal('audio.config'), config: audioConfigSchema }),
   // Settings / logs
   empty('settings.get'),
+  /** Recent projects and onboarding state are owned by the main process: the values sent here for them are ignored. */
   z.object({ type: z.literal('settings.update'), settings: settingsSchema }),
+  z.object({ type: z.literal('settings.forgetRecent'), paths: z.array(z.string().max(1000)).min(1).max(10) }),
   empty('logs.recent'),
   z.object({ type: z.literal('diagnostic.export'), path: optPath }),
   /**
@@ -270,6 +299,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   // Application
   empty('app.info'),
   empty('app.checkUpdates'),
+  // Local data (imported audio, AI cache, recovery copies)
+  empty('storage.report'),
+  z.object({ type: z.literal('storage.purge'), music: z.boolean().default(false), aiCache: z.boolean().default(false), autosave: z.boolean().default(false) }),
 ]);
 export type Command = z.infer<typeof commandSchema>;
 export type CommandType = Command['type'];
@@ -287,6 +319,8 @@ export interface ProjectState {
   issues: PatchIssue[];
   /** Number of scene-layout steps that can be undone / redone. */
   sceneHistory: { undo: number; redo: number };
+  /** Project-wide undo / redo, with the label of the next step each way. */
+  history?: { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
 }
 
 export interface Alert {
@@ -336,12 +370,17 @@ export interface CommandResults {
   'project.update': Void;
   'scene.undo': Void;
   'scene.redo': Void;
+  'project.undo': { label: string | null };
+  'project.redo': { label: string | null };
   'project.listRecovery': RecoveryEntry[];
+  'project.recoveryCandidates': RecoveryEntry[];
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
   'project.openDemo': Void;
   'onboarding.update': Void;
   'profile.import': { imported: string[]; errors: string[]; warnings: string[] };
   'profile.remove': Void;
+  'profile.export': { path: string | null; count: number };
+  'profile.save': { profileId: string };
   'ofl.manufacturers': { key: string; name: string }[];
   'ofl.fixtures': string[];
   'profile.importOfl': { imported: string | null; profileId: string | null; warnings: string[]; errors: string[] };
@@ -420,24 +459,33 @@ export interface CommandResults {
   'ai.revise': AiProposal;
   'ai.apply': AiExecutionReport;
   'ai.release': Void;
+  'ai.cancel': Void;
+  'ai.resetThread': Void;
+  'ai.usage': { today: AiUsageDay; month: AiUsageDay; budget: number | null };
+  'ai.undoApply': Void;
   'ai.listModels': OpenRouterModel[];
   'ai.setKey': Void;
   'ai.sceneFromPhoto': PhotoScene & { model: string; notices: string[] };
+  'ai.profileFromPhoto': PhotoProfile & { model: string; notices: string[] };
   'audio.features': Void;
   'audio.config': Void;
   'audio.armDrop': Void;
+  'audio.release': Void;
   'settings.get': Settings;
   'settings.update': Void;
+  'settings.forgetRecent': Void;
   'logs.recent': LogEntry[];
   'diagnostic.export': { path: string | null };
   'patch.exportSheet': { path: string | null };
   'output.testPattern': Void;
-  'hardware.report': { markdown: string };
+  'hardware.report': { markdown: string; json: ReturnType<HardwareSession['reportJson']> };
   'usage.get': { enabled: boolean; data: UsageData };
   'usage.clear': Void;
   'feedback.export': { path: string | null };
   'app.info': { name: string; version: string; updates: UpdateStatus };
   'app.checkUpdates': UpdateStatus;
+  'storage.report': StorageReport;
+  'storage.purge': { removed: number };
 }
 
 export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string };
@@ -448,7 +496,14 @@ export interface LocatePhoto {
   jpeg: string;
 }
 
+/** Real step of a long operation (show generation), for the progress dialog. */
+export interface Progress {
+  op: 'music';
+  step: 'plan' | 'cache' | 'request' | 'compile';
+}
+
 export interface AppEvents {
+  progress: Progress;
   project: ProjectState;
   runtime: RuntimeState;
   values: ValuesFrame;

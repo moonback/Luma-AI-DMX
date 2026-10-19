@@ -4,6 +4,7 @@ import { VirtualOutput } from '../../protocols/virtual';
 import { ArtNetRdm } from '../../protocols/rdm';
 import type { UniverseView } from '../../../shared/commands';
 import { UserError } from '../shared';
+import { pruneAiEffects } from './ai';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Engine master/blackout/BPM, DMX outputs and RDM. */
@@ -26,6 +27,7 @@ export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'o
       e.stopAllEffects();
       e.stopAllPlaybacks();
       e.timelineStop();
+      pruneAiEffects(app);
       app.logger.info('Moteur', 'Tout relâché (programmeur, IA, effets, playbacks, timeline)');
       return ok;
     case 'output.configure':
@@ -98,7 +100,10 @@ export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'o
       return ok;
     }
     case 'hardware.report':
-      return { markdown: app.hardware.report({ app: app.opts.appInfo ?? { name: 'Luma AI DMX', version: 'dev', platform: process.platform, arch: process.arch, versions: {} }, metrics: e.metrics(), outputs: app.outputs.status(), testPattern: e.testPattern }) };
+    {
+      const input = { app: app.opts.appInfo ?? { name: 'Luma AI DMX', version: 'dev', platform: process.platform, arch: process.arch, versions: {} }, metrics: e.metrics(), outputs: app.outputs.status(), testPattern: e.testPattern };
+      return { markdown: app.hardware.report(input), json: app.hardware.reportJson(input) };
+    }
   }
 }
 

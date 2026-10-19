@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
-  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play,
+  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
 import logo from '../../public/logo.png';
@@ -12,10 +12,11 @@ import { allowedWhileTyping, bindingsFrom, comboFromEvent } from './shortcuts';
 import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings';
 import { Dashboard } from './features/Dashboard';
 import { Fixtures } from './features/Fixtures';
-import { LiveConsole } from './features/LiveConsole';
+import { DETACHED_CONSOLE_HASH, LiveConsole, openDetachedConsole } from './features/LiveConsole';
 import { Programmer } from './features/Programmer';
 import { Cues } from './features/Cues';
 import { Effects } from './features/Effects';
+import { QuickActionsPage } from './features/QuickActions';
 import { TimelinePage } from './features/Timeline';
 import { AiDirector } from './features/AiDirector';
 import { DETACHED_STAGE_HASH, openDetachedStage, StageVisualizer3D, Visualizer } from './features/Visualizer';
@@ -31,11 +32,11 @@ import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/What
 import { t, useT } from './i18n';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
-  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
+  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
   timeline: ChartGantt, ai: Bot, visualizer: Theater, stage3d: Box, audio: AudioLines, music: Music2, output: Cable, settings: SettingsIcon,
 };
 const VIEWS: Record<PageId, ComponentType> = {
-  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects,
+  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
   timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, stage3d: StageVisualizer3D, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
 };
 
@@ -48,14 +49,15 @@ async function guardUnsaved(): Promise<boolean> {
   return confirmAction({ title: t('project.unsavedTitle'), message: t('project.unsavedMessage'), confirmLabel: t('project.unsavedConfirm') });
 }
 
-/** Set at startup from the settings; cleared once the detached 3D window has been opened. */
+/** Set at startup from the settings; cleared once the detached windows have been opened. */
 let detachStageOnOpen = false;
+let detachConsoleOnOpen = false;
 
-/** Opens the detached 3D window once, when the setting asks for it and a project is opened, created or kept. */
+/** Opens the detached 3D / console windows once, when the settings ask for it and a project is opened, created or kept. */
 export function detachStageIfWanted(): void {
-  if (!detachStageOnOpen) return;
-  detachStageOnOpen = false;
-  openDetachedStage();
+  if (detachStageOnOpen) openDetachedStage();
+  if (detachConsoleOnOpen) openDetachedConsole();
+  detachStageOnOpen = detachConsoleOnOpen = false;
 }
 
 /** Opens a project file (dialog when no path); true when a project was opened. */
@@ -64,6 +66,17 @@ export async function openProject(path?: string): Promise<boolean> {
   const opened = !!(await act({ type: 'project.open', ...(path ? { path } : {}) }))?.opened;
   if (opened) detachStageIfWanted();
   return opened;
+}
+
+/** Undo / redo of the whole project, with the step's label in a toast. */
+export async function historyStep(direction: 'undo' | 'redo'): Promise<void> {
+  const r = await act({ type: direction === 'undo' ? 'project.undo' : 'project.redo' });
+  if (r) useStore.getState().toast(r.label ? { kind: 'info', title: t(direction === 'undo' ? 'history.undone' : 'history.redone', { label: r.label }) } : { kind: 'info', title: t('history.nothing') });
+}
+
+/** Releases programmer, AI layer, effects, playbacks and timeline after a confirmation (blackout and STOP are separate). */
+export async function releaseAllFlow(): Promise<void> {
+  if (await confirmAction({ title: t('top.releaseAllConfirmTitle'), message: t('top.releaseAllConfirm'), confirmLabel: t('top.releaseAll') })) await act({ type: 'engine.releaseAll' });
 }
 
 function NewProjectDialog({ onClose }: { onClose: () => void }) {
@@ -124,6 +137,8 @@ function TopBar() {
       <div className="row">
         <button className="btn ghost icon" title={tr('project.newShortcut')} onClick={() => setShowNew(true)}><FilePlus size={16} /></button>
         <button className="btn ghost icon" title={tr('project.openShortcut')} onClick={() => void openProject()}><FolderOpen size={16} /></button>
+        <button className="btn ghost icon" data-testid="undo" disabled={!project?.history?.undo} title={project?.history?.undoLabel ? tr('history.undoTitle', { label: project.history.undoLabel }) : tr('history.nothing')} onClick={() => void historyStep('undo')}><Undo2 size={16} /></button>
+        <button className="btn ghost icon" data-testid="redo" disabled={!project?.history?.redo} title={project?.history?.redoLabel ? tr('history.redoTitle', { label: project.history.redoLabel }) : tr('history.nothing')} onClick={() => void historyStep('redo')}><Redo2 size={16} /></button>
         <button className="btn ghost icon" title={tr('project.saveShortcut')} data-testid="save" onClick={() => void act({ type: 'project.save' })}><Save size={16} /></button>
       </div>
       <div className="top-sep" />
@@ -149,6 +164,9 @@ function TopBar() {
       <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
         <Bell size={16} />
         {alerts > 0 && <span className="badge err" style={{ position: 'absolute', top: -4, right: -8, height: 16, padding: '0 4px' }}>{alerts}</span>}
+      </button>
+      <button className="btn" data-testid="release-all" title={tr('top.releaseAllTitle')} onClick={() => void releaseAllFlow()}>
+        <Undo2 size={15} />{tr('top.releaseAll')}
       </button>
       <button className={`btn ${rt?.engine.blackout ? 'danger solid' : ''}`} data-testid="blackout" title={tr('top.blackoutTitle')} onClick={() => void act({ type: 'engine.blackout', on: !rt?.engine.blackout })}>
         <Moon size={15} />{tr('top.blackout')}
@@ -282,6 +300,13 @@ export function runShortcut(action: ShortcutAction): boolean {
     case 'blackout': void act({ type: 'engine.blackout', on: !s.runtime?.engine.blackout }); return true;
     case 'stopOutput': void act({ type: 'output.transmit', on: false }); return true;
     case 'release': void act({ type: 'programmer.release' }); return true;
+    case 'releaseAll': void releaseAllFlow(); return true;
+    case 'undo':
+    case 'redo':
+      // The stage pages and the timeline editor keep their own Ctrl+Z / Ctrl+Y (scene layout, local edits).
+      if (s.page === 'visualizer' || s.page === 'stage3d' || s.page === 'timeline') return false;
+      void historyStep(action);
+      return true;
     case 'save': void act({ type: 'project.save' }); return true;
     case 'saveAs': void act({ type: 'project.saveAs' }); return true;
     case 'open': void openProject(); return true;
@@ -304,7 +329,7 @@ function useShortcuts() {
       if (!action) return;
       const el = e.target as HTMLElement;
       const typing = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
-      if (typing && !allowedWhileTyping(combo)) return;
+      if (typing && (!allowedWhileTyping(combo) || action === 'undo' || action === 'redo')) return; // Ctrl+Z in a field undoes the text
       if (s.confirm && action !== 'stopOutput') return;
       if (runShortcut(action)) e.preventDefault();
     };
@@ -337,6 +362,19 @@ export function App() {
   );
 }
 
+/** After a crash or a power cut: offers the autosave that is newer than its saved file. */
+async function offerRecovery(): Promise<void> {
+  const r = (await act({ type: 'project.recoveryCandidates' }))?.[0];
+  if (!r) return;
+  const restore = await confirmAction({
+    title: t('recovery.title'),
+    message: t('recovery.message', { name: r.project || r.name, date: new Date(r.modifiedAt).toLocaleString() }),
+    confirmLabel: t('recovery.restore'),
+    danger: false,
+  });
+  if (restore && (await act({ type: 'project.openRecovery', file: r.file }))?.opened) useStore.setState({ startScreen: null });
+}
+
 export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
@@ -345,8 +383,12 @@ export async function bootstrap(): Promise<void> {
   const firstRun = !settings.onboarding.completed;
   if (firstRun) markWhatsNewSeen();
   useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
-  void externalControl.configure(settings.control);
-  // bootstrap also runs in the detached window itself: only the main window opens it, after the first project opened.
-  detachStageOnOpen = settings.general.detachStage3dOnStart && location.hash !== DETACHED_STAGE_HASH;
+  // bootstrap also runs in the detached window: only the main window listens to MIDI/timecode (else every GO fires twice)
+  // and opens the detached window, after the first project opened.
+  const main = location.hash !== DETACHED_STAGE_HASH && location.hash !== DETACHED_CONSOLE_HASH;
+  if (main) void externalControl.configure(settings.control);
+  if (main) void offerRecovery();
+  detachStageOnOpen = settings.general.detachStage3dOnStart && main;
+  detachConsoleOnOpen = settings.general.detachConsoleOnStart && main;
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

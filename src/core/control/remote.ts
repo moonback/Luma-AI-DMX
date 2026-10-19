@@ -17,6 +17,10 @@ export interface RemoteState {
   lists: { index: number; name: string; state: string; cue: string | null }[];
   /** Camera localisation waiting for a smartphone photo of `frame`. */
   locate: { frame: number; total: number; label: string } | null;
+  /** Real outputs and their state, for the alert banner (no address shown). */
+  outputs: { name: string; state: string }[];
+  /** Photosensitive guard reason while it trips. */
+  safety: string | null;
 }
 
 export interface RemoteDeps {
@@ -61,10 +65,23 @@ export class RemoteLimiter {
     return f.count >= AUTH_FAILURES_MAX;
   }
 
+  /** Entries idle for a minute are forgotten; a flood from many addresses cannot grow the maps without bound. */
+  private prune(t: number): void {
+    if (this.failures.size + this.buckets.size < 4096) return;
+    for (const [ip, f] of this.failures) if (t - f.since > AUTH_WINDOW_MS) this.failures.delete(ip);
+    for (const [ip, b] of this.buckets) if (t - b.at > 60_000) this.buckets.delete(ip);
+    for (const m of [this.failures, this.buckets] as Map<string, unknown>[]) for (const k of [...m.keys()].slice(0, Math.max(0, m.size - 1024))) m.delete(k);
+  }
+
   fail(ip: string): void {
+    this.prune(this.now());
     const f = this.failures.get(ip);
     if (!f || this.now() - f.since > AUTH_WINDOW_MS) this.failures.set(ip, { count: 1, since: this.now() });
     else f.count++;
+  }
+
+  get size(): number {
+    return this.failures.size + this.buckets.size;
   }
 
   succeed(ip: string): void {
@@ -73,6 +90,7 @@ export class RemoteLimiter {
 
   takeCommand(ip: string): boolean {
     const t = this.now();
+    this.prune(t);
     const b = this.buckets.get(ip) ?? { tokens: CMD_BURST, at: t };
     b.tokens = Math.min(CMD_BURST, b.tokens + ((t - b.at) / 1000) * CMD_RATE_PER_S);
     b.at = t;
@@ -83,7 +101,7 @@ export class RemoteLimiter {
   }
 }
 
-const ALLOWED = new Set<Command['type']>(['cue.go', 'cue.back', 'cue.goto', 'cue.pause', 'cue.resume', 'engine.blackout', 'engine.master', 'output.transmit', 'programmer.release']);
+const ALLOWED = new Set<Command['type']>(['cue.go', 'cue.back', 'cue.goto', 'cue.pause', 'cue.resume', 'engine.blackout', 'engine.master', 'output.transmit', 'programmer.release', 'engine.releaseAll']);
 
 /** Whitelist + schema validation; `output.transmit` may only stop. Returns the command or an error message. */
 export function validateRemoteCommand(raw: unknown, listId: (i: number) => string | undefined): Command | string {
@@ -229,21 +247,21 @@ button:active{transform:scale(.98)}.go{background:var(--accent);border-color:var
 </style></head><body><h1>Luma — Télécommande</h1>
 <select id="list" aria-label="Liste de cues"></select><div class="st" id="cue">Connexion…</div>
 <div class="row"><button class="go" id="go">GO</button></div>
-<div class="row"><button id="back">BACK</button><button id="pause">Pause</button><button id="release">Relâcher</button></div>
+<div class="row"><button id="back">BACK</button><button id="pause">Pause</button><button id="release">Relâcher</button><button id="relall">Tout relâcher</button></div>
 <div class="row"><button id="bo">Blackout</button><button class="stop" id="stop">STOP OUTPUT</button></div>
 <label for="master">Grand master <span id="mv"></span></label><input id="master" type="range" min="0" max="100">
 <div id="loc" style="display:none;margin-top:16px;padding:12px;border:1px solid var(--accent);border-radius:10px"><b>Localisation des projecteurs</b><div class="st" id="locst"></div><label class="go" style="display:block;text-align:center;padding:18px;border-radius:10px;margin-top:8px">Prendre la photo<input id="cam" type="file" accept="image/*" capture="environment" style="display:none"></label><div class="st">Gardez le téléphone immobile, au même endroit, pour toutes les photos.</div></div>
-<div class="st" id="msg"></div><script>
+<div class="st err" id="alerts" role="alert"></div><div class="st" id="msg"></div><script>
 const $=(i)=>document.getElementById(i);let st=null;
 async function send(c){const r=await fetch('cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});const j=await r.json();$('msg').textContent=j.ok?'':j.error;$('msg').className='st'+(j.ok?'':' err');}
 const list=()=>Number($('list').value||1);
 $('go').onclick=()=>send({type:'cue.go',list:list()});$('back').onclick=()=>send({type:'cue.back',list:list()});
 $('pause').onclick=()=>{const l=st&&st.lists[list()-1];send({type:l&&l.state==='paused'?'cue.resume':'cue.pause',list:list()});};
-$('release').onclick=()=>send({type:'programmer.release'});$('bo').onclick=()=>send({type:'engine.blackout',on:!(st&&st.blackout)});
+$('release').onclick=()=>send({type:'programmer.release'});$('relall').onclick=()=>{if(confirm('Tout relâcher (IA, effets, playbacks, timeline) ?'))send({type:'engine.releaseAll'});};$('bo').onclick=()=>send({type:'engine.blackout',on:!(st&&st.blackout)});
 $('stop').onclick=()=>send({type:'output.transmit',on:false});$('master').oninput=(e)=>send({type:'engine.master',value:e.target.value/100});
 const es=new EventSource('events');es.onerror=()=>{$('cue').textContent='Connexion perdue — reconnexion…';};
 $('cam').onchange=async(e)=>{const f=e.target.files[0];e.target.value='';if(!f||!st||!st.locate)return;const fr=st.locate.frame;$('locst').textContent='Envoi…';const bmp=await createImageBitmap(f);const k=Math.min(1,960/bmp.width);const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const blob=await new Promise((r)=>c.toBlob(r,'image/jpeg',0.85));const r=await fetch('locate/photo?frame='+fr,{method:'POST',body:blob});const j=await r.json();$('locst').textContent=j.ok?'Photo reçue':j.error;};
-es.onmessage=(e)=>{st=JSON.parse(e.data);$('loc').style.display=st.locate?'block':'none';if(st.locate)$('locst').textContent='Image '+(st.locate.frame+1)+'/'+st.locate.total+' : '+st.locate.label;const sel=$('list'),cur=sel.value;if(sel.options.length!==st.lists.length){sel.innerHTML='';for(const l of st.lists){const o=document.createElement('option');o.value=l.index;o.textContent=l.name;sel.appendChild(o);}if(cur)sel.value=cur;}
+es.onmessage=(e)=>{st=JSON.parse(e.data);const bad=(st.outputs||[]).filter((o)=>o.state==='error').map((o)=>'Sortie '+o.name+' en erreur');if(st.safety)bad.push('Garde-fou photosensible : '+st.safety);$('alerts').textContent=bad.join(' · ');$('loc').style.display=st.locate?'block':'none';if(st.locate)$('locst').textContent='Image '+(st.locate.frame+1)+'/'+st.locate.total+' : '+st.locate.label;const sel=$('list'),cur=sel.value;if(sel.options.length!==st.lists.length){sel.innerHTML='';for(const l of st.lists){const o=document.createElement('option');o.value=l.index;o.textContent=l.name;sel.appendChild(o);}if(cur)sel.value=cur;}
 const l=st.lists[list()-1];$('cue').textContent=(l?(l.cue?'Cue : '+l.cue:'Aucun cue actif')+' · '+l.state:'Aucune liste')+(st.transmitting?'':' · ÉMISSIONS ARRÊTÉES');
 $('bo').classList.toggle('on',st.blackout);if(document.activeElement!==$('master'))$('master').value=Math.round(st.master*100);$('mv').textContent=Math.round(st.master*100)+' %';};
 </script></body></html>`;

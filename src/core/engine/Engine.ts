@@ -44,6 +44,8 @@ export interface EngineMetrics {
   jitterMs: number;
   overruns: number;
   load: number; // avgTickMs / period
+  /** Ticks that threw (the last complete frame was sent again instead). */
+  errors: number;
 }
 
 export interface EngineSnapshot {
@@ -146,7 +148,7 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
   /** Computed universes (what the engine asks the outputs to transmit). */
   readonly universes = new Map<number, Uint8Array>();
 
-  private metricsState = { ticks: 0, avgTick: 0, maxTick: 0, jitter: 0, overruns: 0, windowStart: 0, windowTicks: 0, measuredHz: 0 };
+  private metricsState = { ticks: 0, avgTick: 0, maxTick: 0, jitter: 0, overruns: 0, windowStart: 0, windowTicks: 0, measuredHz: 0, errors: 0 };
 
   constructor(index: ProjectIndex, private readonly sink: FrameSink, private settings: EngineSettings) {
     super();
@@ -167,6 +169,11 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
     this.index = index;
     for (const fid of Object.keys(this.programmer)) if (!index.fixtures.has(fid)) delete this.programmer[fid];
     for (const [id, inst] of this.effects) if (!index.effects.has(inst.effectId)) this.effects.delete(id);
+    for (const [id, pb] of this.playbacks) {
+      if (index.cueLists.has(id)) continue;
+      pb.stop();
+      this.playbacks.delete(id);
+    }
   }
 
   get time(): number {
@@ -316,12 +323,27 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
   }
   timelinePause(): void { this.timeline.pause(); }
   timelineStop(): void { this.timeline.stop(); }
-  timelineSeek(s: number): void { this.timeline.seek(s); }
+  timelineSeek(s: number): void {
+    this.timeline.seek(s);
+    this.syncTimelineCues();
+  }
+  /** After a jump of the playhead, puts every list driven by the timeline on the cue it would have reached by playing. */
+  private syncTimelineCues(): void {
+    const tl = this.timeline.timelineId ? this.index.timelines.get(this.timeline.timelineId) : undefined;
+    if (!tl) return;
+    for (const [listId, cue] of this.timeline.cueStateAt(tl, this.timeline.timeMs / 1000)) {
+      const list = this.index.cueLists.get(listId);
+      if (!list) continue;
+      const pb = this.playbacks.get(listId);
+      if (cue === null) pb?.stop();
+      else if (!pb || pb.state === 'idle' || pb.index !== cue) this.playback(listId).goto(list, cue, this.nextOrder(), true);
+    }
+  }
   /** Timecode chase: plays `id` and re-seeks when the playhead drifts more than 2 frames (80 ms) from `seconds`. */
   timelineChase(id: string, seconds: number): boolean {
     if (!this.index.timelines.has(id)) return false;
     if (this.timeline.timelineId !== id || this.timeline.state !== 'playing') this.timeline.play(id);
-    if (Math.abs(this.timeline.timeMs / 1000 - seconds) > 0.08) this.timeline.seek(seconds);
+    if (Math.abs(this.timeline.timeMs / 1000 - seconds) > 0.08) this.timelineSeek(seconds);
     return true;
   }
 
@@ -385,6 +407,7 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
 
   tick(dtMs: number): void {
     const t0 = performance.now();
+    let rendering = false;
     try {
       this.timeMs += dtMs;
       for (const h of this.tickHooks) h(dtMs);
@@ -405,7 +428,9 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
       if (this.settings.flashGuard === 'limit' && !this.blackout) limitFlashes(this.index.fixtures.values(), this.values, values, dtMs, this.programmer);
       this.values = values;
       this.sources = sources;
+      rendering = true;
       this.renderUniverses(values, this.universes);
+      rendering = false;
       if (this.testPattern) {
         const tp = this.testPattern;
         for (const u of tp.universes) {
@@ -417,6 +442,15 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
       this.sink.sendFrames(this.universes);
       this.emit('frame');
     } catch (err) {
+      this.metricsState.errors++;
+      // Keep the DMX stream alive with the last complete frame (a half-rendered buffer would flash the rig).
+      if (!rendering) {
+        try {
+          this.sink.sendFrames(this.universes);
+        } catch {
+          // the outputs report their own failures
+        }
+      }
       this.emit('error', err instanceof Error ? err : new Error(String(err)));
     }
     this.recordTick(performance.now() - t0, dtMs);
@@ -511,6 +545,7 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
       jitterMs: Math.round(m.jitter * 100) / 100,
       overruns: m.overruns,
       load: Math.round((m.avgTick / period) * 1000) / 1000,
+      errors: m.errors,
     };
   }
 

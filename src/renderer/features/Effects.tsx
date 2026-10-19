@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Copy, Pause, Play, Plus, Sparkles, Square, Trash2 } from 'lucide-react';
+import { Copy, Pause, Pin, Play, Plus, Sparkles, Square, Trash2 } from 'lucide-react';
+import { t } from '../i18n';
 import { useStore, confirmAction, EMPTY_ARR } from '../store';
 import { act, newId } from '../api';
 import { Empty, Field, NumberInput, PageHead, Panel } from '../components/ui';
@@ -143,6 +144,7 @@ export function Effects() {
                         ) : (
                           <button className="btn ghost sm icon" title="Démarrer" onClick={() => void act({ type: 'effect.start', id: e.id })}><Play size={12} /></button>
                         )}
+                        {e.transient && <button className="btn ghost sm icon" data-testid="effect-keep" title={t('effects.keepHint')} aria-label={t('effects.keep')} onClick={() => void act({ type: 'effect.upsert', effect: { ...e, transient: false } })}><Pin size={12} /></button>}
                         <button className="btn ghost sm icon" title="Dupliquer" onClick={() => void act({ type: 'effect.upsert', effect: { ...e, id: newId(), name: `${e.name} (copie)`.slice(0, 80) } })}><Copy size={12} /></button>
                         <button className="btn ghost sm icon" title="Supprimer" onClick={async () => (await confirmAction({ title: 'Supprimer l’effet', message: `Supprimer « ${e.name} » ? Il sera retiré des cues et timelines.`, confirmLabel: 'Supprimer' })) && void act({ type: 'effect.remove', id: e.id })}><Trash2 size={12} /></button>
                       </td>
