@@ -287,7 +287,10 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
               </div>
             </div>
             {emitters.map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
-            {has('colorWheel') && channelFor('colorWheel') && <RangeChips channel={channelFor('colorWheel')!} attr="colorWheel" current={cur('colorWheel')} set={set} />}
+            {/* A wheel without documented slots (e.g. not read on the manual photo) still needs a control: slider. */}
+            {has('colorWheel') && channelFor('colorWheel') && (channelFor('colorWheel')!.ranges.length
+              ? <RangeChips channel={channelFor('colorWheel')!} attr="colorWheel" current={cur('colorWheel')} set={set} />
+              : <Slider label={channelFor('colorWheel')!.name} value={cur('colorWheel')} source={src('colorWheel')} touched={touched('colorWheel')} onChange={(v) => set('colorWheel', v)} />)}
             {['cyan', 'magenta', 'yellow', 'cto'].filter(has).map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
             <FamilyPalettes kind="color" ids={ids} />
           </div>

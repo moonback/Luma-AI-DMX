@@ -16,7 +16,7 @@ describe('profil depuis une photo du manuel', () => {
           { name: 'Reset', attribute: 'control', fine: false, default: 0, ranges: [{ from: 250, to: 255, label: 'Reset', kind: 'reset' }, { from: 'x', to: 3 }] },
           {}, // canal illisible
         ] },
-        { name: '9ch', channels: [{ name: 'Dimmer', attribute: 'dimmer', fine: false, default: 0, ranges: [] }] },
+        { name: '9ch', channels: [{ name: 'Couleurs', attribute: 'colorWheel', fine: false, default: 0, ranges: [{ from: 0, to: 9, label: 'Blanc', kind: 'color', color: '' }, { from: 10, to: 19, label: 'Rouge', kind: 'color', color: '#ff0000' }, { from: 20, to: 29, label: 'Bleu', kind: 'color', color: 'blue' }] }] },
         { name: 'vide', channels: [] },
       ],
     });
@@ -30,6 +30,8 @@ describe('profil depuis une photo du manuel', () => {
     expect(m.channels[4]!.default).toBe(255);
     expect(m.channels[5]!.ranges[0]).toMatchObject({ kind: 'reset', dangerous: true });
     expect(profile!.modes.map((x) => x.name)).toEqual(['9ch', '9ch (2)']);
+    // Slot colours feed the 3D view; anything but #RRGGBB is left out.
+    expect(profile!.modes[1]!.channels[0]!.ranges.map((r) => r.color)).toEqual([undefined, '#FF0000', undefined]);
     expect(profile!.id).toBe('photo-acme-spot-60');
     expect(dropped).toBe(2); // une plage illisible + un mode vide
   });

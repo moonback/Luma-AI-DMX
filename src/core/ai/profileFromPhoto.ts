@@ -21,7 +21,7 @@ const llmProfileSchema = z.object({
       attribute: z.string(),
       fine: z.boolean(),
       default: z.number(),
-      ranges: z.array(z.object({ from: z.number(), to: z.number(), label: z.string(), kind: z.enum(RANGE_KINDS) })),
+      ranges: z.array(z.object({ from: z.number(), to: z.number(), label: z.string(), kind: z.enum(RANGE_KINDS), color: z.string() })),
     })),
   })),
 });
@@ -35,7 +35,7 @@ ${JSON.stringify(PROFILE_JSON_SCHEMA)}
 - channel.name: the function as printed (short). attribute: one of ${BUILTIN_ATTRIBUTES.join(', ')}; "shutter" for a channel mixing closed/open/strobe, "strobe" for a pure strobe speed, "control" for reset/lamp/settings, "colorMacro" for colour presets; if none fits, a short english slug (e.g. "auto-program").
 - fine: true for the 16-bit low byte ("fine", "16 bit", "LSB") of an attribute whose coarse channel is also in the mode; it keeps the same attribute as its coarse channel.
 - default: the power-on / home value only if the manual states it, else 0.
-- ranges: every value range printed for the channel (from, to in 0..255, label as printed, kind: open/closed/strobe/pulse/random/color/gobo/shake/rotation/reset/lamp-on/lamp-off/other). Empty for plain 0-255 proportional channels.
+- ranges: every value range printed for the channel (from, to in 0..255, label as printed, kind: open/closed/strobe/pulse/random/color/gobo/shake/rotation/reset/lamp-on/lamp-off/other). Empty for plain 0-255 proportional channels. color: "#RRGGBB" of the light for a colour wheel / colour macro slot (e.g. Red → "#FF0000", Light blue → "#87CEEB", half colours → the mix), "" otherwise. Colour wheels are often printed as a list of colour names with value spans: transcribe every slot.
 - If several photos are given, they are consecutive pages of the same manual.
 "summary": one or two sentences in French on what you read and anything unreadable.`;
 
@@ -74,7 +74,8 @@ function repairMode(m: Record<string, unknown>, count: { dropped: number }): Fix
       if (a < 0 || b < 0) { count.dropped++; return []; }
       const kind = (RANGE_KINDS as readonly string[]).includes(r.kind as string) ? (r.kind as ChannelRange['kind']) : 'other';
       const from = Math.min(a, b), to = Math.max(a, b);
-      return [{ from, to, label: text(r.label, 64, `${from}-${to}`), kind, dangerous: DANGEROUS.has(kind) }];
+      const color = typeof r.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.color) ? r.color.toUpperCase() : undefined;
+      return [{ from, to, label: text(r.label, 64, `${from}-${to}`), kind, dangerous: DANGEROUS.has(kind), ...(color ? { color } : {}) }];
     }));
     return { name, attribute, fine: isFine, default: int(c.default, 0), ranges };
   });
