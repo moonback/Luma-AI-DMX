@@ -70,6 +70,9 @@ export class OscServer extends EventEmitter<{ message: [OscMessage, (ok: boolean
   ack = true;
   /** Packets dropped by the per-sender rate limit since the start. */
   dropped = 0;
+  /** Senders allowed on the network (null: any); 127.0.0.1 always is. Refused packets are counted, never parsed. */
+  allow: ((ip: string) => boolean) | null = null;
+  refused = 0;
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
   private readonly malformed = new Map<string, { count: number; at: number }>();
 
@@ -110,6 +113,10 @@ export class OscServer extends EventEmitter<{ message: [OscMessage, (ok: boolean
     await this.stop();
     const s = dgram.createSocket('udp4');
     s.on('message', (buf, rinfo) => {
+      if (this.allow && rinfo.address !== '127.0.0.1' && !this.allow(rinfo.address)) {
+        this.refused++;
+        return;
+      }
       if (!this.take(rinfo.address)) {
         this.dropped++;
         return;
@@ -140,4 +147,25 @@ export class OscServer extends EventEmitter<{ message: [OscMessage, (ok: boolean
   get port(): number | null {
     return this.socket?.address().port ?? null;
   }
+
+  /** Sends one message from the listening socket (state feedback); nothing when the server is stopped. */
+  send(address: string, args: OscArg[], host: string, port: number): void {
+    this.socket?.send(encodeOsc(address, args), port, host);
+  }
+}
+
+const ipNum = (ip: string) => ip.split('.').reduce((n, p) => n * 256 + Number(p), 0);
+
+/** Matcher for a list of IPv4 addresses or CIDR ranges (« 192.168.1.0/24 »). */
+export function allowList(entries: readonly string[]): (ip: string) => boolean {
+  const ranges = entries.map((e) => {
+    const [addr, bits = '32'] = e.split('/');
+    const n = Math.min(32, Math.max(0, Number(bits)));
+    const mask = n === 0 ? 0 : (0xffffffff << (32 - n)) >>> 0;
+    return { net: (ipNum(addr!) & mask) >>> 0, mask };
+  });
+  return (ip) => {
+    const v = ipNum(ip.replace(/^::ffff:/u, ''));
+    return ranges.some((r) => ((v & r.mask) >>> 0) === r.net);
+  };
 }

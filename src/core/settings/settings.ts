@@ -113,8 +113,12 @@ export const settingsSchema = z.object({
           bind: z.enum(['127.0.0.1', '0.0.0.0']).default('127.0.0.1'),
           /** Reply `/luma/ack` to each message. */
           ack: z.boolean().default(true),
+          /** Senders allowed in network mode (IPv4 or CIDR); empty = any, with a warning. 127.0.0.1 always is. */
+          allow: z.array(z.string().regex(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/u)).max(32).default([]),
+          /** Destinations of the state feedback (`/luma/state/*` on change). */
+          feedback: z.array(z.object({ host: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/u), port: z.number().int().min(1).max(65535) })).max(8).default([]),
         })
-        .default({ enabled: false, port: 8000, bind: '127.0.0.1', ack: true }),
+        .default({ enabled: false, port: 8000, bind: '127.0.0.1', ack: true, allow: [], feedback: [] }),
       timecode: z
         .object({ source: z.enum(['off', 'mtc', 'ltc']).default('off'), ltcDeviceId: z.string().max(300).nullable().default(null) })
         .default({ source: 'off', ltcDeviceId: null }),
@@ -129,7 +133,7 @@ export const settingsSchema = z.object({
         })
         .default({ enabled: false, port: 8080, bind: '0.0.0.0' }),
     })
-    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1', ack: true }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
+    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1', ack: true, allow: [], feedback: [] }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
   /** Opt-in, local usage statistics (command types and error counts only). Off until the user turns it on. */
   telemetry: z.object({ usage: z.boolean().default(false) }).default({ usage: false }),

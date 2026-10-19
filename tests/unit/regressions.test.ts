@@ -607,3 +607,52 @@ describe('annulation globale (LUMA-053)', () => {
     await svc.dispose();
   });
 });
+
+describe('contrôle externe (LUMA-061, 063, 067)', () => {
+  it('liste d’adresses autorisées : IPv4 et CIDR', async () => {
+    const { allowList } = await import('../../src/core/control/osc');
+    const ok = allowList(['192.168.1.0/24', '10.0.0.5']);
+    expect(ok('192.168.1.77')).toBe(true);
+    expect(ok('::ffff:192.168.1.3')).toBe(true);
+    expect(ok('192.168.2.1')).toBe(false);
+    expect(ok('10.0.0.5')).toBe(true);
+    expect(ok('10.0.0.6')).toBe(false);
+    expect(allowList(['0.0.0.0/0'])('8.8.8.8')).toBe(true);
+  });
+
+  it('retour d’état OSC : seulement les changements, vers chaque destination', async () => {
+    const dgram = await import('node:dgram');
+    const { parseOsc } = await import('../../src/core/control/osc');
+    const { oscFeedback } = await import('../../src/core/app/control');
+    const rx = dgram.createSocket('udp4');
+    await new Promise<void>((r) => rx.bind(0, '127.0.0.1', () => r()));
+    const got: string[] = [];
+    rx.on('message', (b) => got.push(...parseOsc(b).map((m) => `${m.address}=${m.args.join(',')}`)));
+    const { svc } = makeService();
+    await svc.init();
+    const s = svc.getSettings();
+    await svc.execute({ type: 'settings.update', settings: { ...s, control: { ...s.control, osc: { ...s.control.osc, enabled: true, port: 0, feedback: [{ host: '127.0.0.1', port: rx.address().port }] } } } });
+    expect(svc.osc.port).not.toBeNull();
+    oscFeedback(svc);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(got).toContain('/luma/state/blackout=0');
+    const n = got.length;
+    oscFeedback(svc); // nothing changed
+    await svc.execute({ type: 'engine.blackout', on: true });
+    oscFeedback(svc);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(got.slice(n)).toEqual(['/luma/state/blackout=1']);
+    rx.close();
+    await svc.dispose();
+  });
+
+  it('la télécommande reçoit l’état des sorties réelles et du garde-fou', async () => {
+    const { remoteState } = await import('../../src/core/app/control');
+    const { svc } = makeService();
+    await svc.init();
+    await svc.execute({ type: 'output.configure', outputs: [{ id: 'an', name: 'Nœud', kind: 'artnet', enabled: true, maxFps: 40, host: '127.0.0.1', bindAddress: '', broadcast: false, universeMap: [{ local: 1, remote: 0 }] }] });
+    expect(remoteState(svc).outputs).toEqual([{ name: 'Nœud', state: 'disarmed' }]);
+    expect(remoteState(svc).safety).toBeNull();
+    await svc.dispose();
+  });
+});

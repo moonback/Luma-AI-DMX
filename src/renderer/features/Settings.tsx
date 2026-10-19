@@ -131,7 +131,7 @@ const OSC_ADDRESSES = [
   ['/luma/go [liste]', 'go'], ['/luma/back [liste]', 'back'], ['/luma/goto <cue> [liste]', 'goto'],
   ['/luma/pause [liste] · /luma/resume [liste]', 'pause'], ['/luma/blackout [0|1]', 'blackout'],
   ['/luma/master <0..1>', 'master'], ['/luma/bpm <bpm>', 'bpm'], ['/luma/release', 'release'],
-  ['/luma/stop', 'stop'], ['/luma/timecode <secondes>', 'timecode'],
+  ['/luma/stop', 'stop'], ['/luma/releaseall', 'releaseAll'], ['/luma/timecode <secondes>', 'timecode'],
 ] as const;
 
 /** Version, update channel and status. Updates install when the application quits, never during a show. */
@@ -215,6 +215,13 @@ function ControlTab({ value, onChange }: { value: Settings['control']; onChange:
               <option value="0.0.0.0">{tr('settings.bind.lan')}</option>
             </select>
           </Field>
+          <Field label={tr('settings.osc.allow')} hint={tr('settings.osc.allowHint')}>
+            <input className="input mono" data-testid="osc-allow" defaultValue={value.osc.allow.join(', ')} placeholder="192.168.1.0/24" onBlur={(e) => onChange({ ...value, osc: { ...value.osc, allow: e.target.value.split(/[\s,;]+/u).filter(Boolean) } })} />
+          </Field>
+          <Field label={tr('settings.osc.feedback')} hint={tr('settings.osc.feedbackHint')}>
+            <input className="input mono" data-testid="osc-feedback" defaultValue={value.osc.feedback.map((f) => `${f.host}:${f.port}`).join(', ')} placeholder="192.168.1.20:9000" onBlur={(e) => onChange({ ...value, osc: { ...value.osc, feedback: e.target.value.split(/[\s,;]+/u).filter(Boolean).map((x) => { const [host = '', port = ''] = x.split(':'); return { host, port: Number(port) }; }) } })} />
+          </Field>
+          <label className="check"><input type="checkbox" checked={value.osc.ack} onChange={(e) => onChange({ ...value, osc: { ...value.osc, ack: e.target.checked } })} />{tr('settings.osc.ackToggle')}</label>
         </div>
         <table className="table small"><tbody>{OSC_ADDRESSES.map(([a, d]) => <tr key={a}><td className="mono">{a}</td><td>{tr(`settings.osc.cmd.${d}`)}</td></tr>)}</tbody></table>
         <p className="small dim" style={{ marginBottom: 0 }}>{tr('settings.osc.ackBefore')}<span className="mono">{tr('settings.osc.ack')}</span>{tr('settings.osc.ackAfter')}</p>

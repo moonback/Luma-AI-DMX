@@ -3,6 +3,7 @@ import { buildVisualModel } from '../visualizer/model';
 import type { ValuesFrame } from '../../shared/commands';
 import type { AppService } from './AppService';
 import { endLocate } from './handlers/locate';
+import { oscFeedback } from './control';
 
 /** The main window crashed or reloaded: nothing may stay stuck on stage waiting for it (camera pattern, raw test pattern). */
 export function rendererLost(app: AppService, reason: string): void {
@@ -91,6 +92,7 @@ export function onFrame(app: AppService): void {
   if (now - app.lastRuntimeEmit >= 100) {
     app.lastRuntimeEmit = now;
     app.emit('runtime', app.runtimeState());
+    oscFeedback(app);
   }
 }
 
