@@ -4,6 +4,8 @@ import { useStore } from '../store';
 import { useT } from '../i18n';
 import { act, newId } from '../api';
 import { Empty, Field, Modal, PageHead } from '../components/ui';
+import { attributeClass } from '../../core/fixtures/attributes';
+import type { RuntimeState } from '../../shared/commands';
 import { moveQuickAction, parseQuickActions, quickActionSchema, type QuickAction } from '../../core/quick/quickActions';
 
 const KINDS = ['color', 'effect', 'cue', 'scene', 'palette'] as const;
@@ -19,40 +21,77 @@ function loadActions(): QuickAction[] {
   }
 }
 
-/** Runs one action on the selection (every fixture when nothing is selected). */
-async function run(a: QuickAction, missing: string): Promise<void> {
-  const st = useStore.getState();
-  const p = st.project?.project;
-  if (!p) return;
-  const ids = (st.selection.length ? st.selection : p.patch.map((f) => f.id)).slice(0, 1024);
-  if (a.kind === 'color') { if (ids.length) await act({ type: 'programmer.setColor', fixtureIds: ids, color: a.color }); return; }
-  const known = { effect: p.effects, scene: p.scenes, palette: p.palettes, cue: p.cueLists }[a.kind];
-  if (!known.some((x) => x.id === a.ref)) { st.toast({ kind: 'error', title: missing, detail: a.name }); return; }
-  if (a.kind === 'effect') await act({ type: 'effect.start', id: a.ref });
-  else if (a.kind === 'scene') await act({ type: 'scene.load', id: a.ref });
-  else if (a.kind === 'palette') { if (ids.length) await act({ type: 'palette.apply', id: a.ref, fixtureIds: ids }); }
-  else await act(a.index === undefined ? { type: 'cue.go', listId: a.ref } : { type: 'cue.goto', listId: a.ref, index: a.index });
+const FAMILY = { color: ['color'], position: ['position'], intensity: ['intensity'], beam: ['beam', 'special'] } as const;
+
+/** Effects and cues are live in the engine; colours, palettes and scenes live in the programmer, so they are remembered by the page (`armed`). */
+function isActive(a: QuickAction, rt: RuntimeState | null, armed: ReadonlySet<string>): boolean {
+  if (!rt) return false;
+  if (a.kind === 'effect') return rt.engine.effects.some((e) => e.effectId === a.ref && e.owner === 'manual');
+  if (a.kind === 'cue') return rt.engine.playbacks.some((pb) => pb.cueListId === a.ref && pb.state !== 'idle' && (a.index === undefined || pb.index === a.index));
+  return armed.has(a.id) && rt.engine.programmerCount > 0;
 }
 
-function AddDialog({ categories, onAdd, onClose }: { categories: string[]; onAdd: (a: QuickAction) => void; onClose: () => void }) {
+/** Releases the programmer attributes of the given classes on `ids` (nothing else the user set). */
+async function releaseFamily(ids: string[], classes: readonly string[]): Promise<void> {
+  const prog = useStore.getState().runtime?.programmer ?? {};
+  const attributes = [...new Set(ids.flatMap((id) => Object.keys(prog[id] ?? {})))].filter((attr) => classes.includes(attributeClass(attr)));
+  if (attributes.length) await act({ type: 'programmer.release', fixtureIds: ids, attributes });
+}
+
+/**
+ * Click on a tile: switches the action on, or off when it is already active. Acts on the selection (every fixture when nothing is selected).
+ * Resolves to the new on/off state of programmer-based actions (color, palette, scene), undefined when nothing changed or for live ones.
+ */
+async function toggle(a: QuickAction, active: boolean, missing: string): Promise<boolean | undefined> {
+  const st = useStore.getState();
+  const p = st.project?.project;
+  if (!p) return undefined;
+  const ids = (st.selection.length ? st.selection : p.patch.map((f) => f.id)).slice(0, 1024);
+  if (a.kind === 'color') {
+    if (active) { await releaseFamily(ids, FAMILY.color); return false; }
+    return ids.length && (await act({ type: 'programmer.setColor', fixtureIds: ids, color: a.color })) ? true : undefined;
+  }
+  const known = { effect: p.effects, scene: p.scenes, palette: p.palettes, cue: p.cueLists }[a.kind];
+  if (!known.some((x) => x.id === a.ref)) { st.toast({ kind: 'error', title: missing, detail: a.name }); return undefined; }
+  if (a.kind === 'effect') {
+    if (!active) await act({ type: 'effect.start', id: a.ref });
+    else for (const e of st.runtime?.engine.effects ?? []) if (e.effectId === a.ref && e.owner === 'manual') await act({ type: 'effect.stop', instanceId: e.instanceId });
+  } else if (a.kind === 'cue') {
+    if (active) await act({ type: 'cue.stop', listId: a.ref });
+    else await act(a.index === undefined ? { type: 'cue.go', listId: a.ref } : { type: 'cue.goto', listId: a.ref, index: a.index });
+  } else if (a.kind === 'scene') {
+    const values = p.scenes.find((s) => s.id === a.ref)!.values;
+    if (!active) return (await act({ type: 'scene.load', id: a.ref })) ? true : undefined;
+    await act({ type: 'programmer.release', fixtureIds: Object.keys(values), attributes: [...new Set(Object.values(values).flatMap((v) => Object.keys(v)))] });
+    return false;
+  } else {
+    const kind = p.palettes.find((x) => x.id === a.ref)!.kind;
+    if (active) { await releaseFamily(ids, FAMILY[kind]); return false; }
+    return ids.length && (await act({ type: 'palette.apply', id: a.ref, fixtureIds: ids })) ? true : undefined;
+  }
+  return undefined;
+}
+
+/** Creates an action, or edits `initial` (same id, so its tile keeps its place). */
+function ActionDialog({ initial, categories, onSave, onClose }: { initial?: QuickAction; categories: string[]; onSave: (a: QuickAction) => void; onClose: () => void }) {
   const tr = useT();
   const p = useStore((s) => s.project!.project);
-  const [kind, setKind] = useState<(typeof KINDS)[number]>('color');
-  const [category, setCategory] = useState(categories[categories.length - 1] ?? '');
-  const [name, setName] = useState('');
-  const [color, setColor] = useState('#FF0000');
-  const [ref, setRef] = useState('');
-  const [index, setIndex] = useState('');
+  const [kind, setKind] = useState<(typeof KINDS)[number]>(initial?.kind ?? 'color');
+  const [category, setCategory] = useState(initial ? initial.category ?? '' : categories[categories.length - 1] ?? '');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [color, setColor] = useState(initial?.kind === 'color' ? initial.color : '#FF0000');
+  const [ref, setRef] = useState(initial && initial.kind !== 'color' ? initial.ref : '');
+  const [index, setIndex] = useState(initial?.kind === 'cue' && initial.index !== undefined ? String(initial.index) : '');
   const options = kind === 'effect' ? p.effects : kind === 'scene' ? p.scenes : kind === 'palette' ? p.palettes : kind === 'cue' ? p.cueLists : [];
   const chosen = options.find((o) => o.id === ref) ?? options[0];
   const submit = () => {
     const label = name.trim() || chosen?.name || color;
     const a = kind === 'color' ? { kind, color } : chosen ? { kind, ref: chosen.id, ...(kind === 'cue' && index !== '' ? { index: Number(index) } : {}) } : null;
-    const parsed = a && quickActionSchema.safeParse({ id: newId(), name: label, ...(category.trim() ? { category } : {}), ...a });
-    if (parsed?.success) { onAdd(parsed.data); onClose(); }
+    const parsed = a && quickActionSchema.safeParse({ id: initial?.id ?? newId(), name: label, ...(category.trim() ? { category } : {}), ...a });
+    if (parsed?.success) { onSave(parsed.data); onClose(); }
   };
   return (
-    <Modal title={tr('quick.add')} onClose={onClose} footer={<><button className="btn" onClick={onClose}>{tr('common.cancel')}</button><button className="btn primary" disabled={kind !== 'color' && !chosen} onClick={submit}>{tr('common.create')}</button></>}>
+    <Modal title={tr(initial ? 'quick.editTitle' : 'quick.add')} onClose={onClose} footer={<><button className="btn" onClick={onClose}>{tr('common.cancel')}</button><button className="btn primary" disabled={kind !== 'color' && !chosen} onClick={submit}>{tr(initial ? 'quick.save' : 'common.create')}</button></>}>
       <Field label={tr('quick.kind')}>
         <select className="input" value={kind} onChange={(e) => { setKind(e.target.value as typeof kind); setRef(''); }}>
           {KINDS.map((k) => <option key={k} value={k}>{tr(`quick.kind.${k}`)}</option>)}
@@ -80,9 +119,21 @@ function AddDialog({ categories, onAdd, onClose }: { categories: string[]; onAdd
 export function QuickActionsPage() {
   const tr = useT();
   const [actions, setActions] = useState(loadActions);
-  const [adding, setAdding] = useState(false);
+  const [dialog, setDialog] = useState(null as QuickAction | 'new' | null);
   const [editing, setEditing] = useState(false);
   const [dragId, setDragId] = useState(''); // '' = nothing being dragged
+  const [armed, setArmed] = useState(new Set<string>());
+  const rt = useStore((s) => s.runtime);
+  const click = async (a: QuickAction) => {
+    const on = await toggle(a, isActive(a, rt, armed), tr('quick.missing'));
+    if (on === undefined) return;
+    setArmed((cur) => {
+      const next = new Set(cur);
+      if (on && a.kind === 'color') actions.forEach((x) => x.kind === 'color' && next.delete(x.id)); // one colour at a time
+      if (on) next.add(a.id); else next.delete(a.id);
+      return next;
+    });
+  };
   const file = useRef<HTMLInputElement>(null);
   // Sections follow the array order: a category sits where its first action sits.
   const categories = [...new Set(actions.map((a) => a.category ?? ''))];
@@ -96,6 +147,12 @@ export function QuickActionsPage() {
   const update = (next: QuickAction[]) => {
     setActions(next);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { toast({ kind: 'warn', title: tr('quick.notSaved') }); }
+  };
+  const save = (a: QuickAction) => {
+    const old = actions.find((x) => x.id === a.id);
+    if (!old) return update([...actions, a]);
+    const next = actions.map((x) => (x.id === a.id ? a : x));
+    update(old.category === a.category ? next : moveQuickAction(next, a.id, a.category));
   };
   const importFile = async (f: File | undefined) => {
     if (!f) return;
@@ -117,7 +174,7 @@ export function QuickActionsPage() {
         <button className={`btn ${editing ? 'primary' : ''}`} disabled={!actions.length} onClick={() => setEditing(!editing)}><Pencil size={14} />{tr('quick.edit')}</button>
         <button className="btn" onClick={() => file.current?.click()}><Upload size={14} />{tr('quick.import')}</button>
         <button className="btn" disabled={!actions.length} onClick={exportFile}><Download size={14} />{tr('quick.export')}</button>
-        <button className="btn primary" onClick={() => setAdding(true)}><Plus size={14} />{tr('quick.add')}</button>
+        <button className="btn primary" onClick={() => setDialog('new')}><Plus size={14} />{tr('quick.add')}</button>
         <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
       </PageHead>
       {actions.length === 0 ? (
@@ -130,7 +187,7 @@ export function QuickActionsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {actions.filter((a) => (a.category ?? '') === cat).map((a) => (
                   <div key={a.id} draggable onDragStart={() => setDragId(a.id)} onDragEnd={() => setDragId('')} onDragOver={(e) => dragId && e.preventDefault()} onDrop={(e) => drop(e, cat, a.id)} style={{ position: 'relative', opacity: dragId === a.id ? 0.4 : 1, cursor: 'grab' }}>
-                    <button className="btn lg" style={{ width: '100%', minHeight: 72, flexDirection: 'column', ...(a.kind === 'color' ? { background: a.color, color: '#000', textShadow: '0 0 3px #fff' } : {}) }} onClick={() => void run(a, tr('quick.missing'))}>
+                    <button className="btn lg" aria-pressed={isActive(a, rt, armed)} style={{ width: '100%', minHeight: 72, flexDirection: 'column', ...(a.kind === 'color' ? { background: a.color, color: '#000', textShadow: '0 0 3px #fff' } : {}), ...(isActive(a, rt, armed) ? { boxShadow: '0 0 0 3px #22d3ee, 0 0 14px #22d3ee' } : {}) }} title={editing ? tr('quick.editHint') : undefined} onClick={() => (editing ? setDialog(a) : void click(a))}>
                       <b>{a.name}</b><span className="small">{tr(`quick.kind.${a.kind}`)}</span>
                     </button>
                     {editing && <button className="btn danger sm icon" style={{ position: 'absolute', top: 4, right: 4 }} aria-label={tr('common.delete')} onClick={() => update(actions.filter((x) => x.id !== a.id))}><X size={12} /></button>}
@@ -141,7 +198,7 @@ export function QuickActionsPage() {
           ))}
         </div>
       )}
-      {adding && <AddDialog categories={categories.filter(Boolean)} onAdd={(a) => update([...actions, a])} onClose={() => setAdding(false)} />}
+      {dialog && <ActionDialog key={dialog === 'new' ? 'new' : dialog.id} initial={dialog === 'new' ? undefined : dialog} categories={categories.filter(Boolean)} onSave={save} onClose={() => setDialog(null)} />}
     </div>
   );
 }
