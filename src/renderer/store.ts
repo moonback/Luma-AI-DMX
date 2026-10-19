@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { LogEntry } from '../core/log/logger';
 import type { FixtureValues } from '../core/model/schemas';
-import type { ProjectState, RuntimeState } from '../shared/commands';
+import type { Progress, ProjectState, RuntimeState } from '../shared/commands';
 import type { PlaceSpec, SceneRef } from '../core/visualizer/sceneEdit';
 
 /** Stable empty defaults: selectors must not return fresh objects (would re-render forever). */
@@ -62,6 +62,8 @@ interface State {
   values: FixtureValues;
   sources: Record<string, Record<string, string>>;
   logs: LogEntry[];
+  /** Last step reported for the long operation in progress (show generation). */
+  progress: Progress | null;
   page: PageId;
   collapsed: boolean;
   selection: string[];
@@ -116,6 +118,7 @@ export const useStore = create<State>((set, get) => ({
   values: {},
   sources: {},
   logs: [],
+  progress: null,
   page: 'dashboard',
   collapsed: prefs.collapsed ?? false,
   selection: [],
@@ -199,5 +202,6 @@ export function connectEvents(): () => void {
       const f = payload as { values: FixtureValues; sources?: Record<string, Record<string, string>> };
       useStore.setState(f.sources ? { values: f.values, sources: f.sources } : { values: f.values });
     } else if (name === 'log') useStore.setState({ logs: [...useStore.getState().logs.slice(-499), payload as LogEntry] });
+    else if (name === 'progress') useStore.setState({ progress: payload as Progress });
   });
 }

@@ -2,6 +2,36 @@ import { stageLight } from '../safety/flashGuard';
 import { buildVisualModel } from '../visualizer/model';
 import type { ValuesFrame } from '../../shared/commands';
 import type { AppService } from './AppService';
+import { endLocate } from './handlers/locate';
+
+/** The main window crashed or reloaded: nothing may stay stuck on stage waiting for it (camera pattern, raw test pattern). */
+export function rendererLost(app: AppService, reason: string): void {
+  if (!app.locate && !app.engine.testPattern) return;
+  endLocate(app);
+  app.engine.testPattern = null;
+  app.logger.warn('Sécurité', `Fenêtre principale perdue (${reason}) : localisation caméra et mire arrêtées`);
+  app.emit('runtime', app.runtimeState());
+}
+
+const engineErrors = new WeakMap<AppService, Map<string, { count: number; at: number }>>();
+
+/** Same engine error at most once per 5 s with an occurrence count (a failing tick repeats 40 times per second). */
+export function onEngineError(app: AppService, message: string, now = Date.now()): void {
+  let seen = engineErrors.get(app);
+  if (!seen || seen.size >= 100) engineErrors.set(app, (seen = new Map()));
+  const e = seen.get(message);
+  if (!e) {
+    seen.set(message, { count: 0, at: now });
+    app.logger.error('Moteur', message);
+    return;
+  }
+  e.count++;
+  if (now - e.at >= 5000) {
+    app.logger.error('Moteur', `${message} (× ${e.count} en ${Math.round((now - e.at) / 1000)} s)`);
+    e.count = 0;
+    e.at = now;
+  }
+}
 
 /* Per-frame work (throttled events to the UI, photosensitive watch, timecode loss) and output state changes. */
 

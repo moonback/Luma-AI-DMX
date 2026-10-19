@@ -110,6 +110,7 @@ class AudioEngine {
     this.stream = null;
     this.ctx = null;
     this.analyser = null;
+    if (this.source !== 'none') void act({ type: 'audio.release' });
     this.source = 'none';
     this.last = null;
     this.emit(null);

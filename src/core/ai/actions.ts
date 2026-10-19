@@ -163,6 +163,8 @@ export interface AiProposal {
   /** Fixture values the AI layer would hold after the proposal is applied (for preview). */
   preview: Record<string, Record<string, number>>;
   createdAt: string;
+  /** Digest of the patch, groups and scene names the proposal was validated against (set when stored). */
+  basis?: string;
 }
 
 export interface AiExecutionReport {

@@ -6,6 +6,7 @@ import { Field, NumberInput, PageHead, Panel, Tabs } from '../components/ui';
 import { resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, type Settings } from '../../core/settings/settings';
 import { comboFromEvent } from '../shortcuts';
 import type { RecoveryEntry } from '../../core/project/store';
+import type { StorageReport } from '../../core/app/storage';
 import type { OpenRouterModel } from '../../core/ai/providers/openrouter';
 import { externalControl } from '../control';
 import { audioEngine } from '../audioEngine';
@@ -287,6 +288,36 @@ function RecentPanel({ recent, onChange }: { recent: string[]; onChange: (list: 
   );
 }
 
+const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} Mo`;
+
+/** Disk used by imported audio, the AI cache and recovery copies; purges only what is no longer referenced. */
+function StoragePanel() {
+  const tr = useT();
+  const [r, setR] = useState<StorageReport | null>(null);
+  const load = () => void act({ type: 'storage.report' }).then((x) => setR(x ?? null));
+  useEffect(load, []);
+  const purge = async (what: 'music' | 'aiCache' | 'autosave') => {
+    if (!(await confirmAction({ title: tr('settings.storage.purgeTitle'), message: tr(`settings.storage.purge.${what}`), confirmLabel: tr('settings.storage.purge') }))) return;
+    await act({ type: 'storage.purge', [what]: true });
+    load();
+  };
+  if (!r) return null;
+  const rows = [
+    { id: 'music' as const, label: tr('settings.storage.music', { n: r.music.files, size: mb(r.music.bytes), orphans: r.music.orphans, orphanSize: mb(r.music.orphanBytes) }), can: r.music.orphans > 0 },
+    { id: 'aiCache' as const, label: tr('settings.storage.aiCache', { n: r.aiCache.files, size: mb(r.aiCache.bytes) }), can: r.aiCache.files > 0 },
+    { id: 'autosave' as const, label: tr('settings.storage.autosave', { n: r.autosave.files, size: mb(r.autosave.bytes), stale: r.autosave.stale }), can: r.autosave.stale > 0 },
+  ];
+  return (
+    <Panel title={tr('settings.storage.title')}>
+      <table className="table small" data-testid="storage-report"><tbody>
+        {rows.map((row) => (
+          <tr key={row.id}><td>{row.label}</td><td style={{ textAlign: 'right' }}><button className="btn sm" disabled={!row.can} onClick={() => void purge(row.id)}>{tr('settings.storage.purge')}</button></td></tr>
+        ))}
+      </tbody></table>
+    </Panel>
+  );
+}
+
 export function SettingsPage() {
   const tr = useT();
   const [s, setS] = useState<Settings | null>(null);
@@ -461,6 +492,7 @@ export function SettingsPage() {
             <div className="row"><button className="btn" onClick={() => void act({ type: 'project.export' })}>{tr('settings.backups.export')}</button></div>
           </Panel>
         )}
+        {tab === 'backups' && <StoragePanel />}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { commandSchema, type AppEvents } from '../shared/commands';
 import { BRAND } from '../shared/brand';
 import { createSecretStore } from './secrets';
 import { createUpdater } from './updates';
+import { discardAutosaveSync } from '../core/app/files';
 import type { Logger } from '../core/log/logger';
 import icon from '../../resources/icon.png?asset';
 
@@ -59,7 +60,7 @@ async function createService(): Promise<AppService> {
       arch: process.arch,
       versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
     },
-    secrets: createSecretStore(dataDir),
+    secrets: createSecretStore(dataDir, (m) => svc.logger.warn('Secrets', m)),
     dialogs: {
       openProject: async () => {
         const r = await dialog.showOpenDialog(win!, { title: 'Ouvrir un projet', filters: projectFilters, properties: ['openFile'] });
@@ -71,11 +72,10 @@ async function createService(): Promise<AppService> {
       },
       openProfile: async () => {
         const r = await dialog.showOpenDialog(win!, { title: 'Importer des profils', filters: [
-          { name: 'Profils (Luma, GDTF, grandMA2)', extensions: ['json', 'gdtf', 'xml', 'qxf'] },
+          { name: 'Profils (Luma, GDTF, grandMA2)', extensions: ['json', 'gdtf', 'xml'] },
           { name: 'Profils Luma', extensions: ['json'] },
           { name: 'GDTF', extensions: ['gdtf'] },
           { name: 'grandMA2', extensions: ['xml'] },
-          { name: 'QLC+ (bientôt)', extensions: ['qxf'] },
         ], properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
       },
@@ -157,14 +157,40 @@ function createWindow(): BrowserWindow {
       message: 'Le projet contient des modifications non enregistrées.',
     });
     if (choice === 2) e.preventDefault();
+    else if (choice === 1) discardAutosaveSync(service);
     else if (choice === 0) {
       e.preventDefault();
-      void service.execute({ type: 'project.save' }).then((r) => {
-        if (r.path) {
-          quitting = true;
-          w.close();
-        }
-      });
+      void service.execute({ type: 'project.save' }).then(
+        (r) => {
+          if (r.path) {
+            quitting = true;
+            w.close();
+          }
+        },
+        (err: unknown) => {
+          // Never leave the user believing the show was saved: say why, and let them choose.
+          const again = dialog.showMessageBoxSync(w, {
+            type: 'error',
+            buttons: ['Enregistrer sous…', 'Quitter sans enregistrer', 'Annuler'],
+            defaultId: 0,
+            cancelId: 2,
+            title: BRAND.productName,
+            message: 'L’enregistrement a échoué.',
+            detail: err instanceof Error ? err.message : String(err),
+          });
+          if (again === 1) {
+            quitting = true;
+            w.close();
+          } else if (again === 0) {
+            void service?.execute({ type: 'project.saveAs' }).then((r) => {
+              if (r.path) {
+                quitting = true;
+                w.close();
+              }
+            }, (e2: unknown) => logFatal('Enregistrement', e2));
+          }
+        },
+      );
     }
   });
   if (DEV_URL) void w.loadURL(DEV_URL);
@@ -221,15 +247,19 @@ function logFatal(source: string, err: unknown): void {
 }
 process.on('uncaughtException', (err) => logFatal('Processus principal', err));
 process.on('unhandledRejection', (reason) => logFatal('Promesse non gérée', reason));
-app.on('render-process-gone', (_e, _wc, details) => logFatal('Fenêtre', `processus de rendu arrêté : ${details.reason} (code ${details.exitCode})`));
+app.on('render-process-gone', (_e, wc, details) => {
+  logFatal('Fenêtre', `processus de rendu arrêté : ${details.reason} (code ${details.exitCode})`);
+  if (win && !win.isDestroyed() && wc === win.webContents) service?.onRendererLost(`plantage : ${details.reason}`);
+});
 app.on('child-process-gone', (_e, details) => {
   if (details.reason !== 'clean-exit') logFatal('Processus', `${details.type} arrêté : ${details.reason} (code ${details.exitCode})`);
 });
 
 app.whenReady().then(async () => {
   const splash = process.env.LUMA_E2E ? null : showSplash();
-  // Only the microphone (audio-reactive input, LTC) and MIDI (controllers, MTC) may be requested by the renderer.
-  const allowed = new Set(['media', 'midi', 'midiSysex']);
+  // Only the microphone (audio-reactive input, LTC), MIDI (controllers, MTC) and the HTML fullscreen of the detached
+  // 3D view (F11) may be requested by the renderer.
+  const allowed = new Set(['media', 'midi', 'midiSysex', 'fullscreen']);
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
 
@@ -256,9 +286,14 @@ app.whenReady().then(async () => {
   service.on('values', forward('values'));
   service.on('log', forward('log'));
   service.on('locatePhoto', forward('locatePhoto'));
+  service.on('progress', forward('progress'));
 
   const w = createWindow();
   win = w;
+  // A reload of the main window drops the camera localisation it was driving.
+  w.webContents.on('did-start-navigation', (e) => {
+    if (e.isMainFrame && !e.isSameDocument) service?.onRendererLost('rechargement');
+  });
   const ready = new Promise<void>((r) => w.once('ready-to-show', () => r()));
   await Promise.all([ready, splash?.done]);
   if (splash && !splash.win.isDestroyed()) splash.win.destroy();

@@ -1,9 +1,12 @@
 import type { AiProposal } from '../../ai/actions';
 import { buildProposal, executeProposal, guardProposalFlashes, liveState, proposeLocally } from '../../ai/director';
+import { pruneTransientEffects } from '../../ai/transient';
+import { ProjectIndex } from '../../engine/resolve';
+import type { Project } from '../../model/schemas';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel } from '../../ai/providers/openrouter';
 import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
 import { OPENROUTER_KEY, UserError } from '../shared';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AppService, CommandIn } from '../AppService';
 
 /* AI Director: proposals (local or OpenRouter), revision, application and the model catalogue. */
@@ -23,10 +26,44 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
     case 'ai.apply': {
       const p = app.proposals.get(cmd.proposalId);
       if (!p) throw new UserError('Proposition expirée ou inconnue');
+      // What was previewed must be what is applied: refuse when the rig the actions were resolved against has changed.
+      if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.');
       if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)');
       app.lastAiApply = Date.now();
       app.proposals.delete(cmd.proposalId); // a proposal is applied at most once
-      const report = executeProposal(p, { index: () => app.index, mutate: (fn) => app.mutate(fn), engine: e, maxStrobeHz: app.settings.engine.maxStrobeHz });
+      // All or nothing: every creation goes to one draft, validated and committed once; effects start after the commit.
+      const before = app.project;
+      let draft: Project | null = null;
+      let index = app.index;
+      const deferred: (() => void)[] = [];
+      const report = executeProposal(p, {
+        index: () => index,
+        mutate: (fn) => {
+          draft ??= structuredClone(app.project);
+          fn(draft);
+          index = new ProjectIndex(draft, app.userProfiles);
+        },
+        defer: (fn) => deferred.push(fn),
+        engine: e,
+        maxStrobeHz: app.settings.engine.maxStrobeHz,
+      });
+      if (draft) {
+        const next: Project = draft;
+        try {
+          app.mutate((d) => { Object.assign(d, next); });
+        } catch (err) {
+          e.releaseAi();
+          throw err;
+        }
+      }
+      for (const start of deferred) {
+        try {
+          start();
+        } catch (err) {
+          app.logger.warn('IA', (err as Error).message);
+        }
+      }
+      app.lastAiUndo = { proposalId: p.id, project: before, revision: app.revision };
       app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s)`);
       for (const s of report.skipped) app.logger.warn('IA', `Ignorée — ${s.summary} : ${s.reason}`);
       return report;
@@ -34,7 +71,26 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
     case 'ai.release':
       e.releaseAi();
       for (const fx of e.snapshot().effects) if (fx.owner === 'ai') e.stopEffect(fx.instanceId);
+      pruneAiEffects(app);
       return ok;
+    case 'ai.cancel':
+      if (app.aiAbort) {
+        app.aiAbort.abort();
+        app.logger.info('IA', 'Demande IA annulée par l’utilisateur');
+      }
+      return ok;
+    case 'ai.undoApply': {
+      const u = app.lastAiUndo;
+      if (!u) throw new UserError('Aucune application IA à annuler');
+      if (app.revision !== u.revision) throw new UserError('Le projet a été modifié depuis l’application IA : annulation impossible');
+      for (const fx of e.snapshot().effects) if (fx.owner === 'ai') e.stopEffect(fx.instanceId);
+      e.releaseAi();
+      app.mutate((d) => { Object.assign(d, structuredClone(u.project)); });
+      e.bpm = u.project.show.bpm;
+      app.lastAiUndo = null;
+      app.logger.info('IA', 'Dernière application IA annulée');
+      return ok;
+    }
     case 'ai.listModels':
       if (cmd.refresh) app.modelCache = null;
       return openRouterModels(app);
@@ -66,7 +122,21 @@ export function guardFlashes(app: AppService, p: AiProposal): void {
   if (n) p.notices.push(`${n} effet(s) refusé(s) par le garde-fou photosensible (Paramètres › Moteur & sécurité).`);
 }
 
+/** Digest of what AI actions resolve against: fixtures (id, profile, mode), groups and scene names. */
+export function rigBasis(app: AppService): string {
+  const p = app.project;
+  const rig = [p.patch.map((f) => [f.id, f.profileId, f.mode]), p.groups.map((g) => [g.id, g.name, g.fixtureIds]), p.scenes.map((s) => s.name)];
+  return createHash('sha1').update(JSON.stringify(rig)).digest('hex');
+}
+
+/** Removes the stopped live AI effects nobody kept (see `pruneTransientEffects`). */
+export function pruneAiEffects(app: AppService): void {
+  const running = new Set(app.engine.snapshot().effects.map((x) => x.effectId));
+  if (app.project.effects.some((x) => x.transient && !running.has(x.id))) app.mutate((d) => { pruneTransientEffects(d, running); });
+}
+
 export function storeProposal(app: AppService, p: AiProposal): void {
+  p.basis = rigBasis(app);
   app.proposals.set(p.id, p);
   while (app.proposals.size > 20) app.proposals.delete(app.proposals.keys().next().value!);
 }
@@ -74,8 +144,8 @@ export function storeProposal(app: AppService, p: AiProposal): void {
 export async function aiPropose(app: AppService, prompt: string): Promise<AiProposal> {
   if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
   app.aiBusy = true;
+  const abort = (app.aiAbort = new AbortController());
   try {
-    const ctx = validationCtx(app);
     const ai = app.settings.ai;
     const key = app.opts.secrets.get(OPENROUTER_KEY);
     let proposal: AiProposal;
@@ -83,27 +153,36 @@ export async function aiPropose(app: AppService, prompt: string): Promise<AiProp
       try {
         const model = ai.model || DEFAULT_OPENROUTER_MODEL;
         const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-        const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps });
-        proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx });
+        const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal });
+        // Validated against the project as it is now: it may have changed during the request.
+        proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx: validationCtx(app) });
         app.aiLastError = null;
       } catch (err) {
+        if (abort.signal.aborted) throw new UserError('Demande IA annulée');
         const msg = err instanceof Error ? err.message : String(err);
         app.aiLastError = msg;
         app.logger.error('IA', `Fournisseur OpenRouter indisponible : ${msg}`);
         if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
-        proposal = proposeLocally(prompt, ctx, app.engine);
+        proposal = proposeLocally(prompt, validationCtx(app), app.engine);
         proposal.notices.unshift(`Fournisseur OpenRouter indisponible (${msg}) : proposition générée par le mode local déterministe.`);
       }
     } else {
-      proposal = proposeLocally(prompt, ctx, app.engine);
+      proposal = proposeLocally(prompt, validationCtx(app), app.engine);
       if (ai.provider === 'openrouter') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
     }
     guardFlashes(app, proposal);
     storeProposal(app, proposal);
+    // Remembering the prompt is not an edit of the show: a clean project stays clean (saved with the next save).
+    const clean = !app.dirty;
     app.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); });
+    if (clean) {
+      app.savedRevision = app.revision;
+      app.emitProject();
+    }
     return proposal;
   } finally {
     app.aiBusy = false;
+    app.aiAbort = null;
   }
 }
 
@@ -114,10 +193,11 @@ async function sceneFromPhoto(app: AppService, image: string) {
   if (!key) throw new UserError('Analyse de photo : configurez une clé OpenRouter dans Paramètres › IA');
   if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
   app.aiBusy = true;
+  const abort = (app.aiAbort = new AbortController());
   try {
     const model = ai.model || DEFAULT_OPENROUTER_MODEL;
     const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-    const r = await sceneFromPhotoWithOpenRouter(image, { apiKey: key, model, effort: ai.effort, timeoutMs: Math.max(60, ai.timeoutSec) * 1000, capabilities: caps }, randomUUID);
+    const r = await sceneFromPhotoWithOpenRouter(image, { apiKey: key, model, effort: ai.effort, timeoutMs: Math.max(60, ai.timeoutSec) * 1000, capabilities: caps, signal: abort.signal }, randomUUID);
     app.aiLastError = null;
     app.logger.info('IA', `Scène depuis photo : ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
     return r;

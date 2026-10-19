@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Bot, Check, Eye, RotateCcw, Send, Wand2, X } from 'lucide-react';
+import { Bot, Check, Eye, RotateCcw, Send, Square, Undo2, Wand2, X } from 'lucide-react';
+import { t } from '../i18n';
 import { useStore } from '../store';
 import { act } from '../api';
 import { PageHead, Panel, useResolved } from '../components/ui';
@@ -143,6 +144,7 @@ export function AiDirector() {
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
       <PageHead title="AI Lighting Director" subtitle={rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? `Fournisseur : OpenRouter (${rt.ai.model}) — repli local si indisponible` : 'Mode local déterministe : règles et modèles intégrés, sans modèle de langage (configurable dans Paramètres › IA)'}>
         <button className="btn" onClick={() => void act({ type: 'ai.release' })} disabled={!rt?.engine.aiActive && !rt?.engine.effects.some((e) => e.owner === 'ai')} title="Retire la couche IA et arrête les effets lancés par l’IA"><RotateCcw size={14} />Relâcher l’IA</button>
+        <button className="btn" data-testid="ai-undo" onClick={() => void act({ type: 'ai.undoApply' })} title={t('ai.undoHint')}><Undo2 size={14} />{t('ai.undo')}</button>
       </PageHead>
       <div className="split" style={{ flex: 1, minHeight: 0 }}>
         <div className="col" style={{ minHeight: 0 }}>
@@ -163,6 +165,7 @@ export function AiDirector() {
           <div className="row" style={{ marginTop: 10 }}>
             <input className="input" style={{ height: 40 }} data-testid="ai-prompt" placeholder="Décrivez l’ambiance ou l’action souhaitée…" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void send()} disabled={busy} />
             <button className="btn primary lg" data-testid="ai-send" onClick={() => void send()} disabled={busy || !prompt.trim()}><Send size={15} />{busy ? 'Analyse…' : 'Envoyer'}</button>
+            {busy && <button className="btn lg" data-testid="ai-cancel" onClick={() => void act({ type: 'ai.cancel' })}><Square size={14} />{t('ai.cancel')}</button>}
             {history.length > 0 && <button className="btn ghost lg icon" title="Effacer la conversation" onClick={() => setHistory([])}><X size={15} /></button>}
           </div>
         </div>

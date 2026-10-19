@@ -13,6 +13,7 @@ import {
 } from './actions';
 import { interpretLocally, normalize, type InterpreterContext } from './local/interpreter';
 import { effectFlashViolation } from '../safety/flashGuard';
+import { pruneTransientEffects } from './transient';
 import type { LiveState } from './providers/openrouter';
 
 /* ------------------------------------------------------------------ */
@@ -374,6 +375,8 @@ export interface ExecutionContext {
   index(): ProjectIndex;
   /** Applies a validated mutation to the project and refreshes the engine index synchronously. */
   mutate(fn: (draft: Project) => void): void;
+  /** Runs `fn` once the mutations are committed (effects can only start once the engine knows them). Default: now. */
+  defer?(fn: () => void): void;
   engine: Engine;
   maxStrobeHz: number;
 }
@@ -398,7 +401,7 @@ function effectFromSpec(index: ProjectIndex, spec: AiEffectSpec, trigger: Effect
   });
   return {
     id: randomUUID(), name: spec.name, type: spec.effectType, targets: { fixtureIds: ids, groupIds: [] }, params,
-    priority: 50, blend: 'override', duration: spec.duration ?? null, trigger, origin: 'ai',
+    priority: 50, blend: 'override', duration: spec.duration ?? null, trigger, origin: 'ai', ...(trigger === 'manual' ? { transient: true } : {}),
   };
 }
 
@@ -424,6 +427,11 @@ function effectMatches(def: Effect, a: { effectType?: string; effectName?: strin
   if (a.effectType) return def.type === a.effectType;
   if (a.effectName) return normalize(def.name) === normalize(a.effectName);
   return true;
+}
+
+function pruneStopped(ctx: ExecutionContext): void {
+  const running = new Set(ctx.engine.snapshot().effects.map((x) => x.effectId));
+  if ([...ctx.index().effects.values()].some((x) => x.transient && !running.has(x.id))) ctx.mutate((d) => { pruneTransientEffects(d, running); });
 }
 
 export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): AiExecutionReport {
@@ -471,8 +479,9 @@ export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): Ai
         case 'startEffect': {
           const def = effectFromSpec(index, a.effect, 'manual', ctx.maxStrobeHz);
           ctx.mutate((d) => { d.effects.push(def); });
-          const inst = engine.startEffect(def.id, 'ai');
-          if (!inst) throw new Error('Le moteur a refusé l’effet');
+          const start = () => { if (!engine.startEffect(def.id, 'ai')) throw new Error('Le moteur a refusé l’effet'); };
+          if (ctx.defer) ctx.defer(start);
+          else start();
           report.created.effects.push(def.name);
           report.executed.push({ index: v.index, summary: v.summary, detail: `Effet démarré sur ${def.targets.fixtureIds.length} projecteur(s)` });
           break;
@@ -484,6 +493,7 @@ export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): Ai
             const def = index.effects.get(e.effectId);
             if (a.all || (def && effectMatches(def, a))) { engine.stopEffect(e.instanceId); n++; }
           }
+          pruneStopped(ctx);
           report.executed.push({ index: v.index, summary: v.summary, detail: `${n} effet(s) arrêté(s)` });
           break;
         }
@@ -560,6 +570,7 @@ export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): Ai
         case 'releaseAi':
           engine.releaseAi();
           for (const e of engine.snapshot().effects) if (e.owner === 'ai') engine.stopEffect(e.instanceId);
+          pruneStopped(ctx);
           report.executed.push({ index: v.index, summary: v.summary, detail: 'Couche IA et effets IA relâchés' });
           break;
       }

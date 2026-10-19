@@ -3,15 +3,19 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writeFileAtomic } from '../../project/store';
 import { applyControl } from '../control';
+import { purgeStorage, storageReport } from '../storage';
 import { DISABLED_UPDATES } from '../updates';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Audio input, settings, logs and the diagnostic export. */
-export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app' | 'usage' | 'feedback'>): Promise<unknown> {
+export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app' | 'usage' | 'feedback' | 'storage'>): Promise<unknown> {
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'audio.features':
       app.audio.push(cmd.features, cmd.source);
+      return ok;
+    case 'audio.release':
+      app.audio.release();
       return ok;
     case 'audio.armDrop':
       app.audio.armDrop(cmd.on);
@@ -41,6 +45,8 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
       await app.persistSettings();
       return ok;
     case 'logs.recent': return app.logger.recent();
+    case 'storage.report': return storageReport(app);
+    case 'storage.purge': return { removed: await purgeStorage(app, cmd) };
     case 'diagnostic.export': {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/gu, '-');
       const file = cmd.path ?? (await app.opts.dialogs.saveDiagnostic?.(`luma-diagnostic-${stamp}.json`)) ?? null;

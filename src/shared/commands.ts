@@ -24,6 +24,7 @@ import type { UsageData } from '../core/telemetry/usage';
 import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 import type { PhotoScene } from '../core/ai/sceneFromPhoto';
+import type { StorageReport } from '../core/app/storage';
 
 /**
  * Single typed command bus between renderer and main. Every payload is validated with Zod in the main process
@@ -82,6 +83,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('scene.undo'),
   empty('scene.redo'),
   empty('project.listRecovery'),
+  /** Autosaves newer than their saved file (offered at start-up after a crash). */
+  empty('project.recoveryCandidates'),
   z.object({ type: z.literal('project.openRecovery'), file: z.string().min(1).max(1000) }),
   /** Opens one of the built-in fictional demonstration projects (unsaved copy). */
   z.object({ type: z.literal('project.openDemo'), id: z.string().min(1).max(40) }),
@@ -223,6 +226,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ai.revise'), proposalId: z.string().uuid(), actions: z.array(z.unknown()).max(50) }),
   z.object({ type: z.literal('ai.apply'), proposalId: z.string().uuid() }),
   empty('ai.release'),
+  /** Cancels the AI request in flight (proposal, photo, show planning): nothing is applied. */
+  empty('ai.cancel'),
+  /** Restores the project as it was before the last applied proposal and releases its AI layer and effects. */
+  empty('ai.undoApply'),
   z.object({ type: z.literal('ai.listModels'), refresh: z.boolean().default(false) }),
   /** Photo of a real stage (downscaled JPEG/PNG data URL) → trusses, set pieces and screens, for review before applying. */
   z.object({ type: z.literal('ai.sceneFromPhoto'), image: z.string().max(8_000_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/) }),
@@ -241,6 +248,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   /** Arms (or disarms) the predicted-drop GO for one shot. Never armed at start-up. */
   z.object({ type: z.literal('audio.armDrop'), on: z.boolean() }),
+  /** The renderer stopped its audio source on purpose (not an interruption). */
+  empty('audio.release'),
   z.object({ type: z.literal('audio.config'), config: audioConfigSchema }),
   // Settings / logs
   empty('settings.get'),
@@ -272,6 +281,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   // Application
   empty('app.info'),
   empty('app.checkUpdates'),
+  // Local data (imported audio, AI cache, recovery copies)
+  empty('storage.report'),
+  z.object({ type: z.literal('storage.purge'), music: z.boolean().default(false), aiCache: z.boolean().default(false), autosave: z.boolean().default(false) }),
 ]);
 export type Command = z.infer<typeof commandSchema>;
 export type CommandType = Command['type'];
@@ -339,6 +351,7 @@ export interface CommandResults {
   'scene.undo': Void;
   'scene.redo': Void;
   'project.listRecovery': RecoveryEntry[];
+  'project.recoveryCandidates': RecoveryEntry[];
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
   'project.openDemo': Void;
   'onboarding.update': Void;
@@ -422,12 +435,15 @@ export interface CommandResults {
   'ai.revise': AiProposal;
   'ai.apply': AiExecutionReport;
   'ai.release': Void;
+  'ai.cancel': Void;
+  'ai.undoApply': Void;
   'ai.listModels': OpenRouterModel[];
   'ai.setKey': Void;
   'ai.sceneFromPhoto': PhotoScene & { model: string; notices: string[] };
   'audio.features': Void;
   'audio.config': Void;
   'audio.armDrop': Void;
+  'audio.release': Void;
   'settings.get': Settings;
   'settings.update': Void;
   'settings.forgetRecent': Void;
@@ -441,6 +457,8 @@ export interface CommandResults {
   'feedback.export': { path: string | null };
   'app.info': { name: string; version: string; updates: UpdateStatus };
   'app.checkUpdates': UpdateStatus;
+  'storage.report': StorageReport;
+  'storage.purge': { removed: number };
 }
 
 export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string };
@@ -451,7 +469,14 @@ export interface LocatePhoto {
   jpeg: string;
 }
 
+/** Real step of a long operation (show generation), for the progress dialog. */
+export interface Progress {
+  op: 'music';
+  step: 'plan' | 'cache' | 'request' | 'compile';
+}
+
 export interface AppEvents {
+  progress: Progress;
   project: ProjectState;
   runtime: RuntimeState;
   values: ValuesFrame;

@@ -173,7 +173,7 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
       app.mutate((d) => { d.timelines = d.timelines.some((t) => t.id === cmd.timeline.id) ? d.timelines.map((t) => (t.id === cmd.timeline.id ? cmd.timeline : t)) : [...d.timelines, cmd.timeline]; });
       return ok;
     case 'timeline.remove':
-      e.timelineStop();
+      if (e.snapshot().timeline.timelineId === cmd.id) e.timelineStop();
       app.mutate((d) => { d.timelines = d.timelines.filter((t) => t.id !== cmd.id); });
       return ok;
     case 'timeline.play':

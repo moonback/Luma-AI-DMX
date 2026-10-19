@@ -160,24 +160,29 @@ export function parseModels(json: unknown): OpenRouterModel[] {
 }
 
 export class OpenRouterError extends Error {
-  constructor(message: string, readonly status: number | null) {
+  constructor(message: string, readonly status: number | null, readonly cancelled = false) {
     super(message);
   }
 }
 
 type FetchLike = typeof fetch;
 
-async function request(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number): Promise<unknown> {
+async function request(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number, cancel?: AbortSignal): Promise<unknown> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const onCancel = () => ctrl.abort();
+  cancel?.addEventListener('abort', onCancel);
   let res: Response;
   try {
+    if (cancel?.aborted) throw Object.assign(new Error('annulée'), { name: 'AbortError' });
     res = await fetchImpl(url, { ...init, signal: ctrl.signal });
   } catch (err) {
+    if (cancel?.aborted) throw new OpenRouterError('Demande annulée', null, true);
     if ((err as Error).name === 'AbortError') throw new OpenRouterError('Délai dépassé', null);
     throw new OpenRouterError(`Connexion impossible (réseau indisponible ?) : ${(err as Error).message}`, null);
   } finally {
     clearTimeout(t);
+    cancel?.removeEventListener('abort', onCancel);
   }
   const text = await res.text();
   let body: unknown = null;
@@ -211,6 +216,8 @@ export interface OpenRouterOptions {
   /** Capabilities of the chosen model when known (from the models list). */
   capabilities?: Pick<OpenRouterModel, 'structuredOutputs' | 'jsonMode' | 'reasoning'>;
   fetchImpl?: FetchLike;
+  /** Cancels the request (user « Annuler »); the error is an `OpenRouterError` with `cancelled`. */
+  signal?: AbortSignal;
 }
 
 export interface ProviderResult {
@@ -266,7 +273,7 @@ export async function completeJson(system: string, user: string | unknown[], sch
     method: 'POST',
     headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json', 'X-Title': BRAND.productName },
     body: JSON.stringify(body),
-  }, opts.timeoutMs);
+  }, opts.timeoutMs, opts.signal);
 
   const parsed = z
     .object({ model: z.string().optional(), choices: z.array(z.object({ finish_reason: z.string().nullable().optional(), message: z.object({ content: z.string().nullable().optional() }) })).min(1) })

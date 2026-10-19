@@ -136,16 +136,22 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
   const cache = new ResponseCache(path.join(app.opts.dataDir, 'ai-cache'));
   const id = cache.key({ ...parts, model, effort: ai.effort });
   const hit = await cache.get(id, schema);
-  if (hit) return { ...hit, notices: ['Réponse IA reprise du cache (même demande, aucun nouvel appel).', ...hit.notices] };
+  if (hit) {
+    app.emit('progress', { op: 'music', step: 'cache' });
+    return { ...hit, notices: ['Réponse IA reprise du cache (même demande, aucun nouvel appel).', ...hit.notices] };
+  }
   if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
   app.aiBusy = true;
+  const abort = (app.aiAbort = new AbortController());
+  app.emit('progress', { op: 'music', step: 'request' });
   try {
     const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-    const r = await call({ apiKey, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps });
+    const r = await call({ apiKey, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal });
     app.aiLastError = null;
     await cache.set(id, r).catch((err: unknown) => app.logger.warn('Musique', `Cache IA non enregistré : ${err instanceof Error ? err.message : String(err)}`));
     return r;
   } catch (err) {
+    if (abort.signal.aborted) throw new UserError('Génération annulée : rien n’a été appliqué');
     const msg = err instanceof Error ? err.message : String(err);
     app.aiLastError = msg;
     app.logger.error('Musique', `Planification OpenRouter indisponible : ${msg}`);
@@ -154,11 +160,13 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
     return null;
   } finally {
     app.aiBusy = false;
+    app.aiAbort = null;
   }
 }
 
 /** Plan with OpenRouter when configured (validated, cached, local fallback), else with the local rules. */
 export async function planShow(app: AppService, t: MusicTrack, userIntent: string, variant: number, mood?: Mood): Promise<{ plan: ShowPlan; notices: string[] }> {
+  app.emit('progress', { op: 'music', step: 'plan' });
   const rig = rigInfo(app.index, app.settings.ai.allowStrobe);
   // Planned with the sliders in words; the plan keeps the operator's own text and the sliders apart for the panel.
   const intent = withMood(userIntent, mood);
@@ -197,6 +205,7 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
   // The plan may come back from a slow OpenRouter call: the track, or the whole project, can be gone by then.
   const cur = app.project.music.tracks.find((x) => x.id === t.id);
   if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué');
+  app.emit('progress', { op: 'music', step: 'compile' });
   const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
   if (app.engine.snapshot().timeline.timelineId === cur.created.timelineId) app.engine.timelineStop();
   app.mutate((d) => {

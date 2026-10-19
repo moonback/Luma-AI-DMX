@@ -285,10 +285,10 @@ export const effectSchema = z.object({
   priority: z.number().int().min(1).max(99).default(50),
   /** override = replaces values; scale = multiplies the underlying value (intensity modulation). */
   blend: z.enum(['override', 'scale']).default('override'),
-  /** Seconds; null = runs until stopped. */
-  duration: z.number().min(0.1).max(86400).nullable().default(null),
+  duration: z.number().min(0.1).max(86400).nullable().default(null), // seconds; null = runs until stopped
   trigger: z.enum(['manual', 'cue', 'beat']).default('manual'),
   origin: z.enum(['user', 'ai']).default('user'),
+  transient: z.boolean().optional(), // live AI effect not kept by the user: pruned once stopped and unreferenced
 });
 export type Effect = z.infer<typeof effectSchema>;
 

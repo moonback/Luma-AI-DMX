@@ -346,6 +346,19 @@ export function App() {
   );
 }
 
+/** After a crash or a power cut: offers the autosave that is newer than its saved file. */
+async function offerRecovery(): Promise<void> {
+  const r = (await act({ type: 'project.recoveryCandidates' }))?.[0];
+  if (!r) return;
+  const restore = await confirmAction({
+    title: t('recovery.title'),
+    message: t('recovery.message', { name: r.project || r.name, date: new Date(r.modifiedAt).toLocaleString() }),
+    confirmLabel: t('recovery.restore'),
+    danger: false,
+  });
+  if (restore && (await act({ type: 'project.openRecovery', file: r.file }))?.opened) useStore.setState({ startScreen: null });
+}
+
 export async function bootstrap(): Promise<void> {
   const [project, logs, settings] = await Promise.all([call({ type: 'project.get' }), call({ type: 'logs.recent' }), call({ type: 'settings.get' })]);
   document.documentElement.classList.toggle('reduced-motion', settings.appearance.reducedMotion);
@@ -358,6 +371,7 @@ export async function bootstrap(): Promise<void> {
   // and opens the detached window, after the first project opened.
   const main = location.hash !== DETACHED_STAGE_HASH;
   if (main) void externalControl.configure(settings.control);
+  if (main) void offerRecovery();
   detachStageOnOpen = settings.general.detachStage3dOnStart && main;
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

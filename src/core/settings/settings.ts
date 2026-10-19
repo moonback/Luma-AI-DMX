@@ -135,3 +135,16 @@ export const settingsSchema = z.object({
 export type Settings = z.infer<typeof settingsSchema>;
 
 export const defaultSettings = (): Settings => settingsSchema.parse({});
+
+/** Keeps every valid top-level section of an invalid settings file; the others take their defaults (listed in `reset`). */
+export function salvageSettings(raw: unknown): { settings: Settings; reset: string[] } {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const kept: Record<string, unknown> = {};
+  const reset: string[] = [];
+  for (const [key, schema] of Object.entries(settingsSchema.shape)) {
+    const r = (schema as z.ZodType).safeParse(src[key]);
+    if (r.success) kept[key] = r.data;
+    else reset.push(key);
+  }
+  return { settings: settingsSchema.parse(kept), reset };
+}

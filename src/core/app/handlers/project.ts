@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Project } from '../../model/schemas';
 import { createProject, ProjectLoadError } from '../../project/format';
 import { buildDemo } from '../../demo/projects';
-import { listRecovery, loadProjectFile, saveProjectFile } from '../../project/store';
+import { listRecovery, loadProjectFile, readAutosaveMeta, recoveryCandidates, saveProjectFile } from '../../project/store';
 import { followTruss } from '../../visualizer/truss';
 import { UserError } from '../shared';
 import { addRecent, clearAutosave } from '../files';
@@ -31,7 +31,9 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
         const { project, migratedFrom } = await loadProjectFile(file);
         await saveToLibrary(app, project.profiles, true);
         app.setProject(project, true);
-        app.projectPath = cmd.type === 'project.open' ? file : null;
+        // A restored autosave goes back to the file it came from (« Enregistrer » overwrites it, the old one kept as .bak).
+        const source = cmd.type === 'project.openRecovery' ? (await readAutosaveMeta(file))?.source ?? null : null;
+        app.projectPath = cmd.type === 'project.open' ? file : source && (await fs.stat(source).then(() => true, () => false)) ? source : null;
         if (cmd.type === 'project.open') addRecent(app, file);
         app.logger.info('Projet', `Ouvert : ${path.basename(file)}${migratedFrom ? ` (migré depuis le format v${migratedFrom})` : ''}`);
         if (cmd.type === 'project.openRecovery') app.revision++; // recovered data is unsaved until saved explicitly
@@ -108,6 +110,8 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
       return ok;
     case 'project.listRecovery':
       return listRecovery(app.autosaveDir, app.projectPath);
+    case 'project.recoveryCandidates':
+      return recoveryCandidates(app.autosaveDir);
     case 'project.exportMvr': {
       const file = cmd.path ?? (await app.opts.dialogs.saveMvr?.(`${app.project.meta.name.replace(/[\\/:*?"<>|]/gu, '_')}.mvr`)) ?? null;
       if (!file) return { path: null };

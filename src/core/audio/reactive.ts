@@ -41,6 +41,9 @@ export class AudioReactive {
   private movePhase = 0;
   /** Called when the armed drop GO fires (for logging). */
   onDropFired: ((cueListId: string) => void) | null = null;
+  /** Called when fresh features stop arriving without `release()` (window throttled, device lost…). */
+  onStale: ((source: AudioStatus['source']) => void) | null = null;
+  private fresh = false;
 
   constructor(
     private readonly engine: Engine,
@@ -74,6 +77,12 @@ export class AudioReactive {
     }
   }
 
+  /** The source was stopped on purpose: drop the last features so their expiry is not reported as an interruption. */
+  release(): void {
+    this.features = null;
+    this.fresh = false;
+  }
+
   armDrop(on: boolean): void {
     this.dropArmed = on;
     if (!on) this.dropAt = null;
@@ -96,7 +105,9 @@ export class AudioReactive {
       this.dropAt = null;
       this.onDropFired?.(cfgDrop.cueListId);
     }
-    const fresh = this.features && this.now() - this.receivedAt < STALE_MS;
+    const fresh = !!this.features && this.now() - this.receivedAt < STALE_MS;
+    if (this.fresh && !fresh) this.onStale?.(this.source);
+    this.fresh = fresh;
     this.engine.audioBands = fresh ? { bass: this.features!.bass, brightness: this.features!.brightness } : null;
     if (!fresh) {
       this.engine.setExternal('audio', null);
