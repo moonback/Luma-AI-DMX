@@ -8,6 +8,7 @@ import { channelCount, channelKey } from '../../core/fixtures/profiles';
 import { findFreeAddress } from '../../core/fixtures/patch';
 import { attributeLabel } from '../../core/fixtures/attributes';
 import { CameraLocate } from './CameraLocate';
+import { ProfileFromPhotoDialog } from './ProfileFromPhoto';
 
 function AddDialog({ onClose }: { onClose: () => void }) {
   const { lib } = useResolved();
@@ -230,6 +231,7 @@ export function Fixtures() {
   const [adding, setAdding] = useState(false);
   const [locating, setLocating] = useState(false);
   const [ofl, setOfl] = useState(false);
+  const [fromPhoto, setFromPhoto] = useState(false);
   const [universe, setUniverse] = useState<number | 'all'>('all');
   const issueIds = useMemo(() => new Set(ps.issues.flatMap((i) => i.fixtureIds)), [ps.issues]);
   const shown = fixtures.filter((rf) => {
@@ -261,6 +263,7 @@ export function Fixtures() {
       <PageHead title="Fixtures" subtitle="Patch DMX : profils, univers, adresses et positions">
         <button className="btn" onClick={() => void importProfiles()} title="Importer des profils : JSON Luma (docs/PROFILE_FORMAT.md) ou export grandMA2 (.xml, un fichier par mode)"><Upload size={15} />Importer des profils</button>
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
+        <button className="btn" data-testid="profile-from-photo" onClick={() => setFromPhoto(true)} title="L’IA lit le tableau des canaux DMX photographié dans le manuel et crée le profil"><Camera size={15} />Profil depuis photo</button>
         <button className="btn" data-testid="patch-sheet-pdf" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'pdf' })} title="Feuille de patch imprimable (A4 paysage), par univers"><FileDown size={15} />Patch PDF</button>
         <button className="btn" data-testid="patch-sheet-csv" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'csv' })} title="Feuille de patch pour tableur (CSV « ; », UTF-8)"><FileDown size={15} />CSV</button>
         <button className="btn" data-testid="export-mvr" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'project.exportMvr' })} title={tr('fixtures.exportMvrTitle')}><FileDown size={15} />{tr('fixtures.exportMvr')}</button>
@@ -326,6 +329,7 @@ export function Fixtures() {
       <div style={{ marginTop: 12 }}><LibraryPanel /></div>
       {adding && <AddDialog onClose={() => setAdding(false)} />}
       {ofl && <OflDialog onClose={() => setOfl(false)} />}
+      {fromPhoto && <ProfileFromPhotoDialog onClose={() => setFromPhoto(false)} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import {
   addressSchema, attributeKeySchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
   stageShapeSchema, thrustSchema, stageMarkerSchema, stageViewSchema, trussSchema, fixtureMountSchema, performerSchema, screenSchema, propSchema,
-  hexColorSchema, moodSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS,
+  hexColorSchema, moodSchema, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS, profileSchema,
 } from '../core/model/schemas';
 import { outputConfigSchema } from '../core/protocols/config';
 import { settingsSchema } from '../core/settings/settings';
@@ -24,6 +24,7 @@ import type { UsageData } from '../core/telemetry/usage';
 import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 import type { PhotoScene } from '../core/ai/sceneFromPhoto';
+import type { PhotoProfile } from '../core/ai/profileFromPhoto';
 import type { StorageReport } from '../core/app/storage';
 import type { AiUsageDay } from '../core/ai/usage';
 import type { HardwareSession } from '../core/app/hardware';
@@ -35,6 +36,8 @@ import type { HardwareSession } from '../core/app/hardware';
 
 const empty = <T extends string>(type: T) => z.object({ type: z.literal(type) });
 const optPath = z.string().min(1).max(1000).optional();
+/** Downscaled photo as a data URL. */
+const photoSchema = z.string().max(8_000_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/);
 const fixturePatchSchema = z.object({
   name: nameSchema.optional(),
   profileId: idSchema.optional(),
@@ -97,6 +100,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   // Profiles
   z.object({ type: z.literal('profile.import'), path: optPath }),
   z.object({ type: z.literal('profile.remove'), id: idSchema }),
+  /** Saves a profile built in the app (photo of the manual) to the library and the project. */
+  z.object({ type: z.literal('profile.save'), profile: profileSchema }),
   empty('ofl.manufacturers'),
   z.object({ type: z.literal('ofl.fixtures'), manufacturer: z.string().regex(/^[a-z0-9-]+$/) }),
   z.object({
@@ -241,7 +246,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('ai.undoApply'),
   z.object({ type: z.literal('ai.listModels'), refresh: z.boolean().default(false) }),
   /** Photo of a real stage (downscaled JPEG/PNG data URL) → trusses, set pieces and screens, for review before applying. */
-  z.object({ type: z.literal('ai.sceneFromPhoto'), image: z.string().max(8_000_000).regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/) }),
+  z.object({ type: z.literal('ai.sceneFromPhoto'), image: photoSchema }),
+  /** Photos of a manual's DMX chart (consecutive pages) → fixture profile, for review before `profile.save`. */
+  z.object({ type: z.literal('ai.profileFromPhoto'), images: z.array(photoSchema).min(1).max(4) }),
   z.object({ type: z.literal('ai.setKey'), key: z.string().trim().min(10).max(500).nullable() }),
   // Audio
   z.object({
@@ -370,6 +377,7 @@ export interface CommandResults {
   'onboarding.update': Void;
   'profile.import': { imported: string[]; errors: string[]; warnings: string[] };
   'profile.remove': Void;
+  'profile.save': { profileId: string };
   'ofl.manufacturers': { key: string; name: string }[];
   'ofl.fixtures': string[];
   'profile.importOfl': { imported: string | null; profileId: string | null; warnings: string[]; errors: string[] };
@@ -455,6 +463,7 @@ export interface CommandResults {
   'ai.listModels': OpenRouterModel[];
   'ai.setKey': Void;
   'ai.sceneFromPhoto': PhotoScene & { model: string; notices: string[] };
+  'ai.profileFromPhoto': PhotoProfile & { model: string; notices: string[] };
   'audio.features': Void;
   'audio.config': Void;
   'audio.armDrop': Void;

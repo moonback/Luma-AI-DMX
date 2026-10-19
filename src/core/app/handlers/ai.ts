@@ -3,8 +3,9 @@ import { buildProposal, executeProposal, guardProposalFlashes, liveState, propos
 import { pruneTransientEffects } from '../../ai/transient';
 import { ProjectIndex } from '../../engine/resolve';
 import type { Project } from '../../model/schemas';
-import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel } from '../../ai/providers/openrouter';
+import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
 import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
+import { profileFromPhotoWithOpenRouter } from '../../ai/profileFromPhoto';
 import { OPENROUTER_KEY, UserError } from '../shared';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -101,6 +102,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       if (cmd.refresh) app.modelCache = null;
       return openRouterModels(app);
     case 'ai.sceneFromPhoto': return sceneFromPhoto(app, cmd.image);
+    case 'ai.profileFromPhoto': return profileFromPhoto(app, cmd.images);
     case 'ai.setKey':
       app.opts.secrets.set(OPENROUTER_KEY, cmd.key);
       app.logger.info('IA', cmd.key ? 'Clé API enregistrée (stockage chiffré du système)' : 'Clé API supprimée');
@@ -231,6 +233,21 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
 
 /** Photo → scene with a vision model (needs OpenRouter); nothing is applied here, the renderer asks first. */
 async function sceneFromPhoto(app: AppService, image: string) {
+  const r = await withVision(app, (opts) => sceneFromPhotoWithOpenRouter(image, opts, randomUUID));
+  app.logger.info('IA', `Scène depuis photo : ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
+  return r;
+}
+
+/** Photo(s) of a manual's DMX chart → fixture profile; nothing is saved here, the renderer shows it for review first. */
+async function profileFromPhoto(app: AppService, images: string[]) {
+  const r = await withVision(app, (opts) => profileFromPhotoWithOpenRouter(images, opts));
+  if (!r.profile) throw new UserError(`Aucun tableau de canaux DMX lu sur la photo : ${r.summary}`);
+  app.logger.info('IA', `Profil depuis photo : ${r.profile.manufacturer} ${r.profile.name}, ${r.profile.modes.length} mode(s)`);
+  return r;
+}
+
+/** Runs one vision request with the OpenRouter key, model and budget of the settings (one AI request at a time). */
+async function withVision<T>(app: AppService, run: (opts: OpenRouterOptions) => Promise<T>): Promise<T> {
   const ai = app.settings.ai;
   const key = app.opts.secrets.get(OPENROUTER_KEY);
   if (!key) throw new UserError('Analyse de photo : configurez une clé OpenRouter dans Paramètres › IA');
@@ -241,9 +258,8 @@ async function sceneFromPhoto(app: AppService, image: string) {
     await guardBudget(app);
     const model = ai.model || DEFAULT_OPENROUTER_MODEL;
     const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-    const r = await sceneFromPhotoWithOpenRouter(image, { apiKey: key, model, effort: ai.effort, timeoutMs: Math.max(60, ai.timeoutSec) * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app) }, randomUUID);
+    const r = await run({ apiKey: key, model, effort: ai.effort, timeoutMs: Math.max(60, ai.timeoutSec) * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app) });
     app.aiLastError = null;
-    app.logger.info('IA', `Scène depuis photo : ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
     return r;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

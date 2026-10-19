@@ -121,6 +121,14 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       app.mutate((d) => { d.profiles = d.profiles.filter((p) => p.id !== cmd.id); });
       return ok;
     }
+    case 'profile.save': {
+      const profile = cmd.profile;
+      if (BUILTIN_PROFILES.some((b) => b.id === profile.id)) throw new UserError(`Profil « ${profile.id} » : identifiant réservé à un profil intégré`);
+      await saveToLibrary(app, [profile]);
+      app.mutate((d) => { d.profiles = [...d.profiles.filter((x) => x.id !== profile.id), profile]; });
+      app.logger.info('Profils', `Profil enregistré : ${profile.manufacturer} ${profile.name} (${profile.modes.length} mode(s))`);
+      return { profileId: profile.id };
+    }
     case 'fixture.add': {
       const profile = app.index.lib.get(cmd.profileId);
       if (!profile) throw new UserError('Profil inconnu');
