@@ -125,10 +125,14 @@ export function QuickActionsPage() {
   const [armed, setArmed] = useState(new Set<string>());
   const rt = useStore((s) => s.runtime);
   const click = async (a: QuickAction) => {
+    // Within a category only one action stays on: switching to another one first turns the active one(s) off.
+    const others = isActive(a, rt, armed) ? [] : actions.filter((o) => o.id !== a.id && o.category === a.category && isActive(o, rt, armed));
+    for (const o of others) await toggle(o, true, tr('quick.missing'));
     const on = await toggle(a, isActive(a, rt, armed), tr('quick.missing'));
-    if (on === undefined) return;
     setArmed((cur) => {
       const next = new Set(cur);
+      others.forEach((o) => next.delete(o.id));
+      if (on === undefined) return next;
       if (on && a.kind === 'color') actions.forEach((x) => x.kind === 'color' && next.delete(x.id)); // one colour at a time
       if (on) next.add(a.id); else next.delete(a.id);
       return next;
