@@ -6,7 +6,7 @@
 
 Ce document fixe l’ordre et le contenu des travaux à mener sur **Luma AI DMX**, logiciel de bureau Electron de contrôle d’éclairage DMX assisté par IA. Il repose exclusivement sur l’état réel du code : ce qui fonctionne et est vérifié, ce qui est fragile, ce qui est présent mais inaccessible, et ce qui manque. Chaque élément est rédigé pour qu’un développeur, ou un agent de programmation, puisse le prendre, relire ses preuves, et commencer sans deviner l’intention.
 
-**Avancement au 19/10/2026** : 46 élément(s) terminé(s), 6 partiel(s), 32 à faire. Le statut affiché est le statut actuel ; celui constaté à l’audit est rappelé dans chaque fiche modifiée.
+**Avancement au 19/10/2026** : 53 élément(s) terminé(s), 6 partiel(s), 25 à faire. Le statut affiché est le statut actuel ; celui constaté à l’audit est rappelé dans chaque fiche modifiée.
 
 Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identifiants sont stables : un élément terminé garde son numéro, et un élément abandonné est marqué comme tel au lieu d’être renuméroté.
 
@@ -79,7 +79,7 @@ Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identi
 |---|---|
 | npx tsc -p tsconfig.json --noEmit | Succès. |
 | npm run lint (eslint, taille des fichiers, i18n) | Succès ; textes en dur : 782 (inchangé). |
-| npx vitest run | Succès : 40 fichiers, 379 tests ; 1 fichier ignoré (banc OpenRouter rejoué, sans enregistrement). |
+| npx vitest run | Succès : 40 fichiers, 387 tests ; 1 fichier ignoré (banc OpenRouter rejoué, sans enregistrement). |
 | npx vitest run --coverage | Succès ; src/core + src/main/ipc.ts + src/main/secrets.ts : 94,5 % des lignes, 81,2 % des branches. Un échec intermittent non identifié observé une fois sur sept passes depuis le début. |
 | npx vitest run --config vitest.perf.config.ts | Succès 3 fois sur 3 depuis LUMA-004 et LUMA-005. |
 | node --check scripts/release.mjs | Syntaxe valide ; script non exécuté. |
@@ -225,11 +225,11 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 | Statut | Éléments |
 |---|---|
-| IMPLÉMENTÉ ET VÉRIFIÉ | 41 |
+| IMPLÉMENTÉ ET VÉRIFIÉ | 48 |
 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 9 |
-| PARTIELLEMENT IMPLÉMENTÉ | 22 |
+| PARTIELLEMENT IMPLÉMENTÉ | 17 |
 | PRÉSENT MAIS NON RACCORDÉ | 0 |
-| ABSENT | 11 |
+| ABSENT | 9 |
 | À INVESTIGUER | 1 |
 
 **Répartition par nature de travaux**
@@ -354,25 +354,25 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 | ID | Titre | Priorité | Statut | Effort | Avancement |
 |---|---|---|---|---|---|
-| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | PARTIELLEMENT IMPLÉMENTÉ | L | À faire |
+| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | L | ✅ Terminé |
 | [LUMA-054](#luma-054) | Internationaliser les messages du cœur et les dialogues du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | L | À faire |
 | [LUMA-055](#luma-055) | Résorber les 782 textes d’interface écrits en dur dans le rendu | P2 | PARTIELLEMENT IMPLÉMENTÉ | L | À faire |
 | [LUMA-056](#luma-056) | Mesurer et améliorer la compréhension des requêtes en anglais par l’interpréteur local | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M | À faire |
 | [LUMA-057](#luma-057) | Découvrir automatiquement les nœuds Art-Net du réseau (ArtPoll et ArtPollReply) | P2 | ABSENT | M | À faire |
-| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | ABSENT | S | À faire |
-| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
+| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
 | [LUMA-060](#luma-060) | Exporter et importer un projet « paquet » qui embarque les fichiers audio des morceaux | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
-| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | ABSENT | S | À faire |
+| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
 | [LUMA-073](#luma-073) | Réduire le coût de chaque mutation (clonage et revalidation complète du projet) | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
 | [LUMA-062](#luma-062) | Étendre le MIDI : faders vers niveaux de playback et d’effets, et retour d’état vers les contrôleurs | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
-| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
 | [LUMA-064](#luma-064) | Implémenter la découverte d’univers sACN (E1.31 §8) et la synchronisation optionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
 | [LUMA-065](#luma-065) | Importer une implantation MVR (patch et positions) depuis Capture, Vectorworks ou grandMA3 | P3 | ABSENT | L | À faire |
 | [LUMA-066](#luma-066) | Appairer la télécommande par QR code | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
-| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
+| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
 | [LUMA-068](#luma-068) | Proposer un mode « tracking » optionnel pour les listes de cues | P3 | ABSENT | M | À faire |
 | [LUMA-069](#luma-069) | Rendre le plan de scène 2D utilisable au clavier et par les lecteurs d’écran | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
-| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
+| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
 
 **Dépendances principales.** Cette phase s’appuie sur [LUMA-031](#luma-031), [LUMA-041](#luma-041), [LUMA-042](#luma-042), [LUMA-001](#luma-001) (phases antérieures). L’annulation globale (LUMA-053) s’appuie sur la couverture du handler de programmation (LUMA-031) et sur la réduction du coût des mutations (LUMA-073), placée dans cette phase pour cette raison.
 
@@ -3014,13 +3014,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Étendre l’annulation et le rétablissement à toutes les éditions du projet
 - **Catégorie** : Édition / historique
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : fonctionnalité
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** L’historique d’annulation ne couvre que l’implantation de scène : positions, accroches, structures et réglages du visualiseur, jusqu’à 100 étapes. Les suppressions de scènes, de listes de cues, d’effets, de groupes, de projecteurs du patch, les éditions de cues et les créations par l’IA ne sont pas annulables. Seule la musique propose un « plan précédent » (`music.restorePrevious`).
+**Réalisation (19/10/2026).** Historique global (`src/core/app/history.ts`) : une étape nommée par commande (50 au plus), gestes du même type à moins de 600 ms regroupés, nouvel historique à l’ouverture. Commandes `project.undo` / `project.redo`, boutons de la barre supérieure, Ctrl+Z / Ctrl+Y (laissés aux pages Scène et Timeline, ignorés dans les champs). Test de propriété (12 éditions aléatoires) : `tests/unit/regressions.test.ts`. La mémoire n’est pas encore plafonnée en octets.
+
+**Constat technique (à l’audit).** L’historique d’annulation ne couvre que l’implantation de scène : positions, accroches, structures et réglages du visualiseur, jusqu’à 100 étapes. Les suppressions de scènes, de listes de cues, d’effets, de groupes, de projecteurs du patch, les éditions de cues et les créations par l’IA ne sont pas annulables. Seule la musique propose un « plan précédent » (`music.restorePrevious`).
 
 **Preuves dans le code.**
 
@@ -3255,13 +3257,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Suivre la consommation de jetons et le coût des appels OpenRouter
 - **Catégorie** : IA / coûts
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** `completeJson` n’extrait de la réponse que `model` et `choices`. Le champ `usage` renvoyé par l’API (jetons d’entrée et de sortie, coût) est ignoré. Les statistiques d’usage locales ne comptent que des types de commandes et des erreurs. L’utilisateur n’a aucune visibilité sur la dépense, alors que des requêtes peuvent atteindre `max_tokens: 8000` avec un raisonnement réglable.
+**Réalisation (19/10/2026).** `usage: { include: true }` demandé, jetons et coût enregistrés par jour dans `ai-usage.json` (`src/core/ai/usage.ts`), commande `ai.usage`, ligne de consommation dans l’IA Director, budget mensuel `ai.monthlyBudget` (Paramètres › IA) qui refuse les appels (repli local si activé). Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `completeJson` n’extrait de la réponse que `model` et `choices`. Le champ `usage` renvoyé par l’API (jetons d’entrée et de sortie, coût) est ignoré. Les statistiques d’usage locales ne comptent que des types de commandes et des erreurs. L’utilisateur n’a aucune visibilité sur la dépense, alors que des requêtes peuvent atteindre `max_tokens: 8000` avec un raisonnement réglable.
 
 **Preuves dans le code.**
 
@@ -3302,13 +3306,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement
 - **Catégorie** : IA / mémoire conversationnelle
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fonctionnalité
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Chaque `ai.propose` envoie un seul message utilisateur (le prompt) avec la description du kit et l’état en direct (`liveState` : couleurs, intensités et effets IA en cours). Les prompts récents sont mémorisés dans le projet (`recentPrompts`), mais ils ne sont pas transmis au modèle, pas plus que la compréhension et les actions de la proposition précédente. Une demande comme « non, plutôt l’inverse » ou « garde ça mais plus lent sur les lyres seulement » repose donc uniquement sur l’état observé.
+**Réalisation (19/10/2026).** `ai.propose` accepte `continueThread` : les 3 derniers échanges (prompt, compréhension et actions validées) sont envoyés au modèle ; le fil se vide avec « Effacer la conversation » (`ai.resetThread`) et au changement de projet. Test du corps des requêtes : `tests/unit/regressions.test.ts`. Cas du banc rejoué (LUMA-041) non ajoutés faute d’enregistrements.
+
+**Constat technique (à l’audit).** Chaque `ai.propose` envoie un seul message utilisateur (le prompt) avec la description du kit et l’état en direct (`liveState` : couleurs, intensités et effets IA en cours). Les prompts récents sont mémorisés dans le projet (`recentPrompts`), mais ils ne sont pas transmis au modèle, pas plus que la compréhension et les actions de la proposition précédente. Une demande comme « non, plutôt l’inverse » ou « garde ça mais plus lent sur les lyres seulement » repose donc uniquement sur l’état observé.
 
 **Preuves dans le code.**
 
@@ -3398,13 +3404,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Restreindre l’OSC réseau à une liste d’adresses autorisées
 - **Catégorie** : Contrôle externe / OSC
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : sécurité
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** En mode `0.0.0.0`, le serveur OSC accepte les commandes de n’importe quelle machine du réseau, sans authentification : GO, BACK, blackout, grand master, relâche, arrêt des émissions. Le journal le signale à l’activation. La télécommande HTTP, elle, exige un jeton.
+**Réalisation (19/10/2026).** Réglage `osc.allow` (IPv4/CIDR, `allowList`), paquets refusés comptés, 127.0.0.1 toujours accepté ; saisie dans Paramètres. Écart assumé : une liste vide reste acceptée en mode réseau (avertissement au démarrage) pour ne pas couper les installations existantes. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** En mode `0.0.0.0`, le serveur OSC accepte les commandes de n’importe quelle machine du réseau, sans authentification : GO, BACK, blackout, grand master, relâche, arrêt des émissions. Le journal le signale à l’activation. La télécommande HTTP, elle, exige un jeton.
 
 **Preuves dans le code.**
 
@@ -3539,13 +3547,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres)
 - **Catégorie** : Contrôle externe / OSC
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Le serveur OSC renvoie seulement `/luma/ack <adresse> <ok>` à l’émetteur de chaque message. Aucun état n’est publié (cue en cours, master, blackout, BPM) : une surface OSC ne peut pas afficher l’état réel, contrairement à la télécommande HTTP, qui reçoit `RemoteState` par SSE.
+**Réalisation (19/10/2026).** Réglage `osc.feedback` (IP:port) : `/luma/state/master`, `blackout`, `bpm`, `transmitting`, `list/<n>/cue|state` envoyés à chaque changement (10 Hz au plus) depuis le socket OSC. Test avec un récepteur UDP local : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Le serveur OSC renvoie seulement `/luma/ack <adresse> <ok>` à l’émetteur de chaque message. Aucun état n’est publié (cue en cours, master, blackout, BPM) : une surface OSC ne peut pas afficher l’état réel, contrairement à la télécommande HTTP, qui reçoit `RemoteState` par SSE.
 
 **Preuves dans le code.**
 
@@ -3716,13 +3726,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Afficher l’état des sorties et les alertes critiques sur la télécommande
 - **Catégorie** : Télécommande
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `RemoteState` contient le master, le blackout, l’indicateur d’émission, le BPM, les listes et la localisation, mais pas l’état des sorties (erreur, reconnexion), ni le garde-fou photosensible, ni les alertes. Un opérateur en salle avec la tablette ne voit pas qu’une sortie est tombée.
+**Réalisation (19/10/2026).** `RemoteState` expose l’état des sorties réelles et la raison du garde-fou ; la page affiche un bandeau d’alerte. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `RemoteState` contient le master, le blackout, l’indicateur d’émission, le BPM, les listes et la localisation, mais pas l’état des sorties (erreur, reconnexion), ni le garde-fou photosensible, ni les alertes. Un opérateur en salle avec la tablette ne voit pas qu’une sortie est tombée.
 
 **Preuves dans le code.**
 
@@ -3849,13 +3861,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes)
 - **Catégorie** : IA / contrat
 - **Nature** : E — Capacité future
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : fonctionnalité
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Le moteur connaît des types d’effets plus récents que ceux du contrat IA v1, comme le précise `AI_EFFECT_TYPES`. Le mécanisme de versionnage et de migration du contrat est en place (`AI_ACTIONS_VERSION`, `AI_ACTION_MIGRATIONS`, échantillons figés et test de contrat), mais aucune v2 n’existe encore.
+**Réalisation (19/10/2026).** Contrat v2 : `fan`, `bassFollow`, `brightnessColor` dans `AI_EFFECT_TYPES`, migration v1 → v2 (identité), `v2.samples.json` et `v2.schema.json` figés, capacités vérifiées (pan/tilt pour l’éventail, couleur pour `brightnessColor`), prompt système complété. Tests : `tests/unit/ai-contract.test.ts` et `tests/unit/regressions.test.ts`. Mots-clés de l’interpréteur local non étendus.
+
+**Constat technique (à l’audit).** Le moteur connaît des types d’effets plus récents que ceux du contrat IA v1, comme le précise `AI_EFFECT_TYPES`. Le mécanisme de versionnage et de migration du contrat est en place (`AI_ACTIONS_VERSION`, `AI_ACTION_MIGRATIONS`, échantillons figés et test de contrat), mais aucune v2 n’existe encore.
 
 **Preuves dans le code.**
 
@@ -4629,24 +4643,24 @@ LUMA-029 → LUMA-083
 | [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
 | [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
 | [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
-| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
+| [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 3 | L | ✅ Terminé |
 | [LUMA-054](#luma-054) | Internationaliser les messages du cœur et les dialogues du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
 | [LUMA-055](#luma-055) | Résorber les 782 textes d’interface écrits en dur dans le rendu | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
 | [LUMA-056](#luma-056) | Mesurer et améliorer la compréhension des requêtes en anglais par l’interpréteur local | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 3 | M | À faire |
 | [LUMA-057](#luma-057) | Découvrir automatiquement les nœuds Art-Net du réseau (ArtPoll et ArtPollReply) | P2 | ABSENT | 3 | M | À faire |
-| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | ABSENT | 3 | S | À faire |
-| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
+| [LUMA-058](#luma-058) | Suivre la consommation de jetons et le coût des appels OpenRouter | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 3 | S | ✅ Terminé |
+| [LUMA-059](#luma-059) | Donner à l’IA distante le contexte des derniers échanges pour les demandes de raffinement | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 3 | M | ✅ Terminé |
 | [LUMA-060](#luma-060) | Exporter et importer un projet « paquet » qui embarque les fichiers audio des morceaux | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
-| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | ABSENT | 3 | S | À faire |
+| [LUMA-061](#luma-061) | Restreindre l’OSC réseau à une liste d’adresses autorisées | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 3 | S | ✅ Terminé |
 | [LUMA-062](#luma-062) | Étendre le MIDI : faders vers niveaux de playback et d’effets, et retour d’état vers les contrôleurs | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
-| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
+| [LUMA-063](#luma-063) | Publier l’état du show en OSC (retour d’état pour TouchOSC, QLab et autres) | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 3 | S | ✅ Terminé |
 | [LUMA-064](#luma-064) | Implémenter la découverte d’univers sACN (E1.31 §8) et la synchronisation optionnelle | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
 | [LUMA-065](#luma-065) | Importer une implantation MVR (patch et positions) depuis Capture, Vectorworks ou grandMA3 | P3 | ABSENT | 3 | L | À faire |
 | [LUMA-066](#luma-066) | Appairer la télécommande par QR code | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
-| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | XS | À faire |
+| [LUMA-067](#luma-067) | Afficher l’état des sorties et les alertes critiques sur la télécommande | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 3 | XS | ✅ Terminé |
 | [LUMA-068](#luma-068) | Proposer un mode « tracking » optionnel pour les listes de cues | P3 | ABSENT | 3 | M | À faire |
 | [LUMA-069](#luma-069) | Rendre le plan de scène 2D utilisable au clavier et par les lecteurs d’écran | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
-| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | PARTIELLEMENT IMPLÉMENTÉ | 3 | S | À faire |
+| [LUMA-070](#luma-070) | Faire évoluer le contrat d’actions IA en v2 pour exposer les effets récents (fan, suiveurs de bandes) | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 3 | S | ✅ Terminé |
 | [LUMA-071](#luma-071) | Isoler le moteur temps réel et les sorties DMX hors de la boucle d’événements du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 4 | XL | À faire |
 | [LUMA-072](#luma-072) | Diffuser des changements incrémentaux du projet au lieu de l’état complet à chaque mutation | P2 | PARTIELLEMENT IMPLÉMENTÉ | 4 | L | À faire |
 | [LUMA-073](#luma-073) | Réduire le coût de chaque mutation (clonage et revalidation complète du projet) | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | M | À faire |
