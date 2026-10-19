@@ -496,7 +496,7 @@ export const trussSchema = z.object({
   height: z.number().min(0.5).max(30),
   length: z.number().min(0.5).max(60),
   rotation: z.number().min(-360).max(360),
-  support: z.enum(['towers', 'hung', 'none']),
+  support: z.enum(['towers', 'hung', 'none']), groupId: idSchema.optional(),
 });
 export type Truss = z.infer<typeof trussSchema>;
 /** Performer or instrument silhouette (meters, y upstage, rotation like fixtures: 0 = facing the audience). */

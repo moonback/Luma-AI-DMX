@@ -22,7 +22,18 @@ const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
 const items = (vis: Vis, kind: SceneKind): Element[] => vis[LIST[kind]];
 
 export const canAdd = (vis: Vis, kind: SceneKind) => items(vis, kind).length < MAX[kind];
+/** Free slots left for `kind` (the limits themselves are unchanged). */
+export const roomFor = (vis: Vis, kind: SceneKind) => MAX[kind] - items(vis, kind).length;
 export const findElement = (vis: Vis, ref: SceneRef): Element | undefined => items(vis, ref.kind).find((x) => x.id === ref.id);
+
+/** Visualizer patch moving every piece of a group by (dx, dy), kept inside the stage bounds. */
+export function withMovedGroup(vis: Vis, groupId: string, dx: number, dy: number): Partial<Vis> {
+  const c = (v: number) => Math.max(-100, Math.min(100, v));
+  return { trusses: vis.trusses.map((t) => (t.groupId === groupId ? { ...t, x: r2(c(t.x + dx)), y: r2(c(t.y + dy)) } : t)) };
+}
+
+/** Visualizer patch removing every piece of a group. */
+export const withoutGroup = (vis: Vis, groupId: string): Partial<Vis> => ({ trusses: vis.trusses.filter((t) => t.groupId !== groupId) });
 
 /** First spot near `at` not already used by an element of the same kind: 0, +1, −1, +2, −2… m sideways. */
 export function freeSpot(vis: Vis, kind: SceneKind, at: P2): P2 {

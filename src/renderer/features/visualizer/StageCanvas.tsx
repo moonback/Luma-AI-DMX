@@ -5,9 +5,10 @@ import { act } from '../../api';
 import { useResolved } from '../../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../../core/visualizer/model';
 import type { FixtureValues, Performer, StageMarker, Truss } from '../../../core/model/schemas';
-import { nearestOnTruss, snapToTrusses, snapTrussEnds } from '../../../core/visualizer/truss';
+import { nearestOnTruss, snapToTrusses, snapTrussEnds, type P2 } from '../../../core/visualizer/truss';
 import { findElement, withPatched, type SceneRef } from '../../../core/visualizer/sceneEdit';
-import { acceptLibraryDrag, addSceneElement, dropLibraryItem } from '../../sceneActions';
+import { snapPoint } from '../../../core/visualizer/trussBuild';
+import { acceptLibraryDrag, addSceneElement, dropLibraryItem, drawTrussGroup, moveTrussGroup } from '../../sceneActions';
 
 
 /**
@@ -27,6 +28,10 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
   const placing = useStore((s) => s.placing);
   const sceneSel = useStore((s) => s.sceneSel);
   const setSceneSel = useStore((s) => s.setSceneSel);
+  // Structure being drawn point by point (only while `drawing`): committed on double-click, dropped on Échap.
+  const drawing = useStore((s) => s.drawing);
+  const [draft, setDraft] = useState<P2[]>([]);
+  const [cursor, setCursor] = useState<P2 | null>(null);
   const local = useRef(new Map<string, { x: number; y: number; height?: number }>());
   const fitKey = useRef('');
   const model = useMemo(() => buildVisualModel(fixtures, values ?? live), [fixtures, values, live]);
@@ -113,8 +118,31 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     });
     return pr ? { kind: 'prop', id: pr.id } : undefined;
   };
+  /** Stage position (m) under the pointer, rounded to the centimetre. */
+  const world = (cx: number, cy: number): P2 => {
+    const r = wrap.current!.getBoundingClientRect();
+    const round = (v: number) => Math.round(v * 100) / 100;
+    return { x: round((cx - r.left - view.ox) / view.scale), y: round((view.oy - (cy - r.top)) / view.scale) };
+  };
+  // While drawing, Échap drops the structure in progress (and only that: the programmer release does not run).
+  useEffect(() => {
+    if (!drawing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      useStore.getState().setDrawing(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => { window.removeEventListener('keydown', onKey, true); setDraft([]); setCursor(null); };
+  }, [drawing]);
   const down = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    if (drawing && e.button === 0) {
+      // Each click adds a point, snapped onto a truss end when one is close.
+      setDraft((d) => [...d, snapPoint(world(e.clientX, e.clientY), vis.trusses)]);
+      return;
+    }
     if (placing && e.button === 0) {
       const r = wrap.current!.getBoundingClientRect();
       addSceneElement(placing.kind, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale }, placing.preset);
@@ -144,6 +172,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     }
   };
   const move = (e: React.PointerEvent) => {
+    if (drawing) { setCursor(world(e.clientX, e.clientY)); return; }
     const d = drag.current;
     if (!d) return;
     d.moved = true;
@@ -152,9 +181,15 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       // Fixtures and stage elements share the local drag overlay (ids never collide: all are UUIDs).
       const p = { x: Math.round((d.ox + (e.clientX - d.x) / view.scale) * 10) / 10, y: Math.round((d.oy - (e.clientY - d.y) / view.scale) * 10) / 10 };
       const t = d.ref?.kind === 'truss' ? vis.trusses.find((x) => x.id === d.id) : undefined;
-      // Truss pieces snap end to end (and take the height of the piece they join) while dragged.
-      const snap = t ? snapTrussEnds({ ...t, ...p }, vis.trusses) : null;
-      local.current.set(d.id, snap ? { x: snap.x, y: snap.y, height: snap.height } : p);
+      if (t?.groupId) {
+        // A piece of a structure drags the whole structure, rigidly (it is moved on drop).
+        const dx = p.x - t.x, dy = p.y - t.y;
+        for (const g of vis.trusses) if (g.groupId === t.groupId) local.current.set(g.id, { x: g.x + dx, y: g.y + dy });
+      } else {
+        // Truss pieces snap end to end (and take the height of the piece they join) while dragged.
+        const snap = t ? snapTrussEnds({ ...t, ...p }, vis.trusses) : null;
+        local.current.set(d.id, snap ? { x: snap.x, y: snap.y, height: snap.height } : p);
+      }
       setView({ ...view });
     }
   };
@@ -172,9 +207,15 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     }
     if (d?.kind === 'element' && d.ref && d.id && d.moved) {
       const p = local.current.get(d.id)!;
-      const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
-      const patch = { x: clampPos(p.x), y: clampPos(p.y), ...(p.height !== undefined ? { height: p.height } : {}) };
-      void act({ type: 'project.update', visualizer: withPatched(vis, d.ref, patch) }).finally(() => local.current.delete(d.id!));
+      const t = d.ref.kind === 'truss' ? vis.trusses.find((x) => x.id === d.id) : undefined;
+      if (t?.groupId) {
+        moveTrussGroup(t.groupId, p.x - t.x, p.y - t.y);
+        for (const g of vis.trusses) if (g.groupId === t.groupId) local.current.delete(g.id);
+      } else {
+        const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
+        const patch = { x: clampPos(p.x), y: clampPos(p.y), ...(p.height !== undefined ? { height: p.height } : {}) };
+        void act({ type: 'project.update', visualizer: withPatched(vis, d.ref, patch) }).finally(() => local.current.delete(d.id!));
+      }
     }
     if (d?.kind === 'marker' && d.id && d.moved) {
       const p = local.current.get(d.id)!;
@@ -203,8 +244,15 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     setView({ scale, ox: mx - ((mx - view.ox) * scale) / view.scale, oy: my - ((my - view.oy) * scale) / view.scale });
   };
   return (
-    <div ref={wrap} className="canvas-wrap" style={{ height: '100%', cursor: placing ? 'crosshair' : undefined }} onPointerDown={down} onDragOver={acceptLibraryDrag} onDrop={(e) => { const r = wrap.current!.getBoundingClientRect(); dropLibraryItem(e, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale }); }} onPointerMove={move} onPointerUp={up} onWheel={wheel} data-testid="stage-canvas">
+    <div ref={wrap} className="canvas-wrap" style={{ height: '100%', position: 'relative', cursor: placing || drawing ? 'crosshair' : undefined }} onPointerDown={down}
+      onDoubleClick={() => { if (drawing) { drawTrussGroup(draft); setDraft([]); } }} onDragOver={acceptLibraryDrag} onDrop={(e) => { const r = wrap.current!.getBoundingClientRect(); dropLibraryItem(e, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale }); }} onPointerMove={move} onPointerUp={up} onWheel={wheel} data-testid="stage-canvas">
       <canvas ref={canvas} />
+      {drawing && draft.length > 0 && (
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+          <polyline fill="none" stroke="var(--violet)" strokeWidth={3} strokeDasharray="6 4"
+            points={[...draft, ...(cursor ? [cursor] : [])].map((p) => { const s = toScreen(p.x, p.y); return `${s.x},${s.y}`; }).join(' ')} />
+        </svg>
+      )}
     </div>
   );
 }

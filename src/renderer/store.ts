@@ -90,6 +90,9 @@ interface State {
   placing: PlaceSpec | null;
   setSceneSel(r: SceneRef | null): void;
   setPlacing(p: PlaceSpec | null): void;
+  /** Drawing a structure point by point on the plan (clicks add points, double-click ends, Échap cancels). */
+  drawing: boolean;
+  setDrawing(on: boolean): void;
   /** Side panel of the stage pages: closed, building the scene, or inspecting the selection. */
   scenePanel: 'build' | 'selection' | null;
   setScenePanel(p: State['scenePanel']): void;
@@ -140,6 +143,8 @@ export const useStore = create<State>((set, get) => ({
   placing: null,
   setSceneSel: (sceneSel) => set(sceneSel ? { sceneSel, selection: [], scenePanel: get().scenePanel === 'build' ? 'build' : 'selection' } : { sceneSel }),
   setPlacing: (placing) => set({ placing }),
+  drawing: false,
+  setDrawing: (drawing) => set({ drawing, placing: null }),
   scenePanel: null,
   setScenePanel: (scenePanel) => set({ scenePanel }),
   frame: null,

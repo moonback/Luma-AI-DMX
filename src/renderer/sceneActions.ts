@@ -5,15 +5,16 @@ import { t } from './i18n';
 import { confirmAction, useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
-import { hangHeight, nearestOnTruss, snapTrussEnds, type P2 } from '../core/visualizer/truss';
+import { followTruss, hangHeight, nearestOnTruss, snapTrussEnds, type P2 } from '../core/visualizer/truss';
+import { chainFromPoints, groupTrusses } from '../core/visualizer/trussBuild';
 import { MAX_UNIVERSES, type Fixture, type Project, type Truss } from '../core/model/schemas';
 import { ProfileLibrary, channelCount } from '../core/fixtures/profiles';
 import { findFreeAddress } from '../core/fixtures/patch';
 import { sceneFromText } from '../core/visualizer/sceneFromText';
 import { libraryItem } from '../core/visualizer/library';
 import {
-  SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
-  type EquipFixture, type SceneKind, type SceneRef,
+  SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, roomFor, serializeElement, withElement, withMovedGroup,
+  withoutElement, withoutGroup, type EquipFixture, type SceneKind, type SceneRef,
 } from '../core/visualizer/sceneEdit';
 
 /** Scene-element actions shared by the scene panel, the 2D plan and the 3D view (all undoable with Ctrl+Z). */
@@ -49,9 +50,60 @@ export function hangFixture(fixture: Fixture, t: Truss): void {
   });
 }
 
+/** Height (m) of the pieces of a drawn structure: the default height of a new truss. */
+const DRAW_HEIGHT = 6;
+
+/**
+ * Structure drawn point by point on the plan: straight pieces sharing one group, added in one undo step. Points
+ * already snapped to a truss end; segments under 0.5 m are dropped.
+ */
+export function drawTrussGroup(points: readonly P2[]): void {
+  const v = vis();
+  const st = useStore.getState();
+  if (!v) return;
+  const pieces = chainFromPoints(points, DRAW_HEIGHT, newId, newId(), `Structure ${groupTrusses(v.trusses).size + 1}`);
+  if (!pieces.length) { toast('Segment trop court', 'Tracez au moins 0,5 m.', 'error'); return; }
+  if (pieces.length > roomFor(v, 'truss')) { toast('Limite atteinte', `Il reste ${roomFor(v, 'truss')} pièce(s) disponible(s).`, 'error'); return; }
+  void act({ type: 'project.update', visualizer: { trusses: [...v.trusses, ...pieces] } }).then((r) => r && st.setSceneSel({ kind: 'truss', id: pieces[0]!.id }));
+}
+
+/** Moves a whole structure by (dx, dy); the projectors hung on it follow their piece (a second undo step if any). */
+export function moveTrussGroup(groupId: string, dx: number, dy: number): void {
+  const v = vis();
+  if (!v) return;
+  const trusses = withMovedGroup(v, groupId, dx, dy).trusses ?? [];
+  const placements = (useStore.getState().project?.project.patch ?? []).flatMap((f) => {
+    const before = v.trusses.find((t) => t.id === f.trussId && t.groupId === groupId);
+    if (!before) return [];
+    const after = trusses.find((t) => t.id === before.id)!;
+    const p = followTruss(before, after, { position: f.position, height: f.height, rotation: f.rotation });
+    return [{ id: f.id, position: p.position, height: p.height, trussId: after.id }];
+  });
+  void act({ type: 'project.update', visualizer: { trusses } }).then((r) => {
+    if (r !== undefined && placements.length) return act({ type: 'fixture.place', placements });
+  });
+}
+
+/** Removes a whole structure; the projectors hung on it are unhooked and stay where they are (a second undo step). */
+export function removeTrussGroup(groupId: string): void {
+  const v = vis();
+  if (!v) return;
+  const gone = new Set(v.trusses.filter((t) => t.groupId === groupId).map((t) => t.id));
+  const hung = (useStore.getState().project?.project.patch ?? []).filter((f) => f.trussId && gone.has(f.trussId));
+  if (useStore.getState().sceneSel && gone.has(useStore.getState().sceneSel!.id)) useStore.getState().setSceneSel(null);
+  void act({ type: 'project.update', visualizer: withoutGroup(v, groupId) }).then((r) => {
+    if (r !== undefined && hung.length) {
+      return act({ type: 'fixture.place', placements: hung.map((f) => ({ id: f.id, position: f.position, height: f.height, trussId: null })) });
+    }
+  });
+}
+
 export function removeSceneElement(ref: SceneRef): void {
   const v = vis();
-  if (!v || !findElement(v, ref)) return;
+  const el = v && findElement(v, ref);
+  if (!v || !el) return;
+  // A piece drawn as part of a structure takes the whole structure with it.
+  if (ref.kind === 'truss' && (el as Truss).groupId) { removeTrussGroup((el as Truss).groupId!); return; }
   if (ref.kind === 'screen') setScreenVideo(ref.id, null);
   if (useStore.getState().sceneSel?.id === ref.id) useStore.getState().setSceneSel(null);
   void act({ type: 'project.update', visualizer: withoutElement(v, ref) });

@@ -5,9 +5,9 @@ import { ProjectIndex } from '../../src/core/engine/resolve';
 import { makeService } from '../helpers';
 
 describe('projets de démonstration', () => {
-  it('20 projets aux identifiants uniques', () => {
-    expect(DEMOS).toHaveLength(20);
-    expect(new Set(DEMOS.map((d) => d.id)).size).toBe(20);
+  it('21 projets aux identifiants uniques', () => {
+    expect(DEMOS).toHaveLength(21);
+    expect(new Set(DEMOS.map((d) => d.id)).size).toBe(21);
   });
 
   it.each(DEMOS.map((d) => [d.id, d] as const))('%s : catalogue cohérent (looks, effets et rigs référencés)', (_id, d) => {

@@ -46,6 +46,7 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
   const setPanel = useStore((s) => s.setScenePanel);
   const [group, setGroup] = useState<string | null>(null);
   const placing = useStore((s) => s.placing);
+  const drawing = useStore((s) => s.drawing);
   useSceneShortcuts();
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -77,6 +78,12 @@ function StagePage({ mode }: { mode: '2d' | '3d' }) {
         )}
         <div className="stage-view">
           {mode === '3d' ? <Stage3D values={preview?.values} groupFilter={group} /> : <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />}
+          {drawing && mode !== '3d' && (
+            <div className="stage-empty stage-placing" data-testid="drawing">
+              <span className="grow">{tr('scene.drawHint')}</span>
+              <button className="btn sm" onClick={() => useStore.getState().setDrawing(false)}>{tr('scene.drawCancel')}</button>
+            </div>
+          )}
           {placing && (
             <div className="stage-empty stage-placing" data-testid="placing">
               <Crosshair size={16} />

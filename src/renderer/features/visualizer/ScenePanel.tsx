@@ -8,6 +8,7 @@ import { useResolved } from '../../components/ui';
 import { buildVisualModel } from '../../../core/visualizer/model';
 import { setScreenVideo } from '../../screenMedia';
 import { JUNCTION_ARMS } from '../../../core/visualizer/truss';
+import { trussBom } from '../../../core/visualizer/trussBom';
 import { LIBRARY, LIBRARY_GROUPS, type LibraryGroup, type LibraryItem } from '../../../core/visualizer/library';
 import { SCENE_LABEL, canAdd, findElement, type SceneKind } from '../../../core/visualizer/sceneEdit';
 import { LIBRARY_MIME, addSceneElement, duplicateSceneElement, equipRig, removeSceneElement } from '../../sceneActions';
@@ -38,13 +39,34 @@ function AddBtn({ kind, label, icon, testId }: { kind: SceneKind; label: Message
 /** Always-visible add bar at the top of the build tab, so adding never needs scrolling to a section. */
 function QuickAdd() {
   const tr = useT();
+  const drawing = useStore((s) => s.drawing);
   return (
+    <>
     <div className="scene-quickadd" role="toolbar" aria-label={tr('scene.addBar')}>
       <AddBtn kind="marker" label="scene.addMarker" icon={<MapPin size={14} />} testId="marker-add" />
       <AddBtn kind="truss" label="scene.addTruss" icon={<Boxes size={14} />} testId="truss-add" />
+      <button className={`scene-add-main ${drawing ? 'on' : ''}`} onClick={() => useStore.getState().setDrawing(!drawing)} aria-pressed={drawing} title={tr('scene.drawTitle')} data-testid="truss-draw">
+        <span>{tr('scene.drawTruss')}</span>
+      </button>
       <AddBtn kind="prop" label="scene.addProp" icon={<Armchair size={14} />} testId="prop-add" />
       <AddBtn kind="performer" label="scene.addPerformer" icon={<UserRound size={14} />} testId="performer-add" />
       <AddBtn kind="screen" label="scene.addScreen" icon={<Monitor size={14} />} testId="screen-add" />
+    </div>
+    <TrussBom />
+    </>
+  );
+}
+
+/** Cutting list of the structures: pieces counted by length. */
+function TrussBom() {
+  const tr = useT();
+  const trusses = useStore((s) => s.project!.project.visualizer.trusses);
+  const bom = trussBom(trusses);
+  if (!bom.length) return null;
+  return (
+    <div className="scene-bom" data-testid="truss-bom">
+      <span>{tr('scene.bomTitle')}</span>
+      {bom.map((l) => <span key={l.length}>{l.count} × {l.length} m</span>)}
     </div>
   );
 }
