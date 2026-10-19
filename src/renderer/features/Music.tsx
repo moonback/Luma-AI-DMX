@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lock, LockOpen, Music2, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
+import { Lock, LockOpen, Music2, Pause, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -183,9 +183,9 @@ export function MusicPage() {
     setBusy(false);
     if (r) setNotices(r.notices);
   };
-  const play = (tk: MusicTrack) => {
+  const play = (tk: MusicTrack, from = tk.analysis.sections[selected]?.start ?? 0) => {
     try {
-      musicPlayer.play(tk, tk.analysis.sections[selected]?.start ?? 0);
+      musicPlayer.play(tk, from);
     } catch (err) {
       useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
@@ -213,9 +213,17 @@ export function MusicPage() {
           <Panel title={track.name} actions={
             <div className="row">
               {musicPlayer.hasAudio(track.hash) ? (
-                playing?.trackId === track.id
-                  ? <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
-                  : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
+                playing?.trackId === track.id ? (
+                  <>
+                    <button className="btn" onClick={() => musicPlayer.pause()} data-testid="music-pause"><Pause size={13} />{t('music.pause')}</button>
+                    <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
+                  </>
+                ) : musicPlayer.paused?.trackId === track.id ? (
+                  <>
+                    <button className="btn accent" onClick={() => play(track, musicPlayer.paused!.at)} data-testid="music-resume"><Play size={13} />{t('music.resume')}</button>
+                    <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(musicPlayer.paused.at) })}</button>
+                  </>
+                ) : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
               ) : <span className="small dim">{t('music.noAudio')}</span>}
               <button className="btn ghost sm" onClick={() => { if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop(); void act({ type: 'music.removeTrack', id: track.id }); }}>{t('music.remove')}</button>
             </div>
@@ -228,6 +236,9 @@ export function MusicPage() {
               <span className="small dim">{t('music.eventsSummary', { impacts: track.analysis.events.filter((e) => e.kind === 'impact').length, risers: track.analysis.events.filter((e) => e.kind === 'riser').length, vocal: Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0)) })}</span>
             </div>
             <SectionStrip track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} pos={playing?.trackId === track.id ? pos : null} />
+            {(playing?.trackId ?? musicPlayer.paused?.trackId) === track.id && (
+              <input type="range" className="mini-player-seek" min={0} max={track.analysis.duration} step={0.1} value={playing ? pos : musicPlayer.paused!.at} aria-label={t('music.seek')} data-testid="music-seek" onChange={(e) => play(track, Number(e.target.value))} />
+            )}
             <p className="small dim" style={{ marginBottom: 0 }}>{t('music.strip.hint')}</p>
           </Panel>
 
