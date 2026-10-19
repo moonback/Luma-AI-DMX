@@ -64,6 +64,8 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'console.noFixturesHint': 'Patch fixtures to control them.',
   'console.fixtures': 'Fixtures',
   'console.controls': 'Controls',
+  'console.cols': 'Palettes per row (1 or 2)',
+  'console.drag': 'Drag to move this palette',
   'console.controlsEmpty': 'Select one or more fixtures (or a group) to show their controls.',
   'console.group.partial': 'Group partly selected: click to select all of it',
   'console.group.new': 'Group',

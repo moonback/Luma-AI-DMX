@@ -62,6 +62,8 @@ export const frScreens = {
   'console.noFixturesHint': 'Patchez des projecteurs pour les piloter.',
   'console.fixtures': 'Projecteurs',
   'console.controls': 'Contrôles',
+  'console.cols': 'Palettes par ligne (1 ou 2)',
+  'console.drag': 'Glisser pour déplacer la palette',
   'console.controlsEmpty': 'Sélectionnez un ou plusieurs projecteurs (ou un groupe) pour afficher leurs contrôles.',
   'console.group.partial': 'Groupe partiellement sélectionné : clic pour le sélectionner entièrement',
   'console.group.new': 'Groupe',
