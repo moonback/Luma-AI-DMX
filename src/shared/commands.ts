@@ -100,6 +100,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   // Profiles
   z.object({ type: z.literal('profile.import'), path: optPath }),
   z.object({ type: z.literal('profile.remove'), id: idSchema }),
+  /** Writes library profiles (all when `ids` is omitted) as a Luma JSON file `{ profiles: [...] }`, re-importable by `profile.import`. */
+  z.object({ type: z.literal('profile.export'), ids: z.array(idSchema).min(1).max(500).optional(), path: optPath }),
   /** Saves a profile built in the app (photo of the manual) to the library and the project. */
   z.object({ type: z.literal('profile.save'), profile: profileSchema }),
   empty('ofl.manufacturers'),
@@ -377,6 +379,7 @@ export interface CommandResults {
   'onboarding.update': Void;
   'profile.import': { imported: string[]; errors: string[]; warnings: string[] };
   'profile.remove': Void;
+  'profile.export': { path: string | null; count: number };
   'profile.save': { profileId: string };
   'ofl.manufacturers': { key: string; name: string }[];
   'ofl.fixtures': string[];

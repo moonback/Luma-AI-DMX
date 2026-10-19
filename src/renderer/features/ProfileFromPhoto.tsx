@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { Camera, Plus, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Camera, Plus, Trash2, X } from 'lucide-react';
 import { useStore } from '../store';
 import { act } from '../api';
 import { useT } from '../i18n';
@@ -27,6 +27,14 @@ function RangesEditor({ ranges, onChange }: { ranges: ChannelRange[]; onChange: 
     const next = { ...r, ...patch };
     return { ...next, dangerous: DANGEROUS_KINDS.has(next.kind) };
   }));
+  // Moving a range swaps its meaning (label, kind, colour) with the neighbour; the DMX spans stay in value order.
+  const move = (i: number, j: number) => {
+    const a = ranges[i]!, b = ranges[j]!;
+    const next = [...ranges];
+    next[i] = { ...b, from: a.from, to: a.to };
+    next[j] = { ...a, from: b.from, to: b.to };
+    onChange(next);
+  };
   const last = ranges[ranges.length - 1];
   const fresh = (from: number): ChannelRange => ({ from, to: 255, label: tr('pphoto.range.new'), kind: 'other', dangerous: false });
   // New range after the last one; when the last already ends at 255, split it in two.
@@ -48,6 +56,8 @@ function RangesEditor({ ranges, onChange }: { ranges: ChannelRange[]; onChange: 
             {RANGE_KINDS.map((k) => <option key={k} value={k}>{tr(`pphoto.kind.${k}`)}</option>)}
           </select>
           <input type="color" value={r.color ?? '#ffffff'} aria-label={tr('pphoto.range.color', { n: i + 1 })} onChange={(e) => setRange(i, { color: e.target.value })} style={{ opacity: r.color ? 1 : 0.35, width: 32, flexShrink: 0 }} />
+          <button className="btn sm" disabled={i === 0} aria-label={tr('pphoto.range.up', { n: i + 1 })} onClick={() => move(i, i - 1)}><ArrowUp size={13} /></button>
+          <button className="btn sm" disabled={i === ranges.length - 1} aria-label={tr('pphoto.range.down', { n: i + 1 })} onClick={() => move(i, i + 1)}><ArrowDown size={13} /></button>
           <button className="btn sm danger" aria-label={tr('pphoto.range.remove', { n: i + 1 })} onClick={() => onChange(ranges.filter((_, k) => k !== i))}><Trash2 size={13} /></button>
         </div>
       ))}
@@ -130,9 +140,9 @@ export function ProfileFromPhotoDialog({ onClose, initial }: { onClose: () => vo
   }
 
   return (
-    <Modal title={tr(initial ? 'pphoto.editTitle' : 'pphoto.reviewTitle')} wide onClose={onClose} footer={<>
+    <Modal title={tr(initial ? 'pphoto.editTitle' : 'pphoto.reviewTitle')} wide onClose={onClose} locked={!!initial} footer={<>
       {error && <span className="small" style={{ color: '#fca5a5', marginRight: 'auto' }}>{error}</span>}
-      {initial ? <button className="btn" onClick={onClose}>{tr('pphoto.cancel')}</button> : <button className="btn" onClick={() => setDraft(null)}>{tr('pphoto.restart')}</button>}
+      {!initial && <button className="btn" onClick={() => setDraft(null)}>{tr('pphoto.restart')}</button>}
       <button className="btn primary" data-testid="profile-photo-save" disabled={!!error} onClick={() => void save()}>{tr(replaces ? 'pphoto.replace' : 'pphoto.save')}</button>
     </>}>
       {summary && <p className="muted small" style={{ marginTop: 0 }}>{summary}</p>}

@@ -58,8 +58,10 @@ export const settingsSchema = z.object({
       autoUpdate: z.boolean().default(true),
       /** Opens the detached 3D stage window (second screen) once the first project of the session is opened, created or resumed. */
       detachStage3dOnStart: z.boolean().default(false),
+      /** Same for the Live Console window. */
+      detachConsoleOnStart: z.boolean().default(false),
     })
-    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false }),
+    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false, detachConsoleOnStart: false }),
   /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
   onboarding: z
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })

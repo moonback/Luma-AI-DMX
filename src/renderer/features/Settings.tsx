@@ -368,6 +368,7 @@ export function SettingsPage() {
               <div className="col" style={{ gap: 10, paddingTop: 22 }}>
                 <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
+                <label className="check"><input type="checkbox" data-testid="detach-console-on-start" checked={s.general.detachConsoleOnStart} onChange={(e) => set('general', { detachConsoleOnStart: e.target.checked })} />{tr('settings.general.detachConsole')}</label>
               </div>
             </div>
           </Panel>

@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Eraser, Plus, Save, SlidersHorizontal, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Eraser, ExternalLink, Plus, Save, SlidersHorizontal, X } from 'lucide-react';
 import { useStore, confirmAction, EMPTY_OBJ } from '../store';
 import { useT } from '../i18n';
 import { act, newId } from '../api';
@@ -287,10 +287,11 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
               </div>
             </div>
             {emitters.map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
-            {/* A wheel without documented slots (e.g. not read on the manual photo) still needs a control: slider. */}
-            {has('colorWheel') && channelFor('colorWheel') && (channelFor('colorWheel')!.ranges.length
-              ? <RangeChips channel={channelFor('colorWheel')!} attr="colorWheel" current={cur('colorWheel')} set={set} />
-              : <Slider label={channelFor('colorWheel')!.name} value={cur('colorWheel')} source={src('colorWheel')} touched={touched('colorWheel')} onChange={(v) => set('colorWheel', v)} />)}
+            {/* Slot chips when the profile documents them, plus a raw 0-255 slider (split colours, undocumented slots). */}
+            {has('colorWheel') && channelFor('colorWheel') && <>
+              {channelFor('colorWheel')!.ranges.length > 0 && <RangeChips channel={channelFor('colorWheel')!} attr="colorWheel" current={cur('colorWheel')} set={set} />}
+              <Slider label={channelFor('colorWheel')!.name} value={cur('colorWheel')} source={src('colorWheel')} touched={touched('colorWheel')} onChange={(v) => set('colorWheel', v)} />
+            </>}
             {['cyan', 'magenta', 'yellow', 'cto'].filter(has).map((a) => <Slider key={a} label={attributeLabel(a)} value={cur(a)} source={src(a)} touched={touched(a)} onChange={(v) => set(a, v)} />)}
             <FamilyPalettes kind="color" ids={ids} />
           </div>
@@ -360,7 +361,19 @@ function Controls({ selected }: { selected: ResolvedFixture[] }) {
   );
 }
 
-export function LiveConsole() {
+export const DETACHED_CONSOLE_HASH = '#console';
+
+export const openDetachedConsole = () => window.open(location.href.split('#')[0] + DETACHED_CONSOLE_HASH, 'luma-console');
+
+/** Live Console alone in its own window (second screen), opened by the "Détacher" button. */
+export function DetachedConsole() {
+  const tr = useT();
+  const ready = useStore((s) => !!s.project);
+  useEffect(() => { document.title = 'Live Console'; }, []);
+  return <div style={{ height: '100vh', overflow: 'auto' }}>{ready ? <LiveConsole detached /> : <div className="empty">{tr('stagePage.connecting')}</div>}</div>;
+}
+
+export function LiveConsole({ detached = false }: { detached?: boolean }) {
   const tr = useT();
   const { fixtures, byId } = useResolved();
   const selection = useStore((s) => s.selection);
@@ -376,6 +389,7 @@ export function LiveConsole() {
           <input type="range" min={0} max={100} style={{ width: 140 }} aria-label={tr('console.masterHint')} value={Math.round((rt?.engine.master ?? 1) * 100)} onChange={(e) => master(Number(e.target.value) / 100)} />
           <span className="mono small">{Math.round((rt?.engine.master ?? 1) * 100)}%</span>
         </div>
+        {!detached && <button className="btn" data-testid="console-detach" onClick={openDetachedConsole} title={tr('console.detachHint')}><ExternalLink size={14} />{tr('console.detach')}</button>}
         <button className="btn" disabled={!selection.length} onClick={() => void act({ type: 'programmer.release', fixtureIds: selection })} title={tr('console.releaseSelHint')}><Eraser size={15} />{tr('console.releaseSel')}</button>
         <button className="btn" onClick={() => void act({ type: 'programmer.release' })} title={tr('console.releaseAllHint')}>{tr('console.releaseAll')}</button>
         <button className="btn primary" disabled={!rt?.engine.programmerCount} onClick={() => setRecording(true)}><Save size={15} />{tr('console.record')}</button>

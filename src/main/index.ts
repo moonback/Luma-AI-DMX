@@ -77,6 +77,10 @@ async function createService(): Promise<AppService> {
         ], properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
       },
+      saveProfiles: async (name) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Exporter des profils', defaultPath: name, filters: [{ name: 'Profils Luma', extensions: ['json'] }] });
+        return r.canceled ? null : r.filePath ?? null;
+      },
       savePatchSheet: async (name, format) => {
         const r = await dialog.showSaveDialog(win!, { title: 'Exporter la feuille de patch', defaultPath: name, filters: [format === 'csv' ? { name: 'Tableur (CSV)', extensions: ['csv'] } : { name: 'PDF', extensions: ['pdf'] }] });
         return r.canceled ? null : r.filePath ?? null;
@@ -131,9 +135,9 @@ function createWindow(): BrowserWindow {
   // Navigation is restricted to the app itself; external https links open in the system browser.
   guardNavigation(w);
   w.webContents.setWindowOpenHandler(({ url }) => {
-    // Detachable 3D stage view (second screen): same renderer, same locked-down preferences.
-    if (isTrustedSender(url) && url.endsWith('#stage3d')) {
-      return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 720, backgroundColor: '#0B0D12', title: 'Stage 3D', icon, autoHideMenuBar: true, webPreferences } };
+    // Detachable 3D stage view and Live Console (second screen): same renderer, same locked-down preferences.
+    if (isTrustedSender(url) && (url.endsWith('#stage3d') || url.endsWith('#console'))) {
+      return { action: 'allow', overrideBrowserWindowOptions: { width: 1280, height: 720, backgroundColor: '#0B0D12', title: url.endsWith('#console') ? 'Live Console' : 'Stage 3D', icon, autoHideMenuBar: true, webPreferences } };
     }
     if (url.startsWith('https://')) void shell.openExternal(url);
     return { action: 'deny' };

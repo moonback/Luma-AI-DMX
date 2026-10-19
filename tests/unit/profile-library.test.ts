@@ -34,4 +34,20 @@ describe('bibliothèque utilisateur de profils', () => {
     expect(third.projectState().library).toEqual([]);
     await third.dispose();
   });
+
+  it('exporte la bibliothèque dans un fichier réimportable', async () => {
+    const dataDir = tempDir();
+    const { svc } = makeService(dataDir);
+    await svc.init();
+    await expect(svc.execute({ type: 'profile.export' })).rejects.toThrow(/Aucun profil/);
+    await svc.execute({ type: 'profile.import', path: PROFILE });
+    const before = svc.projectState().library;
+    const file = path.join(dataDir, 'export.json');
+    expect(await svc.execute({ type: 'profile.export', ids: [ID], path: file })).toEqual({ path: file, count: 1 });
+    await svc.execute({ type: 'project.new', name: 'Vide' });
+    await svc.execute({ type: 'profile.remove', id: ID });
+    expect((await svc.execute({ type: 'profile.import', path: file })).imported).toHaveLength(1);
+    expect(svc.projectState().library).toEqual(before);
+    await svc.dispose();
+  });
 });

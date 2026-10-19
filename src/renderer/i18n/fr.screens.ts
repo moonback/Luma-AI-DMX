@@ -55,6 +55,8 @@ export const frScreens = {
   'console.releaseAll': 'Relâcher le programmeur',
   'console.releaseAllHint': 'Relâcher tout le programmeur (Échap)',
   'console.record': 'Enregistrer scène',
+  'console.detach': 'Détacher',
+  'console.detachHint': 'Ouvrir la Live Console dans une fenêtre séparée (second écran)',
   'console.noFixtures': 'Aucun projecteur',
   'console.openPatch': 'Ouvrir le patch',
   'console.noFixturesHint': 'Patchez des projecteurs pour les piloter.',
@@ -370,4 +372,6 @@ export const frScreens = {
   'pphoto.kind.other': 'Autre',
   'pphoto.edit': 'Modifier le profil (canaux, plages, couleurs)',
   'pphoto.editTitle': 'Modifier le profil',
+  'pphoto.range.up': 'Monter la plage {n}',
+  'pphoto.range.down': 'Descendre la plage {n}',
 } as const;

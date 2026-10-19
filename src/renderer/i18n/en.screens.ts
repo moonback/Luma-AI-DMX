@@ -57,6 +57,8 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'console.releaseAll': 'Release programmer',
   'console.releaseAllHint': 'Release the whole programmer (Esc)',
   'console.record': 'Record scene',
+  'console.detach': 'Detach',
+  'console.detachHint': 'Open the Live Console in a separate window (second screen)',
   'console.noFixtures': 'No fixtures',
   'console.openPatch': 'Open the patch',
   'console.noFixturesHint': 'Patch fixtures to control them.',
@@ -372,4 +374,6 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'pphoto.kind.other': 'Other',
   'pphoto.edit': 'Edit the profile (channels, ranges, colours)',
   'pphoto.editTitle': 'Edit the profile',
+  'pphoto.range.up': 'Move range {n} up',
+  'pphoto.range.down': 'Move range {n} down',
 };

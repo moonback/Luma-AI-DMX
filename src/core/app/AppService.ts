@@ -41,6 +41,7 @@ export interface Dialogs {
   openProject(): Promise<string | null>;
   saveProject(defaultName: string): Promise<string | null>;
   openProfile(): Promise<string | null>;
+  saveProfiles?(defaultName: string): Promise<string | null>;
   saveDiagnostic?(defaultName: string): Promise<string | null>;
   savePatchSheet?(defaultName: string, format: 'csv' | 'pdf'): Promise<string | null>;
   saveFeedback?(defaultName: string): Promise<string | null>;

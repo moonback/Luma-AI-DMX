@@ -12,7 +12,7 @@ import { allowedWhileTyping, bindingsFrom, comboFromEvent } from './shortcuts';
 import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings';
 import { Dashboard } from './features/Dashboard';
 import { Fixtures } from './features/Fixtures';
-import { LiveConsole } from './features/LiveConsole';
+import { DETACHED_CONSOLE_HASH, LiveConsole, openDetachedConsole } from './features/LiveConsole';
 import { Programmer } from './features/Programmer';
 import { Cues } from './features/Cues';
 import { Effects } from './features/Effects';
@@ -48,14 +48,15 @@ async function guardUnsaved(): Promise<boolean> {
   return confirmAction({ title: t('project.unsavedTitle'), message: t('project.unsavedMessage'), confirmLabel: t('project.unsavedConfirm') });
 }
 
-/** Set at startup from the settings; cleared once the detached 3D window has been opened. */
+/** Set at startup from the settings; cleared once the detached windows have been opened. */
 let detachStageOnOpen = false;
+let detachConsoleOnOpen = false;
 
-/** Opens the detached 3D window once, when the setting asks for it and a project is opened, created or kept. */
+/** Opens the detached 3D / console windows once, when the settings ask for it and a project is opened, created or kept. */
 export function detachStageIfWanted(): void {
-  if (!detachStageOnOpen) return;
-  detachStageOnOpen = false;
-  openDetachedStage();
+  if (detachStageOnOpen) openDetachedStage();
+  if (detachConsoleOnOpen) openDetachedConsole();
+  detachStageOnOpen = detachConsoleOnOpen = false;
 }
 
 /** Opens a project file (dialog when no path); true when a project was opened. */
@@ -383,9 +384,10 @@ export async function bootstrap(): Promise<void> {
   useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
   // bootstrap also runs in the detached window: only the main window listens to MIDI/timecode (else every GO fires twice)
   // and opens the detached window, after the first project opened.
-  const main = location.hash !== DETACHED_STAGE_HASH;
+  const main = location.hash !== DETACHED_STAGE_HASH && location.hash !== DETACHED_CONSOLE_HASH;
   if (main) void externalControl.configure(settings.control);
   if (main) void offerRecovery();
   detachStageOnOpen = settings.general.detachStage3dOnStart && main;
+  detachConsoleOnOpen = settings.general.detachConsoleOnStart && main;
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

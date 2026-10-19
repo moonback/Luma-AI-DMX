@@ -196,7 +196,8 @@ function LibraryPanel() {
     if (await confirmAction({ title: tr('fixtures.lib.removeTitle'), message: tr('fixtures.lib.removeMessage', { name }), confirmLabel: tr('fixtures.lib.remove') })) await act({ type: 'profile.remove', id });
   };
   return (
-    <Panel flush className="lib-panel" title={tr('fixtures.lib.title', { n: ps.library.length })}>
+    <Panel flush className="lib-panel" title={tr('fixtures.lib.title', { n: ps.library.length })}
+      actions={<button className="btn sm" data-testid="export-profiles" title={tr('fixtures.lib.exportAllTitle')} onClick={() => void act({ type: 'profile.export' })}><FileDown size={13} />{tr('fixtures.lib.exportAll')}</button>}>
       <table className="table" data-testid="profile-library">
         <thead><tr><th>{tr('fixtures.lib.name')}</th><th>{tr('fixtures.lib.manufacturer')}</th><th>{tr('fixtures.lib.modes')}</th><th>{tr('fixtures.lib.used')}</th><th /></tr></thead>
         <tbody>
@@ -210,6 +211,7 @@ function LibraryPanel() {
                 <td className="mono">{used}</td>
                 <td>
                   <button className="btn ghost sm icon" data-testid={`edit-profile-${p.id}`} title={tr('pphoto.edit')} aria-label={tr('pphoto.edit')} onClick={() => setEditing(p)}><Pencil size={13} /></button>
+                  <button className="btn ghost sm icon" data-testid={`export-profile-${p.id}`} title={tr('fixtures.lib.export')} aria-label={tr('fixtures.lib.export')} onClick={() => void act({ type: 'profile.export', ids: [p.id] })}><FileDown size={13} /></button>
                   <button className="btn ghost sm icon danger" disabled={used > 0} data-testid={`remove-profile-${p.id}`}
                     title={used ? tr('fixtures.lib.inUse', { n: used }) : tr('fixtures.lib.remove')} aria-label={tr('fixtures.lib.remove')} onClick={() => void remove(p.id, p.name)}>
                     <Trash2 size={13} />

@@ -74,19 +74,21 @@ export function NumberInput({ value, onChange, min, max, step = 1, className, ti
   );
 }
 
-export function Modal({ title, children, footer, onClose, wide }: { title: string; children: ReactNode; footer?: ReactNode; onClose: () => void; wide?: boolean }) {
+/** `locked`: no Escape, backdrop or ✕ — only the footer buttons close it. */
+export function Modal({ title, children, footer, onClose, wide, locked }: { title: string; children: ReactNode; footer?: ReactNode; onClose: () => void; wide?: boolean; locked?: boolean }) {
   const tr = useT();
   useEffect(() => {
+    if (locked) return;
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
-  }, [onClose]);
+  }, [onClose, locked]);
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay" onMouseDown={(e) => !locked && e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
         <div className="modal-head row between">
           {title}
-          <button className="btn ghost sm icon" onClick={onClose} title={tr('common.closeEsc')}><X size={14} /></button>
+          {!locked && <button className="btn ghost sm icon" onClick={onClose} title={tr('common.closeEsc')}><X size={14} /></button>}
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
