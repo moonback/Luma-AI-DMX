@@ -15,6 +15,7 @@ export const PAGES = [
   { id: 'programmer', label: 'Programmer' },
   { id: 'cues', label: 'Cues & Sequences' },
   { id: 'effects', label: 'Effects' },
+  { id: 'quick', label: 'Quick Actions' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'ai', label: 'AI Lighting Director' },
   { id: 'visualizer', label: 'Stage Visualizer' },

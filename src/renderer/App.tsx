@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
-  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2,
+  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
 import logo from '../../public/logo.png';
@@ -16,6 +16,7 @@ import { DETACHED_CONSOLE_HASH, LiveConsole, openDetachedConsole } from './featu
 import { Programmer } from './features/Programmer';
 import { Cues } from './features/Cues';
 import { Effects } from './features/Effects';
+import { QuickActionsPage } from './features/QuickActions';
 import { TimelinePage } from './features/Timeline';
 import { AiDirector } from './features/AiDirector';
 import { DETACHED_STAGE_HASH, openDetachedStage, StageVisualizer3D, Visualizer } from './features/Visualizer';
@@ -31,11 +32,11 @@ import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/What
 import { t, useT } from './i18n';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
-  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
+  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
   timeline: ChartGantt, ai: Bot, visualizer: Theater, stage3d: Box, audio: AudioLines, music: Music2, output: Cable, settings: SettingsIcon,
 };
 const VIEWS: Record<PageId, ComponentType> = {
-  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects,
+  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
   timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, stage3d: StageVisualizer3D, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
 };
 

@@ -10,6 +10,7 @@ export const en: Record<MessageKey, string> = {
   'nav.programmer': 'Programmer',
   'nav.cues': 'Cues & Sequences',
   'nav.effects': 'Effects',
+  'nav.quick': 'Quick Actions',
   'nav.timeline': 'Timeline',
   'nav.ai': 'AI Lighting Director',
   'nav.visualizer': 'Stage Visualizer',

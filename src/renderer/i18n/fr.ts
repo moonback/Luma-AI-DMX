@@ -12,6 +12,7 @@ export const fr = {
   'nav.programmer': 'Programmer',
   'nav.cues': 'Cues & Sequences',
   'nav.effects': 'Effects',
+  'nav.quick': 'Actions rapides',
   'nav.timeline': 'Timeline',
   'nav.ai': 'Shows IA',
   'nav.visualizer': 'Visualiseur de scène',
