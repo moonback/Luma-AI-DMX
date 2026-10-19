@@ -109,8 +109,10 @@ export const settingsSchema = z.object({
           port: z.number().int().min(1024).max(65535).default(8000),
           /** 127.0.0.1 = this machine only; 0.0.0.0 = local network (no authentication: trusted networks only). */
           bind: z.enum(['127.0.0.1', '0.0.0.0']).default('127.0.0.1'),
+          /** Reply `/luma/ack` to each message. */
+          ack: z.boolean().default(true),
         })
-        .default({ enabled: false, port: 8000, bind: '127.0.0.1' }),
+        .default({ enabled: false, port: 8000, bind: '127.0.0.1', ack: true }),
       timecode: z
         .object({ source: z.enum(['off', 'mtc', 'ltc']).default('off'), ltcDeviceId: z.string().max(300).nullable().default(null) })
         .default({ source: 'off', ltcDeviceId: null }),
@@ -125,7 +127,7 @@ export const settingsSchema = z.object({
         })
         .default({ enabled: false, port: 8080, bind: '0.0.0.0' }),
     })
-    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1' }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
+    .default({ midi: { enabled: false, mappings: [] }, osc: { enabled: false, port: 8000, bind: '127.0.0.1', ack: true }, timecode: { source: 'off', ltcDeviceId: null }, remote: { enabled: false, port: 8080, bind: '0.0.0.0' } }),
   logs: z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('info') }).default({ level: 'info' }),
   /** Opt-in, local usage statistics (command types and error counts only). Off until the user turns it on. */
   telemetry: z.object({ usage: z.boolean().default(false) }).default({ usage: false }),

@@ -42,8 +42,9 @@ export function readZip(buf: Uint8Array): { names: string[]; read(name: string):
       const e = entries.get(name);
       if (!e) return null;
       if (e.size > MAX_ENTRY_BYTES) throw new ZipError(`« ${name} » est trop volumineux (${Math.round(e.size / 1e6)} Mo)`);
-      if (b.readUInt32LE(e.offset) !== 0x04034b50) throw new ZipError(`« ${name} » : en-tête local corrompu`);
+      if (e.offset + 30 > b.length || b.readUInt32LE(e.offset) !== 0x04034b50) throw new ZipError(`« ${name} » : en-tête local corrompu ou archive tronquée`);
       const start = e.offset + 30 + b.readUInt16LE(e.offset + 26) + b.readUInt16LE(e.offset + 28);
+      if (start + e.packed > b.length) throw new ZipError(`« ${name} » : archive tronquée`);
       const raw = b.subarray(start, start + e.packed);
       if (e.method === 0) return new Uint8Array(raw);
       if (e.method === 8) return new Uint8Array(inflateRawSync(raw, { maxOutputLength: MAX_ENTRY_BYTES }));

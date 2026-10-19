@@ -13,6 +13,42 @@ export function rendererLost(app: AppService, reason: string): void {
   app.emit('runtime', app.runtimeState());
 }
 
+export interface MetricsSample {
+  t: string;
+  hz: number;
+  avgTickMs: number;
+  maxTickMs: number;
+  jitterMs: number;
+  /** Since the previous sample. */
+  overruns: number;
+  errors: number;
+  outputs: { id: string; state: string; fps: number; errors: number }[];
+}
+
+/** One sample every 10 s, 24 h kept: enough to tell, after the show, what happened at 21:14. */
+export const METRICS_EVERY_MS = 10_000;
+const METRICS_MAX = (24 * 3_600_000) / METRICS_EVERY_MS;
+const histories = new WeakMap<AppService, { samples: MetricsSample[]; overruns: number; errors: number; out: Map<string, number> }>();
+
+export function sampleMetrics(app: AppService, now = Date.now()): MetricsSample {
+  let h = histories.get(app);
+  if (!h) histories.set(app, (h = { samples: [], overruns: 0, errors: 0, out: new Map() }));
+  const m = app.engine.metrics();
+  const outputs = app.outputs.status().map((o) => {
+    const errors = o.stats.errors - (h.out.get(o.id) ?? 0);
+    h.out.set(o.id, o.stats.errors);
+    return { id: o.id, state: o.state, fps: o.stats.measuredFps, errors };
+  });
+  const s: MetricsSample = { t: new Date(now).toISOString(), hz: m.measuredHz, avgTickMs: m.avgTickMs, maxTickMs: m.maxTickMs, jitterMs: m.jitterMs, overruns: m.overruns - h.overruns, errors: m.errors - h.errors, outputs };
+  h.overruns = m.overruns;
+  h.errors = m.errors;
+  h.samples.push(s);
+  if (h.samples.length > METRICS_MAX) h.samples.shift();
+  return s;
+}
+
+export const metricsHistory = (app: AppService): MetricsSample[] => histories.get(app)?.samples ?? [];
+
 const engineErrors = new WeakMap<AppService, Map<string, { count: number; at: number }>>();
 
 /** Same engine error at most once per 5 s with an occurrence count (a failing tick repeats 40 times per second). */

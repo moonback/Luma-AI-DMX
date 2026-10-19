@@ -1,11 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, crashReporter, dialog, ipcMain, session, shell } from 'electron';
-import { AppService, UserError } from '../core/app/AppService';
-import { commandSchema, type AppEvents } from '../shared/commands';
+import { AppService } from '../core/app/AppService';
+import type { AppEvents } from '../shared/commands';
 import { BRAND } from '../shared/brand';
 import { createSecretStore } from './secrets';
 import { createUpdater } from './updates';
+import { handleCommand, isTrustedSender as isTrusted } from './ipc';
 import { discardAutosaveSync } from '../core/app/files';
 import type { Logger } from '../core/log/logger';
 import icon from '../../resources/icon.png?asset';
@@ -29,10 +30,7 @@ let quitting = false;
 
 const projectFilters = [{ name: BRAND.productName, extensions: ['json'] }];
 
-function isTrustedSender(url: string): boolean {
-  if (DEV_URL) return url.startsWith(DEV_URL);
-  return url.startsWith('file://');
-}
+const isTrustedSender = (url: string) => isTrusted(url, DEV_URL);
 
 /** Prints self-contained HTML to an A4 landscape PDF in a hidden, script-less window. */
 async function renderPdf(html: string): Promise<Uint8Array> {
@@ -265,18 +263,7 @@ app.whenReady().then(async () => {
 
   service = await createService();
 
-  ipcMain.handle('luma:cmd', async (event, raw: unknown) => {
-    if (!isTrustedSender(event.senderFrame?.url ?? '')) return { ok: false, error: 'Origine non autorisée' };
-    const parsed = commandSchema.safeParse(raw);
-    if (!parsed.success) return { ok: false, error: `Commande invalide : ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ')}` };
-    try {
-      return { ok: true, data: await service!.execute(parsed.data) };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (!(err instanceof UserError)) service!.logger.error('IPC', `${parsed.data.type} : ${message}`);
-      return { ok: false, error: message };
-    }
-  });
+  ipcMain.handle('luma:cmd', (event, raw: unknown) => handleCommand(service!, raw, event.senderFrame?.url ?? '', DEV_URL));
 
   const forward = <K extends keyof AppEvents>(name: K) => (payload: AppEvents[K]) => {
     for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('luma:event', name, payload);

@@ -9,6 +9,7 @@ import type { AppService } from './AppService';
 export async function applyControl(app: AppService): Promise<void> {
   await applyRemote(app);
   const o = app.settings.control.osc;
+  app.osc.ack = o.ack;
   const conf = o.enabled ? `${o.bind}:${o.port}` : '';
   if (conf === app.oscConfig) return;
   app.oscConfig = conf;

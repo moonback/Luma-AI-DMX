@@ -428,3 +428,132 @@ describe('timelines et playbacks', () => {
     await svc.dispose();
   });
 });
+
+describe('phase 2 — robustesse', () => {
+  it('OSC : débit limité par émetteur, paquets invalides résumés, accusé désactivable', async () => {
+    const dgram = await import('node:dgram');
+    const { OscServer, encodeOsc } = await import('../../src/core/control/osc');
+    const osc = new OscServer(() => 1000); // frozen clock: the bucket never refills
+    const errors: string[] = [];
+    osc.on('error', (e) => errors.push(e.message));
+    let handled = 0;
+    osc.on('message', (_m, ack) => { handled++; ack(true); });
+    await osc.start(0, '127.0.0.1');
+    const port = osc.port!;
+    const client = dgram.createSocket('udp4');
+    await new Promise<void>((r) => client.bind(0, '127.0.0.1', () => r()));
+    let acks = 0;
+    client.on('message', () => acks++);
+    const send = (b: Buffer) => new Promise<void>((r) => client.send(b, port, '127.0.0.1', () => r()));
+    for (let i = 0; i < 3; i++) await send(encodeOsc('/luma/go'));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(acks).toBe(3);
+    osc.ack = false;
+    await send(encodeOsc('/luma/go'));
+    for (let i = 0; i < 1000; i++) await send(Buffer.from('pas de l’OSC'));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(acks).toBe(3);
+    expect(handled).toBe(4);
+    expect(errors).toHaveLength(1); // one report, the rest summed up later
+    expect(osc.dropped).toBeGreaterThan(0); // 400-packet burst exhausted
+    client.close();
+    await osc.stop();
+  });
+
+  it('écriture atomique : renommage repris quand Windows tient le fichier', async () => {
+    const fsMod = await import('node:fs');
+    const { writeFileAtomic } = await import('../../src/core/project/store');
+    const real = fsMod.promises.rename.bind(fsMod.promises);
+    let fails = 2;
+    const spy = vi.spyOn(fsMod.promises, 'rename').mockImplementation(async (a, b) => {
+      if (fails-- > 0) throw Object.assign(new Error('busy'), { code: 'EPERM' });
+      return real(a, b);
+    });
+    try {
+      const file = path.join(makeService().dataDir, 'p.json');
+      await writeFileAtomic(file, '{"ok":1}', false);
+      expect(JSON.parse(fsMod.readFileSync(file, 'utf8'))).toEqual({ ok: 1 });
+      expect(spy).toHaveBeenCalledTimes(3);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('ZIP corrompu : erreur ZipError et non RangeError', async () => {
+    const { readZip, writeZip, ZipError } = await import('../../src/core/util/zip');
+    const zip = Buffer.from(writeZip([{ name: 'a.xml', data: new Uint8Array(100) }]));
+    const central = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    zip.writeUInt32LE(0xffffff, central + 42); // local header offset far past the end
+    expect(() => readZip(zip).read('a.xml')).toThrow(ZipError);
+  });
+
+  it('diagnostic : le dossier personnel est masqué', async () => {
+    const os = await import('node:os');
+    const { maskHome } = await import('../../src/core/log/diagnostic');
+    const home = os.homedir();
+    const BS = String.fromCharCode(92); // backslash
+    expect(maskHome(`${home}${BS}Shows${BS}gala.json`)).toBe(`~${BS}Shows${BS}gala.json`);
+    expect(maskHome(`${home.toUpperCase().split(BS).join('/')}/x`)).toBe('~/x');
+  });
+
+  it('commande bloquante journalisée', async () => {
+    const { svc } = makeService();
+    const now = vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(300);
+    try {
+      await svc.execute({ type: 'project.get' });
+    } finally {
+      now.mockRestore();
+    }
+    expect(svc.logger.recent().some((e) => e.source === 'Commandes' && e.message.includes('project.get a bloqué 300 ms'))).toBe(true);
+  });
+
+  it('télécommande : mémoire des limiteurs bornée', async () => {
+    const { RemoteLimiter } = await import('../../src/core/control/remote');
+    let t = 0;
+    const lim = new RemoteLimiter(() => t);
+    for (let i = 0; i < 100_000; i++) { t += 1; lim.takeCommand(`10.${i >> 16}.${(i >> 8) & 255}.${i & 255}`); lim.fail(`f${i}`); }
+    expect(lim.size).toBeLessThanOrEqual(4096);
+  });
+
+  it('CSP de production sans ws://localhost', async () => {
+    const config = (await import('../../electron.vite.config')).default as { renderer: { plugins: { name?: string; transformIndexHtml?: (h: string) => string }[] } };
+    const plugin = config.renderer.plugins.find((p) => p.name === 'luma-csp-prod')!;
+    const fs = await import('node:fs');
+    const html = fs.readFileSync('src/renderer/index.html', 'utf8');
+    expect(html).toContain('ws://localhost');
+    expect(plugin.transformIndexHtml!(html)).not.toContain('ws://localhost');
+  });
+});
+
+describe('OpenRouter : reprise et réparation', () => {
+  const ok = (content: unknown) => new Response(JSON.stringify({ model: 'm/x', choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(content) } }] }));
+  const opts = (fetchImpl: typeof fetch) => ({ apiKey: 'k', model: 'm/x', effort: 'low' as const, timeoutMs: 10_000, fetchImpl, capabilities: { structuredOutputs: true, jsonMode: true, reasoning: false } });
+
+  it('reprend sur 503 avec Retry-After, jamais sur 401', async () => {
+    const { proposeWithOpenRouter } = await import('../../src/core/ai/providers/openrouter');
+    const calls: number[] = [];
+    const flaky = (async () => {
+      calls.push(Date.now());
+      return calls.length === 1 ? new Response('busy', { status: 503, headers: { 'retry-after': '0' } }) : ok({ understanding: 'ok', actions: [] });
+    }) as unknown as typeof fetch;
+    const r = await proposeWithOpenRouter('bleu', 'rig', opts(flaky));
+    expect(calls).toHaveLength(2);
+    expect(r.notices.some((n) => n.includes('2 tentatives'))).toBe(true);
+
+    let n401 = 0;
+    const refused = (async () => { n401++; return new Response('{}', { status: 401 }); }) as unknown as typeof fetch;
+    await expect(proposeWithOpenRouter('bleu', 'rig', opts(refused))).rejects.toThrow(/Clé API refusée/);
+    expect(n401).toBe(1);
+  });
+
+  it('une réponse hors schéma est corrigée par une seconde requête', async () => {
+    const { proposeWithOpenRouter } = await import('../../src/core/ai/providers/openrouter');
+    const bodies: string[] = [];
+    const answers = [{ actions: [] }, { understanding: 'corrigé', actions: [] }]; // first one misses `understanding`
+    const f = (async (_u: string, init: RequestInit) => { bodies.push(String(init.body)); return ok(answers[bodies.length - 1]); }) as unknown as typeof fetch;
+    const r = await proposeWithOpenRouter('bleu', 'rig', opts(f));
+    expect(r.understanding).toBe('corrigé');
+    expect(bodies[1]).toContain('did not match the required JSON schema');
+    expect(r.notices.some((x) => x.includes('seconde requête'))).toBe(true);
+  });
+});

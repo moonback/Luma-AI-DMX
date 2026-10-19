@@ -160,14 +160,46 @@ export function parseModels(json: unknown): OpenRouterModel[] {
 }
 
 export class OpenRouterError extends Error {
-  constructor(message: string, readonly status: number | null, readonly cancelled = false) {
+  /** Delay asked by the provider before retrying (Retry-After), when given. */
+  retryAfterMs?: number;
+  constructor(message: string, readonly status: number | null, readonly cancelled = false, readonly network = false) {
     super(message);
+  }
+}
+
+/** Transient answers worth another attempt (rate limit, gateway errors); a network failure is too. */
+const RETRYABLE = new Set([429, 502, 503, 504]);
+export const MAX_ATTEMPTS = 3;
+
+const pause = (ms: number, cancel?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    cancel?.addEventListener('abort', () => { clearTimeout(t); reject(new OpenRouterError('Demande annulée', null, true)); }, { once: true });
+  });
+
+/**
+ * One API call with at most `MAX_ATTEMPTS` attempts on transient failures (exponential backoff with jitter, or the
+ * provider's Retry-After), all within the same overall `timeoutMs`. A cancelled or refused request is never retried.
+ */
+async function request(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number, cancel?: AbortSignal, stats?: { attempts: number }): Promise<unknown> {
+  const deadline = Date.now() + timeoutMs;
+  for (let attempt = 1; ; attempt++) {
+    if (stats) stats.attempts = attempt;
+    try {
+      return await requestOnce(fetchImpl, url, init, Math.max(1, deadline - Date.now()), cancel);
+    } catch (err) {
+      const e = err as OpenRouterError;
+      const transient = !e.cancelled && (e.status === null ? e.network : RETRYABLE.has(e.status));
+      const wait = e.retryAfterMs ?? 500 * 2 ** (attempt - 1) + Math.random() * 250;
+      if (!transient || attempt >= MAX_ATTEMPTS || Date.now() + wait >= deadline) throw err;
+      await pause(wait, cancel);
+    }
   }
 }
 
 type FetchLike = typeof fetch;
 
-async function request(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number, cancel?: AbortSignal): Promise<unknown> {
+async function requestOnce(fetchImpl: FetchLike, url: string, init: RequestInit, timeoutMs: number, cancel?: AbortSignal): Promise<unknown> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   const onCancel = () => ctrl.abort();
@@ -179,7 +211,7 @@ async function request(fetchImpl: FetchLike, url: string, init: RequestInit, tim
   } catch (err) {
     if (cancel?.aborted) throw new OpenRouterError('Demande annulée', null, true);
     if ((err as Error).name === 'AbortError') throw new OpenRouterError('Délai dépassé', null);
-    throw new OpenRouterError(`Connexion impossible (réseau indisponible ?) : ${(err as Error).message}`, null);
+    throw new OpenRouterError(`Connexion impossible (réseau indisponible ?) : ${(err as Error).message}`, null, false, true);
   } finally {
     clearTimeout(t);
     cancel?.removeEventListener('abort', onCancel);
@@ -194,7 +226,10 @@ async function request(fetchImpl: FetchLike, url: string, init: RequestInit, tim
   if (!res.ok) {
     const msg = (body as { error?: { message?: string } } | null)?.error?.message ?? text.slice(0, 200);
     const hint = res.status === 401 ? 'Clé API refusée' : res.status === 402 ? 'Crédits OpenRouter insuffisants' : res.status === 429 ? 'Limite de débit atteinte, réessayez plus tard' : res.status === 404 ? 'Modèle introuvable' : `Erreur API ${res.status}`;
-    throw new OpenRouterError(`${hint}${msg ? ` : ${msg}` : ''}`, res.status);
+    const e = new OpenRouterError(`${hint}${msg ? ` : ${msg}` : ''}`, res.status);
+    const retryAfter = Number(res.headers.get('retry-after'));
+    if (res.headers.has('retry-after') && Number.isFinite(retryAfter)) e.retryAfterMs = retryAfter * 1000;
+    throw e;
   }
   return body;
 }
@@ -218,6 +253,8 @@ export interface OpenRouterOptions {
   fetchImpl?: FetchLike;
   /** Cancels the request (user « Annuler »); the error is an `OpenRouterError` with `cancelled`. */
   signal?: AbortSignal;
+  /** One corrective request when the answer does not match the schema (default: on). */
+  repair?: boolean;
 }
 
 export interface ProviderResult {
@@ -269,11 +306,12 @@ export async function completeJson(system: string, user: string | unknown[], sch
   else if (caps?.jsonMode) body.response_format = { type: 'json_object' };
   if (caps?.reasoning) body.reasoning = { effort: opts.effort };
 
+  const stats = { attempts: 1 };
   const json = await request(opts.fetchImpl ?? fetch, `${OPENROUTER_URL}/chat/completions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json', 'X-Title': BRAND.productName },
     body: JSON.stringify(body),
-  }, opts.timeoutMs, opts.signal);
+  }, opts.timeoutMs, opts.signal, stats);
 
   const parsed = z
     .object({ model: z.string().optional(), choices: z.array(z.object({ finish_reason: z.string().nullable().optional(), message: z.object({ content: z.string().nullable().optional() }) })).min(1) })
@@ -289,13 +327,23 @@ export async function completeJson(system: string, user: string | unknown[], sch
   const notices: string[] = [];
   if (opts.model === DEFAULT_OPENROUTER_MODEL || model !== opts.model) notices.push(`Réponse servie par ${model}`);
   if (!caps) notices.push('Capacités du modèle inconnues : format JSON demandé par consigne uniquement.');
+  if (stats.attempts > 1) notices.push(`Réponse obtenue après ${stats.attempts} tentatives (incident passager du fournisseur).`);
   // Many models emit null for optional fields: drop them before validating.
   return { json: clean(extractJson(choice.message.content)), model, notices };
 }
 
 export async function proposeWithOpenRouter(prompt: string, rig: string, opts: OpenRouterOptions): Promise<ProviderResult> {
-  const r = await completeJson(`${SYSTEM_PROMPT}\n\nRig description:\n${rig}`, prompt, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
-  const plan = llmPlanSchema.safeParse(r.json);
+  const system = `${SYSTEM_PROMPT}\n\nRig description:\n${rig}`;
+  let r = await completeJson(system, prompt, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
+  let plan = llmPlanSchema.safeParse(r.json);
+  if (!plan.success && opts.repair !== false) {
+    // One second chance with the validation errors: weaker models often miss a single field (costs one more call).
+    const issues = plan.error.issues.slice(0, 5).map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    const retry = `${prompt}\n\nYour previous answer did not match the required JSON schema (${issues}).\nPrevious answer:\n${JSON.stringify(r.json).slice(0, 6000)}\nReturn only the corrected JSON object.`;
+    r = await completeJson(system, retry, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
+    plan = llmPlanSchema.safeParse(r.json);
+    if (plan.success) r.notices.push('Réponse corrigée par une seconde requête (format non conforme la première fois).');
+  }
   if (!plan.success) throw new OpenRouterError(`Réponse IA non conforme au schéma : ${plan.error.issues[0]?.path.join('.')} ${plan.error.issues[0]?.message}`, null);
   return { understanding: plan.data.understanding, actions: plan.data.actions, model: r.model, notices: r.notices };
 }

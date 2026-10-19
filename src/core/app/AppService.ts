@@ -32,7 +32,7 @@ import { endLocate, onLocatePhoto } from './handlers/locate';
 import { configureUpdates } from './handlers/system';
 import { ROUTES, UNCOUNTED, type CommandDomain } from './routes';
 import { applyControl, onOsc, remoteState } from './control';
-import { onEngineError, onFrame, onOutputStatus, rendererLost } from './monitor';
+import { METRICS_EVERY_MS, onEngineError, onFrame, onOutputStatus, rendererLost, sampleMetrics } from './monitor';
 import { autosave } from './files';
 import type { Alert, Command, CommandOf, CommandResults, CommandType, LocatePhoto, Progress, ProjectState, RuntimeState, ValuesFrame } from '../../shared/commands';
 
@@ -201,6 +201,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     await applyControl(this);
     if (this.opts.autoStart !== false) this.engine.start();
     this.timers.push(setInterval(() => void autosave(this), 15000));
+    this.timers.push(setInterval(() => sampleMetrics(this), METRICS_EVERY_MS));
     await this.usage.load();
     this.usage.enabled = this.settings.telemetry.usage;
     this.usage.session();
@@ -360,7 +361,13 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   async handle(cmd: Command): Promise<unknown> {
     if (!UNCOUNTED.has(cmd.type)) this.usage.command(cmd.type);
     const domain = cmd.type.slice(0, cmd.type.indexOf('.')) as CommandDomain;
-    return (ROUTES[domain] as (app: AppService, c: Command) => unknown)(this, cmd);
+    // Handlers run synchronously up to their first await, on the engine's thread: that part is what can cause DMX jitter.
+    const t0 = performance.now();
+    const result = (ROUTES[domain] as (app: AppService, c: Command) => unknown)(this, cmd);
+    const ms = performance.now() - t0;
+    if (ms > 250) this.logger.warn('Commandes', `${cmd.type} a bloqué ${Math.round(ms)} ms`);
+    else if (ms > 50 && !UNCOUNTED.has(cmd.type)) this.logger.debug('Commandes', `${cmd.type} : ${Math.round(ms)} ms bloquants`);
+    return result;
   }
 
   /* ------------------------------------------------------------------ */

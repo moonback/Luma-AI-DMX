@@ -22,7 +22,14 @@ const writes = new Map<string, Promise<void>>();
 async function writeNow(file: string, data: string, keepBackup: boolean): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  await fs.writeFile(tmp, data, 'utf8');
+  // Flushed to disk before the rename: after a power cut the file is the old or the new version, never empty.
+  const h = await fs.open(tmp, 'w');
+  try {
+    await h.writeFile(data, 'utf8');
+    await h.sync();
+  } finally {
+    await h.close();
+  }
   if (keepBackup) {
     try {
       await fs.copyFile(file, `${file}.bak`);
@@ -30,7 +37,21 @@ async function writeNow(file: string, data: string, keepBackup: boolean): Promis
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     }
   }
-  await fs.rename(tmp, file);
+  await renameRetrying(tmp, file);
+}
+
+/** Windows refuses a rename while an antivirus or the indexer holds the file: retry a few times (≈ 1.5 s in all). */
+async function renameRetrying(from: string, to: string, attempts = 5): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      await fs.rename(from, to);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (i >= attempts - 1 || (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES')) throw err;
+      await new Promise((r) => setTimeout(r, 50 * 2 ** i));
+    }
+  }
 }
 
 export async function saveProjectFile(file: string, project: Project): Promise<void> {

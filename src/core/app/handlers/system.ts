@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { writeFileAtomic } from '../../project/store';
 import { applyControl } from '../control';
 import { purgeStorage, storageReport } from '../storage';
+import { metricsHistory } from '../monitor';
 import { DISABLED_UPDATES } from '../updates';
 import type { AppService, CommandIn } from '../AppService';
 
@@ -97,5 +98,6 @@ export function diagnostic(app: AppService) {
     outputs: app.outputs.status().map((o) => ({ ...o })),
     logs: app.logSink?.tail(2000) ?? app.logger.recent(2000).map((e) => JSON.stringify(e)),
     crashDumps: listCrashDumps(app.opts.crashDir),
+    metrics: metricsHistory(app),
   });
 }

@@ -61,10 +61,23 @@ export class RemoteLimiter {
     return f.count >= AUTH_FAILURES_MAX;
   }
 
+  /** Entries idle for a minute are forgotten; a flood from many addresses cannot grow the maps without bound. */
+  private prune(t: number): void {
+    if (this.failures.size + this.buckets.size < 4096) return;
+    for (const [ip, f] of this.failures) if (t - f.since > AUTH_WINDOW_MS) this.failures.delete(ip);
+    for (const [ip, b] of this.buckets) if (t - b.at > 60_000) this.buckets.delete(ip);
+    for (const m of [this.failures, this.buckets] as Map<string, unknown>[]) for (const k of [...m.keys()].slice(0, Math.max(0, m.size - 1024))) m.delete(k);
+  }
+
   fail(ip: string): void {
+    this.prune(this.now());
     const f = this.failures.get(ip);
     if (!f || this.now() - f.since > AUTH_WINDOW_MS) this.failures.set(ip, { count: 1, since: this.now() });
     else f.count++;
+  }
+
+  get size(): number {
+    return this.failures.size + this.buckets.size;
   }
 
   succeed(ip: string): void {
@@ -73,6 +86,7 @@ export class RemoteLimiter {
 
   takeCommand(ip: string): boolean {
     const t = this.now();
+    this.prune(t);
     const b = this.buckets.get(ip) ?? { tokens: CMD_BURST, at: t };
     b.tokens = Math.min(CMD_BURST, b.tokens + ((t - b.at) / 1000) * CMD_RATE_PER_S);
     b.at = t;

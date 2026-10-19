@@ -1,5 +1,15 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+
+/** The user's home folder, any separator and case: diagnostics are sent to the team, the account name is not. */
+const HOME_RE = (() => {
+  const home = os.homedir();
+  if (!home) return null;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return new RegExp(home.split(/[\\/]/u).filter(Boolean).map(esc).join('[\\\\/]'), 'giu');
+})();
+export const maskHome = (s: string): string => (HOME_RE ? s.replace(HOME_RE, '~') : s);
 
 export interface AppInfo {
   name: string;
@@ -19,6 +29,8 @@ export interface Diagnostic {
   outputs: unknown[];
   logs: string[];
   crashDumps: { name: string; size: number; modifiedAt: string }[];
+  /** Engine and output metrics of the last 24 h (one sample every 10 s). */
+  metrics?: unknown[];
 }
 
 const SECRET_KEY = /token|secret|password|passwd|api[-_]?key|apikey|^key$/iu;
@@ -31,7 +43,7 @@ export function redactSecrets<T>(value: T): T {
     if (v && typeof v === 'object') {
       return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, SECRET_KEY.test(k) && x != null ? REDACTED : walk(x)]));
     }
-    if (typeof v === 'string') return v.replace(/([?&](?:t|token)=)[^&\s"]+/giu, `$1${REDACTED}`);
+    if (typeof v === 'string') return maskHome(v.replace(/([?&](?:t|token)=)[^&\s"]+/giu, `$1${REDACTED}`));
     return v;
   };
   return walk(value) as T;

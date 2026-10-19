@@ -25,6 +25,7 @@ import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 import type { PhotoScene } from '../core/ai/sceneFromPhoto';
 import type { StorageReport } from '../core/app/storage';
+import type { HardwareSession } from '../core/app/hardware';
 
 /**
  * Single typed command bus between renderer and main. Every payload is validated with Zod in the main process
@@ -451,7 +452,7 @@ export interface CommandResults {
   'diagnostic.export': { path: string | null };
   'patch.exportSheet': { path: string | null };
   'output.testPattern': Void;
-  'hardware.report': { markdown: string };
+  'hardware.report': { markdown: string; json: ReturnType<HardwareSession['reportJson']> };
   'usage.get': { enabled: boolean; data: UsageData };
   'usage.clear': Void;
   'feedback.export': { path: string | null };

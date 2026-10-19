@@ -58,22 +58,70 @@ export function encodeOsc(address: string, args: OscArg[] = []): Buffer {
   return Buffer.concat(parts);
 }
 
-/** UDP OSC receiver; replies `/luma/ack <address> <ok>` to the sender of each handled message. */
+/** Packets accepted per sender and second (bursts up to twice that); the rest is dropped and counted. */
+export const OSC_RATE_PER_S = 200;
+/** Malformed packets of one sender are reported once, then summed up at most every this many ms. */
+export const OSC_ERROR_REPORT_MS = 10_000;
+
+/** UDP OSC receiver; replies `/luma/ack <address> <ok>` to the sender of each handled message (unless `ack` is off). */
 export class OscServer extends EventEmitter<{ message: [OscMessage, (ok: boolean) => void]; error: [Error] }> {
   private socket: dgram.Socket | null = null;
+  /** Off: nothing is sent back, so spoofed senders cannot use the console as a reflector. */
+  ack = true;
+  /** Packets dropped by the per-sender rate limit since the start. */
+  dropped = 0;
+  private readonly buckets = new Map<string, { tokens: number; at: number }>();
+  private readonly malformed = new Map<string, { count: number; at: number }>();
+
+  constructor(private readonly now: () => number = Date.now) {
+    super();
+  }
+
+  private take(ip: string): boolean {
+    const t = this.now();
+    if (this.buckets.size >= 4096 && !this.buckets.has(ip)) this.buckets.clear();
+    const b = this.buckets.get(ip) ?? { tokens: OSC_RATE_PER_S * 2, at: t };
+    b.tokens = Math.min(OSC_RATE_PER_S * 2, b.tokens + ((t - b.at) / 1000) * OSC_RATE_PER_S);
+    b.at = t;
+    this.buckets.set(ip, b);
+    if (b.tokens < 1) return false;
+    b.tokens -= 1;
+    return true;
+  }
+
+  private reportMalformed(ip: string, reason: string): void {
+    const t = this.now();
+    const m = this.malformed.get(ip);
+    if (!m) {
+      if (this.malformed.size >= 4096) this.malformed.clear();
+      this.malformed.set(ip, { count: 0, at: t });
+      this.emit('error', new Error(`Paquet OSC ignoré (${ip}) : ${reason}`));
+      return;
+    }
+    m.count++;
+    if (t - m.at >= OSC_ERROR_REPORT_MS) {
+      this.emit('error', new Error(`${m.count} paquet(s) OSC invalides de ${ip} ignorés en ${Math.round((t - m.at) / 1000)} s (dernier : ${reason})`));
+      m.count = 0;
+      m.at = t;
+    }
+  }
 
   async start(port: number, address: string): Promise<void> {
     await this.stop();
     const s = dgram.createSocket('udp4');
     s.on('message', (buf, rinfo) => {
+      if (!this.take(rinfo.address)) {
+        this.dropped++;
+        return;
+      }
       let msgs: OscMessage[];
       try {
         msgs = parseOsc(buf);
       } catch (err) {
-        this.emit('error', new Error(`Paquet OSC ignoré (${rinfo.address}) : ${(err as Error).message}`));
+        this.reportMalformed(rinfo.address, (err as Error).message);
         return;
       }
-      for (const m of msgs) this.emit('message', m, (ok) => s.send(encodeOsc('/luma/ack', [m.address, ok]), rinfo.port, rinfo.address));
+      for (const m of msgs) this.emit('message', m, (ok) => { if (this.ack) s.send(encodeOsc('/luma/ack', [m.address, ok]), rinfo.port, rinfo.address); });
     });
     s.on('error', (err) => this.emit('error', err));
     await new Promise<void>((resolve, reject) => {

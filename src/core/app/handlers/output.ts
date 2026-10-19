@@ -100,7 +100,10 @@ export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'o
       return ok;
     }
     case 'hardware.report':
-      return { markdown: app.hardware.report({ app: app.opts.appInfo ?? { name: 'Luma AI DMX', version: 'dev', platform: process.platform, arch: process.arch, versions: {} }, metrics: e.metrics(), outputs: app.outputs.status(), testPattern: e.testPattern }) };
+    {
+      const input = { app: app.opts.appInfo ?? { name: 'Luma AI DMX', version: 'dev', platform: process.platform, arch: process.arch, versions: {} }, metrics: e.metrics(), outputs: app.outputs.status(), testPattern: e.testPattern };
+      return { markdown: app.hardware.report(input), json: app.hardware.reportJson(input) };
+    }
   }
 }
 

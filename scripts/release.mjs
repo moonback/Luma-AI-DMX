@@ -6,6 +6,9 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const REPO = 'moonback/Luma-AI-DMX';
 const dryRun = process.argv.includes('--dry-run');
+// Pre-releases only: an unsigned installer, or no E2E run (both refused for a stable release, which auto-updates users).
+const allowUnsigned = process.argv.includes('--allow-unsigned');
+const skipE2e = process.argv.includes('--skip-e2e');
 const run = (cmd) => execSync(cmd, { stdio: 'inherit' });
 const out = (cmd) => execSync(cmd, { encoding: 'utf8' }).trim();
 const fail = (msg) => {
@@ -28,14 +31,24 @@ try {
 if (released) fail(`La release ${tag} existe déjà : passe "version" de package.json à la suivante.`);
 
 console.log(`\n▶ Release ${tag}${prerelease ? ' (pré-release, canal bêta)' : ''}\n`);
+if (!prerelease && (allowUnsigned || skipE2e)) fail('--allow-unsigned et --skip-e2e sont réservés aux pré-releases.');
+const signed = !!process.env.CSC_LINK;
+if (!signed && !allowUnsigned) fail('Signature de code requise : définissez CSC_LINK et CSC_KEY_PASSWORD (ou --allow-unsigned pour une pré-release).');
+
 run('npm run typecheck');
 run('npm run lint');
-run('npm test');
+run('npm run test:coverage');
+if (!skipE2e) run('npm run test:e2e');
 run('npm run package');
 
 // GitHub replaces spaces in asset names, so artifactName in electron-builder.yml must stay space-free.
 const updateFile = prerelease ? 'beta.yml' : 'latest.yml';
 const files = [`Luma-AI-DMX-Setup-${version}.exe`, `Luma-AI-DMX-Setup-${version}.exe.blockmap`, updateFile];
+if (signed) {
+  // The updater installs this binary on every machine: check the Authenticode signature really is there and valid.
+  const status = out(`powershell -NoProfile -Command "(Get-AuthenticodeSignature 'release/${files[0]}').Status"`);
+  if (status !== 'Valid') fail(`Signature de l’installeur invalide (${status}).`);
+}
 for (const f of files) if (!existsSync(`release/${f}`)) fail(`Fichier manquant : release/${f}`);
 // The update file must describe this build, or the updater downloads a mismatching installer.
 if (!readFileSync(`release/${updateFile}`, 'utf8').includes(`version: ${version}`)) fail(`${updateFile} ne correspond pas à ${version}.`);

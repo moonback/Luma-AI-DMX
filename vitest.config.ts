@@ -14,7 +14,8 @@ export default defineConfig({
     hookTimeout: 60_000,
     coverage: {
       provider: 'v8',
-      include: ['src/core/**'],
+      // src/main: only the Electron-free modules (the trust boundary and the secret store); index/updates need Electron.
+      include: ['src/core/**', 'src/main/ipc.ts', 'src/main/secrets.ts'],
       reporter: ['text-summary', 'html', 'json-summary'],
       reportsDirectory: 'coverage',
       // Ratchet: a little under the measured level (lines 90 %, branches 74 % on 18/10/2026).

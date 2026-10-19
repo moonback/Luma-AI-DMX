@@ -3,12 +3,15 @@ import path from 'node:path';
 import { safeStorage } from 'electron';
 import type { SecretStore } from '../core/app/AppService';
 
+/** Injected in tests; Electron’s safeStorage otherwise. */
+type Crypto = Pick<typeof safeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>;
+
 /**
  * Secrets encrypted with the OS keychain via Electron safeStorage (DPAPI on Windows, Keychain on macOS,
  * libsecret on Linux). Never written in clear text: if encryption is unavailable, storing is refused.
  * The encrypted file is read once and kept in memory: `has` (polled by the runtime state) never touches the disk.
  */
-export function createSecretStore(dir: string, onWarn: (message: string) => void = () => undefined): SecretStore {
+export function createSecretStore(dir: string, onWarn: (message: string) => void = () => undefined, crypto: Crypto = safeStorage): SecretStore {
   const file = path.join(dir, 'secrets.json');
   let cache: Record<string, string> | null = null;
   const read = (): Record<string, string> => {
@@ -33,9 +36,9 @@ export function createSecretStore(dir: string, onWarn: (message: string) => void
     has: (name) => !!read()[name],
     get(name) {
       const enc = read()[name];
-      if (!enc || !safeStorage.isEncryptionAvailable()) return null;
+      if (!enc || !crypto.isEncryptionAvailable()) return null;
       try {
-        return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+        return crypto.decryptString(Buffer.from(enc, 'base64'));
       } catch {
         return null;
       }
@@ -44,8 +47,8 @@ export function createSecretStore(dir: string, onWarn: (message: string) => void
       const all = { ...read() };
       if (value === null) delete all[name];
       else {
-        if (!safeStorage.isEncryptionAvailable()) throw new Error('Chiffrement système indisponible : la clé n’a pas été enregistrée');
-        all[name] = safeStorage.encryptString(value).toString('base64');
+        if (!crypto.isEncryptionAvailable()) throw new Error('Chiffrement système indisponible : la clé n’a pas été enregistrée');
+        all[name] = crypto.encryptString(value).toString('base64');
       }
       writeFileSync(`${file}.tmp`, JSON.stringify(all), { mode: 0o600 });
       renameSync(`${file}.tmp`, file);

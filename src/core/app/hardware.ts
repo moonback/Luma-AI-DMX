@@ -43,6 +43,32 @@ export class HardwareSession {
     if (p) this.patterns.push({ kind: p.kind, universes: p.universes, at: new Date().toISOString() });
   }
 
+  /** Same session as `report`, structured for archiving and comparing campaigns (one file per interface tested). */
+  reportJson(input: { app: AppInfo; metrics: EngineMetrics; outputs: OutputStatus[]; testPattern: TestPattern | null }, now = Date.now()) {
+    const hours = (now - this.startedAt) / 3_600_000;
+    const real = input.outputs.filter((o) => o.real);
+    return {
+      format: 'luma-hardware-session' as const,
+      version: 1,
+      at: new Date(now).toISOString(),
+      app: input.app,
+      hours: Math.round(hours * 100) / 100,
+      engine: input.metrics,
+      patterns: this.patterns,
+      activePattern: input.testPattern?.kind ?? null,
+      outputs: input.outputs.map((o) => {
+        const rc = this.reconnects.filter((r) => r.outputId === o.id);
+        return { name: o.name, kind: o.kind, real: o.real, state: o.state, frames: o.stats.framesSent, packets: o.stats.packetsSent, errors: o.stats.errors, fps: o.stats.measuredFps, reconnects: rc.length, maxReconnectS: rc.length ? Math.max(...rc.map((r) => r.seconds)) : null };
+      }),
+      criteria: {
+        noSendErrors: real.length > 0 && real.every((o) => o.stats.errors === 0),
+        eightHours: hours >= 8,
+        reconnectUnderLimit: this.reconnects.length > 0 && this.reconnects.every((r) => r.seconds <= RECONNECT_MAX_S),
+        testerChecked: null as boolean | null, // DMX tester: checked by hand
+      },
+    };
+  }
+
   report(input: { app: AppInfo; metrics: EngineMetrics; outputs: OutputStatus[]; testPattern: TestPattern | null }, now = Date.now()): string {
     const hours = (now - this.startedAt) / 3_600_000;
     const m = input.metrics;
