@@ -538,3 +538,23 @@ export async function planSectionWithOpenRouter(
   if (fixed.length) notices.push(`Section IA corrigée (champs repris des règles locales) : ${fixed.join(', ')}`);
   return { section: { ...section, locked: req.current.locked, note: req.instruction.slice(0, 200) }, model: r.model, notices };
 }
+
+const SUGGEST_JSON_SCHEMA = z.toJSONSchema(z.object({ suggestions: z.array(z.string().max(120)).max(5) }));
+const SUGGEST_SYSTEM = `You are the lighting designer assistant of a DMX console. For one song, you suggest short intention phrases the operator can add to the show intention.
+You only see the song's symbolic structure (sections, measured energy, brightness, bass share, density, key), never the audio.
+Answer with ONE JSON object only (no prose, no code fence) matching this JSON Schema:
+${JSON.stringify(SUGGEST_JSON_SCHEMA)}
+Rules:
+- 3 to 5 suggestions, in French, 2 to 6 words each, written with the vocabulary of these examples: "couplets sobres", "refrains explosifs", "couleurs froides", "couleurs chaudes", "strobe sur les drops", "lumières sur les basses", "beaucoup de mouvement", "ambiance calme".
+- Each suggestion must follow from THIS song's measured structure (energy contrast between verses and peaks, repeats, bass, density, brightness, key), not a generic style.
+- Do not repeat what the operator already wrote, and do not ask for strobe unless the song has a drop.`;
+
+/** Intention suggestions for one song, from its structure only. Throws when the answer has no usable suggestion. */
+export async function suggestIntentsWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions): Promise<{ suggestions: string[]; model: string; notices: string[] }> {
+  const r = await completeJson(SUGGEST_SYSTEM, `Operator intent already written: ${intent || '(none)'}\n\n${structure}`, 'intent_suggestions', SUGGEST_JSON_SCHEMA, opts);
+  const parsed = z.object({ suggestions: z.array(z.string()) }).safeParse(r.json);
+  if (!parsed.success) throw new OpenRouterError('Suggestions IA non conformes', null);
+  const suggestions = [...new Set(parsed.data.suggestions.map((s) => s.trim().slice(0, 120)).filter(Boolean))].slice(0, 5);
+  if (!suggestions.length) throw new OpenRouterError('Aucune suggestion IA exploitable', null);
+  return { suggestions, model: r.model, notices: r.notices };
+}

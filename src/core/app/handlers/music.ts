@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { showSectionPlanSchema, type Mood, type Project, type MusicTrack, type ShowPlan, type ShowSectionPlan } from '../../model/schemas';
 import { adjustSection, compileShow, planLocally, rigInfo, withMood, type RigInfo } from '../../music/songToShow';
 import { KEY_NAMES, SECTION_NAMES } from '../../music/analyze';
-import { DEFAULT_OPENROUTER_MODEL, planSectionWithOpenRouter, planShowWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
+import { suggestIntents } from '../../music/suggest';
+import { DEFAULT_OPENROUTER_MODEL, planSectionWithOpenRouter, planShowWithOpenRouter, suggestIntentsWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
 import { ResponseCache } from '../../ai/responseCache';
 import { guardBudget, openRouterModels, recordUsage } from './ai';
 import { OPENROUTER_KEY, UserError } from '../shared';
@@ -84,7 +85,22 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       plan.sections[cmd.index] = section;
       return applyShow(app, t, plan, notices);
     }
+    case 'music.suggestIntents':
+      return suggestIntentsFor(app, track(app, cmd.trackId), cmd.intent.trim());
   }
+}
+
+const cachedSuggestSchema = z.object({ suggestions: z.array(z.string().max(120)).max(5), model: z.string().max(150), notices: z.array(z.string()) });
+
+/** Intention suggestions for a track: with OpenRouter when configured (cached, validated), else from its measured sound. */
+async function suggestIntentsFor(app: AppService, t: MusicTrack, intent: string): Promise<{ suggestions: string[]; provider: 'local' | 'openrouter'; model: string | null; notices: string[] }> {
+  const notices: string[] = [];
+  const structure = songStructure(t, rigInfo(app.index, app.settings.ai.allowStrobe));
+  const r = await askOpenRouter(app, { kind: 'suggest', hash: t.hash, intent, structure }, cachedSuggestSchema, notices,
+    (o) => suggestIntentsWithOpenRouter(intent, structure, o));
+  // OpenRouter enabled but unavailable (no key, error): no local suggestions stand in for the AI ones (notices say why).
+  if (!r) return { suggestions: app.settings.ai.provider === 'openrouter' ? [] : suggestIntents(t.analysis), provider: 'local', model: null, notices };
+  return { suggestions: r.suggestions, provider: 'openrouter', model: r.model, notices: r.notices };
 }
 
 const audioFile = (app: AppService, hash: string) => path.join(app.opts.dataDir, 'music', hash);

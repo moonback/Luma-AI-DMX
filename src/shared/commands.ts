@@ -212,6 +212,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('music.regenerateSection'), trackId: idSchema, index: z.number().int().min(0).max(300), instruction: z.string().max(200).default('') }),
   /** Back to the plan before the last change (calling it again swaps back). */
   z.object({ type: z.literal('music.restorePrevious'), trackId: idSchema }),
+  /** Intention suggestions for a track: with OpenRouter when configured, else from the measured sound. */
+  z.object({ type: z.literal('music.suggestIntents'), trackId: idSchema, intent: z.string().max(500).default('') }),
   empty('timeline.stop'),
   z.object({ type: z.literal('timeline.seek'), seconds: z.number().min(0).max(86400) }),
   // Engine
@@ -437,6 +439,7 @@ export interface CommandResults {
   'music.regenerateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.updateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.restorePrevious': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
+  'music.suggestIntents': { suggestions: string[]; provider: 'local' | 'openrouter'; model: string | null; notices: string[] };
   'timeline.stop': Void;
   'timeline.seek': Void;
   'engine.master': Void;

@@ -6,6 +6,7 @@ import { act } from '../api';
 import { Empty, PageHead, Panel } from '../components/ui';
 import { musicPlayer } from '../musicPlayer';
 import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
+import { suggestIntents } from '../../core/music/suggest';
 import { SECTION_LABELS, type Mood, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
 import { BEAM_NAMES, EFFECT_NAMES, EVENT_STYLE, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
 import { SectionEditor } from './music/SectionEditor';
@@ -134,6 +135,13 @@ export function MusicPage() {
   const { playing, pos } = usePlayback();
   const track = tracks.find((t) => t.id === trackId) ?? tracks[0] ?? null;
   const nowIdx = track && playing?.trackId === track.id ? track.analysis.sections.findIndex((s) => pos >= s.start && pos < s.end) : -1;
+  const [aiSuggestions, setAiSuggestions] = useState<{ trackId: string; items: string[]; provider: 'local' | 'openrouter' } | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  // With OpenRouter enabled, only the AI suggestions are shown; the local ones appear only without it.
+  const aiOn = useStore((s) => s.runtime?.ai.provider === 'openrouter');
+  const localSuggestions = track && !aiOn ? suggestIntents(track.analysis).filter((s) => !intent.includes(s)) : [];
+  const aiList = aiSuggestions && aiSuggestions.trackId === track?.id ? aiSuggestions.items.filter((s) => !intent.includes(s)) : [];
+  const suggestions = aiOn ? aiList : localSuggestions;
   const planIntent = track?.plan?.intent ?? '';
   useEffect(() => { if (planIntent) setIntent(planIntent); }, [track?.id, planIntent]);
   const planMood = track?.plan?.mood;
@@ -169,6 +177,24 @@ export function MusicPage() {
     if (r && intent.trim()) setHistory(remember(intent.trim()));
     if (r) setNotices(r.notices);
   };
+  const requestSuggestions = async (trackId: string, text: string) => {
+    setSuggesting(true);
+    const r = await act({ type: 'music.suggestIntents', trackId, intent: text });
+    setSuggesting(false);
+    if (r) {
+      setAiSuggestions({ trackId, items: r.provider === 'openrouter' ? r.suggestions : [], provider: r.provider });
+      setNotices(r.notices);
+    }
+  };
+  // Automatic suggestions when the setting is on: as soon as a track is analysed or opened on this page.
+  useEffect(() => {
+    if (!track) return;
+    let cancelled = false;
+    void act({ type: 'settings.get' }).then((s) => {
+      if (!cancelled && s?.ai.autoSuggestIntents && s.ai.provider === 'openrouter') void requestSuggestions(track.id, track.plan?.intent ?? '');
+    });
+    return () => { cancelled = true; };
+  }, [track?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per track, not on every render
   const restore = async () => {
     if (!track) return;
     setBusy(true);
@@ -245,6 +271,17 @@ export function MusicPage() {
           <Panel title={t('music.intent')} actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : t('music.localRules')} · {t('music.variantN', { n: track.plan.variant })}</span> : null}>
             <div className="col">
               <textarea className="input" rows={2} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
+              {(aiOn || suggestions.length > 0) && (
+              <div className="chips" data-testid="music-intent-suggestions">
+                <span className="muted small">{t('music.suggestions')}</span>
+                {suggestions.map((text) => <button key={text} className="chip" title={t('music.suggestions.hint')} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{text}</button>)}
+                {aiOn && (
+                  <button className="chip" data-testid="music-intent-suggest-ai" disabled={suggesting || busy} title={t('music.suggestions.aiHint')} onClick={() => requestSuggestions(track.id, intent)}>
+                    {suggesting ? t('music.suggestions.aiBusy') : t('music.suggestions.ai')}
+                  </button>
+                )}
+              </div>
+              )}
               <div className="chips" data-testid="music-intent-presets">
                 {INTENT_PRESETS.map(([key, text]) => <button key={key} className="chip" title={text} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{t(`music.preset.${key}`)}</button>)}
                 {history.length > 0 && (

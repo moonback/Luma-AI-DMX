@@ -323,6 +323,8 @@ export const en: Record<MessageKey, string> = {
   'settings.ai.fallback': 'Fall back to local mode when the provider is unavailable',
   'settings.ai.strobeTitle': 'Photosensitivity protection',
   'settings.ai.allowStrobe': 'Allow the AI to propose strobe effects',
+  'settings.ai.autoSuggest': 'Automatic intent suggestions after audio analysis',
+  'settings.ai.autoSuggestHint': 'Music: proposes intents as soon as a track is analysed or opened (OpenRouter if configured, else local rules)',
   'settings.ai.effort': 'Reasoning effort',
   'settings.ai.effortHint': 'Sent only to models that support reasoning',
   'settings.ai.effort.low': 'Low (fast)',

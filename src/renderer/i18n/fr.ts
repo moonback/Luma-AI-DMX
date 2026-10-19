@@ -325,6 +325,8 @@ export const fr = {
   'settings.ai.fallback': 'Repli sur le mode local si le fournisseur est indisponible',
   'settings.ai.strobeTitle': 'Protection photosensible',
   'settings.ai.allowStrobe': 'Autoriser l’IA à proposer des effets strobe',
+  'settings.ai.autoSuggest': 'Suggestions d’intention automatiques après l’analyse audio',
+  'settings.ai.autoSuggestHint': 'Musique : propose des intentions dès qu’un morceau est analysé ou ouvert (OpenRouter si configuré, sinon règles locales)',
   'settings.ai.effort': 'Effort de raisonnement',
   'settings.ai.effortHint': 'Transmis uniquement aux modèles qui prennent en charge le raisonnement',
   'settings.ai.effort.low': 'Faible (rapide)',
