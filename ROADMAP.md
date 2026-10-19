@@ -6,7 +6,7 @@
 
 Ce document fixe l’ordre et le contenu des travaux à mener sur **Luma AI DMX**, logiciel de bureau Electron de contrôle d’éclairage DMX assisté par IA. Il repose exclusivement sur l’état réel du code : ce qui fonctionne et est vérifié, ce qui est fragile, ce qui est présent mais inaccessible, et ce qui manque. Chaque élément est rédigé pour qu’un développeur, ou un agent de programmation, puisse le prendre, relire ses preuves, et commencer sans deviner l’intention.
 
-**Avancement au 19/10/2026** : 30 élément(s) terminé(s), 3 partiel(s), 51 à faire. Le statut affiché est le statut actuel ; celui constaté à l’audit est rappelé dans chaque fiche modifiée.
+**Avancement au 19/10/2026** : 46 élément(s) terminé(s), 6 partiel(s), 32 à faire. Le statut affiché est le statut actuel ; celui constaté à l’audit est rappelé dans chaque fiche modifiée.
 
 Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identifiants sont stables : un élément terminé garde son numéro, et un élément abandonné est marqué comme tel au lieu d’être renuméroté.
 
@@ -79,9 +79,10 @@ Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identi
 |---|---|
 | npx tsc -p tsconfig.json --noEmit | Succès. |
 | npm run lint (eslint, taille des fichiers, i18n) | Succès ; textes en dur : 782 (inchangé). |
-| npx vitest run | Succès : 38 fichiers, 347 tests (26 nouveaux tests de régression et de composant). |
-| npx vitest run --coverage | Succès 4 fois sur 5 ; `src/core` : 92,4 % des lignes. Un échec intermittent (test non identifié dans la sortie filtrée) lors d’une passe, non reproduit sur 3 passes suivantes. |
-| npx vitest run --config vitest.perf.config.ts | Succès 2 fois sur 2 (3 tests). |
+| npx vitest run | Succès : 40 fichiers, 379 tests ; 1 fichier ignoré (banc OpenRouter rejoué, sans enregistrement). |
+| npx vitest run --coverage | Succès ; src/core + src/main/ipc.ts + src/main/secrets.ts : 94,5 % des lignes, 81,2 % des branches. Un échec intermittent non identifié observé une fois sur sept passes depuis le début. |
+| npx vitest run --config vitest.perf.config.ts | Succès 3 fois sur 3 depuis LUMA-004 et LUMA-005. |
+| node --check scripts/release.mjs | Syntaxe valide ; script non exécuté. |
 | npm run test:e2e | Non exécuté (build et fenêtres Electron sur le poste). |
 
 ## 4. Résumé de l’état technique réel de Luma AI DMX
@@ -224,11 +225,11 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 | Statut | Éléments |
 |---|---|
-| IMPLÉMENTÉ ET VÉRIFIÉ | 25 |
-| IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 14 |
-| PARTIELLEMENT IMPLÉMENTÉ | 29 |
+| IMPLÉMENTÉ ET VÉRIFIÉ | 41 |
+| IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 9 |
+| PARTIELLEMENT IMPLÉMENTÉ | 22 |
 | PRÉSENT MAIS NON RACCORDÉ | 0 |
-| ABSENT | 15 |
+| ABSENT | 11 |
 | À INVESTIGUER | 1 |
 
 **Répartition par nature de travaux**
@@ -313,29 +314,29 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 | ID | Titre | Priorité | Statut | Effort | Avancement |
 |---|---|---|---|---|---|
-| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M | À faire |
-| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | ABSENT | M | À faire |
-| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | L | À faire |
-| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
-| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
+| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
+| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
+| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | L | 🟡 Partiel |
+| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
 | [LUMA-035](#luma-035) | Étendre la couverture et les tests de composants au code de rendu | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | L | À faire |
-| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M | À faire |
-| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
-| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | ABSENT | S | À faire |
-| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
-| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
-| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | PARTIELLEMENT IMPLÉMENTÉ | S | 🟡 Partiel |
+| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | M | 🟡 Partiel |
+| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | M | 🟡 Partiel |
+| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
 | [LUMA-045](#luma-045) | Récupérer partiellement un fichier de paramètres invalide au lieu de tout réinitialiser | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
-| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
-| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | À faire |
-| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | ABSENT | S | À faire |
-| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
-| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
-| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | À faire |
-| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | ABSENT | XS | À faire |
-| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | XS | ✅ Terminé |
-| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
-| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
+| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | S | ✅ Terminé |
+| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | S | ✅ Terminé |
+| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | M | 🟡 Partiel |
+| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
 
 **Dépendances principales.** Cette phase s’appuie sur [LUMA-009](#luma-009), [LUMA-002](#luma-002), [LUMA-018](#luma-018), [LUMA-008](#luma-008), [LUMA-007](#luma-007), [LUMA-021](#luma-021), [LUMA-005](#luma-005) (phases antérieures). La phase suppose la CI de la phase 0 (LUMA-008) et la fiabilité de la couverture (LUMA-009).
 
@@ -1926,13 +1927,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines)
 - **Catégorie** : Tests
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : IMPLÉMENTÉ, VALIDATION INSUFFISANTE)
 
-**Constat technique.** Couverture mesurée lors de l’audit (V8, `src/core`) : `src/core/app/handlers/programming.ts` est couvert à 28,9 % des lignes, 20,5 % des branches et 16,7 % des fonctions. C’est le handler qui contient le plus de règles d’intégrité (nettoyage des références à la suppression, validation des références de cues et timelines). Le défaut LUMA-015 se trouve précisément dans ce code non testé.
+**Réalisation (19/10/2026).** Tests de chaque commande du domaine (groupes, palettes, programmeur, scènes, listes, effets, timelines, historique) : `tests/unit/coverage-phase2.test.ts`. `programming.ts` : 100 % des lignes, 88,9 % des branches.
+
+**Constat technique (à l’audit).** Couverture mesurée lors de l’audit (V8, `src/core`) : `src/core/app/handlers/programming.ts` est couvert à 28,9 % des lignes, 20,5 % des branches et 16,7 % des fonctions. C’est le handler qui contient le plus de règles d’intégrité (nettoyage des références à la suppression, validation des références de cues et timelines). Le défaut LUMA-015 se trouve précisément dans ce code non testé.
 
 **Preuves dans le code.**
 
@@ -1972,13 +1975,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture
 - **Catégorie** : Tests / sécurité
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** La couverture est limitée à `src/core/**`. Les trois fichiers du processus principal (`index.ts`, `secrets.ts`, `updates.ts`), qui portent la frontière de confiance (vérification de l’origine IPC, validation Zod, gestion des erreurs `UserError`) et le chiffrement de la clé API, n’ont aucun test unitaire. Seul l’E2E vérifie l’absence de Node dans le rendu.
+**Réalisation (19/10/2026).** Garde d’origine et traitement des commandes extraits dans `src/main/ipc.ts` ; `createSecretStore` reçoit le chiffrement injecté. Tests : `tests/unit/main-process.test.ts` ; `ipc.ts` et `secrets.ts` inclus dans la couverture (100 % et 92,6 % des lignes). `index.ts` et `updates.ts` restent sans test unitaire (dépendent d’Electron).
+
+**Constat technique (à l’audit).** La couverture est limitée à `src/core/**`. Les trois fichiers du processus principal (`index.ts`, `secrets.ts`, `updates.ts`), qui portent la frontière de confiance (vérification de l’origine IPC, validation Zod, gestion des erreurs `UserError`) et le chiffrement de la clé API, n’ont aucun test unitaire. Seul l’E2E vérifie l’absence de Node dans le rendu.
 
 **Preuves dans le code.**
 
@@ -2024,9 +2029,11 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P1
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : 🟡 Partiel
 
-**Constat technique.** Le code déclare lui-même que les implémentations Enttec Pro, Open DMX et RDM n’ont pas été vérifiées sur du matériel réel. L’outillage de campagne existe : mire `signature`, rapport `hardware.report` avec critères (8 h, reconnexion en moins de 10 s, zéro erreur), et l’E2E « campagne matériel » en simulation. Aucun résultat de campagne réelle n’est enregistré dans un artefact non Markdown du dépôt.
+**Réalisation (19/10/2026).** Export structuré `hardware.report` → `json` (`HardwareSession.reportJson`) testé. La campagne sur matériel réel et l’indication « validée / expérimentale » dans l’interface restent à faire.
+
+**Constat technique (à l’audit).** Le code déclare lui-même que les implémentations Enttec Pro, Open DMX et RDM n’ont pas été vérifiées sur du matériel réel. L’outillage de campagne existe : mire `signature`, rapport `hardware.report` avec critères (8 h, reconnexion en moins de 10 s, zéro erreur), et l’E2E « campagne matériel » en simulation. Aucun résultat de campagne réelle n’est enregistré dans un artefact non Markdown du dépôt.
 
 **Preuves dans le code.**
 
@@ -2068,13 +2075,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Tester l’autosauvegarde et la liste des projets récents
 - **Catégorie** : Tests / persistance
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : IMPLÉMENTÉ, VALIDATION INSUFFISANTE)
 
-**Constat technique.** `src/core/app/files.ts` est couvert à 36,4 % des lignes et 0 % des branches. La logique d’autosauvegarde (intervalle, désactivation à 0, `force`, erreur d’écriture journalisée) et la liste des récents (déduplication, limite de 10) ne sont pas vérifiées.
+**Réalisation (19/10/2026).** Échéance, désactivation, forçage, échec d’écriture, liste des récents : `tests/unit/coverage-phase2.test.ts`. `files.ts` : 100 % des branches.
+
+**Constat technique (à l’audit).** `src/core/app/files.ts` est couvert à 36,4 % des lignes et 0 % des branches. La logique d’autosauvegarde (intervalle, désactivation à 0, `force`, erreur d’écriture journalisée) et la liste des récents (déduplication, limite de 10) ne sont pas vérifiées.
 
 **Preuves dans le code.**
 
@@ -2112,13 +2121,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé)
 - **Catégorie** : Tests / audio réactif
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : IMPLÉMENTÉ, VALIDATION INSUFFISANTE)
 
-**Constat technique.** `src/core/audio/reactive.ts` est couvert à 53,9 % des lignes et 43,6 % des branches. Les suiveurs de basses et de brillance, le mouvement selon les attaques et la planification du GO sur drop prédit (conversion d’horloge, retrait de prédiction) sont peu ou pas testés.
+**Réalisation (19/10/2026).** Flash, couleur, suiveurs, BPM, GO sur montée d’énergie, GO sur drop (planification, tir unique, retrait), relâche : `tests/unit/coverage-phase2.test.ts`. `reactive.ts` : 100 % des lignes.
+
+**Constat technique (à l’audit).** `src/core/audio/reactive.ts` est couvert à 53,9 % des lignes et 43,6 % des branches. Les suiveurs de basses et de brillance, le mouvement selon les attaques et la planification du GO sur drop prédit (conversion d’horloge, retrait de prédiction) sont peu ou pas testés.
 
 **Preuves dans le code.**
 
@@ -2208,9 +2219,11 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : 🟡 Partiel
 
-**Constat technique.** `OutputAdapter` gère les états `connecting`, `ready`, `error` et `disarmed`, avec une reconnexion à backoff exponentiel plafonné à 10 s, et `OutputManager` gère l’armement. Couverture des branches : 59,1 % pour `types.ts` et 65,3 % pour `OutputManager.ts`. Les courses (fermeture pendant le minuteur de reconnexion, `configure` d’une sortie armée en erreur) ne sont pas testées.
+**Réalisation (19/10/2026).** Transitions avec backoff et propriété « jamais ouverte sans arm() » sur 200 séquences aléatoires : `tests/unit/coverage-phase2.test.ts`. Branches d’`OutputManager.ts` à 73,6 % (objectif 85 %).
+
+**Constat technique (à l’audit).** `OutputAdapter` gère les états `connecting`, `ready`, `error` et `disarmed`, avec une reconnexion à backoff exponentiel plafonné à 10 s, et `OutputManager` gère l’armement. Couverture des branches : 59,1 % pour `types.ts` et 65,3 % pour `OutputManager.ts`. Les courses (fermeture pendant le minuteur de reconnexion, `configure` d’une sortie armée en erreur) ne sont pas testées.
 
 **Preuves dans le code.**
 
@@ -2250,13 +2263,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé
 - **Catégorie** : Tests / sorties USB
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : IMPLÉMENTÉ, VALIDATION INSUFFISANTE)
 
-**Constat technique.** `EnttecProOutput` importe directement `serialport` dans `doOpen`, sans fabrique injectable. Il est couvert à 42,1 % des lignes et 21,4 % des fonctions. `OpenDmxOutput` accepte déjà une `PortFactory` (86 % des lignes). Le traitement « trame ignorée si occupé », la déconnexion et la fermeture ne sont pas vérifiés.
+**Réalisation (19/10/2026).** `EnttecProOutput` accepte une `SerialFactory` ; compteur `dropped`. Tests de cadrage, trame abandonnée, erreurs d’écriture, déconnexion, ouverture impossible : `tests/unit/coverage-phase2.test.ts`.
+
+**Constat technique (à l’audit).** `EnttecProOutput` importe directement `serialport` dans `doOpen`, sans fabrique injectable. Il est couvert à 42,1 % des lignes et 21,4 % des fonctions. `OpenDmxOutput` accepte déjà une `PortFactory` (86 % des lignes). Le traitement « trame ignorée si occupé », la déconnexion et la fermeture ne sont pas vérifiés.
 
 **Preuves dans le code.**
 
@@ -2295,13 +2310,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires
 - **Catégorie** : IA / intégration OpenRouter
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fiabilité
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** `request()` transforme toute réponse non OK en `OpenRouterError` sans nouvelle tentative, y compris le 429 (limite de débit, message « réessayez plus tard »), les 502 et 503, et les coupures réseau. Le repli local masque l’échec, mais l’utilisateur perd la qualité du modèle distant sur un incident d’une seconde.
+**Réalisation (19/10/2026).** Jusqu’à 3 tentatives sur 429/502/503/504 et erreur réseau, Retry-After respecté, budget de temps global, annulation prioritaire ; notice du nombre de tentatives. Tests : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `request()` transforme toute réponse non OK en `OpenRouterError` sans nouvelle tentative, y compris le 429 (limite de débit, message « réessayez plus tard »), les 502 et 503, et les coupures réseau. Le repli local masque l’échec, mais l’utilisateur perd la qualité du modèle distant sur un incident d’une seconde.
 
 **Preuves dans le code.**
 
@@ -2346,9 +2363,11 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : 🟡 Partiel
 
-**Constat technique.** Le banc d’évaluation (175 cas, dont 33 adverses) ne mesure que l’interpréteur local déterministe (`proposeLocally`). La chaîne distante (prompt système, description du kit, extraction du JSON, réparation `clean`, validation stricte, garde-fou photosensible) n’est évaluée sur aucun corpus. Les tests unitaires utilisent des réponses simulées ponctuelles.
+**Réalisation (19/10/2026).** Banc `tests/eval/openrouter.replay.test.ts` (enregistrement avec `LUMA_EVAL_RECORD=1` et une clé locale, rejeu hors ligne, sécurité bloquante). Aucun enregistrement réel encore : le banc est ignoré tant que `tests/eval/recordings/` est vide.
+
+**Constat technique (à l’audit).** Le banc d’évaluation (175 cas, dont 33 adverses) ne mesure que l’interpréteur local déterministe (`proposeLocally`). La chaîne distante (prompt système, description du kit, extraction du JSON, réparation `clean`, validation stricte, garde-fou photosensible) n’est évaluée sur aucun corpus. Les tests unitaires utilisent des réponses simulées ponctuelles.
 
 **Preuves dans le code.**
 
@@ -2388,13 +2407,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal
 - **Catégorie** : Contrôle externe / OSC
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : sécurité
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Chaque paquet OSC mal formé émet un `error`, transformé en `logger.warn`, ajouté aux alertes et écrit de façon synchrone dans le fichier de journal. En mode `0.0.0.0` (réseau local, sans authentification), un émetteur malveillant ou défaillant peut saturer le journal et les alertes. Chaque message reçoit aussi une réponse `/luma/ack`, ce qui permet un effet de réflexion vers une adresse usurpée.
+**Réalisation (19/10/2026).** Seau de jetons par émetteur (`OSC_RATE_PER_S`), paquets invalides résumés toutes les 10 s, réglage `osc.ack`. Test sur port local : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Chaque paquet OSC mal formé émet un `error`, transformé en `logger.warn`, ajouté aux alertes et écrit de façon synchrone dans le fichier de journal. En mode `0.0.0.0` (réseau local, sans authentification), un émetteur malveillant ou défaillant peut saturer le journal et les alertes. Chaque message reçoit aussi une réponse `/luma/ack`, ce qui permet un effet de réflexion vers une adresse usurpée.
 
 **Preuves dans le code.**
 
@@ -2435,13 +2456,13 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows
 - **Catégorie** : Persistance
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : fiabilité
 - **Phase** : 2
-- **Avancement** : 🟡 Partiel
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Réalisation (19/10/2026).** La mise en file des écritures (LUMA-018) supprime la collision de temporaires. `fsync` et la reprise sur EPERM/EBUSY restent à faire.
+**Réalisation (19/10/2026).** Fichier temporaire synchronisé (`FileHandle.sync`) avant renommage, renommage repris sur EPERM/EBUSY/EACCES (5 essais). Test : `tests/unit/regressions.test.ts`.
 
 **Constat technique (à l’audit).** `writeFileAtomic` écrit le temporaire puis le renomme, sans `fsync` du fichier ni du dossier. Après une coupure de courant, le renommage peut être visible alors que le contenu est vide (selon le système de fichiers). Sous Windows, `rename` échoue en `EPERM` ou `EBUSY` quand un antivirus ou un indexeur tient le fichier, et l’erreur remonte directement, sans nouvelle tentative.
 
@@ -2529,13 +2550,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur
 - **Catégorie** : Livraison
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
 - **Priorité** : P2
 - **Type** : sécurité
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `scripts/release.mjs` exécute `typecheck`, `lint`, `test` et `package`, mais ni `test:perf`, ni `test:e2e`, ni `test:coverage`. La signature de code est facultative : sans `CSC_LINK`, l’installeur est produit non signé, et rien ne bloque une release publique non signée. Le canal de mise à jour automatique télécharge et installe ce binaire.
+**Réalisation (19/10/2026).** `scripts/release.mjs` exige couverture et E2E, refuse une version stable non signée, vérifie la signature Authenticode ; `--allow-unsigned` et `--skip-e2e` réservés aux pré-releases. Non exécuté (arbre propre sur master requis).
+
+**Constat technique (à l’audit).** `scripts/release.mjs` exécute `typecheck`, `lint`, `test` et `package`, mais ni `test:perf`, ni `test:e2e`, ni `test:coverage`. La signature de code est facultative : sans `CSC_LINK`, l’installeur est produit non signé, et rien ne bloque une release publique non signée. Le canal de mise à jour automatique télécharge et installe ce binaire.
 
 **Preuves dans le code.**
 
@@ -2575,13 +2598,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal
 - **Catégorie** : Tests / timecode
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : IMPLÉMENTÉ, VALIDATION INSUFFISANTE)
 
-**Constat technique.** Le cœur est testé en unitaire : `timeline.timecode` donne `chasing`, avec une tolérance de 80 ms. Les décodeurs MTC et LTC du rendu, l’envoi limité à 10 Hz, la pause après 500 ms de perte de signal (`monitor.ts`) et la résistance à un timecode qui recule ne sont pas testés dans la chaîne complète.
+**Réalisation (19/10/2026).** LTC synthétique encodé puis décodé, poursuite et pause après 500 ms sans signal : `tests/unit/coverage-phase2.test.ts`.
+
+**Constat technique (à l’audit).** Le cœur est testé en unitaire : `timeline.timecode` donne `chasing`, avec une tolérance de 80 ms. Les décodeurs MTC et LTC du rendu, l’envoi limité à 10 Hz, la pause après 500 ms de perte de signal (`monitor.ts`) et la résistance à un timecode qui recule ne sont pas testés dans la chaîne complète.
 
 **Preuves dans le code.**
 
@@ -2621,13 +2646,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma
 - **Catégorie** : IA / qualité des réponses
 - **Nature** : C — Amélioration fonctionnelle
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** Quand la réponse JSON du modèle ne respecte pas `llmPlanSchema`, `proposeWithOpenRouter` lève immédiatement une erreur. Le handler bascule alors sur le mode local, si le repli est activé. Il n’y a aucune tentative de correction, alors que l’erreur Zod précise le champ fautif.
+**Réalisation (19/10/2026).** Une relance avec les erreurs de schéma pour `proposeWithOpenRouter` (option `repair`, active par défaut). Test : `tests/unit/regressions.test.ts`. Pas encore de réglage dans l’interface.
+
+**Constat technique (à l’audit).** Quand la réponse JSON du modèle ne respecte pas `llmPlanSchema`, `proposeWithOpenRouter` lève immédiatement une erreur. Le handler bascule alors sur le mode local, si le repli est activé. Il n’y a aucune tentative de correction, alors que l’erreur Zod précise le champ fautif.
 
 **Preuves dans le code.**
 
@@ -2665,13 +2692,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites
 - **Catégorie** : Import GDTF / MVR
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : correction de bug
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `readZip` vérifie la signature des entrées centrales mais lit `b.readUInt32LE(e.offset)` et les longueurs locales sans contrôler que `offset + 30` reste dans le tampon. Un fichier GDTF tronqué lève une `RangeError` Node, qui sera journalisée comme erreur interne et non comme un message utilisateur.
+**Réalisation (19/10/2026).** Bornes vérifiées dans `readZip().read`. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `readZip` vérifie la signature des entrées centrales mais lit `b.readUInt32LE(e.offset)` et les longueurs locales sans contrôler que `offset + 30` reste dans le tampon. Un fichier GDTF tronqué lève une `RangeError` Node, qui sera journalisée comme erreur interne et non comme un message utilisateur.
 
 **Preuves dans le code.**
 
@@ -2708,13 +2737,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur
 - **Catégorie** : Confidentialité / support
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : sécurité
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** Le diagnostic masque les clés sensibles (jeton, secret, mot de passe, clé API) et les jetons dans les URL. Il inclut en revanche l’objet `settings` complet, dont `general.recentProjects` (chemins absolus du type `C:\Users\<nom>\…`), ainsi que les 2 000 dernières lignes de journal, qui peuvent contenir des noms de fichiers.
+**Réalisation (19/10/2026).** `maskHome` remplace le dossier personnel par `~` dans tout le diagnostic. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Le diagnostic masque les clés sensibles (jeton, secret, mot de passe, clé API) et les jetons dans les URL. Il inclut en revanche l’objet `settings` complet, dont `general.recentProjects` (chemins absolus du type `C:\Users\<nom>\…`), ainsi que les 2 000 dernières lignes de journal, qui peuvent contenir des noms de fichiers.
 
 **Preuves dans le code.**
 
@@ -2756,9 +2787,11 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : 🟡 Partiel
 
-**Constat technique.** `Engine.metrics()` donne des valeurs instantanées : la moyenne glissante du tick, un `maxTick` remis à zéro chaque seconde et des dépassements cumulés. Les statistiques de sortie sont cumulatives. Rien n’est conservé dans le temps : après un incident pendant un show (saccade à 21 h 14), impossible de savoir ce qui s’est passé.
+**Réalisation (19/10/2026).** Échantillon toutes les 10 s sur 24 h (`sampleMetrics`, `src/core/app/monitor.ts`), inclus dans le diagnostic ; test : `tests/unit/coverage-phase2.test.ts`. Fichier `metrics.jsonl` et graphique dans la console de diagnostic non réalisés.
+
+**Constat technique (à l’audit).** `Engine.metrics()` donne des valeurs instantanées : la moyenne glissante du tick, un `maxTick` remis à zéro chaque seconde et des dépassements cumulés. Les statistiques de sortie sont cumulatives. Rien n’est conservé dans le temps : après un incident pendant un show (saccade à 21 h 14), impossible de savoir ce qui s’est passé.
 
 **Preuves dans le code.**
 
@@ -2798,13 +2831,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Mesurer et journaliser les commandes IPC lentes
 - **Catégorie** : Observabilité
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : ABSENT
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : amélioration
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : ABSENT)
 
-**Constat technique.** Le gestionnaire `luma:cmd` journalise les erreurs internes, mais ne mesure pas la durée des commandes. Les commandes potentiellement lourdes (`project.open` avec validation complète, `music.addTrack` avec une analyse volumineuse, `music.storeAudio` jusqu’à 500 Mo, `fixture.add` en série) bloquent le thread du moteur sans trace.
+**Réalisation (19/10/2026).** `AppService.handle` mesure la partie synchrone (bloquante) : avertissement au-delà de 250 ms, debug au-delà de 50 ms. Test : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** Le gestionnaire `luma:cmd` journalise les erreurs internes, mais ne mesure pas la durée des commandes. Les commandes potentiellement lourdes (`project.open` avec validation complète, `music.addTrack` avec une analyse volumineuse, `music.storeAudio` jusqu’à 500 Mo, `fixture.add` en série) bloquent le thread du moteur sans trace.
 
 **Preuves dans le code.**
 
@@ -2841,13 +2876,13 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible
 - **Catégorie** : Secrets
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : IMPLÉMENTÉ, VALIDATION INSUFFISANTE
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : fiabilité
 - **Phase** : 2
 - **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Réalisation (19/10/2026).** Un `secrets.json` illisible est renommé en `.corrupt` avec un avertissement (`src/main/secrets.ts`). Sans test unitaire (dépend de LUMA-032).
+**Réalisation (19/10/2026).** Fichier illisible renommé en `.corrupt` et signalé. Test : `tests/unit/main-process.test.ts`.
 
 **Constat technique (à l’audit).** Quand `secrets.json` est corrompu, `read()` renvoie `{}` sans le signaler. Le `set()` suivant réécrit alors un fichier qui ne contient que le nouveau secret : les autres sont perdus sans trace. Aujourd’hui, un seul secret existe (la clé OpenRouter), mais le magasin est générique.
 
@@ -2887,13 +2922,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Borner la mémoire des limiteurs de la télécommande par adresse IP
 - **Catégorie** : Télécommande
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : sécurité
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** `RemoteLimiter` garde une entrée par adresse IP dans `failures` et dans `buckets`. Les entrées de `buckets` ne sont jamais supprimées, et celles de `failures` ne le sont qu’au prochain passage de la même IP. Sur un réseau où des clients changent d’adresse, ou face à des requêtes usurpées depuis de nombreuses adresses, les maps croissent sans limite pendant toute la durée de vie du serveur.
+**Réalisation (19/10/2026).** Élagage des entrées inactives et plafond des maps du `RemoteLimiter`. Test (100 000 adresses) : `tests/unit/regressions.test.ts`.
+
+**Constat technique (à l’audit).** `RemoteLimiter` garde une entrée par adresse IP dans `failures` et dans `buckets`. Les entrées de `buckets` ne sont jamais supprimées, et celles de `failures` ne le sont qu’au prochain passage de la même IP. Sur un réseau où des clients changent d’adresse, ou face à des requêtes usurpées depuis de nombreuses adresses, les maps croissent sans limite pendant toute la durée de vie du serveur.
 
 **Preuves dans le code.**
 
@@ -2929,13 +2966,15 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost
 - **Catégorie** : Sécurité du rendu
 - **Nature** : B — Fiabilisation de l’existant
-- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Statut actuel** : IMPLÉMENTÉ ET VÉRIFIÉ
 - **Priorité** : P3
 - **Type** : sécurité
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : ✅ Terminé (statut à l’audit : PARTIELLEMENT IMPLÉMENTÉ)
 
-**Constat technique.** La Content-Security-Policy du rendu, stricte par ailleurs (`script-src "self"`, `object-src "none"`, `form-action "none"`), autorise `connect-src "self" ws://localhost:*` dans tous les builds. Ce droit ne sert qu’au rechargement à chaud de Vite en développement.
+**Réalisation (19/10/2026).** Plugin Vite `luma-csp-prod` (`electron.vite.config.ts`) qui retire `ws://localhost:*` en build. Test du plugin : `tests/unit/regressions.test.ts` ; build non relancée.
+
+**Constat technique (à l’audit).** La Content-Security-Policy du rendu, stricte par ailleurs (`script-src "self"`, `object-src "none"`, `form-action "none"`), autorise `connect-src "self" ws://localhost:*` dans tous les builds. Ce droit ne sert qu’au rechargement à chaud de Vite en développement.
 
 **Preuves dans le code.**
 
@@ -4568,28 +4607,28 @@ LUMA-029 → LUMA-083
 | [LUMA-028](#luma-028) | Ne pas marquer le projet comme modifié pour une simple requête IA non appliquée | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
 | [LUMA-029](#luma-029) | Retirer de la boîte d’import le filtre QLC+ annoncé mais refusé | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | XS | ✅ Terminé |
 | [LUMA-030](#luma-030) | Nettoyer les fichiers audio, le cache IA et les copies de récupération orphelins | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 1 | M | ✅ Terminé |
-| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | M | À faire |
-| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | ABSENT | 2 | M | À faire |
-| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
-| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
+| [LUMA-031](#luma-031) | Couvrir par des tests le handler de programmation (groupes, palettes, scènes, cues, effets, timelines) | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | M | ✅ Terminé |
+| [LUMA-032](#luma-032) | Tester le processus principal : garde IPC, magasin de secrets et flux de fermeture | P1 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | M | ✅ Terminé |
+| [LUMA-033](#luma-033) | Tester l’autosauvegarde et la liste des projets récents | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
+| [LUMA-034](#luma-034) | Tester les réactions audio (flash sur le temps, couleur selon l’énergie, suiveurs, GO sur drop armé) | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
 | [LUMA-035](#luma-035) | Étendre la couverture et les tests de composants au code de rendu | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | L | À faire |
-| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | M | À faire |
-| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
-| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | L | À faire |
-| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | ABSENT | 2 | S | À faire |
-| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | ABSENT | 2 | S | À faire |
-| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M | À faire |
-| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S | À faire |
-| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S | 🟡 Partiel |
-| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
+| [LUMA-036](#luma-036) | Tester la machine d’états des sorties (reconnexion avec backoff, fermeture pendant reconnexion, désarmement) | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | M | 🟡 Partiel |
+| [LUMA-037](#luma-037) | Rendre l’adaptateur Enttec Pro injectable et le tester avec un port série simulé | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
+| [LUMA-038](#luma-038) | Mener la campagne de validation matérielle (Enttec Pro, Open DMX, RDM Art-Net, nœuds Art-Net et sACN) | P1 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | L | 🟡 Partiel |
+| [LUMA-039](#luma-039) | Ajouter une reprise contrôlée des appels OpenRouter sur 429, 5xx et erreurs réseau transitoires | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
+| [LUMA-040](#luma-040) | Relancer une fois le modèle avec les erreurs de validation quand sa réponse ne respecte pas le schéma | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
+| [LUMA-041](#luma-041) | Évaluer le chemin OpenRouter avec un banc rejoué hors ligne | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M | 🟡 Partiel |
+| [LUMA-042](#luma-042) | Limiter le débit des paquets OSC invalides ou inconnus et leur impact sur le journal | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
+| [LUMA-043](#luma-043) | Rendre les écritures atomiques durables (fsync) et tolérantes aux verrous de fichiers Windows | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
+| [LUMA-044](#luma-044) | Transformer les lectures hors bornes du lecteur ZIP en erreurs `ZipError` explicites | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
 | [LUMA-045](#luma-045) | Récupérer partiellement un fichier de paramètres invalide au lieu de tout réinitialiser | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
-| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | PARTIELLEMENT IMPLÉMENTÉ | 2 | S | À faire |
-| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
-| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M | À faire |
-| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | ABSENT | 2 | XS | À faire |
-| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | XS | ✅ Terminé |
-| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
-| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | À faire |
+| [LUMA-046](#luma-046) | Renforcer la porte de release : tests de performance, E2E, signature de code et vérification de l’installeur | P2 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 2 | S | ✅ Terminé |
+| [LUMA-047](#luma-047) | Retirer du diagnostic exporté les chemins personnels et les noms d’utilisateur | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
+| [LUMA-048](#luma-048) | Historiser les métriques du moteur et des sorties pour diagnostiquer un incident après coup | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | M | 🟡 Partiel |
+| [LUMA-049](#luma-049) | Mesurer et journaliser les commandes IPC lentes | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
+| [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
+| [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
+| [LUMA-052](#luma-052) | Tester de bout en bout la chaîne timecode (MTC et LTC dans le rendu vers la poursuite de timeline) et la perte de signal | P2 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | S | ✅ Terminé |
 | [LUMA-053](#luma-053) | Étendre l’annulation et le rétablissement à toutes les éditions du projet | P1 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
 | [LUMA-054](#luma-054) | Internationaliser les messages du cœur et les dialogues du processus principal | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
 | [LUMA-055](#luma-055) | Résorber les 782 textes d’interface écrits en dur dans le rendu | P2 | PARTIELLEMENT IMPLÉMENTÉ | 3 | L | À faire |
@@ -4621,5 +4660,5 @@ LUMA-029 → LUMA-083
 | [LUMA-081](#luma-081) | Proposer une redondance de sortie par machine de secours sACN | P3 | ABSENT | 5 | L | À faire |
 | [LUMA-082](#luma-082) | Construire et valider les versions macOS et Linux | P3 | ABSENT | 5 | L | À faire |
 | [LUMA-083](#luma-083) | Importer les profils QLC+ (`.qxf`) | P3 | ABSENT | 5 | M | À faire |
-| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
+| [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
 
