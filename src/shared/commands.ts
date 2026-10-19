@@ -244,7 +244,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('audio.config'), config: audioConfigSchema }),
   // Settings / logs
   empty('settings.get'),
+  /** Recent projects and onboarding state are owned by the main process: the values sent here for them are ignored. */
   z.object({ type: z.literal('settings.update'), settings: settingsSchema }),
+  z.object({ type: z.literal('settings.forgetRecent'), paths: z.array(z.string().max(1000)).min(1).max(10) }),
   empty('logs.recent'),
   z.object({ type: z.literal('diagnostic.export'), path: optPath }),
   /**
@@ -428,6 +430,7 @@ export interface CommandResults {
   'audio.armDrop': Void;
   'settings.get': Settings;
   'settings.update': Void;
+  'settings.forgetRecent': Void;
   'logs.recent': LogEntry[];
   'diagnostic.export': { path: string | null };
   'patch.exportSheet': { path: string | null };

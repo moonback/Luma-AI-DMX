@@ -43,7 +43,8 @@ export interface TransmittedFrame {
 export class OutputManager extends EventEmitter<{ status: [] }> implements FrameSink {
   private readonly adapters = new Map<string, OutputAdapter>();
   private readonly armed = new Set<string>();
-  private readonly lastSentAt = new Map<string, number>();
+  /** Per-output send deadline (ms): a sliding grid, so engine tick jitter does not halve the output rate. */
+  private readonly nextDue = new Map<string, number>();
   readonly transmitted = new Map<string, Map<number, TransmittedFrame>>();
   transmitting = true;
 
@@ -127,9 +128,11 @@ export class OutputManager extends EventEmitter<{ status: [] }> implements Frame
     for (const [id, a] of this.adapters) {
       if (a.state !== 'ready') continue;
       if (!this.transmitting && a.config.kind !== 'virtual') continue;
-      const last = this.lastSentAt.get(id) ?? 0;
-      if (now - last < 1000 / a.config.maxFps - 1) continue; // per-output rate limit
-      this.lastSentAt.set(id, now);
+      // Per-output rate limit: a tick up to half a period early still sends; the grid never lags more than one period.
+      const period = 1000 / a.config.maxFps;
+      const due = this.nextDue.get(id) ?? now;
+      if (now < due - period / 2) continue;
+      this.nextDue.set(id, Math.max(due, now - period) + period);
       let sent = this.transmitted.get(id);
       if (!sent) this.transmitted.set(id, (sent = new Map()));
       let any = false;

@@ -83,7 +83,7 @@ export class RemoteLimiter {
   }
 }
 
-const ALLOWED = new Set<Command['type']>(['cue.go', 'cue.back', 'cue.goto', 'cue.pause', 'cue.resume', 'engine.blackout', 'engine.master', 'output.transmit', 'programmer.release']);
+const ALLOWED = new Set<Command['type']>(['cue.go', 'cue.back', 'cue.goto', 'cue.pause', 'cue.resume', 'engine.blackout', 'engine.master', 'output.transmit', 'programmer.release', 'engine.releaseAll']);
 
 /** Whitelist + schema validation; `output.transmit` may only stop. Returns the command or an error message. */
 export function validateRemoteCommand(raw: unknown, listId: (i: number) => string | undefined): Command | string {
@@ -229,7 +229,7 @@ button:active{transform:scale(.98)}.go{background:var(--accent);border-color:var
 </style></head><body><h1>Luma — Télécommande</h1>
 <select id="list" aria-label="Liste de cues"></select><div class="st" id="cue">Connexion…</div>
 <div class="row"><button class="go" id="go">GO</button></div>
-<div class="row"><button id="back">BACK</button><button id="pause">Pause</button><button id="release">Relâcher</button></div>
+<div class="row"><button id="back">BACK</button><button id="pause">Pause</button><button id="release">Relâcher</button><button id="relall">Tout relâcher</button></div>
 <div class="row"><button id="bo">Blackout</button><button class="stop" id="stop">STOP OUTPUT</button></div>
 <label for="master">Grand master <span id="mv"></span></label><input id="master" type="range" min="0" max="100">
 <div id="loc" style="display:none;margin-top:16px;padding:12px;border:1px solid var(--accent);border-radius:10px"><b>Localisation des projecteurs</b><div class="st" id="locst"></div><label class="go" style="display:block;text-align:center;padding:18px;border-radius:10px;margin-top:8px">Prendre la photo<input id="cam" type="file" accept="image/*" capture="environment" style="display:none"></label><div class="st">Gardez le téléphone immobile, au même endroit, pour toutes les photos.</div></div>
@@ -239,7 +239,7 @@ async function send(c){const r=await fetch('cmd',{method:'POST',headers:{'Conten
 const list=()=>Number($('list').value||1);
 $('go').onclick=()=>send({type:'cue.go',list:list()});$('back').onclick=()=>send({type:'cue.back',list:list()});
 $('pause').onclick=()=>{const l=st&&st.lists[list()-1];send({type:l&&l.state==='paused'?'cue.resume':'cue.pause',list:list()});};
-$('release').onclick=()=>send({type:'programmer.release'});$('bo').onclick=()=>send({type:'engine.blackout',on:!(st&&st.blackout)});
+$('release').onclick=()=>send({type:'programmer.release'});$('relall').onclick=()=>{if(confirm('Tout relâcher (IA, effets, playbacks, timeline) ?'))send({type:'engine.releaseAll'});};$('bo').onclick=()=>send({type:'engine.blackout',on:!(st&&st.blackout)});
 $('stop').onclick=()=>send({type:'output.transmit',on:false});$('master').oninput=(e)=>send({type:'engine.master',value:e.target.value/100});
 const es=new EventSource('events');es.onerror=()=>{$('cue').textContent='Connexion perdue — reconnexion…';};
 $('cam').onchange=async(e)=>{const f=e.target.files[0];e.target.value='';if(!f||!st||!st.locate)return;const fr=st.locate.frame;$('locst').textContent='Envoi…';const bmp=await createImageBitmap(f);const k=Math.min(1,960/bmp.width);const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const blob=await new Promise((r)=>c.toBlob(r,'image/jpeg',0.85));const r=await fetch('locate/photo?frame='+fr,{method:'POST',body:blob});const j=await r.json();$('locst').textContent=j.ok?'Photo reçue':j.error;};

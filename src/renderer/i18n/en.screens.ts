@@ -54,7 +54,7 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'console.master': 'Master',
   'console.releaseSel': 'Release selection',
   'console.releaseSelHint': 'Release the selection',
-  'console.releaseAll': 'Release all',
+  'console.releaseAll': 'Release programmer',
   'console.releaseAllHint': 'Release the whole programmer (Esc)',
   'console.record': 'Record scene',
   'console.noFixtures': 'No fixtures',

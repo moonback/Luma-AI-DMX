@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
-  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play,
+  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Undo2,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
 import logo from '../../public/logo.png';
@@ -64,6 +64,11 @@ export async function openProject(path?: string): Promise<boolean> {
   const opened = !!(await act({ type: 'project.open', ...(path ? { path } : {}) }))?.opened;
   if (opened) detachStageIfWanted();
   return opened;
+}
+
+/** Releases programmer, AI layer, effects, playbacks and timeline after a confirmation (blackout and STOP are separate). */
+export async function releaseAllFlow(): Promise<void> {
+  if (await confirmAction({ title: t('top.releaseAllConfirmTitle'), message: t('top.releaseAllConfirm'), confirmLabel: t('top.releaseAll') })) await act({ type: 'engine.releaseAll' });
 }
 
 function NewProjectDialog({ onClose }: { onClose: () => void }) {
@@ -149,6 +154,9 @@ function TopBar() {
       <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
         <Bell size={16} />
         {alerts > 0 && <span className="badge err" style={{ position: 'absolute', top: -4, right: -8, height: 16, padding: '0 4px' }}>{alerts}</span>}
+      </button>
+      <button className="btn" data-testid="release-all" title={tr('top.releaseAllTitle')} onClick={() => void releaseAllFlow()}>
+        <Undo2 size={15} />{tr('top.releaseAll')}
       </button>
       <button className={`btn ${rt?.engine.blackout ? 'danger solid' : ''}`} data-testid="blackout" title={tr('top.blackoutTitle')} onClick={() => void act({ type: 'engine.blackout', on: !rt?.engine.blackout })}>
         <Moon size={15} />{tr('top.blackout')}
@@ -282,6 +290,7 @@ export function runShortcut(action: ShortcutAction): boolean {
     case 'blackout': void act({ type: 'engine.blackout', on: !s.runtime?.engine.blackout }); return true;
     case 'stopOutput': void act({ type: 'output.transmit', on: false }); return true;
     case 'release': void act({ type: 'programmer.release' }); return true;
+    case 'releaseAll': void releaseAllFlow(); return true;
     case 'save': void act({ type: 'project.save' }); return true;
     case 'saveAs': void act({ type: 'project.saveAs' }); return true;
     case 'open': void openProject(); return true;
@@ -345,8 +354,10 @@ export async function bootstrap(): Promise<void> {
   const firstRun = !settings.onboarding.completed;
   if (firstRun) markWhatsNewSeen();
   useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
-  void externalControl.configure(settings.control);
-  // bootstrap also runs in the detached window itself: only the main window opens it, after the first project opened.
-  detachStageOnOpen = settings.general.detachStage3dOnStart && location.hash !== DETACHED_STAGE_HASH;
+  // bootstrap also runs in the detached window: only the main window listens to MIDI/timecode (else every GO fires twice)
+  // and opens the detached window, after the first project opened.
+  const main = location.hash !== DETACHED_STAGE_HASH;
+  if (main) void externalControl.configure(settings.control);
+  detachStageOnOpen = settings.general.detachStage3dOnStart && main;
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

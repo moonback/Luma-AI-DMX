@@ -127,7 +127,8 @@ function createWindow(): BrowserWindow {
     title: BRAND.productName,
     icon,
     autoHideMenuBar: true,
-    webPreferences,
+    // The main window runs the audio analysis and the timecode decoders: they must keep running while it is minimised.
+    webPreferences: { ...webPreferences, backgroundThrottling: false },
   });
   // Navigation is restricted to the app itself; external https links open in the system browser.
   guardNavigation(w);

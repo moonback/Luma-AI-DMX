@@ -57,6 +57,10 @@ export const fr = {
   'top.aiLocal': 'Local',
   'top.alerts': '{n} alerte(s) — ouvrir la console de diagnostic',
   'top.blackout': 'Blackout',
+  'top.releaseAll': 'Tout relâcher',
+  'top.releaseAllTitle': 'Relâche le programmeur et la couche IA, arrête effets, playbacks et timeline (sans blackout)',
+  'top.releaseAllConfirmTitle': 'Tout relâcher ?',
+  'top.releaseAllConfirm': 'Le programmeur et la couche IA sont relâchés ; les effets, listes de cues et la timeline en cours s’arrêtent. Le blackout et les émissions ne changent pas.',
   'top.blackoutTitle': 'Blackout (B) — politique configurable dans Paramètres',
   'top.stopTitle': 'STOP OUTPUT (Maj+Échap) : arrête immédiatement toute émission DMX réelle',
   'top.resume': 'Reprendre',
@@ -82,6 +86,15 @@ export const fr = {
 
   'app.connecting': 'Connexion au moteur…',
 
+  'fixtures.lib.title': 'Bibliothèque de profils ({n})',
+  'fixtures.lib.name': 'Profil',
+  'fixtures.lib.manufacturer': 'Fabricant',
+  'fixtures.lib.modes': 'Modes',
+  'fixtures.lib.used': 'Projecteurs',
+  'fixtures.lib.remove': 'Retirer de la bibliothèque',
+  'fixtures.lib.removeTitle': 'Retirer le profil',
+  'fixtures.lib.removeMessage': 'Retirer « {name} » de la bibliothèque et de ce projet ?',
+  'fixtures.lib.inUse': 'Utilisé par {n} projecteur(s) : retirez-les du patch d’abord',
   'fixtures.exportMvr': 'MVR',
   'fixtures.exportMvrTitle': 'Implantation et patch au format MVR (Capture, Vectorworks, grandMA3…)',
 

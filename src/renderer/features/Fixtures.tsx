@@ -184,6 +184,42 @@ function Editor({ id }: { id: string }) {
   );
 }
 
+/** Imported profiles of the user library (every project); a profile still patched cannot be removed. */
+function LibraryPanel() {
+  const tr = useT();
+  const ps = useStore((s) => s.project!);
+  if (!ps.library.length) return null;
+  const remove = async (id: string, name: string) => {
+    if (await confirmAction({ title: tr('fixtures.lib.removeTitle'), message: tr('fixtures.lib.removeMessage', { name }), confirmLabel: tr('fixtures.lib.remove') })) await act({ type: 'profile.remove', id });
+  };
+  return (
+    <Panel flush className="lib-panel" title={tr('fixtures.lib.title', { n: ps.library.length })}>
+      <table className="table" data-testid="profile-library">
+        <thead><tr><th>{tr('fixtures.lib.name')}</th><th>{tr('fixtures.lib.manufacturer')}</th><th>{tr('fixtures.lib.modes')}</th><th>{tr('fixtures.lib.used')}</th><th /></tr></thead>
+        <tbody>
+          {ps.library.map((p) => {
+            const used = ps.project.patch.filter((f) => f.profileId === p.id).length;
+            return (
+              <tr key={p.id}>
+                <td>{p.name}</td>
+                <td className="muted">{p.manufacturer}</td>
+                <td className="mono">{p.modes.length}</td>
+                <td className="mono">{used}</td>
+                <td>
+                  <button className="btn ghost sm icon danger" disabled={used > 0} data-testid={`remove-profile-${p.id}`}
+                    title={used ? tr('fixtures.lib.inUse', { n: used }) : tr('fixtures.lib.remove')} aria-label={tr('fixtures.lib.remove')} onClick={() => void remove(p.id, p.name)}>
+                    <Trash2 size={13} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Panel>
+  );
+}
+
 export function Fixtures() {
   const tr = useT();
   const { fixtures } = useResolved();
@@ -287,6 +323,7 @@ export function Fixtures() {
           <Panel title="Propriétés"><p className="muted" style={{ margin: 0 }}>{selection.length ? `${selection.length} projecteurs sélectionnés (Maj/Ctrl+clic). Utilisez la console live pour les piloter ensemble.` : 'Sélectionnez un projecteur pour modifier son adressage, sa position et ses tags.'}</p></Panel>
         )}
       </div>
+      <div style={{ marginTop: 12 }}><LibraryPanel /></div>
       {adding && <AddDialog onClose={() => setAdding(false)} />}
       {ofl && <OflDialog onClose={() => setOfl(false)} />}
     </div>

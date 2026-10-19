@@ -23,7 +23,8 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
     case 'settings.get': return app.getSettings();
     case 'settings.update': {
       const outputsChanged = JSON.stringify(cmd.settings.outputs) !== JSON.stringify(app.settings.outputs);
-      app.settings = { ...cmd.settings, sacn: app.settings.sacn };
+      // The Settings page sends the copy it loaded: fields the main process changes on its own must not be rolled back.
+      app.settings = { ...cmd.settings, sacn: app.settings.sacn, onboarding: app.settings.onboarding, general: { ...cmd.settings.general, recentProjects: app.settings.general.recentProjects } };
       app.settings.control.remote.token ??= randomUUID();
       await app.persistSettings();
       app.logger.level = app.settings.logs.level;
@@ -35,6 +36,10 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
       app.logger.info('Paramètres', 'Paramètres enregistrés');
       return ok;
     }
+    case 'settings.forgetRecent':
+      app.settings.general.recentProjects = app.settings.general.recentProjects.filter((p) => !cmd.paths.includes(p));
+      await app.persistSettings();
+      return ok;
     case 'logs.recent': return app.logger.recent();
     case 'diagnostic.export': {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/gu, '-');

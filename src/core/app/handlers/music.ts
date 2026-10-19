@@ -194,8 +194,11 @@ async function planSection(app: AppService, t: MusicTrack, plan: ShowPlan, index
 
 /** Compiles the plan, replaces the track's previously generated objects and stores the plan. */
 export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[]) {
-  const c = compileShow(app.index, t.name, t.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
-  if (app.engine.snapshot().timeline.timelineId === t.created.timelineId) app.engine.timelineStop();
+  // The plan may come back from a slow OpenRouter call: the track, or the whole project, can be gone by then.
+  const cur = app.project.music.tracks.find((x) => x.id === t.id);
+  if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué');
+  const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
+  if (app.engine.snapshot().timeline.timelineId === cur.created.timelineId) app.engine.timelineStop();
   app.mutate((d) => {
     const track = d.music.tracks.find((x) => x.id === t.id)!;
     removeGenerated(app, d, track);

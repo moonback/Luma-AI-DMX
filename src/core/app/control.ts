@@ -80,6 +80,7 @@ export async function onOsc(app: AppService, m: OscMessage): Promise<boolean> {
     case '/luma/master': return run({ type: 'engine.master', value: Math.min(1, Math.max(0, num(0) ?? 1)) });
     case '/luma/bpm': return run({ type: 'engine.bpm', bpm: Math.min(300, Math.max(20, num(0) ?? 120)) });
     case '/luma/release': return run({ type: 'programmer.release' });
+    case '/luma/releaseall': return run({ type: 'engine.releaseAll' });
     case '/luma/stop': return run({ type: 'output.transmit', on: false });
     case '/luma/timecode': return (await app.handle({ type: 'timeline.timecode', seconds: Math.max(0, num(0) ?? 0) }) as { chasing: boolean }).chasing;
     default:

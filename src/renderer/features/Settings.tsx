@@ -308,8 +308,9 @@ export function SettingsPage() {
   const tabs = TAB_IDS.map((id) => ({ id, label: tr(`settings.tab.${id}`) }));
   // Removing recent projects is saved at once, without committing the other pending edits.
   const forgetRecent = async (recentProjects: string[]) => {
+    const paths = s.general.recentProjects.filter((p) => !recentProjects.includes(p));
+    if (!paths.length || !(await act({ type: 'settings.forgetRecent', paths }))) return;
     const next = { ...saved!, general: { ...saved!.general, recentProjects } };
-    if (!(await act({ type: 'settings.update', settings: next }))) return;
     setSaved(next);
     setS({ ...s, general: { ...s.general, recentProjects } });
   };

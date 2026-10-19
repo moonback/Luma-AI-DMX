@@ -9,6 +9,7 @@ export const SHORTCUT_ACTIONS = [
   { id: 'blackout', label: 'Blackout on/off', default: 'B' },
   { id: 'stopOutput', label: 'STOP OUTPUT : arrêt immédiat des émissions réelles', default: 'Shift+Escape' },
   { id: 'release', label: 'Relâcher le programmeur (reprise des playbacks)', default: 'Escape' },
+  { id: 'releaseAll', label: 'Tout relâcher : programmeur, IA, effets, playbacks et timeline', default: '' },
   { id: 'save', label: 'Enregistrer', default: 'Ctrl+S' },
   { id: 'saveAs', label: 'Enregistrer sous', default: 'Ctrl+Shift+S' },
   { id: 'open', label: 'Ouvrir un projet', default: 'Ctrl+O' },

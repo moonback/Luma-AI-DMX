@@ -55,6 +55,10 @@ export const en: Record<MessageKey, string> = {
   'top.aiLocal': 'Local',
   'top.alerts': '{n} alert(s) — open the diagnostics console',
   'top.blackout': 'Blackout',
+  'top.releaseAll': 'Release all',
+  'top.releaseAllTitle': 'Releases the programmer and the AI layer, stops effects, playbacks and timeline (no blackout)',
+  'top.releaseAllConfirmTitle': 'Release everything?',
+  'top.releaseAllConfirm': 'The programmer and the AI layer are released; running effects, cue lists and the timeline stop. Blackout and transmission are unchanged.',
   'top.blackoutTitle': 'Blackout (B) — policy set in Settings',
   'top.stopTitle': 'STOP OUTPUT (Shift+Esc): immediately stops all real DMX transmission',
   'top.resume': 'Resume',
@@ -80,6 +84,15 @@ export const en: Record<MessageKey, string> = {
 
   'app.connecting': 'Connecting to the engine…',
 
+  'fixtures.lib.title': 'Profile library ({n})',
+  'fixtures.lib.name': 'Profile',
+  'fixtures.lib.manufacturer': 'Manufacturer',
+  'fixtures.lib.modes': 'Modes',
+  'fixtures.lib.used': 'Fixtures',
+  'fixtures.lib.remove': 'Remove from library',
+  'fixtures.lib.removeTitle': 'Remove profile',
+  'fixtures.lib.removeMessage': 'Remove “{name}” from the library and from this project?',
+  'fixtures.lib.inUse': 'Used by {n} fixture(s): unpatch them first',
   'fixtures.exportMvr': 'MVR',
   'fixtures.exportMvrTitle': 'Layout and patch as MVR (Capture, Vectorworks, grandMA3…)',
 

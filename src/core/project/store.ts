@@ -7,7 +7,19 @@ import { parseProject, ProjectLoadError, serializeProject } from './format';
  * Atomic write: data goes to `<file>.tmp`, the previous file is kept as `<file>.bak` (recovery copy),
  * then the temp file is renamed over the target. A crash mid-write never leaves a truncated project.
  */
-export async function writeFileAtomic(file: string, data: string, keepBackup = true): Promise<void> {
+export function writeFileAtomic(file: string, data: string, keepBackup = true): Promise<void> {
+  // Writes to one path run one at a time: concurrent writers would share `<file>.tmp` (rename ENOENT, truncated file).
+  const key = path.resolve(file);
+  const next = (writes.get(key) ?? Promise.resolve()).then(() => writeNow(file, data, keepBackup));
+  const tail = next.catch(() => undefined);
+  writes.set(key, tail);
+  void tail.then(() => { if (writes.get(key) === tail) writes.delete(key); });
+  return next;
+}
+
+const writes = new Map<string, Promise<void>>();
+
+async function writeNow(file: string, data: string, keepBackup: boolean): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
   await fs.writeFile(tmp, data, 'utf8');

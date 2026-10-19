@@ -11,6 +11,9 @@ import { act } from './api';
  */
 type Listener = (f: AudioFeatures | null) => void;
 
+/** Analysis period (≈ 60 Hz, like the display refresh it replaces). */
+const FRAME_MS = 16;
+
 class AudioEngine {
   source: 'none' | 'live' | 'simulated' | 'track' = 'none';
   simBpm = 124;
@@ -19,7 +22,7 @@ class AudioEngine {
   private ctx: AudioContext | null = null;
   private stream: MediaStream | null = null;
   private analyser: AnalyserNode | null = null;
-  private raf = 0;
+  private timer: ReturnType<typeof setTimeout> | undefined;
   private analyzer = new AudioAnalyzer({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, riseRatio: 1.8 });
   private lastSent = 0;
   private listeners = new Set<Listener>();
@@ -98,7 +101,7 @@ class AudioEngine {
   }
 
   stop(): void {
-    cancelAnimationFrame(this.raf);
+    clearTimeout(this.timer);
     this.stream?.getTracks().forEach((t) => t.stop());
     if (this.ownsContext) void this.ctx?.close().catch(() => undefined);
     this.analyser?.disconnect();
@@ -152,7 +155,8 @@ class AudioEngine {
       this.lastSent = now;
       void act({ type: 'audio.features', source: this.source, features: { ...f, level: Math.min(1, f.level), energy: Math.min(1, f.energy), bpm: f.bpm && f.bpm >= 20 && f.bpm <= 300 ? f.bpm : null, levelDb: Number.isFinite(f.levelDb) ? f.levelDb : -120 } });
     }
-    this.raf = requestAnimationFrame(this.loop);
+    // A timer, not requestAnimationFrame: rAF stops in a minimised or hidden window and the audio reactions with it.
+    this.timer = setTimeout(this.loop, FRAME_MS);
   };
 
   private emit(f: AudioFeatures | null): void {

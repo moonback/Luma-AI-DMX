@@ -52,7 +52,7 @@ export const frScreens = {
   'console.master': 'Master',
   'console.releaseSel': 'Relâcher sélection',
   'console.releaseSelHint': 'Relâcher la sélection',
-  'console.releaseAll': 'Tout relâcher',
+  'console.releaseAll': 'Relâcher le programmeur',
   'console.releaseAllHint': 'Relâcher tout le programmeur (Échap)',
   'console.record': 'Enregistrer scène',
   'console.noFixtures': 'Aucun projecteur',
