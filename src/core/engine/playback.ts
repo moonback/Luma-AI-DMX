@@ -53,7 +53,8 @@ export class CueListPlayback {
     return `cuelist:${this.cueListId}`;
   }
 
-  goto(list: CueList, index: number, order: number): boolean {
+  /** `instant`: lands on the cue fully faded in (repositioning after a timeline seek, not a performed GO). */
+  goto(list: CueList, index: number, order: number, instant = false): boolean {
     const cue = list.cues[index];
     if (!cue) return false;
     this.order = order;
@@ -82,6 +83,7 @@ export class CueListPlayback {
     this.fadeMs = cue.fade * 1000;
     this.curve = CURVES[cue.curve];
     this.state = this.delayMs > 0 ? 'delay' : 'fading';
+    if (instant) this.elapsed = this.delayMs + this.fadeMs;
     this.deps.stopCueEffects(this.ownerKey);
     if (cue.effectIds.length) this.deps.startCueEffects(this.ownerKey, cue.effectIds);
     this.apply();

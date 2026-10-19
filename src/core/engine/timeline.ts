@@ -72,6 +72,18 @@ export class TimelineTransport {
     this.timeMs = next;
   }
 
+  /**
+   * Cue each list should be on at `seconds`: the last `cue` event strictly before it (an event exactly at the playhead is
+   * fired by the next tick), or null when the playhead is before the list's first event.
+   */
+  cueStateAt(tl: Timeline, seconds: number): Map<string, number | null> {
+    const out = new Map<string, number | null>();
+    const events = tl.events.filter((e) => e.kind === 'cue' && e.refId).sort((a, b) => a.start - b.start);
+    for (const e of events) if (!out.has(e.refId!)) out.set(e.refId!, null);
+    for (const e of events) if (e.start < seconds) out.set(e.refId!, e.cueIndex);
+    return out;
+  }
+
   /** Values contributed by active scene/effect events at the current playhead. */
   evaluate(tl: Timeline | undefined, index: ProjectIndex, bpm: number, maxStrobeHz: number, audio: AudioBands | null = null): { values: FixtureValues; effects: EffectOutput[] } {
     const values: FixtureValues = {};
