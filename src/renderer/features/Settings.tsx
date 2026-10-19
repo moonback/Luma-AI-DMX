@@ -342,7 +342,7 @@ export function SettingsPage() {
   if (!s) return <div className="page">{tr('common.loading')}</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
-  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts, language: s.appearance.language }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: tr('settings.saved') }); } };
+  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts, language: s.appearance.language, installPlanButton: s.general.installPlanButton }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: tr('settings.saved') }); } };
   const tabs = TAB_IDS.map((id) => ({ id, label: tr(`settings.tab.${id}`) }));
   // Removing recent projects is saved at once, without committing the other pending edits.
   const forgetRecent = async (recentProjects: string[]) => {
@@ -369,6 +369,7 @@ export function SettingsPage() {
                 <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-console-on-start" checked={s.general.detachConsoleOnStart} onChange={(e) => set('general', { detachConsoleOnStart: e.target.checked })} />{tr('settings.general.detachConsole')}</label>
+                <label className="check" title={tr('settings.general.installPlanHint')}><input type="checkbox" data-testid="install-plan-button" checked={s.general.installPlanButton} onChange={(e) => set('general', { installPlanButton: e.target.checked })} />{tr('settings.general.installPlan')}</label>
               </div>
             </div>
           </Panel>

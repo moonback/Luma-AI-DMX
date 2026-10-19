@@ -77,6 +77,8 @@ interface State {
   shortcuts: Record<string, string>;
   /** Interface language (Settings › Apparence); catalogues in ./i18n. */
   language: 'fr' | 'en';
+  /** Header button « Plan d’installation » (Settings › Général). */
+  installPlanButton: boolean;
   /** True while the Settings page records a new shortcut (global handler paused). */
   capturingShortcut: boolean;
   toasts: Toast[];
@@ -129,6 +131,7 @@ export const useStore = create<State>((set, get) => ({
   startScreen: null,
   shortcuts: {},
   language: 'fr',
+  installPlanButton: false,
   capturingShortcut: false,
   toasts: [],
   confirm: null,

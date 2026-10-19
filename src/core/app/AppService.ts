@@ -44,6 +44,7 @@ export interface Dialogs {
   saveProfiles?(defaultName: string): Promise<string | null>;
   saveDiagnostic?(defaultName: string): Promise<string | null>;
   savePatchSheet?(defaultName: string, format: 'csv' | 'pdf'): Promise<string | null>;
+  savePatchPlan?(defaultName: string): Promise<string | null>;
   saveFeedback?(defaultName: string): Promise<string | null>;
   saveMvr?(defaultName: string): Promise<string | null>;
 }

@@ -85,6 +85,10 @@ async function createService(): Promise<AppService> {
         const r = await dialog.showSaveDialog(win!, { title: 'Exporter la feuille de patch', defaultPath: name, filters: [format === 'csv' ? { name: 'Tableur (CSV)', extensions: ['csv'] } : { name: 'PDF', extensions: ['pdf'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
+      savePatchPlan: async (name) => {
+        const r = await dialog.showSaveDialog(win!, { title: 'Exporter le plan d’installation', defaultPath: name, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+        return r.canceled ? null : r.filePath ?? null;
+      },
       saveMvr: async (name) => {
         const r = await dialog.showSaveDialog(win!, { title: 'Exporter l’implantation (MVR)', defaultPath: name, filters: [{ name: 'My Virtual Rig', extensions: ['mvr'] }] });
         return r.canceled ? null : r.filePath ?? null;

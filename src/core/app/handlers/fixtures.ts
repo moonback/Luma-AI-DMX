@@ -10,6 +10,7 @@ import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } 
 import { findFreeAddress, validatePatch } from '../../fixtures/patch';
 import { SCENE_FIELDS, UserError } from '../shared';
 import { patchSheetCsv, patchSheetHtml } from '../../fixtures/patchSheet';
+import { installPlanHtml } from '../../fixtures/installPlan';
 import type { AppService, CommandIn } from '../AppService';
 import { removeFromLibrary, saveToLibrary } from '../library';
 
@@ -231,6 +232,15 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         await fs.writeFile(file, await app.opts.renderPdf(patchSheetHtml(app.project)));
       }
       app.logger.info('Patch', `Feuille de patch exportée : ${path.basename(file)}`);
+      return { path: file };
+    }
+    case 'patch.exportPlan': {
+      const base = `${app.project.meta.name} - plan d'installation`.replace(/[\\/:*?"<>|]/gu, '_');
+      const file = cmd.path ?? (await app.opts.dialogs.savePatchPlan?.(`${base}.pdf`)) ?? null;
+      if (!file) return { path: null };
+      if (!app.opts.renderPdf) throw new UserError('Export PDF indisponible ici : le plan d’installation nécessite le moteur de rendu.');
+      await fs.writeFile(file, await app.opts.renderPdf(installPlanHtml(app.project, app.settings.outputs)));
+      app.logger.info('Patch', `Plan d’installation exporté : ${path.basename(file)}`);
       return { path: file };
     }
   }

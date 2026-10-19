@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
+  Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
   Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
@@ -116,6 +116,7 @@ function TopBar() {
   const transmitting = rt?.transmitting ?? true;
   const pb = rt?.engine.playbacks.find((p) => p.state !== 'idle');
   const alerts = rt?.alerts.length ?? 0;
+  const installPlanButton = useStore((s) => s.installPlanButton);
 
   const tap = () => {
     const now = performance.now();
@@ -141,6 +142,7 @@ function TopBar() {
         <button className="btn ghost icon" data-testid="redo" disabled={!project?.history?.redo} title={project?.history?.redoLabel ? tr('history.redoTitle', { label: project.history.redoLabel }) : tr('history.nothing')} onClick={() => void historyStep('redo')}><Redo2 size={16} /></button>
         <button className="btn ghost icon" title={tr('project.saveShortcut')} data-testid="save" onClick={() => void act({ type: 'project.save' })}><Save size={16} /></button>
       </div>
+      {installPlanButton && <button className="btn ghost" data-testid="install-plan" title={tr('top.installPlanTitle')} onClick={() => void act({ type: 'patch.exportPlan' })}><ClipboardList size={16} />{tr('top.installPlan')}</button>}
       <div className="top-sep" />
       <span className={`mode-badge ${live ? 'live' : ''}`} data-testid="mode" title={live ? tr('top.liveTitle') : tr('top.simulationTitle')}>{live ? 'LIVE' : 'SIMULATION'}</span>
       <div className="stat" title={outputs.map((o) => `${o.name} : ${o.state}`).join('\n')}>
@@ -382,7 +384,7 @@ export async function bootstrap(): Promise<void> {
   // First run: the welcome screen replaces the release notes; afterwards they show once per new version.
   const firstRun = !settings.onboarding.completed;
   if (firstRun) markWhatsNewSeen();
-  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
+  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, installPlanButton: settings.general.installPlanButton, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
   // bootstrap also runs in the detached window: only the main window listens to MIDI/timecode (else every GO fires twice)
   // and opens the detached window, after the first project opened.
   const main = location.hash !== DETACHED_STAGE_HASH && location.hash !== DETACHED_CONSOLE_HASH;

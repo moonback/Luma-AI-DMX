@@ -286,6 +286,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   empty('hardware.report'),
   /** Patch sheet for the crew: CSV (spreadsheet) or PDF (print). */
   z.object({ type: z.literal('patch.exportSheet'), format: z.enum(['csv', 'pdf']), path: optPath }),
+  /** Installation plan (PDF): equipment, power, DMX cabling, rigging, checks and commissioning steps. */
+  z.object({ type: z.literal('patch.exportPlan'), path: optPath }),
   // Beta programme: local usage statistics and feedback files
   empty('usage.get'),
   empty('usage.clear'),
@@ -480,6 +482,7 @@ export interface CommandResults {
   'logs.recent': LogEntry[];
   'diagnostic.export': { path: string | null };
   'patch.exportSheet': { path: string | null };
+  'patch.exportPlan': { path: string | null };
   'output.testPattern': Void;
   'hardware.report': { markdown: string; json: ReturnType<HardwareSession['reportJson']> };
   'usage.get': { enabled: boolean; data: UsageData };
