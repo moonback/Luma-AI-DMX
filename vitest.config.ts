@@ -10,6 +10,8 @@ export default defineConfig({
     setupFiles: ['tests/setup.ts'],
     // Synthetic audio/video scenes are CPU-heavy; with parallel workers 5 s is too tight.
     testTimeout: 20_000,
+    // Same for beforeAll hooks: the synthetic songs take longer to analyse under coverage instrumentation.
+    hookTimeout: 60_000,
     coverage: {
       provider: 'v8',
       include: ['src/core/**'],
