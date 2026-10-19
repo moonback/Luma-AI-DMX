@@ -435,6 +435,7 @@ export function SettingsPage() {
               </Field>
               <Field label={tr('settings.ai.timeout')}><NumberInput value={s.ai.timeoutSec} min={5} max={300} onChange={(v) => set('ai', { timeoutSec: v })} /></Field>
               <label className="check"><input type="checkbox" checked={s.ai.fallbackToLocal} onChange={(e) => set('ai', { fallbackToLocal: e.target.checked })} />{tr('settings.ai.fallback')}</label>
+              <Field label={tr('settings.ai.budget')} hint={tr('settings.ai.budgetHint')}><NumberInput value={s.ai.monthlyBudget ?? 0} min={0} max={10000} onChange={(v) => set('ai', { monthlyBudget: v > 0 ? v : null })} /></Field>
               <label className="check" title={tr('settings.ai.strobeTitle')}><input type="checkbox" checked={s.ai.allowStrobe} onChange={(e) => set('ai', { allowStrobe: e.target.checked })} />{tr('settings.ai.allowStrobe')}</label>
             </div>
             {s.ai.provider === 'openrouter' && (

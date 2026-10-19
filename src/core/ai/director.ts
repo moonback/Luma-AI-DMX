@@ -102,8 +102,8 @@ function checkEffect(spec: AiEffectSpec, ctx: ValidationContext, messages: strin
   }
   if (spec.effectType === 'strobe' && (spec.speed ?? 0) > ctx.maxStrobeHz) messages.push(`Fréquence limitée à ${ctx.maxStrobeHz} Hz par la sécurité`);
   let test: ((rf: ResolvedFixture) => boolean) | null = null;
-  if (spec.effectType === 'panTilt' || spec.effectType === 'randomMove') test = hasPosition;
-  if (spec.effectType === 'rainbow' || spec.effectType === 'colorCycle') test = hasColor;
+  if (spec.effectType === 'panTilt' || spec.effectType === 'randomMove' || spec.effectType === 'fan') test = hasPosition;
+  if (spec.effectType === 'rainbow' || spec.effectType === 'colorCycle' || spec.effectType === 'brightnessColor') test = hasColor;
   const { ok, skipped } = test ? capable(ctx.index, ids, test) : { ok: ids, skipped: [] };
   if (skipped.length) messages.push(`Ignorés (capacité absente) : ${skipped.join(', ')}`);
   if (!ok.length) {

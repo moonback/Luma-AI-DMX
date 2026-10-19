@@ -57,6 +57,8 @@ export const en: Record<MessageKey, string> = {
   'top.blackout': 'Blackout',
   'top.releaseAll': 'Release all',
   'history.undone': 'Undone: {label}',
+  'settings.ai.budget': 'Monthly OpenRouter budget (USD)',
+  'settings.ai.budgetHint': '0 = no cap. Beyond it calls are refused (the local mode answers when the fallback is on).',
   'settings.osc.allow': 'Allowed senders',
   'settings.osc.allowHint': 'IPv4 addresses or CIDR ranges, comma-separated; empty = any machine on the network. 127.0.0.1 is always accepted.',
   'settings.osc.feedback': 'State feedback (destinations)',

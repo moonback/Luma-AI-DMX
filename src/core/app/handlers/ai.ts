@@ -7,6 +7,8 @@ import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWit
 import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
 import { OPENROUTER_KEY, UserError } from '../shared';
 import { createHash, randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { AiUsageLedger, type AiUsage } from '../../ai/usage';
 import type { AppService, CommandIn } from '../AppService';
 
 /* AI Director: proposals (local or OpenRouter), revision, application and the model catalogue. */
@@ -14,7 +16,11 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
   const ok = { ok: true } as const;
   const e = app.engine;
   switch (cmd.type) {
-    case 'ai.propose': return aiPropose(app, cmd.prompt);
+    case 'ai.propose': return aiPropose(app, cmd.prompt, cmd.continueThread);
+    case 'ai.resetThread':
+      threads.delete(app);
+      return ok;
+    case 'ai.usage': return { ...(await ledgerOf(app).totals()), budget: app.settings.ai.monthlyBudget };
     case 'ai.revise': {
       const prev = app.proposals.get(cmd.proposalId);
       if (!prev) throw new UserError('Proposition expirée');
@@ -129,6 +135,40 @@ export function rigBasis(app: AppService): string {
   return createHash('sha1').update(JSON.stringify(rig)).digest('hex');
 }
 
+const ledgers = new WeakMap<AppService, AiUsageLedger>();
+export function ledgerOf(app: AppService): AiUsageLedger {
+  let l = ledgers.get(app);
+  if (!l) ledgers.set(app, (l = new AiUsageLedger(path.join(app.opts.dataDir, 'ai-usage.json'))));
+  return l;
+}
+export const recordUsage = (app: AppService) => (u: AiUsage): void => { void ledgerOf(app).record(u).catch(() => undefined); };
+
+/** Refuses an OpenRouter call once the monthly budget is spent (the local fallback still answers when enabled). */
+export async function guardBudget(app: AppService): Promise<void> {
+  const budget = app.settings.ai.monthlyBudget;
+  if (budget === null) return;
+  const { month } = await ledgerOf(app).totals();
+  if (month.cost >= budget) throw new UserError(`Budget IA mensuel atteint (${month.cost.toFixed(2)} $ sur ${budget} $) : modifiable dans Paramètres › IA`);
+}
+
+/** Last exchanges of the conversation with the remote model, for follow-up requests (« plutôt l’inverse »). */
+const THREAD_TURNS = 3;
+const threads = new WeakMap<AppService, { projectId: string; turns: { prompt: string; answer: string }[] }>();
+
+function threadHistory(app: AppService): { role: 'user' | 'assistant'; content: string }[] {
+  const t = threads.get(app);
+  if (!t || t.projectId !== app.project.id) return [];
+  return t.turns.flatMap((x) => [{ role: 'user' as const, content: x.prompt }, { role: 'assistant' as const, content: x.answer }]);
+}
+
+function rememberTurn(app: AppService, prompt: string, p: AiProposal): void {
+  let t = threads.get(app);
+  if (!t || t.projectId !== app.project.id) threads.set(app, (t = { projectId: app.project.id, turns: [] }));
+  // What the model said and what validation kept, so a follow-up can build on it without re-sending the rig twice.
+  const answer = JSON.stringify({ understanding: p.understanding, actions: p.actions.map((a) => `${a.status} — ${a.summary}`) }).slice(0, 1500);
+  t.turns = [...t.turns, { prompt, answer }].slice(-THREAD_TURNS);
+}
+
 /** Removes the stopped live AI effects nobody kept (see `pruneTransientEffects`). */
 export function pruneAiEffects(app: AppService): void {
   const running = new Set(app.engine.snapshot().effects.map((x) => x.effectId));
@@ -141,7 +181,7 @@ export function storeProposal(app: AppService, p: AiProposal): void {
   while (app.proposals.size > 20) app.proposals.delete(app.proposals.keys().next().value!);
 }
 
-export async function aiPropose(app: AppService, prompt: string): Promise<AiProposal> {
+export async function aiPropose(app: AppService, prompt: string, continueThread = false): Promise<AiProposal> {
   if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
   app.aiBusy = true;
   const abort = (app.aiAbort = new AbortController());
@@ -151,9 +191,10 @@ export async function aiPropose(app: AppService, prompt: string): Promise<AiProp
     let proposal: AiProposal;
     if (ai.provider === 'openrouter' && key) {
       try {
+        await guardBudget(app);
         const model = ai.model || DEFAULT_OPENROUTER_MODEL;
         const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-        const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal });
+        const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app), history: continueThread ? threadHistory(app) : [] });
         // Validated against the project as it is now: it may have changed during the request.
         proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx: validationCtx(app) });
         app.aiLastError = null;
@@ -172,6 +213,8 @@ export async function aiPropose(app: AppService, prompt: string): Promise<AiProp
     }
     guardFlashes(app, proposal);
     storeProposal(app, proposal);
+    if (!continueThread) threads.delete(app);
+    rememberTurn(app, prompt, proposal);
     // Remembering the prompt is not an edit of the show: a clean project stays clean (saved with the next save).
     const clean = !app.dirty;
     app.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); }, { history: false });
@@ -195,9 +238,10 @@ async function sceneFromPhoto(app: AppService, image: string) {
   app.aiBusy = true;
   const abort = (app.aiAbort = new AbortController());
   try {
+    await guardBudget(app);
     const model = ai.model || DEFAULT_OPENROUTER_MODEL;
     const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-    const r = await sceneFromPhotoWithOpenRouter(image, { apiKey: key, model, effort: ai.effort, timeoutMs: Math.max(60, ai.timeoutSec) * 1000, capabilities: caps, signal: abort.signal }, randomUUID);
+    const r = await sceneFromPhotoWithOpenRouter(image, { apiKey: key, model, effort: ai.effort, timeoutMs: Math.max(60, ai.timeoutSec) * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app) }, randomUUID);
     app.aiLastError = null;
     app.logger.info('IA', `Scène depuis photo : ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
     return r;

@@ -9,6 +9,7 @@ import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
 import { coarseChannel } from '../../fixtures/profiles';
 import { BRAND } from '../../../shared/brand';
+import type { AiUsage } from '../usage';
 
 export const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 export const DEFAULT_OPENROUTER_MODEL = 'openrouter/auto';
@@ -74,7 +75,8 @@ ${JSON.stringify(PLAN_JSON_SCHEMA)}
 - Values are normalized 0..1 (level, pan, tilt, amplitude, offset, phaseSpread). Colours are "#RRGGBB". Fades/holds are seconds. speed is cycles per second.
 - Target fixtures only by the exact group names, fixture names or fixture types listed in the rig description. {"all": true} targets the whole rig.
 - Multi-head fixtures list their "modules" (e.g. main head + LED ring). Add "module": "<module name>" to a target to change only that head's colour/intensity.
-- Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove) need pan/tilt. Colour effects need colour attributes.
+- Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove, fan) need pan/tilt. Colour effects (including brightnessColor) need colour attributes.
+- fan spreads moving heads symmetrically from the centre and folds them back. bassFollow (dimmer follows the bass, amplitude = depth) and brightnessColor (colour from colors[0] when the music is dark to colors[1] when it is bright) only react while live audio or a track is analysed: say so in "understanding".
 - Never touch reset, lamp or other special/control functions; they are not available to you.
 - Strobe effects are only allowed when the rig description says strobeAllowed: true.
 - setBeam changes beam attributes of fixtures that have them: gobo = slot number on the gobo wheel (0 = open, see "gobos" for the slot count), prism true/false, zoom 0 (narrow) .. 1 (wide), focus/frost/iris 0..1.
@@ -255,6 +257,10 @@ export interface OpenRouterOptions {
   signal?: AbortSignal;
   /** One corrective request when the answer does not match the schema (default: on). */
   repair?: boolean;
+  /** Tokens and cost of each completed call (OpenRouter `usage`). */
+  onUsage?: (u: AiUsage) => void;
+  /** Previous exchanges of the conversation, sent between the system prompt and the request. */
+  history?: { role: 'user' | 'assistant'; content: string }[];
 }
 
 export interface ProviderResult {
@@ -296,8 +302,10 @@ export async function completeJson(system: string, user: string | unknown[], sch
     model: opts.model,
     max_tokens: 8000,
     temperature: 0.3,
+    usage: { include: true },
     messages: [
       { role: 'system', content: system },
+      ...(opts.history ?? []),
       { role: 'user', content: user },
     ],
   };
@@ -313,6 +321,9 @@ export async function completeJson(system: string, user: string | unknown[], sch
     body: JSON.stringify(body),
   }, opts.timeoutMs, opts.signal, stats);
 
+  // The call is paid even if its content turns out unusable: record it first.
+  const usage = z.object({ usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number(), cost: z.number().optional() }) }).safeParse(json);
+  if (usage.success) opts.onUsage?.({ promptTokens: usage.data.usage.prompt_tokens, completionTokens: usage.data.usage.completion_tokens, cost: usage.data.usage.cost ?? null });
   const parsed = z
     .object({ model: z.string().optional(), choices: z.array(z.object({ finish_reason: z.string().nullable().optional(), message: z.object({ content: z.string().nullable().optional() }) })).min(1) })
     .safeParse(json);

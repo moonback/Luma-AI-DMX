@@ -59,6 +59,8 @@ export const fr = {
   'top.blackout': 'Blackout',
   'top.releaseAll': 'Tout relâcher',
   'history.undone': 'Annulé : {label}',
+  'settings.ai.budget': 'Budget mensuel OpenRouter (USD)',
+  'settings.ai.budgetHint': '0 = aucun plafond. Au-delà, les appels sont refusés (le mode local répond si le repli est activé).',
   'settings.osc.allow': 'Adresses autorisées',
   'settings.osc.allowHint': 'IPv4 ou plages CIDR séparées par des virgules ; vide = toute machine du réseau. 127.0.0.1 est toujours accepté.',
   'settings.osc.feedback': 'Retour d’état (destinations)',

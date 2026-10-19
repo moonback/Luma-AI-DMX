@@ -170,6 +170,7 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'music.genStep.compile': 'Creating scenes, effects and timeline…',
   'music.genCancel': 'Cancel',
   'ai.undo': 'Undo',
+  'ai.usageLine': 'This month: {calls} call(s), {tokens} tokens, ${cost} (budget {budget})',
   'ai.undoHint': 'Restores the project as it was before the last applied proposal and releases its AI layer',
   'ai.cancel': 'Cancel',
   'effects.keep': 'Keep',

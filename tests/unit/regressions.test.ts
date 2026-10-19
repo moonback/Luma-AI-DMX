@@ -656,3 +656,67 @@ describe('contrôle externe (LUMA-061, 063, 067)', () => {
     await svc.dispose();
   });
 });
+
+describe('IA phase 3 (LUMA-058, 059, 070)', () => {
+  const answer = (understanding: string, usage = { prompt_tokens: 1000, completion_tokens: 200, cost: 0.004 }) =>
+    new Response(JSON.stringify({ model: 'm/x', usage, choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ understanding, actions: [] }) } }] }));
+
+  async function openrouterService(fetchImpl: (url: string, init: RequestInit) => Response) {
+    const { svc, secrets } = makeService();
+    await svc.init();
+    svc.setProject(demoProject(), true);
+    secrets.set('openrouter-api-key', 'sk-test-key-000');
+    const s = svc.getSettings();
+    await svc.execute({ type: 'settings.update', settings: { ...s, ai: { ...s.ai, provider: 'openrouter', fallbackToLocal: true } } });
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => (url.endsWith('/models') ? new Response(JSON.stringify({ data: [] })) : fetchImpl(url, init)));
+    return svc;
+  }
+
+  it('coût enregistré par appel ; budget mensuel atteint → repli local signalé', async () => {
+    const svc = await openrouterService(() => answer('ok'));
+    try {
+      await svc.execute({ type: 'ai.propose', prompt: 'bleu' });
+      await new Promise((r) => setTimeout(r, 50));
+      const u = await svc.execute({ type: 'ai.usage' });
+      expect(u.month).toMatchObject({ calls: 1, promptTokens: 1000, completionTokens: 200 });
+      expect(u.month.cost).toBeCloseTo(0.004);
+      const s = svc.getSettings();
+      await svc.execute({ type: 'settings.update', settings: { ...s, ai: { ...s.ai, monthlyBudget: 0.001 } } });
+      const p = await svc.execute({ type: 'ai.propose', prompt: 'rouge' });
+      expect(p.provider).toBe('local');
+      expect(p.notices.join(' ')).toMatch(/Budget IA mensuel atteint/);
+    } finally {
+      vi.unstubAllGlobals();
+      await svc.dispose();
+    }
+  });
+
+  it('continueThread envoie les échanges précédents ; sans lui ou après reset, rien', async () => {
+    const bodies: { messages: { role: string; content: string }[] }[] = [];
+    const svc = await openrouterService((_u, init) => { bodies.push(JSON.parse(String(init.body))); return answer(`réponse ${bodies.length}`); });
+    try {
+      await svc.execute({ type: 'ai.propose', prompt: 'ambiance bleue' });
+      await svc.execute({ type: 'ai.propose', prompt: 'plutôt l’inverse', continueThread: true });
+      const roles = bodies[1]!.messages.map((m) => m.role);
+      expect(roles).toEqual(['system', 'user', 'assistant', 'user']);
+      expect(bodies[1]!.messages[1]!.content).toBe('ambiance bleue');
+      expect(bodies[1]!.messages[2]!.content).toContain('réponse 1');
+      await svc.execute({ type: 'ai.resetThread' });
+      await svc.execute({ type: 'ai.propose', prompt: 'autre chose', continueThread: true });
+      expect(bodies[2]!.messages.map((m) => m.role)).toEqual(['system', 'user']);
+    } finally {
+      vi.unstubAllGlobals();
+      await svc.dispose();
+    }
+  });
+
+  it('contrat v2 : éventail accepté sur les lyres, refusé sans pan/tilt', async () => {
+    const { validateActions } = await import('../../src/core/ai/director');
+    const { ProjectIndex } = await import('../../src/core/engine/resolve');
+    const ctx = { index: new ProjectIndex(demoProject()), allowStrobe: false, maxStrobeHz: 10 };
+    const fan = (target: object) => ({ type: 'startEffect', effect: { name: 'Éventail', effectType: 'fan', target } });
+    const [ok, ko] = validateActions([fan({ fixtureNames: ['Spot 1', 'Spot 2'] }), fan({ fixtureNames: ['PAR 1'] })], ctx);
+    expect(ok!.status).not.toBe('rejected');
+    expect(ko!.status).toBe('rejected');
+  });
+});

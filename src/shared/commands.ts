@@ -25,6 +25,7 @@ import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 import type { PhotoScene } from '../core/ai/sceneFromPhoto';
 import type { StorageReport } from '../core/app/storage';
+import type { AiUsageDay } from '../core/ai/usage';
 import type { HardwareSession } from '../core/app/hardware';
 
 /**
@@ -226,7 +227,11 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rdm.setAddress'), outputId: z.string().min(1).max(64), universe: universeSchema, uid: z.string().regex(/^[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}$/), address: addressSchema, confirmed: z.literal(true) }),
   empty('output.interfaces'),
   // AI
-  z.object({ type: z.literal('ai.propose'), prompt: z.string().trim().min(1).max(2000) }),
+  /** `continueThread`: the last exchanges are sent to the remote model (follow-up requests). */
+  z.object({ type: z.literal('ai.propose'), prompt: z.string().trim().min(1).max(2000), continueThread: z.boolean().optional() }),
+  empty('ai.resetThread'),
+  /** OpenRouter tokens and cost of today and of the month, with the monthly budget. */
+  empty('ai.usage'),
   z.object({ type: z.literal('ai.revise'), proposalId: z.string().uuid(), actions: z.array(z.unknown()).max(50) }),
   z.object({ type: z.literal('ai.apply'), proposalId: z.string().uuid() }),
   empty('ai.release'),
@@ -444,6 +449,8 @@ export interface CommandResults {
   'ai.apply': AiExecutionReport;
   'ai.release': Void;
   'ai.cancel': Void;
+  'ai.resetThread': Void;
+  'ai.usage': { today: AiUsageDay; month: AiUsageDay; budget: number | null };
   'ai.undoApply': Void;
   'ai.listModels': OpenRouterModel[];
   'ai.setKey': Void;

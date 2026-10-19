@@ -168,6 +168,7 @@ export const frScreens = {
   'music.genStep.compile': 'Création des scènes, effets et timeline…',
   'music.genCancel': 'Annuler',
   'ai.undo': 'Défaire',
+  'ai.usageLine': 'Ce mois : {calls} appel(s), {tokens} jetons, {cost} $ (budget {budget})',
   'ai.undoHint': 'Rétablit le projet tel qu’avant la dernière proposition appliquée et relâche sa couche IA',
   'ai.cancel': 'Annuler',
   'effects.keep': 'Conserver',

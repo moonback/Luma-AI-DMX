@@ -92,8 +92,10 @@ export const settingsSchema = z.object({
       allowStrobe: z.boolean().default(false),
       /** Fall back to the local interpreter when the external provider fails. */
       fallbackToLocal: z.boolean().default(true),
+      /** Monthly OpenRouter spending cap in USD (null: none); calls are refused once reached. */
+      monthlyBudget: z.number().min(0).max(10_000).nullable().default(null),
     })
-    .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, fallbackToLocal: true }),
+    .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, fallbackToLocal: true, monthlyBudget: null }),
   audio: z.object({ deviceId: z.string().max(300).nullable().default(null) }).default({ deviceId: null }),
   /** External control: MIDI mappings (renderer, Web MIDI), OSC over UDP (main) and timecode chase of the timeline. */
   control: z

@@ -7,7 +7,7 @@ import { adjustSection, compileShow, planLocally, rigInfo, withMood, type RigInf
 import { KEY_NAMES, SECTION_NAMES } from '../../music/analyze';
 import { DEFAULT_OPENROUTER_MODEL, planSectionWithOpenRouter, planShowWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
 import { ResponseCache } from '../../ai/responseCache';
-import { openRouterModels } from './ai';
+import { guardBudget, openRouterModels, recordUsage } from './ai';
 import { OPENROUTER_KEY, UserError } from '../shared';
 import type { AppService, CommandIn } from '../AppService';
 
@@ -145,8 +145,9 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
   const abort = (app.aiAbort = new AbortController());
   app.emit('progress', { op: 'music', step: 'request' });
   try {
+    await guardBudget(app);
     const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-    const r = await call({ apiKey, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal });
+    const r = await call({ apiKey, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app) });
     app.aiLastError = null;
     await cache.set(id, r).catch((err: unknown) => app.logger.warn('Musique', `Cache IA non enregistré : ${err instanceof Error ? err.message : String(err)}`));
     return r;

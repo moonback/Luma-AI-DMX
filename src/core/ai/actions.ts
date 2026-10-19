@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { FIXTURE_TYPES, hexColorSchema, unitSchema, type EffectType } from '../model/schemas';
 
-/** Effect types of the AI contract v1; newer engine types (fan, band followers) need a contract bump to be offered. */
-export const AI_EFFECT_TYPES = ['fade', 'pulse', 'chase', 'wave', 'rainbow', 'strobe', 'dimmerWave', 'colorCycle', 'panTilt', 'randomMove'] as const satisfies readonly EffectType[];
+/** Effect types the AI may ask for (contract v2 added the fan and the band followers). */
+export const AI_EFFECT_TYPES = ['fade', 'pulse', 'chase', 'wave', 'rainbow', 'strobe', 'dimmerWave', 'colorCycle', 'panTilt', 'randomMove', 'fan', 'bassFollow', 'brightnessColor'] as const satisfies readonly EffectType[];
 
 /**
  * The ONLY things an AI (local or remote) may ask for. Actions are validated against the patch and the
@@ -109,11 +109,14 @@ export const MAX_ACTIONS_PER_PROPOSAL = 50;
  * checks that the samples of every past version still validate once migrated: a stored plan or a model prompted
  * with an older contract keeps working.
  */
-export const AI_ACTIONS_VERSION = 1;
+export const AI_ACTIONS_VERSION = 2;
 
 type RawAction = Record<string, unknown>;
 /** `AI_ACTION_MIGRATIONS[n]` turns a version-n action into a version n + 1 action (null drops it). */
-export const AI_ACTION_MIGRATIONS: Record<number, (a: RawAction) => RawAction | null> = {};
+export const AI_ACTION_MIGRATIONS: Record<number, (a: RawAction) => RawAction | null> = {
+  // v1 → v2 is additive (three new effect types): every v1 action is a valid v2 action.
+  1: (a) => a,
+};
 
 /** Brings raw actions written for `fromVersion` to the current contract. Unknown future versions are refused. */
 export function migrateAiActions(raws: readonly unknown[], fromVersion: number): { actions: unknown[]; error: string | null } {
