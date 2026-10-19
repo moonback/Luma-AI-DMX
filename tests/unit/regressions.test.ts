@@ -557,3 +557,53 @@ describe('OpenRouter : reprise et réparation', () => {
     expect(r.notices.some((x) => x.includes('seconde requête'))).toBe(true);
   });
 });
+
+describe('annulation globale (LUMA-053)', () => {
+  it('propriété : une suite aléatoire d’éditions, tout annuler redonne l’état initial, tout rétablir l’état final', async () => {
+    const { svc } = makeService();
+    await svc.init();
+    svc.setProject(demoProject(), true);
+    const strip = (p: unknown) => { const c = structuredClone(p) as { meta: { modifiedAt?: string } }; delete c.meta.modifiedAt; return c; };
+    const initial = strip(svc.project);
+    let seed = 3;
+    const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+    const ops = [
+      () => svc.execute({ type: 'group.upsert', group: { id: `g${rnd(3)}`, name: `G${rnd(9)}`, color: '#123456', fixtureIds: ['par1'] } }),
+      () => svc.execute({ type: 'project.update', meta: { notes: `n${rnd(99)}` } }),
+      () => svc.execute({ type: 'fixture.duplicate', ids: ['par1'] }),
+      () => svc.execute({ type: 'palette.upsert', palette: { id: `p${rnd(3)}`, name: 'P', kind: 'intensity', values: { dimmer: rnd(10) / 10 } } }),
+    ];
+    let steps = 0;
+    for (let i = 0; i < 12; i++) {
+      await ops[rnd(ops.length)]!();
+      await new Promise((r) => setTimeout(r, 650)); // past the coalescing window: one step per edit
+      steps++;
+    }
+    const final = strip(svc.project);
+    expect(svc.projectState().history!.undo).toBe(steps);
+    for (let i = 0; i < steps; i++) expect((await svc.execute({ type: 'project.undo' })).label).not.toBeNull();
+    expect(strip(svc.project)).toEqual(initial);
+    expect((await svc.execute({ type: 'project.undo' })).label).toBeNull();
+    for (let i = 0; i < steps; i++) await svc.execute({ type: 'project.redo' });
+    expect(strip(svc.project)).toEqual(final);
+    await svc.dispose();
+  }, 30_000);
+
+  it('gestes rapprochés regroupés, prompts IA hors historique, nouvelle édition efface le rétablissement, nouveau projet repart à zéro', async () => {
+    const { svc } = makeService();
+    await svc.init();
+    svc.setProject(demoProject(), true);
+    for (const x of [1, 2, 3]) await svc.execute({ type: 'fixture.update', id: 'par1', patch: { position: { x, y: 0 } } });
+    expect(svc.projectState().history).toMatchObject({ undo: 1, undoLabel: 'modification d’un projecteur' });
+    await svc.execute({ type: 'ai.propose', prompt: 'Mets les pars en rouge' });
+    expect(svc.projectState().history!.undo).toBe(1);
+    await svc.execute({ type: 'project.undo' });
+    expect(svc.project.patch.find((f) => f.id === 'par1')!.position).toEqual({ x: -2, y: 1 });
+    expect(svc.projectState().history!.redo).toBe(1);
+    await svc.execute({ type: 'project.update', meta: { notes: 'autre' } });
+    expect(svc.projectState().history!.redo).toBe(0);
+    await svc.execute({ type: 'project.new', name: 'Neuf' });
+    expect(svc.projectState().history).toMatchObject({ undo: 0, redo: 0 });
+    await svc.dispose();
+  });
+});

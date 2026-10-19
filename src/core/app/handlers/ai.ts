@@ -174,7 +174,7 @@ export async function aiPropose(app: AppService, prompt: string): Promise<AiProp
     storeProposal(app, proposal);
     // Remembering the prompt is not an edit of the show: a clean project stays clean (saved with the next save).
     const clean = !app.dirty;
-    app.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); });
+    app.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); }, { history: false });
     if (clean) {
       app.savedRevision = app.revision;
       app.emitProject();

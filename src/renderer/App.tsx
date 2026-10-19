@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
-  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Undo2,
+  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
 import logo from '../../public/logo.png';
@@ -64,6 +64,12 @@ export async function openProject(path?: string): Promise<boolean> {
   const opened = !!(await act({ type: 'project.open', ...(path ? { path } : {}) }))?.opened;
   if (opened) detachStageIfWanted();
   return opened;
+}
+
+/** Undo / redo of the whole project, with the step's label in a toast. */
+export async function historyStep(direction: 'undo' | 'redo'): Promise<void> {
+  const r = await act({ type: direction === 'undo' ? 'project.undo' : 'project.redo' });
+  if (r) useStore.getState().toast(r.label ? { kind: 'info', title: t(direction === 'undo' ? 'history.undone' : 'history.redone', { label: r.label }) } : { kind: 'info', title: t('history.nothing') });
 }
 
 /** Releases programmer, AI layer, effects, playbacks and timeline after a confirmation (blackout and STOP are separate). */
@@ -129,6 +135,8 @@ function TopBar() {
       <div className="row">
         <button className="btn ghost icon" title={tr('project.newShortcut')} onClick={() => setShowNew(true)}><FilePlus size={16} /></button>
         <button className="btn ghost icon" title={tr('project.openShortcut')} onClick={() => void openProject()}><FolderOpen size={16} /></button>
+        <button className="btn ghost icon" data-testid="undo" disabled={!project?.history?.undo} title={project?.history?.undoLabel ? tr('history.undoTitle', { label: project.history.undoLabel }) : tr('history.nothing')} onClick={() => void historyStep('undo')}><Undo2 size={16} /></button>
+        <button className="btn ghost icon" data-testid="redo" disabled={!project?.history?.redo} title={project?.history?.redoLabel ? tr('history.redoTitle', { label: project.history.redoLabel }) : tr('history.nothing')} onClick={() => void historyStep('redo')}><Redo2 size={16} /></button>
         <button className="btn ghost icon" title={tr('project.saveShortcut')} data-testid="save" onClick={() => void act({ type: 'project.save' })}><Save size={16} /></button>
       </div>
       <div className="top-sep" />
@@ -291,6 +299,12 @@ export function runShortcut(action: ShortcutAction): boolean {
     case 'stopOutput': void act({ type: 'output.transmit', on: false }); return true;
     case 'release': void act({ type: 'programmer.release' }); return true;
     case 'releaseAll': void releaseAllFlow(); return true;
+    case 'undo':
+    case 'redo':
+      // The stage pages and the timeline editor keep their own Ctrl+Z / Ctrl+Y (scene layout, local edits).
+      if (s.page === 'visualizer' || s.page === 'stage3d' || s.page === 'timeline') return false;
+      void historyStep(action);
+      return true;
     case 'save': void act({ type: 'project.save' }); return true;
     case 'saveAs': void act({ type: 'project.saveAs' }); return true;
     case 'open': void openProject(); return true;
@@ -313,7 +327,7 @@ function useShortcuts() {
       if (!action) return;
       const el = e.target as HTMLElement;
       const typing = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
-      if (typing && !allowedWhileTyping(combo)) return;
+      if (typing && (!allowedWhileTyping(combo) || action === 'undo' || action === 'redo')) return; // Ctrl+Z in a field undoes the text
       if (s.confirm && action !== 'stopOutput') return;
       if (runShortcut(action)) e.preventDefault();
     };

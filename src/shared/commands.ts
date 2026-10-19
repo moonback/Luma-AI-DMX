@@ -83,6 +83,9 @@ export const commandSchema = z.discriminatedUnion('type', [
   /** Scene-layout history (positions, mounting, trusses, stage settings): independent from the other edits. */
   empty('scene.undo'),
   empty('scene.redo'),
+  /** Project-wide history: every edit of the show (patch, scenes, cues, effects, timelines, AI, layout). */
+  empty('project.undo'),
+  empty('project.redo'),
   empty('project.listRecovery'),
   /** Autosaves newer than their saved file (offered at start-up after a crash). */
   empty('project.recoveryCandidates'),
@@ -302,6 +305,8 @@ export interface ProjectState {
   issues: PatchIssue[];
   /** Number of scene-layout steps that can be undone / redone. */
   sceneHistory: { undo: number; redo: number };
+  /** Project-wide undo / redo, with the label of the next step each way. */
+  history?: { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
 }
 
 export interface Alert {
@@ -351,6 +356,8 @@ export interface CommandResults {
   'project.update': Void;
   'scene.undo': Void;
   'scene.redo': Void;
+  'project.undo': { label: string | null };
+  'project.redo': { label: string | null };
   'project.listRecovery': RecoveryEntry[];
   'project.recoveryCandidates': RecoveryEntry[];
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };

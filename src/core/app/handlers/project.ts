@@ -9,6 +9,7 @@ import { UserError } from '../shared';
 import { addRecent, clearAutosave } from '../files';
 import { exportMvr } from '../../project/mvr';
 import { saveToLibrary } from '../library';
+import { travel } from '../history';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Project documents: new/open/save/export, demos, recovery, onboarding. */
@@ -108,6 +109,12 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
       app.settings.onboarding = { ...app.settings.onboarding, ...Object.fromEntries(Object.entries({ completed: cmd.completed, checklistHidden: cmd.checklistHidden }).filter(([, v]) => v !== undefined)) };
       await app.persistSettings();
       return ok;
+    case 'project.undo':
+    case 'project.redo': {
+      const label = travel(app, cmd.type === 'project.undo' ? 'undo' : 'redo');
+      if (label) app.logger.info('Projet', `${cmd.type === 'project.undo' ? 'Annulé' : 'Rétabli'} : ${label}`);
+      return { label };
+    }
     case 'project.listRecovery':
       return listRecovery(app.autosaveDir, app.projectPath);
     case 'project.recoveryCandidates':

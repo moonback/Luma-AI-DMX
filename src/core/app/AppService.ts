@@ -32,6 +32,7 @@ import { endLocate, onLocatePhoto } from './handlers/locate';
 import { configureUpdates } from './handlers/system';
 import { ROUTES, UNCOUNTED, type CommandDomain } from './routes';
 import { applyControl, onOsc, remoteState } from './control';
+import { beginCommand, clearHistory, historyState, recordStep } from './history';
 import { METRICS_EVERY_MS, onEngineError, onFrame, onOutputStatus, rendererLost, sampleMetrics } from './monitor';
 import { autosave } from './files';
 import type { Alert, Command, CommandOf, CommandResults, CommandType, LocatePhoto, Progress, ProjectState, RuntimeState, ValuesFrame } from '../../shared/commands';
@@ -250,6 +251,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     return {
       project: this.project, library: this.userProfiles, path: this.projectPath, dirty: this.dirty, revision: this.revision, issues: validatePatch(this.index.lib, this.project.patch),
       sceneHistory: { undo: this.sceneUndo.length, redo: this.sceneRedo.length },
+      history: historyState(this),
     };
   }
 
@@ -278,13 +280,15 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   /* ------------------------------------------------------------------ */
 
   /** Applies a mutation on a draft, re-validates the whole document, then swaps it in. Invalid drafts are rejected. */
-  mutate(fn: (draft: Project) => void): void {
+  /** `history: false`: bookkeeping that is not an edit of the show (not an undo step). */
+  mutate(fn: (draft: Project) => void, opts: { history?: boolean } = {}): void {
     const draft = structuredClone(this.project);
     fn(draft);
     embedUsedProfiles(draft, this.userProfiles);
     draft.meta.modifiedAt = new Date().toISOString();
     const parsed = projectSchema.safeParse(draft);
     if (!parsed.success) throw new UserError(`Modification refusée : ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ')}`);
+    if (opts.history !== false) recordStep(this, this.project);
     this.setProject(parsed.data, false);
   }
 
@@ -292,6 +296,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.project = p;
     this.index = new ProjectIndex(p, this.userProfiles);
     if (reset) {
+      clearHistory(this);
       this.sceneUndo = [];
       this.sceneRedo = [];
       this.engine.stopAllPlaybacks();
@@ -360,6 +365,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   /** Routes a command to the handler of its domain (the part of the type before the dot). */
   async handle(cmd: Command): Promise<unknown> {
     if (!UNCOUNTED.has(cmd.type)) this.usage.command(cmd.type);
+    beginCommand(this, cmd.type);
     const domain = cmd.type.slice(0, cmd.type.indexOf('.')) as CommandDomain;
     // Handlers run synchronously up to their first await, on the engine's thread: that part is what can cause DMX jitter.
     const t0 = performance.now();
@@ -371,14 +377,6 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   }
 
   /* ------------------------------------------------------------------ */
-  /* Music (Song-to-Show)                                                */
-  /* ------------------------------------------------------------------ */
-
-  /* ------------------------------------------------------------------ */
-  /* External control (OSC)                                              */
-  /* ------------------------------------------------------------------ */
-
-  /* ------------------------------------------------------------------ */
   /* AI                                                                  */
   /* ------------------------------------------------------------------ */
 
@@ -388,9 +386,5 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   interpretForTest(prompt: string) {
     return interpretLocally(prompt, interpreterContext(this.index, this.engine, this.settings.ai.allowStrobe));
   }
-
-  /* ------------------------------------------------------------------ */
-  /* Files                                                               */
-  /* ------------------------------------------------------------------ */
 
 }
