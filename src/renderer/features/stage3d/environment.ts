@@ -253,7 +253,7 @@ export function buildEnvironment(
     env.add(cyc);
   }
   if (!stage.arena) {
-    const wingMat = new THREE.MeshStandardMaterial({ color: 0x0a0b10, roughness: 1, side: THREE.DoubleSide });
+    const wingMat = new THREE.MeshStandardMaterial({ color: 0x0a0b10, roughness: 1 });
     for (const x of [-W / 2 - 0.5, W / 2 + 0.5]) {
       const wing = new THREE.Mesh(new THREE.PlaneGeometry(D, H), wingMat);
       wing.rotation.y = Math.PI / 2;
