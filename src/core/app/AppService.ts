@@ -199,6 +199,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     this.logger.level = this.settings.logs.level;
     this.engine.updateSettings(this.engineSettings());
     await this.outputs.configure(this.settings.outputs);
+    if (this.settings.general.autoArmOnStart) void this.outputs.armAllEnabledReal();
     configureUpdates(this);
     await applyControl(this);
     if (this.opts.autoStart !== false) this.engine.start();

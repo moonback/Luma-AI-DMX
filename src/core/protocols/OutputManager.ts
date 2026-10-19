@@ -92,6 +92,11 @@ export class OutputManager extends EventEmitter<{ status: [] }> implements Frame
     this.emit('status');
   }
 
+  /** Start-up re-arm: every enabled real output is tried; a failure (hardware absent) is left to the adapter's error state. */
+  async armAllEnabledReal(): Promise<void> {
+    for (const [id, a] of this.adapters) if (a.config.kind !== 'virtual' && a.config.enabled) await this.arm(id).catch(() => undefined);
+  }
+
   async disarm(id: string): Promise<void> {
     const a = this.adapters.get(id);
     if (!a) return;

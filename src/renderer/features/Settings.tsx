@@ -421,8 +421,9 @@ export function SettingsPage() {
             <table className="table small"><tbody>
               <tr><td>{tr('settings.network.outputs')}</td><td>{s.outputs.map((o) => o.name).join(', ')}</td></tr>
               <tr><td>{tr('settings.network.cid')}</td><td className="mono">{s.sacn?.cid ?? '—'}</td></tr>
-              <tr><td>{tr('settings.network.arming')}</td><td>{tr('settings.network.armingNever')}</td></tr>
             </tbody></table>
+            <label className="check" style={{ marginTop: 10 }}><input type="checkbox" data-testid="auto-arm-on-start" checked={s.general.autoArmOnStart} onChange={(e) => set('general', { autoArmOnStart: e.target.checked })} />{tr('settings.network.autoArm')}</label>
+            <p className="small dim" style={{ marginBottom: 0 }}>{tr('settings.network.armingNever')}</p>
           </Panel>
         )}
         {tab === 'ai' && (

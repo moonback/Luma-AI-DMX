@@ -60,8 +60,10 @@ export const settingsSchema = z.object({
       detachStage3dOnStart: z.boolean().default(false),
       /** Same for the Live Console window. */
       detachConsoleOnStart: z.boolean().default(false),
+      /** Re-arms the enabled real outputs at launch; one that cannot open (hardware absent) just stays in error. Off by default: real outputs start disarmed. */
+      autoArmOnStart: z.boolean().default(false),
     })
-    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false, detachConsoleOnStart: false }),
+    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false, detachConsoleOnStart: false, autoArmOnStart: false }),
   /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
   onboarding: z
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })
