@@ -20,6 +20,10 @@ export const fr = {
   'nav.music': 'Show Musique',
   'nav.output': 'DMX Output',
   'nav.settings': 'Réglages',
+  'nav.group.live': 'Live',
+  'nav.group.create': 'Création',
+  'nav.group.stage': 'Scène',
+  'nav.group.config': 'Config',
   'nav.expand': 'Déplier',
   'nav.collapse': 'Replier',
 

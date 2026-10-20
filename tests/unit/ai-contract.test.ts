@@ -16,7 +16,8 @@ describe('contrat d’actions IA versionné', () => {
     // UPDATE_AI_CONTRACT=1 writes the snapshot of a NEW version; an existing version is never rewritten.
     if (process.env.UPDATE_AI_CONTRACT && !existsSync(schemaFile)) writeFileSync(schemaFile, `${current}\n`);
     expect(existsSync(schemaFile), `${schemaFile} manquant : lancez UPDATE_AI_CONTRACT=1 npx vitest run tests/unit/ai-contract.test.ts`).toBe(true);
-    expect(current, `aiActionSchema a changé sans changer AI_ACTIONS_VERSION (${AI_ACTIONS_VERSION})`).toBe(readFileSync(schemaFile, 'utf8').trimEnd());
+    // core.autocrlf may check the snapshot out with CRLF: compare line endings normalised.
+    expect(current, `aiActionSchema a changé sans changer AI_ACTIONS_VERSION (${AI_ACTIONS_VERSION})`).toBe(readFileSync(schemaFile, 'utf8').replace(/\r\n/gu, '\n').trimEnd());
   });
 
   it('les échantillons de la version courante couvrent tous les types d’action', () => {

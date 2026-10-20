@@ -18,6 +18,10 @@ export const en: Record<MessageKey, string> = {
   'nav.music': 'Music',
   'nav.output': 'DMX Output',
   'nav.settings': 'Settings',
+  'nav.group.live': 'Live',
+  'nav.group.create': 'Create',
+  'nav.group.stage': 'Stage',
+  'nav.group.config': 'Config',
   'nav.expand': 'Expand',
   'nav.collapse': 'Collapse',
 

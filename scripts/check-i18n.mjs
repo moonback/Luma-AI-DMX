@@ -11,7 +11,8 @@ const WORD = /[A-Za-zÀ-ÿ]{2,}/u;
 /** JSX text nodes, text attributes and message-like object properties holding words. */
 export function countTexts(src) {
   let n = 0;
-  for (const m of src.matchAll(/(?<!=)>([^<>{}]+)<(?=[/A-Za-z])/gu)) if (WORD.test(m[1])) n++;
+  // `;`, `=` or `'` inside the match: code between generics (`useState<X>(…)`) or a comment, not a text node.
+  for (const m of src.matchAll(/(?<!=)>([^<>{}]+)<(?=[/A-Za-z])/gu)) if (WORD.test(m[1]) && !/[;='`]/u.test(m[1])) n++;
   for (const m of src.matchAll(/\b(?:title|placeholder|label|aria-label|hint|subtitle|confirmLabel|message|detail)\s*[=:]\s*\{?\s*(['"`])((?:(?!\1).)*)\1/gu)) if (WORD.test(m[2].replace(/\$\{[^}]*\}/gu, ''))) n++;
   return n;
 }

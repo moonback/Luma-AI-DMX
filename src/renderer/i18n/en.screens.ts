@@ -88,6 +88,8 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'prog.groupCount': '{n} fix.',
   'prog.groupPartial': '{sel}/{n} selected',
   'prog.groupSelected': 'Current selection',
+  'fixtures.selectAll': 'Select all',
+  'fixtures.selectOne': 'Select {name}',
   'prog.select': 'Select',
   'prog.selectHint': 'Click the name: select the group',
   'prog.replace': 'Replace with the selection',

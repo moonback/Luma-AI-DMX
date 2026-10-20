@@ -325,7 +325,7 @@ export function Fixtures() {
                     <th style={{ width: 32, paddingLeft: 10 }}>
                       <input
                         type="checkbox"
-                        aria-label="Tout sélectionner"
+                        aria-label={tr('fixtures.selectAll')}
                         checked={allShownSelected}
                         ref={(el) => { if (el) el.indeterminate = !allShownSelected && someShownSelected; }}
                         onChange={toggleAll}
@@ -344,7 +344,7 @@ export function Fixtures() {
                         <td style={{ paddingLeft: 10 }} onClick={(e) => { e.stopPropagation(); toggleCheckbox(rf.fixture.id); }}>
                           <input
                             type="checkbox"
-                            aria-label={`Sélectionner ${rf.fixture.name}`}
+                            aria-label={tr('fixtures.selectOne', { name: rf.fixture.name })}
                             checked={isSelected}
                             onChange={() => toggleCheckbox(rf.fixture.id)}
                             style={{ cursor: 'pointer' }}

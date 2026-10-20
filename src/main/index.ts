@@ -311,13 +311,13 @@ app.on('window-all-closed', () => {
 
 let disposed = false;
 // Kept alive until quitAndInstall terminates the process — prevents GC from closing the window prematurely.
-let installWin: BrowserWindow | null = null;
+let _installWin: BrowserWindow | null = null;
 app.on('before-quit', (e) => {
   quitting = true;
   if (disposed || !service) return;
   e.preventDefault();
   const update = updater?.status();
-  if (update?.state === 'ready') installWin = showInstallWindow(update.version);
+  if (update?.state === 'ready') _installWin = showInstallWindow(update.version);
   // Clean shutdown: stop the engine, send sACN stream-terminated packets, close sockets/serial ports.
   void service.dispose().finally(() => {
     disposed = true;

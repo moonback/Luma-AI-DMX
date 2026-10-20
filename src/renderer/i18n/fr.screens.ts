@@ -87,6 +87,8 @@ export const frScreens = {
   'prog.groupPartial': '{sel}/{n} sélectionné(s)',
   'prog.groupSelected': 'Sélection courante',
   'prog.select': 'Sélectionner',
+  'fixtures.selectAll': 'Tout sélectionner',
+  'fixtures.selectOne': 'Sélectionner {name}',
   'prog.selectHint': 'Clic sur le nom : sélectionner le groupe',
   'prog.replace': 'Remplacer par la sélection',
   'prog.renameColor': 'Renommer / couleur',

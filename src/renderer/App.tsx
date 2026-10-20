@@ -29,7 +29,7 @@ import { HelpButton, OnboardingHost } from './features/Onboarding';
 import { StartScreen } from './features/StartScreen';
 import { MiniPlayer } from './features/music/MiniPlayer';
 import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/WhatsNew';
-import { t, useT } from './i18n';
+import { t, useT, type MessageKey } from './i18n';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
@@ -185,11 +185,11 @@ function TopBar() {
   );
 }
 
-const NAV_GROUPS: { label: string; ids: PageId[] }[] = [
-  { label: 'Live', ids: ['dashboard', 'console', 'programmer', 'cues', 'quick'] },
-  { label: 'Création', ids: ['effects', 'timeline', 'ai', 'music'] },
-  { label: 'Scène', ids: ['visualizer', 'fixtures', 'audio'] },
-  { label: 'Config', ids: ['output', 'settings'] },
+const NAV_GROUPS: { key: MessageKey; ids: PageId[] }[] = [
+  { key: 'nav.group.live', ids: ['dashboard', 'console', 'programmer', 'cues', 'quick'] },
+  { key: 'nav.group.create', ids: ['effects', 'timeline', 'ai', 'music'] },
+  { key: 'nav.group.stage', ids: ['visualizer', 'fixtures', 'audio'] },
+  { key: 'nav.group.config', ids: ['output', 'settings'] },
 ];
 
 function Sidebar() {
@@ -206,8 +206,8 @@ function Sidebar() {
       
       <div className="sidebar-sep" />
       {NAV_GROUPS.map((group, gi) => (
-        <div key={group.label} className="nav-group">
-          {!collapsed && <span className="nav-group-label">{group.label}</span>}
+        <div key={group.key} className="nav-group">
+          {!collapsed && <span className="nav-group-label">{tr(group.key)}</span>}
           {collapsed && gi > 0 && <div className="nav-group-divider" />}
           {group.ids.map((id: string) => {
             const p = PAGES.find((pg) => pg.id === id)!;
