@@ -185,6 +185,13 @@ function TopBar() {
   );
 }
 
+const NAV_GROUPS: { label: string; ids: PageId[] }[] = [
+  { label: 'Live', ids: ['dashboard', 'console', 'programmer', 'cues', 'quick'] },
+  { label: 'Création', ids: ['effects', 'timeline', 'ai', 'music'] },
+  { label: 'Scène', ids: ['visualizer', 'fixtures', 'audio'] },
+  { label: 'Config', ids: ['output', 'settings'] },
+];
+
 function Sidebar() {
   const tr = useT();
   const page = useStore((s) => s.page);
@@ -192,21 +199,46 @@ function Sidebar() {
   const collapsed = useStore((s) => s.collapsed);
   const toggle = useStore((s) => s.toggleCollapsed);
   const keys = resolveShortcuts(useStore((s) => s.shortcuts));
+  const rt = useStore((s) => s.runtime);
+  const aiActive = rt?.engine.aiActive ?? false;
   return (
     <nav className="sidebar" aria-label={tr('nav.aria')}>
-      {PAGES.map((p) => {
-        const Icon = ICONS[p.id];
-        const k = keys[`page:${p.id}` as ShortcutAction];
-        const label = tr(`nav.${p.id}`);
-        return (
-          <button key={p.id} className={`nav-item ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)} title={`${label}${k ? ` (${k})` : ''}`} data-testid={`nav-${p.id}`}>
-            <Icon size={17} /><span>{label}</span>{k && <span className="kbd">{k.replace('Ctrl+', '^')}</span>}
-          </button>
-        );
-      })}
+      
+      <div className="sidebar-sep" />
+      {NAV_GROUPS.map((group, gi) => (
+        <div key={group.label} className="nav-group">
+          {!collapsed && <span className="nav-group-label">{group.label}</span>}
+          {collapsed && gi > 0 && <div className="nav-group-divider" />}
+          {group.ids.map((id) => {
+            const p = PAGES.find((pg) => pg.id === id)!;
+            const Icon = ICONS[p.id];
+            const k = keys[`page:${p.id}` as ShortcutAction];
+            const label = tr(`nav.${p.id}`);
+            const badge = p.id === 'ai' && aiActive;
+            return (
+              <button
+                key={p.id}
+                className={`nav-item ${page === p.id ? 'active' : ''}`}
+                onClick={() => setPage(p.id)}
+                title={collapsed ? `${label}${k ? ` (${k})` : ''}` : undefined}
+                data-testid={`nav-${p.id}`}
+              >
+                <span className="nav-icon-wrap">
+                  <Icon size={16} />
+                  {badge && <span className="nav-badge" />}
+                </span>
+                <span className="nav-label">{label}</span>
+                {k && <span className="kbd">{k.replace('Ctrl+', '^')}</span>}
+              </button>
+            );
+          })}
+        </div>
+      ))}
       <div className="grow" />
-      <button className="nav-item" onClick={toggle} title={collapsed ? tr('nav.expand') : tr('nav.collapse')}>
-        {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}<span>{tr('nav.collapse')}</span>
+      <div className="sidebar-sep" />
+      <button className="nav-item nav-collapse-btn" onClick={toggle} title={collapsed ? tr('nav.expand') : tr('nav.collapse')}>
+        {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        <span className="nav-label">{collapsed ? tr('nav.expand') : tr('nav.collapse')}</span>
       </button>
     </nav>
   );
