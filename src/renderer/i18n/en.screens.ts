@@ -63,6 +63,8 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'console.openPatch': 'Open the patch',
   'console.noFixturesHint': 'Patch fixtures to control them.',
   'console.fixtures': 'Fixtures',
+  'console.pinFixtures': 'Keep the fixture list open',
+  'console.unpinFixtures': 'Fold the list into a rail (unfolds on hover)',
   'console.controls': 'Controls',
   'console.cols': 'Palettes per row (1 or 2)',
   'console.drag': 'Drag to move this palette',

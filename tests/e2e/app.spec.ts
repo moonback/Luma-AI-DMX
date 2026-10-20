@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import { demoSong } from '../music-synth';
+import { DEMOS } from '../../src/core/demo/catalog';
 
 const require = createRequire(import.meta.url);
 const electronPath = require('electron') as unknown as string;
@@ -34,6 +35,8 @@ test.afterAll(async () => {
 });
 
 const nav = (id: string) => page.getByTestId(`nav-${id}`).click();
+/** Fixture tiles of the live console: the side rail only unfolds while hovered or focused. */
+const tiles = async () => { await page.getByTestId('console-side').hover(); return page.getByTestId('fixture-tiles'); };
 /** Stage page in plan or 3D view (the view choice is remembered between sessions, so it is set explicitly). */
 const nav2d = async () => { await nav('visualizer'); await page.getByTestId('stage-mode-2d').click(); };
 const nav3d = async () => { await nav('visualizer'); await page.getByTestId('stage-mode-3d').click(); };
@@ -70,7 +73,7 @@ test('patch → console → sortie virtuelle → IA → rapport', async () => {
 
   // Live console: select first fixture, push the dimmer to full
   await nav('console');
-  await page.getByTestId('fixture-tiles').locator('.fx-tile').first().click();
+  await (await tiles()).locator('.fx-tile').first().click();
   await page.getByTestId('dimmer-fader').fill('255');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${shots}/03-console.png` });
@@ -133,7 +136,7 @@ test('programmeur → scène → liste de cues → GO', async () => {
   await page.getByRole('button', { name: /Relâcher l’IA/ }).click();
   await nav('console');
   await page.getByRole('button', { name: 'Aucun', exact: true }).click(); // selection left by the previous scenario
-  await page.getByTestId('fixture-tiles').locator('.fx-tile').first().click();
+  await (await tiles()).locator('.fx-tile').first().click();
   await page.getByTestId('dimmer-fader').fill('200');
   await page.getByRole('button', { name: 'Enregistrer scène' }).click();
   await page.locator('.modal input.input').first().fill('Scène e2e');
@@ -271,7 +274,7 @@ test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection
   await page.getByTestId('cam-foh').click();
   // Select a moving head (shared selection with the console) → info panel shows its live data.
   await nav('console');
-  await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+  await (await tiles()).getByText('Lyre 1').click();
   await nav3d();
   await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
   await expect(page.getByTestId('stage3d-info')).toContainText('prisme');
@@ -283,6 +286,12 @@ test('vue 3D du visualiseur : kit réel, faisceaux animés, caméras, sélection
   await expect(detached.getByTestId('stage-3d').locator('canvas')).toBeVisible();
   await expect(detached.getByTestId('fps')).not.toHaveText('0 i/s', { timeout: 5000 });
   await expect(detached.getByTestId('nav-visualizer')).toHaveCount(0);
+  // F11 (LUMA-024): the HTML fullscreen of the detached view passes the permission filter, and toggles back.
+  const fullscreen = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isFullScreen()));
+  await detached.keyboard.press('F11');
+  await expect.poll(fullscreen, { timeout: 5000 }).toBe(true);
+  await detached.keyboard.press('F11');
+  await expect.poll(fullscreen, { timeout: 5000 }).toBe(false);
   await detached.screenshot({ path: `${shots}/16e-visualizer-3d-detache.png` });
   await detached.close();
   await inv({ type: 'effect.stopAll' });
@@ -310,7 +319,7 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
   await nav3d();
   if (!(await page.getByTestId('stage3d-info').isVisible())) {
     await nav('console');
-    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await (await tiles()).getByText('Lyre 1').click();
     await nav3d();
   }
   await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
@@ -374,7 +383,7 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
   await nav3d();
   if (!(await page.getByTestId('stage3d-info').isVisible())) {
     await nav('console');
-    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await (await tiles()).getByText('Lyre 1').click();
     await nav3d();
   }
   await page.getByTestId('fixture-truss').selectOption({ label: 'Structure 1' });
@@ -401,7 +410,7 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
   await nav3d();
   if (!(await page.getByTestId('stage3d-info').isVisible())) {
     await nav('console');
-    await page.getByTestId('fixture-tiles').getByText('Lyre 1').click();
+    await (await tiles()).getByText('Lyre 1').click();
     await nav3d();
   }
   await expect(page.getByTestId('stage3d-info')).toContainText('Lyre 1');
@@ -717,7 +726,7 @@ test('onboarding : visite guidée complète, premiers pas, projet de démonstrat
 
   await page.getByTestId('help').click();
   await page.getByTestId('help-demos').click();
-  await expect(page.getByTestId('demo-gallery').locator('[data-testid^="demo-"]')).toHaveCount(20);
+  await expect(page.getByTestId('demo-gallery').locator('[data-testid^="demo-"]')).toHaveCount(DEMOS.length);
   await page.screenshot({ path: `${shots}/24-projets-demo.png` });
   await page.getByTestId('demo-gala-danse').getByRole('button', { name: 'Ouvrir' }).click();
   const confirm = page.getByRole('button', { name: 'Ouvrir la démo' });

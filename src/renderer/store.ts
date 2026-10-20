@@ -135,7 +135,7 @@ export const useStore = create<State>((set, get) => ({
   sources: {},
   logs: [],
   progress: null,
-  page: prefs.page ?? 'quick',
+  page: prefs.page ?? 'dashboard',
   collapsed: prefs.collapsed ?? false,
   selection: [],
   cueListId: null,
