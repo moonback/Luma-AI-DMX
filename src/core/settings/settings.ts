@@ -15,6 +15,7 @@ export const SHORTCUT_ACTIONS = [
   { id: 'new', label: 'Nouveau projet', default: 'Ctrl+N' },
   { id: 'diagnostics', label: 'Console de diagnostic', default: 'Ctrl+`' },
   { id: 'page:dashboard', label: 'Espace Dashboard', default: 'Ctrl+1' },
+  { id: 'page:setup', label: 'Espace Mise en place', default: '' },
   { id: 'page:fixtures', label: 'Espace Fixtures', default: 'Ctrl+2' },
   { id: 'page:console', label: 'Espace Live Console', default: 'Ctrl+3' },
   { id: 'page:programmer', label: 'Espace Programmer', default: 'Ctrl+4' },

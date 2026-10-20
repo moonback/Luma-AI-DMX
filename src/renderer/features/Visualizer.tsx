@@ -517,7 +517,7 @@ function AddBtn({ kind, label, testId }: { kind: SceneKind; label: string; testI
 }
 
 /** One-click starting layouts; replacing a non-empty scene asks first (and stays undoable). */
-function TemplatePicker({ vis }: { vis: Vis }) {
+export function TemplatePicker({ vis }: { vis: Vis }) {
   const apply = async (t: (typeof SCENE_TEMPLATES)[number]) => {
     if (hasSceneContent(vis) && !(await confirmAction({
       title: 'Remplacer la scène',
@@ -538,12 +538,36 @@ function TemplatePicker({ vis }: { vis: Vis }) {
   );
 }
 
+/** Stage size and shape (plateau), shared by the scene panel and the step-by-step setup page. */
+export function StageShapeSettings({ vis }: { vis: Vis }) {
+  const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
+  return (
+    <Section icon={<Theater size={13} />} title="Plateau">
+      <div className="chips" role="group" aria-label="Forme du plateau">
+        {SHAPES.map((sh) => <button key={sh.id} className={`chip ${vis.shape === sh.id ? 'on' : ''}`} data-testid={`shape-${sh.id}`} onClick={() => update({ shape: sh.id })}>{sh.label}</button>)}
+      </div>
+      <div className="scene-card-grid">
+        <Num label="Largeur" title="Largeur du plateau, jardin ↔ cour (m)" value={vis.stageWidth} min={2} max={200} step={1} onChange={(v) => update({ stageWidth: v })} />
+        <Num label="Profondeur" title="Profondeur du plateau (m)" value={vis.stageDepth} min={2} max={200} step={1} onChange={(v) => update({ stageDepth: v })} />
+        {vis.shape !== 'arena' && (
+          <label className="row small scene-check"><input type="checkbox" checked={vis.cyclo} onChange={(e) => update({ cyclo: e.target.checked })} data-testid="cyclo" />Cyclorama</label>
+        )}
+        {vis.shape === 'thrust' && (
+          <>
+            <Num label="Avancée L" title="Largeur de l’avancée (m)" value={vis.thrust.width} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, width: v } })} />
+            <Num label="Avancée P" title="Profondeur de l’avancée (m)" value={vis.thrust.depth} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, depth: v } })} />
+          </>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 /** Side panel shared by the 2D and 3D views: build the scene (template, library, elements) or inspect the selection. */
 function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
   const tab = useStore((s) => s.scenePanel) ?? 'build';
   const setTab = useStore((s) => s.setScenePanel);
   const count = useStore((s) => (s.sceneSel ? 1 : s.selection.length));
-  const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
   return (
     <aside className="scene-panel" aria-label="Panneau de la scène">
       <div className="scene-panel-head">
@@ -562,24 +586,7 @@ function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
         <Section icon={<Library size={13} />} title="Bibliothèque">
           <LibraryPicker />
         </Section>
-        <Section icon={<Theater size={13} />} title="Plateau">
-          <div className="chips" role="group" aria-label="Forme du plateau">
-            {SHAPES.map((sh) => <button key={sh.id} className={`chip ${vis.shape === sh.id ? 'on' : ''}`} data-testid={`shape-${sh.id}`} onClick={() => update({ shape: sh.id })}>{sh.label}</button>)}
-          </div>
-          <div className="scene-card-grid">
-            <Num label="Largeur" title="Largeur du plateau, jardin ↔ cour (m)" value={vis.stageWidth} min={2} max={200} step={1} onChange={(v) => update({ stageWidth: v })} />
-            <Num label="Profondeur" title="Profondeur du plateau (m)" value={vis.stageDepth} min={2} max={200} step={1} onChange={(v) => update({ stageDepth: v })} />
-            {vis.shape !== 'arena' && (
-              <label className="row small scene-check"><input type="checkbox" checked={vis.cyclo} onChange={(e) => update({ cyclo: e.target.checked })} data-testid="cyclo" />Cyclorama</label>
-            )}
-            {vis.shape === 'thrust' && (
-              <>
-                <Num label="Avancée L" title="Largeur de l’avancée (m)" value={vis.thrust.width} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, width: v } })} />
-                <Num label="Avancée P" title="Profondeur de l’avancée (m)" value={vis.thrust.depth} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, depth: v } })} />
-              </>
-            )}
-          </div>
-        </Section>
+        <StageShapeSettings vis={vis} />
         <Section icon={<MapPin size={13} />} title="Points de scène" count={vis.markers.length}>
           {vis.markers.map((m) => <MarkerCard key={m.id} m={m} vis={vis} />)}
           <AddBtn kind="marker" label="Point de scène" testId="marker-add" />
@@ -922,7 +929,7 @@ function SelectionTab({ vis, mode }: { vis: Vis; mode: '2d' | '3d' }) {
 /* ---------- Build tab sections ---------- */
 
 /** Set pieces (risers, stairs, speakers, monitors, mic stands, tables, drapes, boxes, columns). */
-function PropSettings({ vis }: { vis: Vis }) {
+export function PropSettings({ vis }: { vis: Vis }) {
   return (
     <Section icon={<Armchair size={13} />} title="Décor" count={vis.props.length}>
       {vis.props.map((p) => <PropCard key={p.id} p={p} vis={vis} />)}
@@ -933,7 +940,7 @@ function PropSettings({ vis }: { vis: Vis }) {
 }
 
 /** Explicit trusses: hung fixtures follow them (handled by the main process when a truss changes). */
-function TrussSettings({ vis }: { vis: Vis }) {
+export function TrussSettings({ vis }: { vis: Vis }) {
   const { fixtures } = useResolved();
   const selection = useStore((s) => s.selection);
   return (

@@ -10,6 +10,7 @@ export const EMPTY_ARR: readonly never[] = Object.freeze([]);
 
 export const PAGES = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'setup', label: 'Mise en place' },
   { id: 'fixtures', label: 'Fixtures' },
   { id: 'console', label: 'Live Console' },
   { id: 'programmer', label: 'Programmer' },

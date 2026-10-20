@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   Activity, AudioLines, Bell, Bot, Box, Cable, ChartGantt, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
-  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play,
+  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, Wand2, X, Moon, Play,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
 import { PAGES, useStore, confirmAction, type PageId } from './store';
@@ -10,6 +10,7 @@ import { ConfirmHost, Modal, Field } from './components/ui';
 import { allowedWhileTyping, bindingsFrom, comboFromEvent } from './shortcuts';
 import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings';
 import { Dashboard } from './features/Dashboard';
+import { SetupWizard } from './features/SetupWizard';
 import { Fixtures } from './features/Fixtures';
 import { LiveConsole } from './features/LiveConsole';
 import { Programmer } from './features/Programmer';
@@ -26,11 +27,11 @@ import { externalControl } from './control';
 import { HelpButton, OnboardingHost } from './features/Onboarding';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
-  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
+  dashboard: LayoutDashboard, setup: Wand2, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles,
   timeline: ChartGantt, ai: Bot, visualizer: Theater, stage3d: Box, audio: AudioLines, music: Music2, output: Cable, settings: SettingsIcon,
 };
 const VIEWS: Record<PageId, ComponentType> = {
-  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects,
+  dashboard: Dashboard, setup: SetupWizard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects,
   timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, stage3d: StageVisualizer3D, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
 };
 

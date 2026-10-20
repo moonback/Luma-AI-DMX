@@ -8,7 +8,7 @@ import { findFreeAddress } from '../../core/fixtures/patch';
 import { attributeLabel } from '../../core/fixtures/attributes';
 import { CameraLocate } from './CameraLocate';
 
-function AddDialog({ onClose }: { onClose: () => void }) {
+export function AddDialog({ onClose }: { onClose: () => void }) {
   const { lib } = useResolved();
   const project = useStore((s) => s.project!.project);
   const profiles = lib.all();
