@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Download, GripVertical, HelpCircle, LayoutGrid, Pencil, Plus, Search, Upload, X, Zap } from 'lucide-react';
+import { Download, GripVertical, HelpCircle, LayoutGrid, Pencil, Plus, Search, Upload, Users, X, Zap } from 'lucide-react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { act, newId } from '../api';
@@ -49,11 +49,24 @@ async function releaseFamily(ids: string[], classes: readonly string[]): Promise
   if (attributes.length) await act({ type: 'programmer.release', fixtureIds: ids, attributes });
 }
 
+/** Resolves the fixture IDs an action should target. Priority: action groupIds → action fixtureIds → global selection → all. */
+function resolveTargets(a: QuickAction): string[] {
+  const st = useStore.getState();
+  const p = st.project?.project;
+  if (!p) return [];
+  if (a.groupIds?.length) {
+    const ids = [...new Set(a.groupIds.flatMap((gid) => p.groups.find((g) => g.id === gid)?.fixtureIds ?? []))];
+    return ids.slice(0, 1024);
+  }
+  if (a.fixtureIds?.length) return a.fixtureIds.slice(0, 1024);
+  return (st.selection.length ? st.selection : p.patch.map((f) => f.id)).slice(0, 1024);
+}
+
 async function toggle(a: QuickAction, active: boolean, missing: string): Promise<boolean | undefined> {
   const st = useStore.getState();
   const p = st.project?.project;
   if (!p) return undefined;
-  const ids = (st.selection.length ? st.selection : p.patch.map((f) => f.id)).slice(0, 1024);
+  const ids = resolveTargets(a);
   if (a.kind === 'color') {
     if (active) { await releaseFamily(ids, FAMILY.color); return false; }
     return ids.length && (await act({ type: 'programmer.setColor', fixtureIds: ids, color: a.color })) ? true : undefined;
@@ -155,6 +168,23 @@ function ActionTile({
         )}
         {size !== 'sm' && isColor && (
           <span style={{ fontSize: '0.68rem', opacity: 0.7 }}>{tr('quick.kind.color')}</span>
+        )}
+        {/* Machine target badge */}
+        {size !== 'sm' && (a.groupIds?.length || a.fixtureIds?.length) && (
+          <span
+            title={tr('quick.targetBadgeHint')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              background: 'rgba(0,0,0,0.35)',
+              borderRadius: 4,
+              padding: '1px 5px',
+              fontSize: '0.65rem',
+              color: isColor ? 'rgba(0,0,0,0.7)' : 'var(--fg-muted, #aaa)',
+            }}
+          >
+            <Users size={9} />
+            {a.groupIds?.length ? a.groupIds.length : a.fixtureIds?.length}
+          </span>
         )}
       </button>
       {editing && (
@@ -275,6 +305,103 @@ function CategoryTabBar({
   );
 }
 
+// ── Machine picker (used inside ActionDialog) ────────────────────────────────
+/** Mode: 'all' = follow global selection, 'groups' = pick groups, 'fixtures' = pick individual fixtures */
+type TargetMode = 'all' | 'groups' | 'fixtures';
+
+function MachinePicker({
+  mode, setMode,
+  selectedGroups, setSelectedGroups,
+  selectedFixtures, setSelectedFixtures,
+}: {
+  mode: TargetMode; setMode(m: TargetMode): void;
+  selectedGroups: string[]; setSelectedGroups(ids: string[]): void;
+  selectedFixtures: string[]; setSelectedFixtures(ids: string[]): void;
+}) {
+  const tr = useT();
+  const p = useStore((s) => s.project!.project);
+  const toggleId = (list: string[], id: string): string[] =>
+    list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+
+  return (
+    <div>
+      {/* Mode selector */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+        {(['all', 'groups', 'fixtures'] as TargetMode[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={`btn sm ${mode === m ? 'primary' : ''}`}
+            style={{ flex: 1 }}
+            onClick={() => setMode(m)}
+          >
+            {tr(`quick.target.${m}`)}
+          </button>
+        ))}
+      </div>
+
+      {/* Group chips */}
+      {mode === 'groups' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {p.groups.length === 0 && (
+            <span style={{ fontSize: '0.82rem', color: 'var(--fg-muted, #888)' }}>{tr('quick.target.noGroups')}</span>
+          )}
+          {p.groups.map((g) => {
+            const on = selectedGroups.includes(g.id);
+            return (
+              <button
+                key={g.id}
+                type="button"
+                className={`btn sm ${on ? 'primary' : ''}`}
+                style={{
+                  borderLeft: `3px solid ${g.color}`,
+                  paddingLeft: 8,
+                  opacity: on ? 1 : 0.65,
+                }}
+                onClick={() => setSelectedGroups(toggleId(selectedGroups, g.id))}
+              >
+                {g.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Fixture chips */}
+      {mode === 'fixtures' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
+          {p.patch.length === 0 && (
+            <span style={{ fontSize: '0.82rem', color: 'var(--fg-muted, #888)' }}>{tr('quick.target.noFixtures')}</span>
+          )}
+          {p.patch.map((f) => {
+            const on = selectedFixtures.includes(f.id);
+            return (
+              <button
+                key={f.id}
+                type="button"
+                className={`btn sm ${on ? 'primary' : ''}`}
+                style={{ opacity: on ? 1 : 0.65 }}
+                onClick={() => setSelectedFixtures(toggleId(selectedFixtures, f.id))}
+              >
+                {f.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Summary */}
+      {mode !== 'all' && (
+        <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--fg-muted, #888)' }}>
+          {mode === 'groups'
+            ? tr('quick.target.groupsSummary').replace('{n}', String(selectedGroups.length))
+            : tr('quick.target.fixturesSummary').replace('{n}', String(selectedFixtures.length))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Action Dialog ────────────────────────────────────────────────────────────
 function ActionDialog({ initial, categories, onSave, onClose }: { initial?: QuickAction; categories: string[]; onSave: (a: QuickAction) => void; onClose: () => void }) {
   const tr = useT();
@@ -285,12 +412,28 @@ function ActionDialog({ initial, categories, onSave, onClose }: { initial?: Quic
   const [color, setColor] = useState(initial?.kind === 'color' ? initial.color : '#FF0000');
   const [ref, setRef] = useState(initial && initial.kind !== 'color' ? initial.ref : '');
   const [index, setIndex] = useState(initial?.kind === 'cue' && initial.index !== undefined ? String(initial.index) : '');
+
+  // Machine targeting state
+  const initMode = (): TargetMode => {
+    if (initial?.groupIds?.length) return 'groups';
+    if (initial?.fixtureIds?.length) return 'fixtures';
+    return 'all';
+  };
+  const [targetMode, setTargetMode] = useState<TargetMode>(initMode);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>(initial?.groupIds ?? []);
+  const [selectedFixtures, setSelectedFixtures] = useState<string[]>(initial?.fixtureIds ?? []);
+
   const options = kind === 'effect' ? p.effects : kind === 'scene' ? p.scenes : kind === 'palette' ? p.palettes : kind === 'cue' ? p.cueLists : [];
   const chosen = options.find((o) => o.id === ref) ?? options[0];
   const submit = () => {
     const label = name.trim() || chosen?.name || color;
     const a = kind === 'color' ? { kind, color } : chosen ? { kind, ref: chosen.id, ...(kind === 'cue' && index !== '' ? { index: Number(index) } : {}) } : null;
-    const parsed = a && quickActionSchema.safeParse({ id: initial?.id ?? newId(), name: label, ...(category.trim() ? { category } : {}), ...a });
+    const targeting = targetMode === 'groups' && selectedGroups.length
+      ? { groupIds: selectedGroups }
+      : targetMode === 'fixtures' && selectedFixtures.length
+        ? { fixtureIds: selectedFixtures }
+        : {};
+    const parsed = a && quickActionSchema.safeParse({ id: initial?.id ?? newId(), name: label, ...(category.trim() ? { category } : {}), ...targeting, ...a });
     if (parsed?.success) { onSave(parsed.data); onClose(); }
   };
   return (
@@ -315,6 +458,16 @@ function ActionDialog({ initial, categories, onSave, onClose }: { initial?: Quic
         </Field>
       )}
       {kind === 'cue' && <Field label={tr('quick.cueIndex')} hint={tr('quick.cueIndexHint')}><input className="input" type="number" min={1} value={index === '' ? '' : Number(index) + 1} onChange={(e) => setIndex(e.target.value === '' ? '' : String(Math.max(0, Number(e.target.value) - 1)))} /></Field>}
+      <Field label={tr('quick.target')} hint={tr('quick.targetHint')}>
+        <MachinePicker
+          mode={targetMode}
+          setMode={setTargetMode}
+          selectedGroups={selectedGroups}
+          setSelectedGroups={setSelectedGroups}
+          selectedFixtures={selectedFixtures}
+          setSelectedFixtures={setSelectedFixtures}
+        />
+      </Field>
     </Modal>
   );
 }

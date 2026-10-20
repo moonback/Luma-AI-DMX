@@ -5,14 +5,26 @@ export const MAX_QUICK_ACTIONS = 200;
 
 /** `category` is a free label; actions without one are grouped together. Array order is the display order. */
 const base = { id: idSchema, name: nameSchema, category: z.string().trim().min(1).max(40).optional() };
+/**
+ * Per-action machine targeting (overrides the global selection when set).
+ * - `groupIds`: resolved to fixture IDs at trigger time via the project's groups.
+ * - `fixtureIds`: explicit fixture IDs.
+ * Both are optional; when absent the action falls back to the global selection.
+ * Only meaningful for color/palette actions (effects, cues and scenes carry their own targeting).
+ */
+const targeting = {
+  groupIds: z.array(idSchema).max(64).optional(),
+  fixtureIds: z.array(idSchema).max(1024).optional(),
+};
+
 /** One-click action of the Quick Actions page; effects, scenes, palettes and cue lists are referenced by id. */
 export const quickActionSchema = z.discriminatedUnion('kind', [
-  z.object({ ...base, kind: z.literal('color'), color: hexColorSchema }),
-  z.object({ ...base, kind: z.literal('effect'), ref: idSchema }),
-  z.object({ ...base, kind: z.literal('scene'), ref: idSchema }),
-  z.object({ ...base, kind: z.literal('palette'), ref: idSchema }),
+  z.object({ ...base, ...targeting, kind: z.literal('color'), color: hexColorSchema }),
+  z.object({ ...base, ...targeting, kind: z.literal('effect'), ref: idSchema }),
+  z.object({ ...base, ...targeting, kind: z.literal('scene'), ref: idSchema }),
+  z.object({ ...base, ...targeting, kind: z.literal('palette'), ref: idSchema }),
   /** `index` omitted = GO (next cue); set = jump to that cue. */
-  z.object({ ...base, kind: z.literal('cue'), ref: idSchema, index: z.number().int().min(0).optional() }),
+  z.object({ ...base, ...targeting, kind: z.literal('cue'), ref: idSchema, index: z.number().int().min(0).optional() }),
 ]);
 export type QuickAction = z.infer<typeof quickActionSchema>;
 
