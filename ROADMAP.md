@@ -2223,6 +2223,8 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Réalisation (19/10/2026).** Transitions avec backoff et propriété « jamais ouverte sans arm() » sur 200 séquences aléatoires : `tests/unit/coverage-phase2.test.ts`. Branches d’`OutputManager.ts` à 73,6 % (objectif 85 %).
 
+**Complément (20/10/2026).** Deux courses corrigées : désarmement pendant la reconnexion (le `.then(open)` rouvrait la sortie) et pendant l’ouverture (`doOpen` résolu après `close()` passait l’état à `ready`). `sendFrames` exige désormais `armed` en plus de `ready`. Tests : `tests/unit/protocols.test.ts` (« sûreté de l’armement face aux courses »).
+
 **Constat technique (à l’audit).** `OutputAdapter` gère les états `connecting`, `ready`, `error` et `disarmed`, avec une reconnexion à backoff exponentiel plafonné à 10 s, et `OutputManager` gère l’armement. Couverture des branches : 59,1 % pour `types.ts` et 65,3 % pour `OutputManager.ts`. Les courses (fermeture pendant le minuteur de reconnexion, `configure` d’une sortie armée en erreur) ne sont pas testées.
 
 **Preuves dans le code.**

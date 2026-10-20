@@ -27,6 +27,11 @@ export abstract class OutputAdapter extends EventEmitter<{ status: [] }> {
     this.setState('connecting', 'Ouverture…');
     try {
       await this.doOpen();
+      // Disarmed while the transport was opening: release it and stay disarmed (never 'ready' without arm()).
+      if (this.closing) {
+        await this.doClose().catch((err: unknown) => this.recordError(err));
+        return;
+      }
       this.backoff = 1000;
       this.setState('ready', 'Prêt');
     } catch (err) {
@@ -87,7 +92,7 @@ export abstract class OutputAdapter extends EventEmitter<{ status: [] }> {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (this.closing) return;
-      void this.doClose().catch(() => undefined).then(() => this.open());
+      void this.doClose().catch(() => undefined).then(() => { if (!this.closing) void this.open(); });
     }, delay);
   }
 

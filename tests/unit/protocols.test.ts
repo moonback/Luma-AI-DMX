@@ -4,7 +4,7 @@ import { buildSacnPacket, multicastAddress, parseSacnPacket, SacnOutput, SACN_OP
 import { buildEnttecProPacket } from '../../src/core/protocols/enttec';
 import { VirtualOutput } from '../../src/core/protocols/virtual';
 import { OutputManager } from '../../src/core/protocols/OutputManager';
-import { outputConfigSchema, type OutputConfig } from '../../src/core/protocols/types';
+import { OutputAdapter, outputConfigSchema, type OutputConfig } from '../../src/core/protocols/types';
 
 const frame = (fill: (i: number) => number) => Uint8Array.from({ length: 512 }, (_, i) => fill(i));
 
@@ -160,6 +160,70 @@ describe('sortie virtuelle et gestionnaire de sorties', () => {
     m.sendFrames(new Map([[1, frame(() => 3)]]));
     expect(sent).toEqual(['v']);
     expect(m.transmitted.get('a')!.get(1)!.data[0]).toBe(2); // last frame actually handed to the transport
+    await m.closeAll();
+  });
+});
+
+/** Real-output stand-in whose open / close resolve only when the test says so. */
+class Slow extends OutputAdapter {
+  opens = 0;
+  closes = 0;
+  sentFrames = 0;
+  openGate: (() => void) | null = null;
+  closeGates: (() => void)[] = [];
+  constructor(config: OutputConfig, private readonly slowClose = false) { super(config); }
+  protected doOpen(): Promise<void> { this.opens++; return new Promise((r) => { this.openGate = r; }); }
+  protected doClose(): Promise<void> { this.closes++; return this.slowClose ? new Promise((r) => { this.closeGates.push(r); }) : Promise.resolve(); }
+  protected doSend(): void { this.sentFrames++; }
+  boom(): void { this.fail(new Error('câble')); }
+}
+const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+
+describe('sûreté de l’armement face aux courses', () => {
+  const artnet = outputConfigSchema.parse({ id: 'a', name: 'A', kind: 'artnet', host: '127.0.0.1', universeMap: [{ local: 1, remote: 0 }] });
+  afterEach(() => vi.useRealTimers());
+
+  it('un désarmement pendant la reconnexion ne rouvre pas la sortie', async () => {
+    vi.useFakeTimers();
+    const a = new Slow(artnet, true);
+    const opened = a.open();
+    a.openGate!();
+    await opened;
+    a.boom();
+    expect(a.state).toBe('error');
+    await vi.advanceTimersByTimeAsync(1000); // reconnection: doClose pending
+    expect(a.closes).toBe(1);
+    const closed = a.close(); // operator disarms while the reconnection is closing
+    a.closeGates.forEach((r) => r());
+    await closed;
+    await flush();
+    expect(a.state).toBe('disarmed');
+    expect(a.opens).toBe(1);
+  });
+
+  it('un désarmement pendant l’ouverture laisse la sortie désarmée et muette', async () => {
+    const a = new Slow(artnet);
+    const opened = a.open();
+    await a.close(); // disarm while doOpen is still pending
+    a.openGate!();
+    await opened;
+    expect(a.state).toBe('disarmed');
+    a.send(0, frame(() => 1));
+    expect(a.sentFrames).toBe(0);
+  });
+
+  it('une sortie réelle « prête » sans armement ne reçoit aucune trame', async () => {
+    const a = new Slow(artnet);
+    const m = new OutputManager(() => a);
+    await m.configure([artnet]);
+    a.state = 'ready'; // the race above, or any future regression of the adapter
+    m.sendFrames(new Map([[1, frame(() => 1)]]));
+    expect(a.sentFrames).toBe(0);
+    const armed = m.arm('a');
+    a.openGate!();
+    await armed;
+    m.sendFrames(new Map([[1, frame(() => 1)]]));
+    expect(a.sentFrames).toBe(1);
     await m.closeAll();
   });
 });

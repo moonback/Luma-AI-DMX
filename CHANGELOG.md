@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Corrigé
+- Sûreté de l'armement (LUMA-036) : un désarmement pendant une reconnexion ou pendant l'ouverture du transport laissait la sortie réelle repasser « prête » et émettre ; `OutputAdapter` reste désarmé dans ces deux courses et `OutputManager.sendFrames` exige aussi l'armement. Tests de régression : `tests/unit/protocols.test.ts`.
 - Porte qualité rouge : test du contrat IA sensible aux fins de ligne CRLF (`core.autocrlf`), test des démos figé à 20 projets (21 depuis la démo stade), deux erreurs ESLint (import et variable inutilisés).
 - `npm run lint` : quatre fichiers au-dessus de la limite de 600 lignes découpés sans changement de comportement (`QuickActionsParts.tsx`, `model/primitives.ts`, `music/intent.ts`, `demo/catalogStadium.ts`).
 - Cliquet i18n : les génériques `useState<…>` et les commentaires ne sont plus comptés comme du texte d'interface ; libellés des groupes de navigation et cases à cocher du patch passés par les catalogues (fr / en).

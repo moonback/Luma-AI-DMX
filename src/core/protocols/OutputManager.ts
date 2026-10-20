@@ -131,7 +131,8 @@ export class OutputManager extends EventEmitter<{ status: [] }> implements Frame
   sendFrames(frames: ReadonlyMap<number, Uint8Array>): void {
     const now = this.now();
     for (const [id, a] of this.adapters) {
-      if (a.state !== 'ready') continue;
+      // `armed` as well as `ready`: an adapter that comes up late (race with a disarm) must stay silent.
+      if (a.state !== 'ready' || !this.armed.has(id)) continue;
       if (!this.transmitting && a.config.kind !== 'virtual') continue;
       // Per-output rate limit: a tick up to half a period early still sends; the grid never lags more than one period.
       const period = 1000 / a.config.maxFps;
