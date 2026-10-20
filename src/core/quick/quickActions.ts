@@ -28,6 +28,33 @@ export function moveQuickAction(actions: readonly QuickAction[], id: string, cat
   return [...others.slice(0, i), moved, ...others.slice(i)];
 }
 
+/**
+ * Moves all actions of `category` before all actions of `beforeCategory`.
+ * If `beforeCategory` is undefined, appends the category at the end.
+ */
+export function moveCategoryBefore(actions: readonly QuickAction[], category: string, beforeCategory: string | undefined): QuickAction[] {
+  const catKey = (a: QuickAction) => a.category ?? '';
+  const categories = [...new Set(actions.map(catKey))];
+  if (category === (beforeCategory ?? '') || !categories.includes(category)) return [...actions];
+  // Build ordered list of categories
+  const others = categories.filter((c) => c !== category);
+  let insertIdx = beforeCategory !== undefined ? others.indexOf(beforeCategory) : others.length;
+  if (insertIdx < 0) insertIdx = others.length;
+  const orderedCats = [...others.slice(0, insertIdx), category, ...others.slice(insertIdx)];
+  // Re-emit actions in that category order
+  return orderedCats.flatMap((c) => actions.filter((a) => catKey(a) === c));
+}
+
+/** Renames every action of `oldCategory` to `newCategory` (trim; empty → undefined = uncategorized). */
+export function renameCategory(actions: readonly QuickAction[], oldCategory: string, newCategory: string): QuickAction[] {
+  const trimmed = newCategory.trim().slice(0, 40);
+  return actions.map((a) => {
+    if ((a.category ?? '') !== oldCategory) return a;
+    if (!trimmed) { const { category: _c, ...rest } = a; return rest as QuickAction; }
+    return { ...a, category: trimmed };
+  });
+}
+
 /** Parses an import file (an array, or `{ actions: [...] }`): keeps valid actions, gives fresh ids to duplicates. */
 export function parseQuickActions(text: string, existing: readonly QuickAction[], newId: () => string): { actions: QuickAction[]; skipped: number } {
   let raw: unknown;

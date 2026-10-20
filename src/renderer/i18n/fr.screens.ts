@@ -1,4 +1,4 @@
-/** French screen catalogue (Dashboard, console, Programmer, stage, music strip), merged into fr.ts to keep each file short. */
+﻿/** French screen catalogue (Dashboard, console, Programmer, stage, music strip), merged into fr.ts to keep each file short. */
 export const frScreens = {
   'dash.src.title': 'Origine de la donnée',
   'dash.src.persisted': 'persisté',
@@ -406,6 +406,13 @@ export const frScreens = {
   'quick.categoryHint': 'Choisissez une catégorie existante ou tapez-en une nouvelle. Glissez les tuiles pour les ranger.',
   'quick.uncategorized': 'Sans catégorie',
   'quick.dragHint': 'Glissez une tuile sur une autre pour la réordonner, ou sur une catégorie pour l’y ranger.',
+  'quick.dragCategory': 'Glisser pour réordonner cette catégorie',
+  'quick.renameCategory': 'Renommer la catégorie',
+  'quick.renameCategoryHint': 'Double-clic pour renommer',
+  'quick.tabAll': 'Tout',
+  'quick.search': 'Rechercher\u2026',
+  'quick.noResults': 'Aucune action ne correspond à la recherche.',
+  'quick.tileSize': 'Taille des tuiles (SM / MD / LG)',
   'quick.name': 'Nom',
   'quick.color': 'Couleur',
   'quick.noneInProject': 'Rien de ce type dans le projet.',
