@@ -411,9 +411,9 @@ export function QuickActionsPage() {
           <LayoutGrid size={14} />
           <span style={{ fontSize: '0.7rem', marginLeft: 2 }}>{size.toUpperCase()}</span>
         </button>
-        <button className={`btn ${editing ? 'primary' : ''}`} disabled={!actions.length} onClick={() => setEditing(!editing)}><Pencil size={14} />{tr('quick.edit')}</button>
-        <button className="btn" onClick={() => fileRef.current?.click()}><Upload size={14} />{tr('quick.import')}</button>
-        <button className="btn" disabled={!actions.length} onClick={exportFile}><Download size={14} />{tr('quick.export')}</button>
+        <button className={`btn ${editing ? 'primary' : ''}`} disabled={!actions.length} onClick={() => setEditing(!editing)}><Pencil size={14} /></button>
+        <button className="btn" onClick={() => fileRef.current?.click()}><Upload size={14} /></button>
+        <button className="btn" disabled={!actions.length} onClick={exportFile}><Download size={14} /></button>
         <button className="btn primary" onClick={() => setDialog('new')}><Plus size={14} />{tr('quick.add')}</button>
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
       </PageHead>
