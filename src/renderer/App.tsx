@@ -209,7 +209,7 @@ function Sidebar() {
         <div key={group.label} className="nav-group">
           {!collapsed && <span className="nav-group-label">{group.label}</span>}
           {collapsed && gi > 0 && <div className="nav-group-divider" />}
-          {group.ids.map((id) => {
+          {group.ids.map((id: string) => {
             const p = PAGES.find((pg) => pg.id === id)!;
             const Icon = ICONS[p.id];
             const k = keys[`page:${p.id}` as ShortcutAction];

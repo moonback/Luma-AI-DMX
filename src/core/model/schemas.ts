@@ -400,6 +400,8 @@ export const songAnalysisSchema = z.object({
   duration: seconds,
   bpm: z.number().min(20).max(300),
   tempoStable: z.boolean(),
+  /** Time signature numerator: 3 (waltz/6/8) or 4 (common time). Defaults to 4 for legacy analyses. */
+  meter: z.union([z.literal(3), z.literal(4)]).default(4),
   beats: z.array(seconds).max(40000),
   downbeats: z.array(seconds).max(10000),
   sections: z.array(songSectionSchema).max(300),

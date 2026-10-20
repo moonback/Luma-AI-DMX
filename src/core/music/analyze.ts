@@ -149,19 +149,30 @@ function avgVec(vs: Float32Array[], from: number, to: number, dim: number): Floa
   return out;
 }
 
-/** Downbeat phase (0..3): beats with the strongest bass accents and harmonic changes start the bars. */
-function downbeatPhase(f: Frames, beats: number[]): number {
-  const scores = [0, 0, 0, 0];
-  const counts = [0, 0, 0, 0];
-  for (let j = 1; j < beats.length - 1; j++) {
-    const before = avgVec(f.chroma, beats[j - 1]!, beats[j]!, 12);
-    const after = avgVec(f.chroma, beats[j]!, beats[j + 1]!, 12);
-    scores[j % 4]! += near(f.bassFlux, beats[j]!) + 2 * (1 - cosine(before, after));
-    counts[j % 4]!++;
+/** Downbeat phase and meter: tests 3/4 and 4/4 hypotheses and picks the one with the higher score per beat.
+ *
+ * For each candidate meter M (3 or 4), and for each of the M possible phases (0..M-1), the score per beat is:
+ *   bass flux at that beat + 2 × harmonic change from the previous beat.
+ * The meter whose best-phase score is highest wins.
+ */
+function detectMeter(f: Frames, beats: number[]): { phase: number; meter: 3 | 4 } {
+  let bestScore = -Infinity, bestPhase = 0, bestMeter: 3 | 4 = 4;
+  for (const meter of [3, 4] as const) {
+    const scores = new Array<number>(meter).fill(0);
+    const counts = new Array<number>(meter).fill(0);
+    for (let j = 1; j < beats.length - 1; j++) {
+      const before = avgVec(f.chroma, beats[j - 1]!, beats[j]!, 12);
+      const after = avgVec(f.chroma, beats[j]!, beats[j + 1]!, 12);
+      const idx = j % meter;
+      scores[idx]! += near(f.bassFlux, beats[j]!) + 2 * (1 - cosine(before, after));
+      counts[idx]!++;
+    }
+    for (let k = 0; k < meter; k++) {
+      const s = scores[k]! / (counts[k] || 1);
+      if (s > bestScore) { bestScore = s; bestPhase = k; bestMeter = meter; }
+    }
   }
-  let best = 0;
-  for (let k = 1; k < 4; k++) if (scores[k]! / (counts[k] || 1) > scores[best]! / (counts[best] || 1)) best = k;
-  return best;
+  return { phase: bestPhase, meter: bestMeter };
 }
 
 /* ---------------- Structure ---------------- */
@@ -189,7 +200,7 @@ function similarity(bars: Bar[]): number[][] {
   for (const b of bars) for (let d = 0; d < dims; d++) mu[d] = mu[d]! + b.bands[d]! / bars.length;
   for (const b of bars) for (let d = 0; d < dims; d++) sd[d] = sd[d]! + (b.bands[d]! - mu[d]!) ** 2 / bars.length;
   const z = bars.map((b) => Float32Array.from(b.bands, (v, d) => (v - mu[d]!) / (Math.sqrt(sd[d]!) || 1)));
-  const maxRms = Math.max(...bars.map((b) => b.rms)) || 1;
+  const maxRms = bars.reduce((m, b) => Math.max(m, b.rms), 0) || 1;
   return bars.map((a, i) => bars.map((b, j) => {
     const timbre = (cosine(z[i]!, z[j]!) + 1) / 2;
     const energy = 1 - Math.abs(a.rms - b.rms) / maxRms;
@@ -197,8 +208,9 @@ function similarity(bars: Bar[]): number[][] {
   }));
 }
 
-/** Boundaries (bar indices) from checkerboard novelty, snapped to 4-bar phrases, at least 4 bars apart. */
-function boundaries(bars: Bar[], S: number[][]): number[] {
+/** Boundaries (bar indices) from checkerboard novelty, snapped to phrase boundaries, at least phraseLen bars apart.
+ *  phraseLen = 4 for common time (4/4), 3 for waltz/6/8 (3/4). */
+function boundaries(bars: Bar[], S: number[][], phraseLen = 4): number[] {
   const n = bars.length;
   const R = 4;
   const nov = new Array<number>(n).fill(0);
@@ -212,19 +224,21 @@ function boundaries(bars: Bar[], S: number[][]): number[] {
     }
     nov[b] = Math.max(0, s);
   }
-  const maxNov = Math.max(...nov) || 1;
-  const maxRms = Math.max(...bars.map((b) => b.rms)) || 1;
+  const maxNov = nov.reduce((m, x) => Math.max(m, x), 0) || 1;
+  const maxRms = bars.reduce((m, b) => Math.max(m, b.rms), 0) || 1;
   const score = nov.map((v, b) => {
     if (b < 2 || b > n - 2) return 0;
     const before = mean(bars.slice(Math.max(0, b - 2), b).map((x) => x.rms));
     const after = mean(bars.slice(b, b + 2).map((x) => x.rms));
-    const phrase = b % 4 === 0 ? 0.3 : b % 2 === 0 ? 0.1 : 0;
+    // Bonus for phrase boundaries: full phrase (+0.3), half phrase (+0.1).
+    const phrase = b % phraseLen === 0 ? 0.3 : b % Math.ceil(phraseLen / 2) === 0 ? 0.1 : 0;
     return v / maxNov + Math.abs(after - before) / maxRms + phrase;
   });
   const sorted = score.map((s, b) => ({ s, b })).filter((x) => x.s > 0.45).sort((a, b) => b.s - a.s);
+  const minDist = phraseLen; // at least one full phrase between boundaries
   const picked: number[] = [];
   for (const c of sorted) {
-    if (c.b < 4 || n - c.b < 2 || picked.some((p) => Math.abs(p - c.b) < 4)) continue;
+    if (c.b < minDist || n - c.b < 2 || picked.some((p) => Math.abs(p - c.b) < minDist)) continue;
     picked.push(c.b);
   }
   return picked.sort((a, b) => a - b);
@@ -266,7 +280,7 @@ function label(sections: Omit<SongSection, 'label'>[], vectors: Float32Array[]):
     if (firstChorus >= 0 && i > firstChorus && labels[i] === 'verse' && counts.get(s.cluster) === 1 && i < n - 1) labels[i] = 'bridge';
   });
   if (n > 1 && sections[0]!.energy < 0.6 && labels[0] !== 'chorus' && labels[0] !== 'drop') labels[0] = 'intro';
-  if (n > 2 && sections[n - 1]!.energy < 0.6 * Math.max(...sections.map((s) => s.energy))) labels[n - 1] = 'outro';
+  if (n > 2 && sections[n - 1]!.energy < 0.6 * sections.reduce((m, s) => Math.max(m, s.energy), 0)) labels[n - 1] = 'outro';
   void vectors;
   return labels;
 }
@@ -319,20 +333,23 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
   const bpm = slope > 0 ? 60 / slope : tempo0;
   const local: number[] = [];
   for (let i = 0; i + 8 < beats.length; i += 8) local.push((60 * 8) / (beats[i + 8]! - beats[i]!));
-  const tempoStable = local.length < 2 || (Math.max(...local) - Math.min(...local)) / median(local) < 0.03;
+  const localMax = local.length ? local.reduce((m, x) => Math.max(m, x), 0) : 0;
+  const localMin = local.length ? local.reduce((m, x) => Math.min(m, x), Infinity) : 0;
+  const tempoStable = local.length < 2 || (localMax - localMin) / median(local) < 0.03;
 
-  const phase = downbeatPhase(f, beatFrames);
-  const downFrames = beatFrames.filter((_, j) => j % 4 === phase);
+  const { phase, meter } = detectMeter(f, beatFrames);
+  const downFrames = beatFrames.filter((_, j) => j % meter === phase);
   const downbeats = downFrames.map(toT);
 
   // Bars (a leading partial bar is merged into the first one).
   const bars = barFeatures(f, downFrames.length ? [0, ...downFrames.filter((x) => x > 0)] : [0], f.onset.length);
   const S = similarity(bars);
-  const cuts = [0, ...boundaries(bars, S), bars.length];
+  const cuts = [0, ...boundaries(bars, S, meter), bars.length];
   o.onProgress?.(0.9);
 
-  const maxRms = Math.max(...bars.map((b) => b.rms)) || 1;
-  const cMin = Math.min(...bars.map((b) => b.centroid)), cMax = Math.max(...bars.map((b) => b.centroid));
+  const maxRms = bars.reduce((m, b) => Math.max(m, b.rms), 0) || 1;
+  const cMin = bars.reduce((m, b) => Math.min(m, b.centroid), Infinity);
+  const cMax = bars.reduce((m, b) => Math.max(m, b.centroid), -Infinity);
   const raw = cuts.slice(0, -1).map((a, k) => {
     const seg = bars.slice(a, cuts[k + 1]);
     const span = seg[seg.length - 1]!.end - seg[0]!.start;
@@ -377,7 +394,7 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
 
   // Events.
   const events: SongAnalysis['events'] = [];
-  const peakRms = Math.max(...f.rms) || 1;
+  const peakRms = f.rms.reduce((m, x) => Math.max(m, x), 0) || 1;
   for (let i = 0, start = -1; i <= f.rms.length; i++) {
     const quiet = i < f.rms.length && f.rms[i]! < 0.02 * peakRms;
     if (quiet && start < 0) start = i;
@@ -412,6 +429,7 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
     duration,
     bpm: Math.round(bpm * 100) / 100,
     tempoStable,
+    meter,
     beats: beats.map((t) => Math.round(t * 1000) / 1000),
     downbeats: downbeats.map((t) => Math.round(t * 1000) / 1000),
     sections,

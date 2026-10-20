@@ -9,7 +9,7 @@ function section(label: SongSection['label'], energy: number, extra: Partial<Son
 
 function song(sections: SongSection[], key: Partial<SongAnalysis['key']> = {}): SongAnalysis {
   return {
-    version: 1, duration: 60, bpm: 120, tempoStable: true, beats: [], downbeats: [], events: [],
+    version: 1, duration: 60, bpm: 120, tempoStable: true, meter: 4, beats: [], downbeats: [], events: [],
     sections, key: { tonic: 0, mode: 'major', confidence: 0.1, ...key },
   } as SongAnalysis;
 }
