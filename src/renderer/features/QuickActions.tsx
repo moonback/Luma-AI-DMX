@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Download, GripVertical, LayoutGrid, Pencil, Plus, Search, Upload, X, Zap } from 'lucide-react';
+import { Download, GripVertical, HelpCircle, LayoutGrid, Pencil, Plus, Search, Upload, X, Zap } from 'lucide-react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { act, newId } from '../api';
@@ -26,6 +26,15 @@ function loadSize(): TileSize {
 }
 
 const FAMILY = { color: ['color'], position: ['position'], intensity: ['intensity'], beam: ['beam', 'special'] } as const;
+
+// Badge color per action kind
+const KIND_BADGE: Record<string, string> = {
+  color:   'transparent',
+  effect:  '#7c3aed',
+  cue:     '#0891b2',
+  scene:   '#059669',
+  palette: '#d97706',
+};
 
 function isActive(a: QuickAction, rt: RuntimeState | null, armed: ReadonlySet<string>): boolean {
   if (!rt) return false;
@@ -72,10 +81,16 @@ async function toggle(a: QuickAction, active: boolean, missing: string): Promise
 
 // ── Tile size config ─────────────────────────────────────────────────────────
 const TILE_CFG: Record<TileSize, { minW: number; minH: number; fontSize: string }> = {
-  sm: { minW: 90,  minH: 48, fontSize: '0.78rem' },
-  md: { minW: 130, minH: 64, fontSize: '0.88rem' },
-  lg: { minW: 170, minH: 84, fontSize: '1rem' },
+  sm: { minW: 90,  minH: 52, fontSize: '0.78rem' },
+  md: { minW: 130, minH: 72, fontSize: '0.88rem' },
+  lg: { minW: 170, minH: 92, fontSize: '1rem' },
 };
+
+const TILE_SIZES: { key: TileSize; label: string }[] = [
+  { key: 'sm', label: 'S' },
+  { key: 'md', label: 'M' },
+  { key: 'lg', label: 'L' },
+];
 
 // ── Action Tile ──────────────────────────────────────────────────────────────
 function ActionTile({
@@ -90,6 +105,7 @@ function ActionTile({
   const cfg = TILE_CFG[size];
   const isDragging = dragKey === `tile:${a.id}`;
   const isTarget = dragKey.startsWith('tile:') && !isDragging;
+  const isColor = a.kind === 'color';
   return (
     <div
       draggable
@@ -101,7 +117,7 @@ function ActionTile({
         position: 'relative',
         opacity: isDragging ? 0.35 : 1,
         cursor: 'grab',
-        borderRadius: 8,
+        borderRadius: 10,
         outline: isTarget ? '2px dashed var(--accent, #22d3ee)' : undefined,
         transition: 'opacity 0.1s',
       }}
@@ -114,25 +130,51 @@ function ActionTile({
           minHeight: cfg.minH,
           minWidth: cfg.minW,
           flexDirection: 'column',
-          gap: 2,
+          gap: 4,
           fontSize: cfg.fontSize,
-          ...(a.kind === 'color' ? { background: a.color, color: '#000', textShadow: '0 0 3px #fff' } : {}),
-          ...(active ? { boxShadow: '0 0 0 3px #22d3ee, 0 0 14px #22d3ee' } : {}),
+          borderRadius: 10,
+          ...(isColor ? { background: a.color, color: '#000', textShadow: '0 0 3px rgba(255,255,255,0.6)' } : {}),
+          ...(active ? { boxShadow: '0 0 0 3px #22d3ee, 0 0 16px rgba(34,211,238,0.4)' } : {}),
         }}
         title={editing ? tr('quick.editHint') : undefined}
         onClick={onClick}
       >
         <b style={{ lineHeight: 1.2 }}>{a.name}</b>
-        {size !== 'sm' && <span style={{ opacity: 0.65, fontSize: '0.72rem' }}>{tr(`quick.kind.${a.kind}`)}</span>}
+        {size !== 'sm' && a.kind !== 'color' && (
+          <span style={{
+            background: KIND_BADGE[a.kind] ?? '#555',
+            borderRadius: 4,
+            padding: '2px 6px',
+            fontSize: '0.68rem',
+            letterSpacing: '0.03em',
+            color: '#fff',
+            opacity: 0.95,
+          }}>
+            {tr(`quick.kind.${a.kind}`)}
+          </span>
+        )}
+        {size !== 'sm' && isColor && (
+          <span style={{ fontSize: '0.68rem', opacity: 0.7 }}>{tr('quick.kind.color')}</span>
+        )}
       </button>
       {editing && (
         <button
           className="btn danger sm icon"
-          style={{ position: 'absolute', top: 3, right: 3, padding: '1px 3px' }}
+          style={{
+            position: 'absolute',
+            top: 5,
+            right: 5,
+            padding: '3px 5px',
+            borderRadius: 6,
+            lineHeight: 1,
+          }}
           aria-label={tr('common.delete')}
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(tr('quick.deleteConfirm').replace('{name}', a.name))) onDelete();
+          }}
         >
-          <X size={10} />
+          <X size={13} />
         </button>
       )}
     </div>
@@ -285,6 +327,7 @@ export function QuickActionsPage() {
   const [editing, setEditing] = useState(false);
   const [size, setSize] = useState<TileSize>(loadSize);
   const [search, setSearch] = useState('');
+  const [showSubtitleFull, setShowSubtitleFull] = useState(false);
   // active tab: '__all__' | category string
   const [activeTab, setActiveTab] = useState('__all__');
   // drag: 'tile:<id>' | 'cat:<name>'
@@ -348,9 +391,8 @@ export function QuickActionsPage() {
   };
   const cancelRename = () => setRenamingCat(null);
 
-  // ── Size toggle ────────────────────────────────────────────────────────────
-  const cycleSize = () => {
-    const next: TileSize = size === 'sm' ? 'md' : size === 'md' ? 'lg' : 'sm';
+  // ── Size ────────────────────────────────────────────────────────────────────
+  const setAndSaveSize = (next: TileSize) => {
     setSize(next);
     try { localStorage.setItem(SIZE_KEY, next); } catch { /* ignore */ }
   };
@@ -390,12 +432,22 @@ export function QuickActionsPage() {
     <div className="page" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden', height: '100%' }}>
       {/* ── Toolbar ── */}
       <PageHead title={tr('quick.title')} subtitle={tr('quick.subtitle')}>
+        {/* Subtitle help icon */}
+        <button
+          className="btn sm icon"
+          title={tr('quick.subtitleFull')}
+          onClick={() => setShowSubtitleFull((v) => !v)}
+          style={{ color: showSubtitleFull ? 'var(--accent, #22d3ee)' : undefined }}
+        >
+          <HelpCircle size={15} />
+        </button>
+
         {/* Search */}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <Search size={13} style={{ position: 'absolute', left: 7, color: 'var(--fg-muted, #888)', pointerEvents: 'none' }} />
           <input
             className="input"
-            style={{ paddingLeft: 26, width: 160, height: 28, fontSize: '0.82rem' }}
+            style={{ paddingLeft: 26, width: 160, height: 30, fontSize: '0.82rem' }}
             placeholder={tr('quick.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -406,20 +458,100 @@ export function QuickActionsPage() {
             </button>
           )}
         </div>
-        {/* Tile size */}
-        <button className="btn sm icon" title={tr('quick.tileSize')} onClick={cycleSize}>
-          <LayoutGrid size={14} />
-          <span style={{ fontSize: '0.7rem', marginLeft: 2 }}>{size.toUpperCase()}</span>
+
+        {/* Tile size — 3 explicit buttons */}
+        <div
+          style={{ display: 'flex', gap: 1, alignItems: 'center', background: 'var(--bg-raised, #222)', borderRadius: 6, padding: '2px' }}
+          title={tr('quick.tileSize')}
+        >
+          {TILE_SIZES.map(({ key, label }) => (
+            <button
+              key={key}
+              className={`btn sm ${size === key ? 'primary' : ''}`}
+              style={{ minWidth: 28, padding: '2px 6px', borderRadius: 4, fontWeight: size === key ? 700 : 400 }}
+              onClick={() => setAndSaveSize(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Edit mode toggle */}
+        <button
+          className={`btn ${editing ? 'primary' : ''}`}
+          disabled={!actions.length}
+          onClick={() => setEditing(!editing)}
+          title={editing ? tr('quick.done') : tr('quick.edit')}
+        >
+          <Pencil size={14} />
+          <span style={{ marginLeft: 5 }}>{editing ? tr('quick.done') : tr('quick.edit')}</span>
         </button>
-        <button className={`btn ${editing ? 'primary' : ''}`} disabled={!actions.length} onClick={() => setEditing(!editing)}><Pencil size={14} /></button>
-        <button className="btn" onClick={() => fileRef.current?.click()}><Upload size={14} /></button>
-        <button className="btn" disabled={!actions.length} onClick={exportFile}><Download size={14} /></button>
-        <button className="btn primary" onClick={() => setDialog('new')}><Plus size={14} />{tr('quick.add')}</button>
+
+        {/* Import */}
+        <button className="btn" onClick={() => fileRef.current?.click()} title={tr('quick.import')}>
+          <Upload size={14} />
+          <span style={{ marginLeft: 5 }}>{tr('quick.import')}</span>
+        </button>
+
+        {/* Export */}
+        <button className="btn" disabled={!actions.length} onClick={exportFile} title={tr('quick.export')}>
+          <Download size={14} />
+          <span style={{ marginLeft: 5 }}>{tr('quick.export')}</span>
+        </button>
+
+        {/* Add */}
+        <button className="btn primary" onClick={() => setDialog('new')}>
+          <Plus size={14} />
+          {tr('quick.add')}
+        </button>
+
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
       </PageHead>
 
+      {/* ── Expanded subtitle ── */}
+      {showSubtitleFull && (
+        <div style={{
+          margin: '0 8px 0',
+          padding: '8px 14px',
+          background: 'var(--bg-raised, #1e1e1e)',
+          borderRadius: 8,
+          border: '1px solid var(--border, #333)',
+          fontSize: '0.82rem',
+          color: 'var(--fg-muted, #aaa)',
+          lineHeight: 1.5,
+        }}>
+          {tr('quick.subtitleFull')}
+        </div>
+      )}
+
+      {/* ── Editing mode banner ── */}
+      {editing && (
+        <div style={{
+          margin: '6px 8px 0',
+          padding: '7px 14px',
+          background: 'rgba(34,211,238,0.07)',
+          border: '1px solid rgba(34,211,238,0.25)',
+          borderRadius: 8,
+          fontSize: '0.82rem',
+          color: 'var(--accent, #22d3ee)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexShrink: 0,
+        }}>
+          <Pencil size={13} />
+          <span><strong>{tr('quick.editingMode')}</strong> — {tr('quick.editingModeHint')}</span>
+        </div>
+      )}
+
       {actions.length === 0 ? (
-        <Empty icon={<Zap size={32} />} title={tr('quick.empty')}>{tr('quick.emptyHint')}</Empty>
+        <Empty icon={<Zap size={32} />} title={tr('quick.empty')}>
+          <p style={{ color: 'var(--fg-muted, #aaa)', marginBottom: 14, textAlign: 'center' }}>{tr('quick.emptyHint')}</p>
+          <button className="btn primary" style={{ display: 'inline-flex', gap: 6 }} onClick={() => setDialog('new')}>
+            <Plus size={15} />
+            {tr('quick.add')}
+          </button>
+        </Empty>
       ) : (
         <>
           {/* ── Category tabs ── */}
@@ -441,9 +573,9 @@ export function QuickActionsPage() {
           />
 
           {/* ── Tiles area ── */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 6px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 8px', display: 'flex', flexDirection: 'column', gap: 22 }}>
             {visibleActions.length === 0 ? (
-              <div style={{ color: 'var(--fg-muted, #888)', padding: '24px', textAlign: 'center' }}>
+              <div style={{ color: 'var(--fg-muted, #888)', padding: '28px', textAlign: 'center' }}>
                 {tr('quick.noResults')}
               </div>
             ) : (
@@ -454,7 +586,7 @@ export function QuickActionsPage() {
                   <section key={cat}>
                     {/* Show category label only in "all" view */}
                     {activeTab === '__all__' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                         {editing && (
                           <span
                             draggable
@@ -466,10 +598,17 @@ export function QuickActionsPage() {
                             <GripVertical size={14} />
                           </span>
                         )}
-                        <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600 }}>
+                        <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--fg-muted, #999)' }}>
                           {cat || tr('quick.uncategorized')}
                         </h3>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--fg-muted, #888)' }}>
+                        <span style={{
+                          fontSize: '0.72rem',
+                          color: 'var(--fg-muted, #666)',
+                          background: 'var(--bg-raised, #222)',
+                          borderRadius: 10,
+                          padding: '1px 7px',
+                          fontWeight: 500,
+                        }}>
                           {catActions.length}
                         </span>
                         {editing && cat !== '' && (
@@ -483,7 +622,7 @@ export function QuickActionsPage() {
                       style={{
                         display: 'grid',
                         gridTemplateColumns: `repeat(auto-fill, minmax(${cfg.minW}px, 1fr))`,
-                        gap: size === 'sm' ? 6 : 10,
+                        gap: size === 'sm' ? 7 : 11,
                       }}
                       onDragOver={(e) => { if (dragKey.startsWith('tile:')) e.preventDefault(); }}
                       onDrop={(e) => dropOnTile(e, cat)}
