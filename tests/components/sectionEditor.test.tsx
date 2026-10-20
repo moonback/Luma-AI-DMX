@@ -8,7 +8,7 @@ import type { MusicTrack, SongAnalysis } from '../../src/core/model/schemas';
 const invoke = vi.fn(async (_cmd: unknown) => ({ ok: true, data: { timelineId: 't', notices: ['ok'], provider: 'local' } }));
 const section = (start: number, end: number, label: 'verse' | 'chorus', energy: number) => ({ start, end, label, cluster: 0, energy, brightness: 0.5, density: 2, bassShare: 0.5 });
 const analysis: SongAnalysis = {
-  version: 1, duration: 60, bpm: 120, tempoStable: true, beats: [], downbeats: [], key: { tonic: 0, mode: 'major', confidence: 0.8 }, events: [],
+  version: 1, duration: 60, bpm: 120, tempoStable: true, meter: 4, beats: [], downbeats: [], key: { tonic: 0, mode: 'major', confidence: 0.8 }, events: [],
   sections: [section(0, 30, 'verse', 0.5), section(30, 60, 'chorus', 0.95)],
 };
 const track = (withPlan: boolean): MusicTrack => ({

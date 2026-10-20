@@ -127,7 +127,7 @@ function songStructure(t: MusicTrack, rig: Required<RigInfo>): string {
   const voiced = (s: { start: number; end: number }) => vocals.reduce((d, v) => d + Math.max(0, Math.min(s.end, v.t + v.duration) - Math.max(s.start, v.t)), 0) / Math.max(0.1, s.end - s.start);
   const names = (list: { name: string }[]) => (list.length ? list.map((x) => `"${x.name}"`).join(', ') : '(none)');
   return [
-    `Tempo ${a.bpm.toFixed(1)} BPM, key ${KEY_NAMES[a.key.tonic]} ${a.key.mode}, duration ${a.duration.toFixed(0)} s.`,
+    `Tempo ${a.bpm.toFixed(1)} BPM, key ${KEY_NAMES[a.key.tonic]} ${a.key.mode}, meter ${a.meter ?? 4}/4, duration ${a.duration.toFixed(0)} s.`,
     `Rig: ${rig.wash} wash/PAR, ${rig.moving} moving heads, ${rig.bars} LED bars; strobeAllowed: ${rig.allowStrobe}.`,
     `Groups: ${names(rig.groups)}. Stage markers: ${names(rig.markers)}.`,
     'Sections (index, label, start s, duration s, measured energy 0..1, repeat group, share of the section with a voice, brightness 0..1, onsets per beat, bass share 0..1):',

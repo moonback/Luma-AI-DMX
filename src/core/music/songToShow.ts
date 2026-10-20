@@ -198,7 +198,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
   const base = intent.colors.length ? intent.colors : intent.warmth === 'cold' || (!intent.warmth && !modeIsMajor) ? COLD : WARM;
   const accent = (intent.warmth === 'cold' || (!intent.warmth && !modeIsMajor) ? WARM : COLD)[variant % 4]!;
   const byLabel = groupsBySection(intentText, rig.groups ?? []);
-  const barSec = 240 / analysis.bpm;
+  const barSec = (analysis.meter ?? 4) * 60 / analysis.bpm;
   const sections = analysis.sections.map((s, i): ShowSectionPlan => {
     const kept = previous?.sections[i];
     if (kept?.locked && previous!.sections.length === analysis.sections.length) return kept;

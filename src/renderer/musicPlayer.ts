@@ -1,7 +1,7 @@
-import { analyzeAudio } from '../core/music/analyze';
 import type { MusicTrack, SongAnalysis } from '../core/model/schemas';
 import { audioEngine } from './audioEngine';
 import { act } from './api';
+import type { WorkerMessage, WorkerRequest } from './analyzeWorker';
 
 /**
  * Song import and synchronised playback, outside React (keeps playing across pages).
@@ -54,12 +54,12 @@ class MusicPlayer {
     src.connect(off.destination);
     src.start();
     const mono = (await off.startRendering()).getChannelData(0);
-    // shortcut: analysis runs on the UI thread in cooperative slices (a Web Worker under file:// and the strict CSP is untested); move it to a worker if the UI stutters on long files.
-    const analysis = await analyzeAudio(mono, ANALYSIS_RATE, {
-      bpmMin: opts.bpmRange.min, bpmMax: opts.bpmRange.max,
-      onProgress: (p) => opts.onProgress(0.05 + 0.95 * p, 'Analyse'),
-      yieldFn: () => new Promise((r) => setTimeout(r, 0)),
-    });
+    // Run the analysis in a dedicated Web Worker so the UI thread stays responsive.
+    // The Float32Array buffer is transferred (zero-copy); the Worker sends progress
+    // updates and then the final SongAnalysis.
+    const analysis = await analyzeInWorker(mono, ANALYSIS_RATE, opts.bpmRange.min, opts.bpmRange.max, (p) =>
+      opts.onProgress(0.05 + 0.95 * p, 'Analyse'),
+    );
     return { hash, name, analysis };
   }
 
@@ -135,6 +135,55 @@ async function decode(data: ArrayBuffer): Promise<AudioBuffer> {
   } finally {
     void ctx.close();
   }
+}
+
+/**
+ * Runs analyzeAudio in a Web Worker (dedicated thread, zero-copy buffer transfer).
+ * Falls back to the main-thread import if the Worker constructor fails (e.g. strict
+ * file:// CSP in some Electron configurations).
+ */
+async function analyzeInWorker(
+  mono: Float32Array,
+  sampleRate: number,
+  bpmMin: number,
+  bpmMax: number,
+  onProgress: (p: number) => void,
+): Promise<SongAnalysis> {
+  // Try to spin up a Worker; fall back gracefully to on-thread analysis.
+  let worker: Worker;
+  try {
+    worker = new Worker(new URL('./analyzeWorker.ts', import.meta.url), { type: 'module' });
+  } catch {
+    // Fallback: dynamic import to avoid pulling analyzeAudio into the main chunk when Worker succeeds.
+    const { analyzeAudio } = await import('../core/music/analyze');
+    return analyzeAudio(mono, sampleRate, {
+      bpmMin, bpmMax,
+      onProgress,
+      yieldFn: () => new Promise((r) => setTimeout(r, 0)),
+    });
+  }
+
+  return new Promise<SongAnalysis>((resolve, reject) => {
+    worker.onmessage = (ev: MessageEvent<WorkerMessage>) => {
+      const msg = ev.data;
+      if (msg.type === 'progress') {
+        onProgress(msg.p);
+      } else if (msg.type === 'done') {
+        worker.terminate();
+        resolve(msg.analysis);
+      } else {
+        worker.terminate();
+        reject(new Error(msg.message));
+      }
+    };
+    worker.onerror = (e) => {
+      worker.terminate();
+      reject(new Error(e.message ?? 'Erreur du worker d\'analyse'));
+    };
+    const req: WorkerRequest = { samples: mono, sampleRate, bpmMin, bpmMax };
+    // Transfer the buffer: zero-copy, the main thread must not use `mono` after this.
+    worker.postMessage(req, [mono.buffer]);
+  });
 }
 
 export const musicPlayer = new MusicPlayer();
