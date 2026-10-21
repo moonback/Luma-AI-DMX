@@ -399,6 +399,21 @@ function GroupsPanel({
   const [creating, setCreating] = useState(false);
   const [groupName, setGroupName] = useState('');
 
+  // Un groupe est "actif" si toutes ses machines sont dans la sélection
+  const isGroupActive = (fixtureIds: string[]) =>
+    fixtureIds.length > 0 && fixtureIds.every((id) => selIds.includes(id));
+
+  const toggleGroup = (fixtureIds: string[]) => {
+    if (isGroupActive(fixtureIds)) {
+      // Désactiver : retirer les machines du groupe de la sélection
+      onSelectGroup(selIds.filter((id) => !fixtureIds.includes(id)));
+    } else {
+      // Activer : ajouter les machines du groupe à la sélection
+      const merged = [...new Set([...selIds, ...fixtureIds])];
+      onSelectGroup(merged);
+    }
+  };
+
   const createGroup = async () => {
     if (selIds.length === 0) return;
     const name = groupName.trim() || `Groupe ${groups.length + 1}`;
@@ -459,10 +474,10 @@ function GroupsPanel({
           {groups.map((g) => (
             <div key={g.id} className="sc-group-row">
               <button
-                className="sc-group-btn"
+                className={`sc-group-btn ${isGroupActive(g.fixtureIds) ? 'sc-group-btn--on' : ''}`}
                 style={{ borderLeft: `3px solid ${g.color}` }}
-                onClick={() => onSelectGroup(g.fixtureIds)}
-                title={`Sélectionner le groupe (${g.fixtureIds.length} machines)`}
+                onClick={() => toggleGroup(g.fixtureIds)}
+                title={isGroupActive(g.fixtureIds) ? 'Cliquer pour désélectionner' : `Sélectionner le groupe (${g.fixtureIds.length} machines)`}
               >
                 <span className="sc-group-name">{g.name}</span>
                 <span className="sc-group-count muted small">{g.fixtureIds.length} machines</span>

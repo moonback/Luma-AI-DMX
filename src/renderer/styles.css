@@ -856,6 +856,8 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   transition: border-color var(--dur), background var(--dur);
 }
 .sc-group-btn:hover { border-color: var(--border-strong); background: var(--panel-3); }
+.sc-group-btn--on { background: var(--violet-soft) !important; border-color: var(--violet) !important; }
+.sc-group-btn--on .sc-group-name { color: var(--text); }
 .sc-group-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-group-count { font-size: 11px; flex-shrink: 0; }
 
