@@ -235,7 +235,7 @@ export const effectParamsSchema = z.object({
   direction: z.enum(['forward', 'reverse', 'pingpong']).default('forward'),
   colors: z.array(hexColorSchema).max(16).default([]),
   attribute: attributeSchema.default('dimmer'),
-  shape: z.enum(['circle', 'figure8', 'pan', 'tilt']).default('circle'),
+  shape: z.enum(['circle', 'figure8', 'pan', 'tilt', 'pingpong', 'zigzag']).default('circle'),
   width: z.number().int().min(1).max(64).default(1),
   duty: z.number().min(0.05).max(0.95).default(0.5),
   seed: z.number().int().min(0).max(2 ** 31).default(1),
@@ -362,6 +362,14 @@ export const songSectionSchema = z.object({
   bassShare: unitSchema,
 });
 export type SongSection = z.infer<typeof songSectionSchema>;
+export const tempoChangeSchema = z.object({
+  t: seconds,
+  from: z.number().min(20).max(300),
+  to: z.number().min(20).max(300),
+});
+
+export type TempoChange = z.infer<typeof tempoChangeSchema>;
+
 export const songAnalysisSchema = z.object({
   version: z.literal(1),
   duration: seconds,
@@ -375,11 +383,13 @@ export const songAnalysisSchema = z.object({
   key: z.object({ tonic: z.number().int().min(0).max(11), mode: z.enum(['major', 'minor']), confidence: unitSchema }),
   /** `vocal`: stretch where a voice is detected (presence in 300 Hz–3 kHz + harmonic stability). */
   events: z.array(z.object({ t: seconds, kind: z.enum(['impact', 'riser', 'silence', 'vocal']), duration: z.number().min(0).max(600) })).max(2000),
+  /** Detected tempo changes (t in seconds, from/to in BPM). */
+  tempoChanges: z.array(tempoChangeSchema).max(100).optional().default([]),
 });
 export type SongAnalysis = z.infer<typeof songAnalysisSchema>;
 
-export const SHOW_MOVEMENTS = ['none', 'slow', 'sweep', 'fast', 'fan', 'ballyhoo'] as const;
-export const SHOW_EFFECTS = ['none', 'wave', 'pulse', 'chase', 'rainbow', 'strobe', 'colorChase'] as const;
+export const SHOW_MOVEMENTS = ['none', 'slow', 'sweep', 'fast', 'fan', 'ballyhoo', 'circle', 'figure8', 'pan', 'tilt', 'random', 'pendulum', 'zigzag'] as const;
+export const SHOW_EFFECTS = ['none', 'wave', 'pulse', 'chase', 'rainbow', 'strobe', 'colorChase', 'dimmerWave', 'pulseSlow', 'chaseSlow', 'flicker', 'snap', 'glow', 'gradient'] as const;
 /** Section layers: intensity ramp, blinder hit, zoom/iris breathing, band followers (dimmer ← bass, colour ← brightness). */
 export const SHOW_EXTRAS = ['ramp', 'blinder', 'breathe', 'bassFollow', 'colorFollow'] as const;
 /** Beam look of the moving heads: open, a gobo, gobo + prism, or frost (soft edge). */

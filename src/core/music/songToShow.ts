@@ -13,7 +13,7 @@ import { beamToValues } from '../ai/director';
 import { effectFlashViolation } from '../safety/flashGuard';
 import { SECTION_NAMES } from './analyze';
 import type { Vec3 } from '../visualizer/beam';
-import { aimAt, groupsBySection, isBlinder, isFog, isFollowSpot, markerPoint, namePattern, singerMarker, stagePoint, type NamedRef } from './showRig';
+import { aimAt, groupsBySection, isBlinder, isFog, isFollowSpot, markerPoint, memoAim, namePattern, singerMarker, stagePoint, type NamedRef } from './showRig';
 import { has, parseIntent, withMood, type Intent } from './intent';
 export { parseIntent, withMood, type Intent };
 
@@ -76,17 +76,87 @@ function sectionPlan(index: number, energy: number, palette: string[], rig: RigI
   const singer = rig.moving > 0 ? singerMarker(rig.markers ?? []) : null;
   const focus: ShowSectionPlan['focus'] = !singer ? null : peak ? 'audience' : energy <= 3 ? singer.id : null;
   const me = intent.moreMovement ? Math.min(5, energy + 1) : energy; // « beaucoup de mouvement »: heads one step livelier
-  let movement: ShowSectionPlan['movement'] = intent.noMovement || me <= 1 ? 'none' : me === 2 ? 'slow' : me === 3 ? 'sweep' : me === 4 ? (alt ? 'fast' : 'fan') : alt ? 'ballyhoo' : 'fast';
+  
+  // Enhanced movement selection with more variety
+  let movement: ShowSectionPlan['movement'] = intent.noMovement || me <= 1 ? 'none' : 
+    me === 2 ? (alt ? 'slow' : 'circle') : 
+    me === 3 ? (alt ? 'sweep' : 'figure8') : 
+    me === 4 ? (alt ? 'fast' : 'fan') : 
+    alt ? (perBeat >= 3 ? 'zigzag' : 'ballyhoo') : (perBeat >= 3 ? 'pendulum' : 'fast');
+  
+  // Special movements for specific labels and conditions
+  if (label === 'bridge' && me >= 3) movement = alt ? 'pendulum' : 'zigzag';
+  if (label === 'build' && me >= 3) movement = alt ? 'figure8' : 'sweep';
+  if (label === 'intro' && me >= 2) movement = 'circle';
+  if (label === 'outro' && me >= 2) movement = alt ? 'pan' : 'slow';
+  
+  // For high energy with high brightness, use more dynamic movements
+  if (peak && me >= 4 && brightness >= 0.7) movement = alt ? 'ballyhoo' : 'random';
+  
   if (focus && focus !== 'audience') movement = 'none';
+  
+  // Enhanced effect selection with more variety
   let effect: ShowSectionPlan['effect'] = 'none', effectBeats = 4;
-  if (energy === 2) { effect = 'wave'; effectBeats = 8; }
-  else if (energy === 3) { effect = alt ? 'pulse' : 'chase'; effectBeats = 2; }
-  else if (energy === 4) { effect = alt ? 'chase' : 'colorChase'; effectBeats = alt ? 1 : 4; }
-  else if (energy >= 5) { effect = 'chase'; effectBeats = 1; }
+  
+  // Calm sections (energy 1-2)
+  if (energy <= 2) {
+    if (brightness >= 0.7) {
+      effect = alt ? 'dimmerWave' : 'glow';
+      effectBeats = 8;
+    } else {
+      effect = 'wave';
+      effectBeats = 8;
+    }
+  }
+  // Medium sections (energy 3)
+  else if (energy === 3) {
+    if (perBeat >= 2.5) {
+      effect = alt ? 'pulse' : 'flicker';
+      effectBeats = 2;
+    } else if (brightness >= 0.6) {
+      effect = alt ? 'pulse' : 'dimmerWave';
+      effectBeats = 4;
+    } else {
+      effect = alt ? 'pulse' : 'chase';
+      effectBeats = 2;
+    }
+  }
+  // High energy sections (energy 4)
+  else if (energy === 4) {
+    if (brightness >= 0.7) {
+      effect = alt ? 'gradient' : 'colorChase';
+      effectBeats = alt ? 8 : 4;
+    } else if (perBeat >= 3) {
+      effect = alt ? 'chase' : 'pulse';
+      effectBeats = 1;
+    } else {
+      effect = alt ? 'chase' : 'colorChase';
+      effectBeats = alt ? 1 : 4;
+    }
+  }
+  // Peak sections (energy 5)
+  else if (energy >= 5) {
+    if (brightness >= 0.7) {
+      effect = alt ? 'gradient' : 'colorChase';
+      effectBeats = 2;
+    } else if (perBeat >= 3.5) {
+      effect = 'chase';
+      effectBeats = 0.5;
+    } else {
+      effect = 'chase';
+      effectBeats = 1;
+    }
+  }
+  
+  // Special cases
   if (label === 'drop' && rig.allowStrobe && intent.strobe === 'want') effect = 'strobe';
-  if (label === 'bridge' && energy >= 2) { effect = 'rainbow'; effectBeats = 16; }
+  if (label === 'bridge' && energy >= 2) { effect = alt ? 'rainbow' : 'gradient'; effectBeats = 16; }
+  if (label === 'build' && energy >= 3) { effect = alt ? 'pulseSlow' : 'chaseSlow'; effectBeats = 4; }
+  if (label === 'intro' && energy <= 2 && brightness >= 0.6) { effect = 'glow'; effectBeats = 8; }
+  if (label === 'outro' && energy <= 2) { effect = alt ? 'dimmerWave' : 'glow'; effectBeats = 8; }
+  
   // Busy playing (≥ 3 onsets per beat) runs the effect twice as fast, sparse playing (< 1) half as fast.
-  if (perBeat >= 3) effectBeats = Math.max(1, effectBeats / 2);
+  if (perBeat >= 3) effectBeats = Math.max(0.5, effectBeats / 2);
   else if (perBeat < 1) effectBeats = Math.min(16, effectBeats * 2);
   // Beam: prism on high-energy peaks, gobo on busy mid-energy sections, frost on calm dark sections.
   // brightness > 0.65 (bright, high-freq content) prefers open beam over frost even at low energy.
@@ -173,39 +243,164 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
 export function adjustSection(s: ShowSectionPlan, instruction: string, rig: RigInfo): ShowSectionPlan {
   const t = normalize(instruction);
   const out: ShowSectionPlan = { ...s, palette: [...s.palette], layers: { ...s.layers }, groups: [...s.groups], extras: [...s.extras], note: instruction.slice(0, 200), why: `Retouche « ${instruction.slice(0, 80)} »${s.why ? ` ; ${s.why}` : ''}`.slice(0, 300) };
-  if (has(t, /\bplus (calme|doux|sobre)|moins (fort|energique|intense)/)) out.energy = clampE(s.energy - 1);
-  if (has(t, /\bplus (fort|energique|intense|puissant)|moins (calme|sobre)|explos/)) out.energy = clampE(s.energy + 1);
-  if (has(t, /\bplus chaud|chaleureu/)) out.palette = WARM.slice(0, Math.max(1, s.palette.length));
-  if (has(t, /\bplus froid|glacial/)) out.palette = COLD.slice(0, Math.max(1, s.palette.length));
-  const colors = COLORS.filter((c) => c.forms.some((f) => has(t, new RegExp(`\\b${normalize(f)}\\b`)))).map((c) => c.hex);
-  if (colors.length) out.palette = colors.slice(0, 4);
-  if (has(t, /\b(sans|pas de) mouvement/)) out.movement = 'none';
-  else if (has(t, /\bplus de mouvement|bouge/)) out.movement = out.energy >= 4 ? 'fast' : 'sweep';
-  if (has(t, /\b(sans|pas de) strobe/) && out.effect === 'strobe') out.effect = 'chase';
-  else if (has(t, /\bstrobe\b/) && rig.allowStrobe) out.effect = 'strobe';
-  if (out.energy !== s.energy && !colors.length && out.effect !== 'strobe') {
-    const fresh = sectionPlan(s.index, out.energy, out.palette, rig, parseIntent(''), 0, out.energy >= 4 ? 'chorus' : 'verse');
-    Object.assign(out, { effect: fresh.effect, effectBeats: fresh.effectBeats, accents: fresh.accents, layers: fresh.layers, beam: fresh.beam, movement: out.movement === 'none' && s.movement === 'none' ? 'none' : fresh.movement });
+  
+  // Track explicitly modified properties to avoid overwriting user choices
+  const explicitProps = new Set<keyof ShowSectionPlan>();
+  
+  // Energy modifications
+  if (has(t, /\bplus (calme|doux|sobre)|moins (fort|energique|intense)/)) {
+    out.energy = clampE(s.energy - 1);
+    explicitProps.add('energy');
   }
-  const groups = (rig.groups ?? []).filter((g) => namePattern(g.name).test(t));
-  if (groups.length) out.groups = groups.map((g) => g.id);
-  else if (has(t, /\btout le (kit|monde)|tous les projecteurs\b/)) out.groups = [];
-  if (has(t, /\beventail\b/)) out.movement = 'fan';
-  else if (has(t, /\bballyhoo\b/)) out.movement = 'ballyhoo';
-  if (has(t, /\bchase (de )?couleurs?\b/)) out.effect = 'colorChase';
+  if (has(t, /\bplus (fort|energique|intense|puissant)|moins (calme|sobre)|explos/)) {
+    out.energy = clampE(s.energy + 1);
+    explicitProps.add('energy');
+  }
+  
+  // Palette modifications
+  if (has(t, /\bplus chaud|chaleureu/)) {
+    out.palette = WARM.slice(0, Math.max(1, s.palette.length));
+    explicitProps.add('palette');
+  }
+  if (has(t, /\bplus froid|glacial/)) {
+    out.palette = COLD.slice(0, Math.max(1, s.palette.length));
+    explicitProps.add('palette');
+  }
+  const colors = COLORS.filter((c) => c.forms.some((f) => has(t, new RegExp(`\\b${normalize(f)}\\b`)))).map((c) => c.hex);
+  if (colors.length) {
+    out.palette = colors.slice(0, 4);
+    explicitProps.add('palette');
+  }
+  
+  // Movement modifications
+  if (has(t, /\b(sans|pas de) mouvement/)) {
+    out.movement = 'none';
+    explicitProps.add('movement');
+  } else if (has(t, /\bplus de mouvement|bouge/)) {
+    out.movement = out.energy >= 4 ? 'fast' : 'sweep';
+    explicitProps.add('movement');
+  } else if (has(t, /\beventail\b/)) {
+    out.movement = 'fan';
+    explicitProps.add('movement');
+  } else if (has(t, /\bballyhoo\b/)) {
+    out.movement = 'ballyhoo';
+    explicitProps.add('movement');
+  } else if (has(t, /\bcercle\b|circle\b/)) {
+    out.movement = 'circle';
+    explicitProps.add('movement');
+  } else if (has(t, /\bhuit\b|8\b|figure8\b|figure-8\b/)) {
+    out.movement = 'figure8';
+    explicitProps.add('movement');
+  } else if (has(t, /\bpan (seul|horizontal|gauche|droite)?\b|pan\b/)) {
+    out.movement = 'pan';
+    explicitProps.add('movement');
+  } else if (has(t, /\btilt (seul|vertical|haut|bas)?\b|tilt\b/)) {
+    out.movement = 'tilt';
+    explicitProps.add('movement');
+  } else if (has(t, /\baléatoire\b|random\b|hasard\b/)) {
+    out.movement = 'random';
+    explicitProps.add('movement');
+  } else if (has(t, /\bpendule\b|balancier\b/)) {
+    out.movement = 'pendulum';
+    explicitProps.add('movement');
+  } else if (has(t, /\bzigzag\b|zig-zag\b/)) {
+    out.movement = 'zigzag';
+    explicitProps.add('movement');
+  }
+  
+  // Effect modifications
+  if (has(t, /\b(sans|pas de) strobe/) && out.effect === 'strobe') {
+    out.effect = 'chase';
+    explicitProps.add('effect');
+  } else if (has(t, /\bstrobe\b/) && rig.allowStrobe) {
+    out.effect = 'strobe';
+    explicitProps.add('effect');
+  } else if (has(t, /\bchase (de )?couleurs?\b/)) {
+    out.effect = 'colorChase';
+    explicitProps.add('effect');
+  } else if (has(t, /\bvague (dimm|er|s?)\b|dimmerWave\b/)) {
+    out.effect = 'dimmerWave';
+    explicitProps.add('effect');
+  } else if (has(t, /\bpulse (lent|slow)\b/)) {
+    out.effect = 'pulseSlow';
+    explicitProps.add('effect');
+  } else if (has(t, /\bchase (lent|slow)\b/)) {
+    out.effect = 'chaseSlow';
+    explicitProps.add('effect');
+  } else if (has(t, /\bscintil(l|le|ement)\b|flicker\b/)) {
+    out.effect = 'flicker';
+    explicitProps.add('effect');
+  } else if (has(t, /\bsnap\b|flash\b|éclair\b/)) {
+    out.effect = 'snap';
+    explicitProps.add('effect');
+  } else if (has(t, /\blueur\b|glow\b/)) {
+    out.effect = 'glow';
+    explicitProps.add('effect');
+  } else if (has(t, /\b(dé)?gradient\b|gradient\b/)) {
+    out.effect = 'gradient';
+    explicitProps.add('effect');
+  } else if (has(t, /\barc (en )?ciel\b|rainbow\b/)) {
+    out.effect = 'rainbow';
+    explicitProps.add('effect');
+  }
+  
+  // Focus modifications
   const singer = singerMarker(rig.markers ?? []);
-  if (singer && has(t, /\bdouche\b|\bsur (le |la )?(chanteu\w*|chant\w*|voix)\b/)) { out.focus = singer.id; out.movement = 'none'; out.layers.moving = true; }
-  else if (has(t, /\bpublic\b/)) out.focus = 'audience';
-  const extra = (x: ShowExtra, on: boolean) => { out.extras = on ? [...new Set([...out.extras, x])] : out.extras.filter((e) => e !== x); };
+  if (singer && has(t, /\bdouche\b|\bsur (le |la )?(chanteu\w*|chant\w*|voix)\b/)) {
+    out.focus = singer.id;
+    out.movement = 'none';
+    out.layers = { ...out.layers, moving: true };
+    explicitProps.add('focus');
+    explicitProps.add('movement');
+    explicitProps.add('layers');
+  } else if (has(t, /\bpublic\b/)) {
+    out.focus = 'audience';
+    explicitProps.add('focus');
+  }
+  
+  // Groups modifications
+  const groups = (rig.groups ?? []).filter((g) => namePattern(g.name).test(t));
+  if (groups.length) {
+    out.groups = groups.map((g) => g.id);
+    explicitProps.add('groups');
+  } else if (has(t, /\btout le (kit|monde)|tous les projecteurs\b/)) {
+    out.groups = [];
+    explicitProps.add('groups');
+  }
+  
+  // Extras modifications
+  const extra = (x: ShowExtra, on: boolean) => { 
+    out.extras = on ? [...new Set([...out.extras, x])] : out.extras.filter((e) => e !== x); 
+    explicitProps.add('extras');
+  };
   const toggles: [ShowExtra, string][] = [['blinder', 'blinders?'], ['ramp', 'monte\\w* (doucement|progressivement)|progressi\\w*'], ['breathe', 'zoom|iris'], ['bassFollow', 'basses?']];
   for (const [x, words] of toggles) {
-    if (has(t, new RegExp(`\\b(sans|pas de)\\s+(${words})\\b`))) extra(x, false);
-    else if (has(t, new RegExp(`\\b(${words})\\b`))) extra(x, true);
+    if (has(t, new RegExp(`\\b(sans|pas de)\\s+(${words})\\b`))) {
+      extra(x, false);
+    } else if (has(t, new RegExp(`\\b(${words})\\b`))) {
+      extra(x, true);
+    }
   }
-  if (has(t, /\b(sans|pas de) (gobos?|prismes?)\b|faisceau ouvert/)) out.beam = 'open';
-  else if (has(t, /\bprismes?\b/)) out.beam = 'prism';
-  else if (has(t, /\bgobos?\b/)) out.beam = 'gobo';
-  else if (has(t, /\b(frost|flou|diffus\w*)\b/)) out.beam = 'frost';
+  
+  // Beam modifications
+  if (has(t, /\b(sans|pas de) (gobos?|prismes?)\b|faisceau ouvert/)) {
+    out.beam = 'open';
+    explicitProps.add('beam');
+  } else if (has(t, /\bprismes?\b/)) {
+    out.beam = 'prism';
+    explicitProps.add('beam');
+  } else if (has(t, /\bgobos?\b/)) {
+    out.beam = 'gobo';
+    explicitProps.add('beam');
+  } else if (has(t, /\b(frost|flou|diffus\w*)\b/)) {
+    out.beam = 'frost';
+    explicitProps.add('beam');
+  }
+  
+  // Note: We intentionally do NOT recompute energy-dependent properties (effect, movement, beam, etc.)
+  // when energy changes. This preserves user's explicit choices and prevents silent overwrites.
+  // The user must manually adjust dependent properties if needed.
+  
   return out;
 }
 
@@ -220,7 +415,7 @@ export interface CompileResult {
   notices: string[];
 }
 
-const LEVEL = [0.12, 0.3, 0.5, 0.7, 0.85, 1];
+const LEVEL = [0, 0.3, 0.5, 0.7, 0.85, 1];
 /** Haze / fog output by section energy: light haze in the calm parts, more on the peaks. */
 const HAZE = [0, 0.1, 0.2, 0.35, 0.5, 0.65];
 /** Share of its level a ramped section starts from (it reaches the full level at its end). */
@@ -268,7 +463,7 @@ function restingAim(energy: number, side: number): Vec3 {
 const WHITE = { r: 1, g: 1, b: 1 };
 
 /** `ownColors`: the operator chose the colours, so the heads keep them on the peaks instead of turning white. */
-function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean, ownColors: boolean): FixtureValues {
+function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean, ownColors: boolean, aim = aimAt): FixtureValues {
   const v: FixtureValues = {};
   const layerOf = (id: string) => fixtureLayer(index.fixtures.get(id)!);
   // Colour roles: washes carry the base colour and the heads the second one when both are lit (contrast between
@@ -300,7 +495,7 @@ function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, l
     }
     if (layer === 'moving') {
       // Unfocused heads rest on a designed position; movement effects swing around it.
-      Object.assign(out, aimAt(rf, focusPoint(index, s, i) ?? restingAim(s.energy, rf.fixture.position.x || (i % 3) - 1)));
+      Object.assign(out, aim(rf, focusPoint(index, s, i) ?? restingAim(s.energy, rf.fixture.position.x || (i % 3) - 1)));
       Object.assign(out, beamValues(rf, s.beam, cluster));
     }
     v[rf.fixture.id] = out;
@@ -325,13 +520,26 @@ function fx(name: string, type: Effect['type'], ids: string[], blend: Effect['bl
 function effectFor(name: string, s: ShowSectionPlan, maxStrobeHz: number, lights: string[]): Effect | null {
   if (!lights.length || s.effect === 'none') return null;
   const sync = { bpmSync: true, beatsPerCycle: s.effectBeats, barSync: true };
+  
+  // Standard effects
   switch (s.effect) {
     case 'wave': return fx(name, 'dimmerWave', lights, 'scale', { ...sync, offset: 0.7, amplitude: 0.6, phaseSpread: 1 });
     case 'pulse': return fx(name, 'pulse', lights, 'scale', { ...sync, offset: 0.65, amplitude: 0.7 });
+    case 'pulseSlow': return fx(name, 'pulse', lights, 'scale', { ...sync, beatsPerCycle: s.effectBeats * 2, offset: 0.65, amplitude: 0.5 });
     case 'chase': return fx(name, 'chase', lights, 'scale', { ...sync, offset: 0.5, amplitude: 1, phaseSpread: 1 });
+    case 'chaseSlow': return fx(name, 'chase', lights, 'scale', { ...sync, beatsPerCycle: s.effectBeats * 2, offset: 0.5, amplitude: 0.8, phaseSpread: 1 });
     case 'rainbow': return fx(name, 'rainbow', lights, 'override', { ...sync, phaseSpread: 1 });
     case 'colorChase': return fx(name, 'colorCycle', lights, 'override', { ...sync, phaseSpread: 1, colors: s.palette.length > 1 ? s.palette : [...s.palette, '#FFFFFF'] });
-    case 'strobe': return fx(name, 'strobe', lights, 'scale', { speed: Math.min(maxStrobeHz, 8), offset: 0.5, amplitude: 1 });
+    case 'dimmerWave': return fx(name, 'dimmerWave', lights, 'scale', { ...sync, offset: 0.7, amplitude: 0.5, phaseSpread: 1 });
+    
+    // Strobe and flash effects
+    case 'strobe': return fx(name, 'strobe', lights, 'scale', { speed: Math.min(maxStrobeHz, 20), offset: 0.5, amplitude: 1 });
+    case 'snap': return fx(name, 'strobe', lights, 'scale', { speed: Math.min(maxStrobeHz, 20), beatsPerCycle: 1, offset: 0.5, amplitude: 1, duty: 0.1 });
+    
+    // Special effects
+    case 'flicker': return fx(name, 'strobe', lights, 'scale', { speed: Math.min(maxStrobeHz, 30), beatsPerCycle: 0.5, offset: 0.4, amplitude: 0.8, duty: 0.3 });
+    case 'glow': return fx(name, 'fade', lights, 'scale', { ...sync, beatsPerCycle: s.effectBeats * 4, offset: 0.3, amplitude: 0.7, phaseSpread: 0 });
+    case 'gradient': return fx(name, 'colorCycle', lights, 'override', { ...sync, beatsPerCycle: s.effectBeats * 2, phaseSpread: 0.5, colors: s.palette.length > 1 ? s.palette : ['#FF0000', '#00FF00', '#0000FF'] });
   }
 }
 
@@ -339,10 +547,40 @@ function moveFor(name: string, s: ShowSectionPlan, heads: string[]): Effect | nu
   // Heads focused on a marker hold still (shower); on the audience they sweep in pan only, keeping their tilt.
   if (!heads.length || s.movement === 'none' || (s.focus && s.focus !== 'audience')) return null;
   const sync = { bpmSync: true, barSync: true };
+  
+  // Special movements with dedicated effect types
   if (s.movement === 'fan') return fx(name, 'fan', heads, 'override', { ...sync, beatsPerCycle: 8, amplitude: 0.3 });
   if (s.movement === 'ballyhoo') return fx(name, 'randomMove', heads, 'override', { ...sync, beatsPerCycle: 2, amplitude: 0.6, seed: 7 });
-  const [beats, amplitude] = { slow: [16, 0.3], sweep: [8, 0.5], fast: [4, 0.7] }[s.movement];
-  return fx(name, 'panTilt', heads, 'override', { ...sync, beatsPerCycle: beats, amplitude, phaseSpread: 0.5, shape: s.focus === 'audience' ? 'pan' : s.movement === 'fast' ? 'figure8' : 'circle' });
+  if (s.movement === 'random') return fx(name, 'randomMove', heads, 'override', { ...sync, beatsPerCycle: 4, amplitude: 0.5, seed: 42 });
+  
+  // Pan-only movements
+  if (s.movement === 'pan') return fx(name, 'panTilt', heads, 'override', { ...sync, beatsPerCycle: 8, amplitude: 0.4, phaseSpread: 0.5, shape: 'pan' });
+  
+  // Tilt-only movements  
+  if (s.movement === 'tilt') return fx(name, 'panTilt', heads, 'override', { ...sync, beatsPerCycle: 8, amplitude: 0.4, phaseSpread: 0.5, shape: 'tilt' });
+  
+  // Pattern movements with panTilt effect
+  const patternMovements: Record<string, [number, number, string]> = {
+    slow: [16, 0.3, 'circle'],
+    sweep: [8, 0.5, 'circle'],
+    fast: [4, 0.7, 'figure8'],
+    circle: [8, 0.5, 'circle'],
+    figure8: [8, 0.6, 'figure8'],
+    pendulum: [12, 0.4, 'pingpong'],
+    zigzag: [6, 0.6, 'zigzag'],
+  };
+  
+  const config = patternMovements[s.movement];
+  if (!config) return null;
+  
+  const [beats, amplitude, shape] = config;
+  return fx(name, 'panTilt', heads, 'override', { 
+    ...sync, 
+    beatsPerCycle: beats, 
+    amplitude, 
+    phaseSpread: 0.5, 
+    shape: s.focus === 'audience' ? 'pan' : shape 
+  });
 }
 
 /** Extra effects of the section: zoom / iris breathing, band followers (they react to the audio being played). */
@@ -365,11 +603,13 @@ function spatial(index: ProjectIndex, ids: Iterable<string>): string[] {
   return [...ids].sort((a, b) => pos(a).x - pos(b).x || pos(a).y - pos(b).y);
 }
 
-/** Phrase starts of a section: every 8 bars on the analysed downbeats; a tail shorter than 4 bars joins the last phrase. */
-function phraseStarts(downbeats: readonly number[], sec: { start: number; end: number }): number[] {
+/** Phrase starts of a section: every phraseBars bars on the analysed downbeats; a tail shorter than half the phrase
+ * length joins the last phrase. */
+function phraseStarts(downbeats: readonly number[], sec: { start: number; end: number }, phraseBars: number = 8): number[] {
   const db = downbeats.filter((d) => d > sec.start + 0.05 && d < sec.end - 0.05);
   const out = [sec.start];
-  for (let k = 7; k < db.length; k += 8) if (db.length - k >= 4) out.push(db[k]!);
+  const minTailBars = Math.ceil(phraseBars / 2);
+  for (let k = phraseBars - 1; k < db.length; k += phraseBars) if (db.length - k >= minTailBars) out.push(db[k]!);
   return out;
 }
 
@@ -386,7 +626,14 @@ function splitAround(e: TimelineEvent, a: number, b: number): TimelineEvent[] {
   return out;
 }
 
-export function compileShow(index: ProjectIndex, trackName: string, analysis: SongAnalysis, plan: ShowPlan, opts: { maxStrobeHz: number; allowStrobe: boolean }): CompileResult {
+export function compileShow(index: ProjectIndex, trackName: string, analysis: SongAnalysis, plan: ShowPlan, opts: { maxStrobeHz: number; allowStrobe: boolean; phraseBars?: number }): CompileResult {
+  // Number of bars per phrase for cue generation - smaller values create more cues/tableaux
+  // Default is 8, but can be configured via opts.phraseBars
+  // For backward compatibility, we use 8 bars by default
+  const phraseBars = opts.phraseBars ?? 8;
+  
+  // Calculate bar duration for detecting long sections
+  const barDuration = 60 / analysis.bpm * 4;
   const scenes: Scene[] = [];
   /** Layers over the section looks (progressions, blinders): listed after them, section scenes keep the section order. */
   const overlays: Scene[] = [];
@@ -417,6 +664,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   // Breath before a drop: one beat of black so the hit lands on a dark stage (only after a section long enough).
   const breaths = analysis.sections.flatMap((s, i) => (breathBefore(analysis.sections, i) && s.start - analysis.sections[i - 1]!.start > 4 * beat ? [{ t: s.start - beat, duration: beat }] : []));
 
+  const aimMemo = memoAim();
   let lastLook: TimelineEvent | undefined;
   // GO list: each cue fires at a time (section start or phrase start) and holds the look until the next one.
   const cueSteps: { t: number; fade: number; sceneId: string; effectIds: string[]; label: string }[] = [];
@@ -428,7 +676,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     const name = `${short} · ${label}`;
     const len = sec.end - sec.start;
     const lit = litIds(index, p);
-    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze, intent.colors.length > 0);
+    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze, intent.colors.length > 0, aimMemo);
     const ramped = p.extras.includes('ramp');
     const scene: Scene = { id: randomUUID(), name: name.slice(0, 80), notes: plan.intent.slice(0, 500), values: ramped ? scaleIntensity(full, RAMP_FROM) : full, origin: 'ai' };
     scenes.push(scene);
@@ -466,11 +714,16 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
         main = effectFor(main.name, { ...p, effect: 'pulse', effectBeats: 4 }, opts.maxStrobeHz, lights);
       }
     }
-    // Symmetry: the main effect mirrors from the edges to the centre; every other 8-bar phrase it sweeps across the
+    // Symmetry: the main effect mirrors from the edges to the centre; every other phrase it sweeps across the
     // stage instead, and the heads reverse, so a long section keeps evolving with the music's phrasing.
     if (main) main.params.direction = 'pingpong';
     const move = moveFor(`${name} · mouvement`, p, movers);
-    const starts = phraseStarts(analysis.downbeats, sec);
+    
+    // For long sections (> 16 bars), use smaller phraseBars to create more cues/tableaux
+    // This automatically generates more variation in long sections
+    const sectionBars = Math.round(len / barDuration);
+    const effectivePhraseBars = sectionBars > 16 ? Math.max(4, phraseBars / 2) : phraseBars;
+    const starts = phraseStarts(analysis.downbeats, sec, effectivePhraseBars);
     const flip: Record<string, Effect['params']['direction']> = { pingpong: 'forward', forward: 'reverse' };
     for (const e of [main, move, ...extrasFor(index, name, p, lights, movers)]) {
       if (!e) continue;

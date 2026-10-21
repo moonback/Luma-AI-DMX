@@ -11,6 +11,7 @@ function song(sections: SongSection[], key: Partial<SongAnalysis['key']> = {}): 
   return {
     version: 1, duration: 60, bpm: 120, tempoStable: true, meter: 4, beats: [], downbeats: [], events: [],
     sections, key: { tonic: 0, mode: 'major', confidence: 0.1, ...key },
+    tempoChanges: [],
   } as SongAnalysis;
 }
 
