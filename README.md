@@ -15,10 +15,14 @@ Le nom et la marque sont centralisés dans [`src/shared/brand.ts`](src/shared/br
 - [Configuration DMX](#configuration-dmx)
 - [Mode virtuel](#mode-virtuel)
 - [Configuration de l'IA](#configuration-de-lia)
+- [Assistant vocal (Gemini Live)](#assistant-vocal-gemini-live)
 - [Licences et abonnements](#licences-et-abonnements)
 - [Sécurité](#sécurité)
 - [Limites matérielles](#limites-matérielles)
 - [Problèmes connus](#problèmes-connus)
+- [Structure du projet](#structure-du-projet)
+- [Contribuer](#contribuer)
+- [Licence du dépôt](#licence-du-dépôt)
 - Documentation : [architecture](docs/ARCHITECTURE.md), [format de projet](docs/PROJECT_FORMAT.md), [format de profil](docs/PROFILE_FORMAT.md), [test avec du matériel réel](docs/HARDWARE.md), [roadmap](ROADMAP.md) (et [scène](docs/roadmap/scene.md), [Stage 3D](docs/roadmap/stage3d.md), [fixtures](docs/roadmap/fixture.md)), [décisions (ADR)](docs/adr/), [rapport niveau 2](docs/RAPPORT-NIVEAU-2.md), [contribuer](CONTRIBUTING.md), [changelog](CHANGELOG.md)
 
 ## Captures d'écran
@@ -38,6 +42,7 @@ Captures produites par le test de bout en bout (`npm run test:e2e`, sortie virtu
 - Node.js 22 ou plus récent (développé avec Node 24.16) et npm.
 - Windows 10/11 x64 : c'est la plateforme où le build et les tests ont été exécutés. macOS et Linux sont configurés dans `electron-builder.yml`, mais **n'ont pas été construits ni testés**.
 - Facultatif : une clé API OpenRouter pour utiliser un modèle de langage externe.
+- Facultatif : une clé API Google Gemini (Google AI Studio) pour l'assistant vocal.
 
 ## Installation et démarrage
 ```bash
@@ -54,18 +59,23 @@ npm run build
 npm start
 ```
 
+Variable d'environnement utile : `LUMA_USER_DATA` redirige le dossier de données de l'application (projets, clés chiffrées, licence) vers un autre dossier, par exemple pour tester sans toucher à vos projets. `LUMA_E2E` est réservée aux tests de bout en bout.
+
 ## Compilation, tests et packaging
 | Commande | Rôle |
 |---|---|
 | `npm run typecheck` | TypeScript strict (`strict`, `noUncheckedIndexedAccess`) |
-| `npm run lint` | ESLint (typescript-eslint + règles des hooks React) |
+| `npm run lint` | ESLint (typescript-eslint + règles des hooks React), taille des fichiers (600 lignes max) et textes en dur hors i18n |
 | `npm test` | Vitest : tests unitaires, d'intégration et de composants |
+| `npm run test:watch` | Vitest en mode surveillance |
+| `npm run test:coverage` | Tests avec seuils de couverture sur `src/core` |
 | `npm run eval` | Banc d'évaluation de l'IA locale (`tests/eval/cases.json`) : scores, latence, 0 violation de sécurité exigée ; rapport `test-results/ai-eval.json` |
 | `npm run test:perf` | Mesures temps réel (cadence et gigue de l'ordonnanceur, charge de 1 000 projecteurs), exécutées seules pour ne pas être faussées par les autres tests |
 | `npm run test:e2e` | Build puis Playwright, qui pilote l'application Electron réelle |
 | `npm run check` | typecheck + lint + tests + tests de performance |
 | `npm run package` | Installateur Windows NSIS dans `release/` |
 | `npm run package:dir` | Application décompressée, sans installateur |
+| `npm run release` | Script de publication (`scripts/release.mjs`) ; voir [Contribuer](#contribuer) |
 
 ## Prise en main
 0. **Premier lancement** : l'écran de démarrage propose de créer un projet, d'ouvrir un fichier, de rechercher parmi les projets récents, de continuer le projet en cours ou d'ouvrir une démo. L'accueil propose aussi une **visite guidée** en 18 étapes. Elle met en surbrillance chaque zone de l'interface et ouvre les pages qu'elle décrit (←/→ pour avancer, Échap pour quitter). L'accueil donne aussi accès aux **10 projets de démonstration fictifs** : club électro, concert pop, théâtre, mariage, conférence, club de jazz, festival sur 2 univers, défilé de mode, concert en église, gala de danse. Chacun est livré avec patch, groupes, scènes, cues, effets et parfois une timeline, jouable en sortie virtuelle et en 3D. Sur le Dashboard, la liste **« Premiers pas »** se coche d'elle-même au fil de votre progression. Le bouton **?** de la barre supérieure relance la visite, ouvre la galerie de démos ou réaffiche la liste. Les démos s'ouvrent comme des copies non enregistrées (Ctrl+S pour les conserver) ; lieux, artistes et événements sont inventés.
@@ -118,6 +128,15 @@ La sortie virtuelle (univers 1 à 4 par défaut) enregistre les trames reçues, 
 - **OpenRouter** : *Settings › IA et fournisseurs* : fournisseur « OpenRouter », puis choix du modèle. *Charger la liste des modèles* affiche le catalogue OpenRouter avec recherche, contexte, prix par million de jetons et format pris en charge. On peut aussi saisir un identifiant `fournisseur/modèle` ; `openrouter/auto` laisse OpenRouter choisir. La clé API (`sk-or-v1-…`) est chiffrée par le système (Electron `safeStorage`) dans le processus principal. Elle n'est jamais renvoyée à l'interface ni écrite dans un projet. Le format JSON est imposé selon les capacités du modèle : sortie structurée (`json_schema`), sinon mode JSON, sinon consigne seule. La réponse est ensuite **revalidée** par le schéma strict de l'application. L'effort de raisonnement n'est transmis qu'aux modèles qui le prennent en charge. Si le fournisseur est indisponible (réseau, clé, crédits, modèle), l'application bascule sur le mode local et le signale. Données envoyées : la demande et une description du kit (noms, types, capacités, groupes, scènes).
 - L'IA ne produit **que** des actions typées (`setIntensity`, `setColor`, `setPosition`, `startEffect`, `stopEffect`, `createScene`, `applyScene`, `createCue`, `createSequence`, `setBpm`, `releaseAi`). Elle n'envoie jamais de DMX, n'exécute aucun code et n'a pas accès aux fonctions spéciales (reset, lampe). Le strobe exige l'autorisation explicite *Autoriser l'IA à proposer des effets strobe*.
 
+## Assistant vocal (Gemini Live)
+Un bouton vocal de l'interface ouvre une session **Gemini Live** (modèle `gemini-3.8-live`, défini dans [`src/core/app/shared.ts`](src/core/app/shared.ts)) : vous parlez, l'assistant répond à voix haute et agit sur l'éclairage.
+
+- **Activation** : *Settings › IA et fournisseurs*, champ **Clé Gemini (assistant vocal)**. Sans clé, le bouton reste désactivé. La clé est chiffrée par le système comme la clé OpenRouter.
+- **Fonctionnement** : le processus principal ne transmet jamais la clé au rendu. Il émet un **jeton à usage unique** (`ai.voiceToken`), et c'est la fenêtre qui ouvre la session. Le micro est capté à 16 kHz, la voix de retour est lue à 24 kHz. La session s'arrête avec le composant : quitter la vue coupe le micro.
+- **Outils** (définis dans [`src/renderer/voice/tools.ts`](src/renderer/voice/tools.ts)) : `propose_lighting` et `apply_proposal` (proposition puis application, comme l'assistant écrit), `undo_last`, `get_status`, et `control_engine` pour les cues (`cue_go`, `cue_back`, `cue_pause`, `cue_resume`).
+- **Limites du rôle** : `control_engine` permet de couper ou rétablir le blackout, de régler le BPM, de piloter les cues (GO, Back, pause, reprise) et de libérer le programmeur ou l'IA. Il ne peut **pas** armer une sortie réelle ni la reprendre après un STOP : ces actions restent à l'opérateur.
+- **Données envoyées** : pendant la session, le flux audio du micro et les messages sont envoyés à Google. Ce n'est pas le cas du mode local de l'IA. Le palier requis est celui des commandes `ai.*` (Standard).
+
 ## Licences et abonnements
 Trois paliers contrôlent l'accès aux fonctions. La vérification est **hors ligne** : aucune connexion n'est nécessaire sur scène.
 
@@ -168,3 +187,29 @@ node scripts/license.mjs issue --tier pro --sub client@exemple.fr --days 365
 - Raccourcis : configurables dans *Settings › Raccourcis* ; annuler/rétablir de la timeline restent fixés à Ctrl+Z / Ctrl+Y.
 - OpenRouter n'a été testé qu'avec des réponses simulées : aucun appel facturé n'a été effectué. La liste réelle des modèles a, elle, été récupérée avec succès.
 - L'installateur n'est pas signé (avertissement SmartScreen possible).
+- L'assistant vocal n'a pas été testé avec une clé réelle sur le matériel : les tests utilisent des réponses simulées.
+
+## Structure du projet
+```
+src/
+  core/      logique métier sans Electron ni React : moteur, IA, musique, sorties, licences
+  main/      processus principal Electron : fenêtres, IPC, cycle de vie, mises à jour
+  preload/   pont exposé au rendu (deux fonctions : invoke et on)
+  renderer/  interface React : composants, fonctionnalités, i18n, voix, vision
+  shared/    commandes, types et marque partagés avec le rendu
+tests/       unitaires, composants, performance, évaluation de l'IA, bout en bout
+docs/        architecture, formats de projet et de profil, ADR, feuilles de route, captures
+scripts/     licence, publication, contrôles (taille des fichiers, i18n, messages de commit)
+```
+La description détaillée des couches et des priorités est dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Contribuer
+Le guide complet est dans [CONTRIBUTING.md](CONTRIBUTING.md). En bref :
+- une branche par changement, partie de `master` ;
+- des commits au format [Conventional Commits](https://www.conventionalcommits.org/fr/) (`feat(scene): …`, `fix(engine): …`), vérifiés par `scripts/check-commits.mjs` ;
+- `npm run check` doit passer avant chaque commit ; la CI (`.github/workflows/ci.yml`) relance typecheck, lint, tests avec couverture et e2e ;
+- toute modification visible ajoute une ligne dans la section « Non publié » de [CHANGELOG.md](CHANGELOG.md) ;
+- tout nouveau texte d'interface passe par `src/renderer/i18n` (clés en français et en anglais).
+
+## Licence du dépôt
+Le dépôt ne contient pas encore de fichier `LICENSE` : les conditions de réutilisation du code ne sont pas définies. Les licences décrites plus haut concernent l'usage de l'application, pas le code source.
