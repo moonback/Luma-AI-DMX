@@ -54,8 +54,11 @@ export interface FrameFeatures {
 /** Precomputed analysis plan for a frame size and sample rate. */
 export class Spectrum {
   readonly window: Float64Array;
+  /** Packed real FFT: even / odd samples as one complex signal of size/2, split with the twiddles `wc` / `ws`. */
   private readonly re: Float64Array;
   private readonly im: Float64Array;
+  private readonly wc: Float64Array;
+  private readonly ws: Float64Array;
   private readonly bandOf: Int16Array;
   private readonly pitchOf: Int8Array;
   private readonly bassMax: number;
@@ -63,9 +66,11 @@ export class Spectrum {
 
   constructor(readonly size: number, readonly sampleRate: number) {
     this.window = Float64Array.from({ length: size }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / size));
-    this.re = new Float64Array(size);
-    this.im = new Float64Array(size);
     const half = size / 2;
+    this.re = new Float64Array(half);
+    this.im = new Float64Array(half);
+    this.wc = Float64Array.from({ length: half }, (_, k) => Math.cos((2 * Math.PI * k) / size));
+    this.ws = Float64Array.from({ length: half }, (_, k) => Math.sin((2 * Math.PI * k) / size));
     const hz = (k: number) => (k * sampleRate) / size;
     this.bandOf = Int16Array.from({ length: half }, (_, k) => {
       const f = hz(k);
@@ -83,20 +88,26 @@ export class Spectrum {
 
   /** Features of `samples[offset .. offset+size)` (zero-padded past the end). */
   frame(samples: ArrayLike<number>, offset: number): FrameFeatures {
-    const { size, re, im } = this;
+    const { size, re, im, wc, ws, window } = this;
+    const half = size / 2;
     let sq = 0;
-    for (let i = 0; i < size; i++) {
-      const s = samples[offset + i] ?? 0;
-      sq += s * s;
-      re[i] = s * this.window[i]!;
-      im[i] = 0;
+    for (let j = 0; j < half; j++) {
+      const s0 = samples[offset + 2 * j] ?? 0, s1 = samples[offset + 2 * j + 1] ?? 0;
+      sq += s0 * s0;
+      sq += s1 * s1;
+      re[j] = s0 * window[2 * j]!;
+      im[j] = s1 * window[2 * j + 1]!;
     }
     fft(re, im);
     const bands = new Float32Array(N_BANDS);
     const chroma = new Float32Array(12);
     let total = 0, weighted = 0, bass = 0, high = 0;
-    for (let k = 1; k < size / 2; k++) {
-      const p = re[k]! * re[k]! + im[k]! * im[k]!;
+    for (let k = 1; k < half; k++) {
+      const m = half - k;
+      const er = (re[k]! + re[m]!) / 2, ei = (im[k]! - im[m]!) / 2; // spectrum of the even samples
+      const or = (im[k]! + im[m]!) / 2, oi = (re[m]! - re[k]!) / 2; // of the odd samples
+      const xr = er + or * wc[k]! + oi * ws[k]!, xi = ei + oi * wc[k]! - or * ws[k]!;
+      const p = xr * xr + xi * xi;
       const mag = Math.sqrt(p);
       total += mag;
       weighted += mag * k;

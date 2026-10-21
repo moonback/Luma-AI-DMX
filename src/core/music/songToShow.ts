@@ -13,7 +13,7 @@ import { beamToValues } from '../ai/director';
 import { effectFlashViolation } from '../safety/flashGuard';
 import { SECTION_NAMES } from './analyze';
 import type { Vec3 } from '../visualizer/beam';
-import { aimAt, groupsBySection, isBlinder, isFog, isFollowSpot, markerPoint, namePattern, singerMarker, stagePoint, type NamedRef } from './showRig';
+import { aimAt, groupsBySection, isBlinder, isFog, isFollowSpot, markerPoint, memoAim, namePattern, singerMarker, stagePoint, type NamedRef } from './showRig';
 import { has, parseIntent, withMood, type Intent } from './intent';
 export { parseIntent, withMood, type Intent };
 
@@ -463,7 +463,7 @@ function restingAim(energy: number, side: number): Vec3 {
 const WHITE = { r: 1, g: 1, b: 1 };
 
 /** `ownColors`: the operator chose the colours, so the heads keep them on the peaks instead of turning white. */
-function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean, ownColors: boolean): FixtureValues {
+function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean, ownColors: boolean, aim = aimAt): FixtureValues {
   const v: FixtureValues = {};
   const layerOf = (id: string) => fixtureLayer(index.fixtures.get(id)!);
   // Colour roles: washes carry the base colour and the heads the second one when both are lit (contrast between
@@ -495,7 +495,7 @@ function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, l
     }
     if (layer === 'moving') {
       // Unfocused heads rest on a designed position; movement effects swing around it.
-      Object.assign(out, aimAt(rf, focusPoint(index, s, i) ?? restingAim(s.energy, rf.fixture.position.x || (i % 3) - 1)));
+      Object.assign(out, aim(rf, focusPoint(index, s, i) ?? restingAim(s.energy, rf.fixture.position.x || (i % 3) - 1)));
       Object.assign(out, beamValues(rf, s.beam, cluster));
     }
     v[rf.fixture.id] = out;
@@ -664,6 +664,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
   // Breath before a drop: one beat of black so the hit lands on a dark stage (only after a section long enough).
   const breaths = analysis.sections.flatMap((s, i) => (breathBefore(analysis.sections, i) && s.start - analysis.sections[i - 1]!.start > 4 * beat ? [{ t: s.start - beat, duration: beat }] : []));
 
+  const aimMemo = memoAim();
   let lastLook: TimelineEvent | undefined;
   // GO list: each cue fires at a time (section start or phrase start) and holds the look until the next one.
   const cueSteps: { t: number; fade: number; sceneId: string; effectIds: string[]; label: string }[] = [];
@@ -675,7 +676,7 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
     const name = `${short} · ${label}`;
     const len = sec.end - sec.start;
     const lit = litIds(index, p);
-    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze, intent.colors.length > 0);
+    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze, intent.colors.length > 0, aimMemo);
     const ramped = p.extras.includes('ramp');
     const scene: Scene = { id: randomUUID(), name: name.slice(0, 80), notes: plan.intent.slice(0, 500), values: ramped ? scaleIntensity(full, RAMP_FROM) : full, origin: 'ai' };
     scenes.push(scene);

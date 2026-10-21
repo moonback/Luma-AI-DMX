@@ -76,7 +76,23 @@ export function aimAt(rf: ResolvedFixture, target: Vec3): { pan?: number; tilt?:
   return { ...(hasPan ? { pan: best.pan } : {}), ...(hasTilt ? { tilt: best.tilt } : {}) };
 }
 
-export const isFog = (rf: ResolvedFixture) => rf.attributes.includes('fog');
+/**
+ * `aimAt` memoised per fixture object and target, for one compile: sections repeat the same resting / marker aims.
+ * Scope it to a single call over one ProjectIndex (its fixtures do not change meanwhile), so nothing can go stale.
+ */
+export function memoAim(): typeof aimAt {
+  const memo = new Map<ResolvedFixture, Map<string, ReturnType<typeof aimAt>>>();
+  return (rf, t) => {
+    let per = memo.get(rf);
+    if (!per) memo.set(rf, per = new Map());
+    const key = `${t.x},${t.y},${t.z}`;
+    let r = per.get(key);
+    if (!r) per.set(key, r = aimAt(rf, t));
+    return r;
+  };
+}
+
+export const isFog =(rf: ResolvedFixture) => rf.attributes.includes('fog');
 /** Blinders: named or tagged so, else the conventional dimmer fixtures. */
 export const isBlinder = (rf: ResolvedFixture) => [rf.fixture.name, ...rf.fixture.tags].some((t) => /blind/i.test(t)) || rf.profile.type === 'dimmer';
 /** Follow spot for the vocals: a moving head named or tagged so, else the first one. */
