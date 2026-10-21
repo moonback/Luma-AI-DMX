@@ -9,6 +9,7 @@ import { createUpdater } from './updates';
 import { handleCommand, isTrustedSender as isTrusted } from './ipc';
 import { discardAutosaveSync } from '../core/app/files';
 import type { Logger } from '../core/log/logger';
+import { LICENSE_PUBLIC_KEY } from '../core/license/publicKey';
 import icon from '../../resources/icon.png?asset';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,7 @@ async function createService(): Promise<AppService> {
     // Read lazily: update events arrive after the service is constructed.
     updater: (updater = createUpdater((): Logger => svc.logger)),
     renderPdf,
+    licensePublicKey: LICENSE_PUBLIC_KEY,
     appInfo: {
       name: BRAND.productName,
       version: app.getVersion(),

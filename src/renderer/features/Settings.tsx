@@ -12,6 +12,7 @@ import { externalControl } from '../control';
 import { audioEngine } from '../audioEngine';
 import type { UpdateStatus } from '../../core/app/updates';
 import { FeedbackPanel, UsagePanel } from './settings/BetaPanel';
+import { LicensePanel } from './settings/LicensePanel';
 import { useT } from '../i18n';
 import { openProject } from '../App';
 import { splitPath } from './StartScreen';
@@ -375,6 +376,7 @@ export function SettingsPage() {
           </Panel>
         )}
         {tab === 'general' && <RecentPanel recent={s.general.recentProjects} onChange={(recentProjects) => void forgetRecent(recentProjects)} />}
+        {tab === 'general' && <LicensePanel />}
         {tab === 'general' && <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />}
         {tab === 'appearance' && (
           <Panel title={tr('settings.tab.appearance')}>

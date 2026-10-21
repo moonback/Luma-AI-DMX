@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
+  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
   Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
@@ -27,6 +27,7 @@ import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
 import { HelpButton, OnboardingHost } from './features/Onboarding';
 import { StartScreen } from './features/StartScreen';
+import { LicenseBadge } from './features/LicenseBadge';
 import { MiniPlayer } from './features/music/MiniPlayer';
 import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/WhatsNew';
 import { t, useT, type MessageKey } from './i18n';
@@ -95,6 +96,127 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Dropdown menu for project actions (New / Open / Save / Undo / Redo). */
+function ProjectMenu({ onNew }: { onNew: () => void }) {
+  const tr = useT();
+  const project = useStore((s) => s.project);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const dirty = project?.dirty ?? false;
+
+  return (
+    <div className="proj-menu-wrap" ref={ref}>
+      <button
+        className="proj-menu-btn btn ghost"
+        onClick={() => setOpen((v) => !v)}
+        title={project?.project.meta.name ?? '…'}
+      >
+        <span className="proj-menu-name">
+          <b>{project?.project.meta.name ?? '…'}{dirty ? ' •' : ''}</b>
+        </span>
+        <ChevronDown size={13} className={`proj-menu-chevron ${open ? 'open' : ''}`} />
+      </button>
+      {open && (
+        <div className="proj-menu-dropdown">
+          <button className="proj-menu-item" onClick={() => { setOpen(false); onNew(); }}>
+            <FilePlus size={14} />{tr('project.newShortcut')}
+          </button>
+          <button className="proj-menu-item" onClick={() => { setOpen(false); void openProject(); }}>
+            <FolderOpen size={14} />{tr('project.openShortcut')}
+          </button>
+          <div className="proj-menu-sep" />
+          <button className="proj-menu-item" data-testid="save" onClick={() => { setOpen(false); void act({ type: 'project.save' }); }}>
+            <Save size={14} />{tr('project.saveShortcut')}
+          </button>
+          <div className="proj-menu-sep" />
+          <button
+            className="proj-menu-item"
+            data-testid="undo"
+            disabled={!project?.history?.undo}
+            onClick={() => { setOpen(false); void historyStep('undo'); }}
+          >
+            <Undo2 size={14} />{project?.history?.undoLabel ? tr('history.undoTitle', { label: project.history.undoLabel }) : tr('history.nothing')}
+          </button>
+          <button
+            className="proj-menu-item"
+            data-testid="redo"
+            disabled={!project?.history?.redo}
+            onClick={() => { setOpen(false); void historyStep('redo'); }}
+          >
+            <Redo2 size={14} />{project?.history?.redoLabel ? tr('history.redoTitle', { label: project.history.redoLabel }) : tr('history.nothing')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Compact status pills — LED dot + short label, full detail in title tooltip. */
+function StatusPills() {
+  const tr = useT();
+  const rt = useStore((s) => s.runtime);
+  const taps = useRef<number[]>([]);
+  const outputs = rt?.outputs ?? [];
+  const errors = outputs.filter((o) => o.state === 'error').length;
+  const ready = outputs.filter((o) => o.state === 'ready').length;
+  const transmitting = rt?.transmitting ?? true;
+
+  const tap = () => {
+    const now = performance.now();
+    taps.current = [...taps.current.filter((t) => now - t < 3000), now];
+    if (taps.current.length >= 3) {
+      const iv = taps.current.slice(1).map((t, i) => t - taps.current[i]!);
+      const bpm = Math.round(60000 / (iv.reduce((a, b) => a + b, 0) / iv.length));
+      if (bpm >= 20 && bpm <= 300) void act({ type: 'engine.bpm', bpm });
+    }
+  };
+
+  return (
+    <div className="status-pills">
+      {/* Output */}
+      <div
+        className="status-pill"
+        title={outputs.map((o) => `${o.name} : ${o.state}`).join('\n') || tr('top.output')}
+      >
+        <span className={`led ${errors ? 'err' : !transmitting ? 'warn' : ready ? 'ok' : ''}`} />
+        <span className="status-pill-label">
+          {errors ? `${errors} err` : !transmitting ? 'stopped' : `${ready} out`}
+        </span>
+      </div>
+      {/* Engine */}
+      <div
+        className="status-pill"
+        title={tr('top.engineTitle', { tick: rt?.engine.metrics.avgTickMs ?? 0, jitter: rt?.engine.metrics.jitterMs ?? 0 })}
+      >
+        <span className={`led ${rt?.engine.running ? 'ok' : 'err'}`} />
+        <span className="status-pill-label">{rt ? `${rt.engine.metrics.measuredHz} Hz` : '–'}</span>
+      </div>
+      {/* BPM tap */}
+      <button
+        className="status-pill status-pill-btn"
+        onClick={tap}
+        title={tr('top.tapTitle')}
+      >
+        <span className="led ok" style={{ background: 'var(--cyan)' }} />
+        <span className="status-pill-label">{rt ? `${rt.engine.bpm.toFixed(0)} bpm` : '–'}</span>
+      </button>
+      {/* AI */}
+      <div className="status-pill" title={rt?.ai.lastError ?? tr('top.ai')}>
+        <span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />
+        <span className="status-pill-label">AI</span>
+      </div>
+    </div>
+  );
+}
+
 function TopBar() {
   const tr = useT();
   const project = useStore((s) => s.project);
@@ -108,78 +230,61 @@ function TopBar() {
       useStore.setState({ newProjectOpen: false });
     }
   }, [newOpen]);
-  const taps = useRef<number[]>([]);
-  const outputs = rt?.outputs ?? [];
-  const errors = outputs.filter((o) => o.state === 'error').length;
-  const ready = outputs.filter((o) => o.state === 'ready').length;
   const live = rt?.liveMode ?? false;
   const transmitting = rt?.transmitting ?? true;
-  const pb = rt?.engine.playbacks.find((p) => p.state !== 'idle');
   const alerts = rt?.alerts.length ?? 0;
   const installPlanButton = useStore((s) => s.installPlanButton);
 
-  const tap = () => {
-    const now = performance.now();
-    taps.current = [...taps.current.filter((t) => now - t < 3000), now];
-    if (taps.current.length >= 3) {
-      const iv = taps.current.slice(1).map((t, i) => t - taps.current[i]!);
-      const bpm = Math.round(60000 / (iv.reduce((a, b) => a + b, 0) / iv.length));
-      if (bpm >= 20 && bpm <= 300) void act({ type: 'engine.bpm', bpm });
-    }
-  };
-
   return (
     <header className="topbar">
-      <div className="brand"><img className="brand-logo" src={logo} alt={BRAND.productName} /></div>
-      <div className="top-project" title={project?.path ?? tr('project.unsaved')}>
-        <b>{project?.project.meta.name ?? '…'}{project?.dirty ? ' •' : ''}</b>
-        <span className="small muted">{project?.project.meta.show || (pb ? tr('project.cue', { name: pb.cueName ?? '–' }) : tr('project.noCue'))}</span>
+      {/* ── Left zone: logo + project dropdown ── */}
+      <div className="top-left">
+        <div className="brand"><img className="brand-logo" src={logo} alt={BRAND.productName} /></div>
+        <ProjectMenu onNew={() => setShowNew(true)} />
+        {installPlanButton && (
+          <button className="btn ghost icon" data-testid="install-plan" title={tr('top.installPlanTitle')} onClick={() => void act({ type: 'patch.exportPlan' })}>
+            <ClipboardList size={15} />
+          </button>
+        )}
       </div>
-      <div className="row">
-        <button className="btn ghost icon" title={tr('project.newShortcut')} onClick={() => setShowNew(true)}><FilePlus size={16} /></button>
-        <button className="btn ghost icon" title={tr('project.openShortcut')} onClick={() => void openProject()}><FolderOpen size={16} /></button>
-        <button className="btn ghost icon" data-testid="undo" disabled={!project?.history?.undo} title={project?.history?.undoLabel ? tr('history.undoTitle', { label: project.history.undoLabel }) : tr('history.nothing')} onClick={() => void historyStep('undo')}><Undo2 size={16} /></button>
-        <button className="btn ghost icon" data-testid="redo" disabled={!project?.history?.redo} title={project?.history?.redoLabel ? tr('history.redoTitle', { label: project.history.redoLabel }) : tr('history.nothing')} onClick={() => void historyStep('redo')}><Redo2 size={16} /></button>
-        <button className="btn ghost icon" title={tr('project.saveShortcut')} data-testid="save" onClick={() => void act({ type: 'project.save' })}><Save size={16} /></button>
+
+      {/* ── Centre: mode badge + compact status pills ── */}
+      <div className="top-stats">
+        <span className={`mode-badge ${live ? 'live' : ''}`} data-testid="mode" title={live ? tr('top.liveTitle') : tr('top.simulationTitle')}>
+          {live ? 'LIVE' : 'SIM'}
+        </span>
+        <StatusPills />
       </div>
-      {installPlanButton && <button className="btn ghost" data-testid="install-plan" title={tr('top.installPlanTitle')} onClick={() => void act({ type: 'patch.exportPlan' })}><ClipboardList size={16} />{tr('top.installPlan')}</button>}
-      <div className="top-sep" />
-      <span className={`mode-badge ${live ? 'live' : ''}`} data-testid="mode" title={live ? tr('top.liveTitle') : tr('top.simulationTitle')}>{live ? 'LIVE' : 'SIMULATION'}</span>
-      <div className="stat" title={outputs.map((o) => `${o.name} : ${o.state}`).join('\n')}>
-        <span className="k">{tr('top.output')}</span>
-        <span className="v row" style={{ gap: 6 }}><span className={`led ${errors ? 'err' : !transmitting ? 'warn' : ready ? 'ok' : ''}`} />{errors ? tr('top.outputErrors', { n: errors }) : !transmitting ? tr('top.outputStopped') : tr('top.outputActive', { n: ready })}</span>
-      </div>
-      <div className="stat" title={tr('top.engineTitle', { tick: rt?.engine.metrics.avgTickMs ?? 0, jitter: rt?.engine.metrics.jitterMs ?? 0 })}>
-        <span className="k">{tr('top.engine')}</span>
-        <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.engine.running ? 'ok' : 'err'}`} />{rt ? `${rt.engine.metrics.measuredHz} Hz` : '–'}</span>
-      </div>
-      <button className="stat btn ghost" style={{ height: 'auto', padding: '2px 6px', alignItems: 'flex-start' }} onClick={tap} title={tr('top.tapTitle')}>
-        <span className="k">BPM {rt?.engine.bpmSource === 'audio' ? '· audio' : ''}</span>
-        <span className="v">{rt ? rt.engine.bpm.toFixed(0) : '–'}</span>
-      </button>
-      <div className="stat" title={rt?.ai.lastError ?? ''}>
-        <span className="k">{tr('top.ai')}</span>
-        <span className="v row" style={{ gap: 6 }}><span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />{rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? 'OpenRouter' : tr('top.aiLocal')}</span>
-      </div>
-      <div className="grow" />
-      <HelpButton />
-      <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
-        <Bell size={16} />
-        {alerts > 0 && <span className="badge err" style={{ position: 'absolute', top: -4, right: -8, height: 16, padding: '0 4px' }}>{alerts}</span>}
-      </button>
-      <button className="btn" data-testid="release-all" title={tr('top.releaseAllTitle')} onClick={() => void releaseAllFlow()}>
-        <Undo2 size={15} />{tr('top.releaseAll')}
-      </button>
-      <button className={`btn ${rt?.engine.blackout ? 'danger solid' : ''}`} data-testid="blackout" title={tr('top.blackoutTitle')} onClick={() => void act({ type: 'engine.blackout', on: !rt?.engine.blackout })}>
-        <Moon size={15} />{tr('top.blackout')}
-      </button>
-      {transmitting ? (
-        <button className="btn danger solid lg" data-testid="stop-output" title={tr('top.stopTitle')} onClick={() => void act({ type: 'output.transmit', on: false })}>
-          <OctagonX size={18} />STOP
+
+      {/* ── Right zone: alerts + critical actions ── */}
+      <div className="top-right">
+        <LicenseBadge />
+        <HelpButton />
+        <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
+          <Bell size={16} />
+          {alerts > 0 && <span className="badge err" style={{ position: 'absolute', top: -4, right: -8, height: 16, padding: '0 4px' }}>{alerts}</span>}
         </button>
-      ) : (
-        <button className="btn accent lg" title={tr('top.resumeTitle')} onClick={() => void act({ type: 'output.transmit', on: true })}><Play size={16} />{tr('top.resume')}</button>
-      )}
+        <button className="btn ghost icon" data-testid="release-all" title={tr('top.releaseAllTitle')} onClick={() => void releaseAllFlow()}>
+          <Undo2 size={15} />
+        </button>
+        <button
+          className={`btn icon ${rt?.engine.blackout ? 'danger solid' : 'ghost'}`}
+          data-testid="blackout"
+          title={tr('top.blackoutTitle')}
+          onClick={() => void act({ type: 'engine.blackout', on: !rt?.engine.blackout })}
+        >
+          <Moon size={15} />
+        </button>
+        {transmitting ? (
+          <button className="btn danger solid" data-testid="stop-output" title={tr('top.stopTitle')} onClick={() => void act({ type: 'output.transmit', on: false })}>
+            <OctagonX size={16} />STOP
+          </button>
+        ) : (
+          <button className="btn accent" title={tr('top.resumeTitle')} onClick={() => void act({ type: 'output.transmit', on: true })}>
+            <Play size={15} />{tr('top.resume')}
+          </button>
+        )}
+      </div>
       {showNew && <NewProjectDialog onClose={() => setShowNew(false)} />}
     </header>
   );

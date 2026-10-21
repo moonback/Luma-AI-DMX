@@ -9,7 +9,7 @@ import { DISABLED_UPDATES } from '../updates';
 import type { AppService, CommandIn } from '../AppService';
 
 /* Audio input, settings, logs and the diagnostic export. */
-export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app' | 'usage' | 'feedback' | 'storage'>): Promise<unknown> {
+export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'settings' | 'logs' | 'diagnostic' | 'app' | 'usage' | 'license' | 'feedback' | 'storage'>): Promise<unknown> {
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'audio.features':
@@ -60,6 +60,15 @@ export async function handleSystem(app: AppService, cmd: CommandIn<'audio' | 'se
       const info = app.opts.appInfo;
       return { name: info?.name ?? 'Luma AI DMX', version: info?.version ?? 'dev', updates: app.opts.updater?.status() ?? DISABLED_UPDATES };
     }
+    case 'license.get': return app.license.status();
+    case 'license.activate': {
+      const status = await app.license.activate(cmd.key);
+      app.logger.info('Licence', `Licence ${status.tier} activée`);
+      return status;
+    }
+    case 'license.remove':
+      await app.license.remove();
+      return app.license.status();
     case 'usage.get': return { enabled: app.usage.enabled, data: app.usage.snapshot() };
     case 'usage.clear':
       await app.usage.clear();

@@ -30,6 +30,7 @@ import type { OpenRouterModel } from '../ai/providers/openrouter';
 import { OPENROUTER_KEY, SCENE_FIELDS, SCENE_HISTORY_MAX, UserError, type SceneFields, type SceneSnapshot } from './shared';
 import { endLocate, onLocatePhoto } from './handlers/locate';
 import { configureUpdates } from './handlers/system';
+import { LicenseManager } from '../license/manager';
 import { ROUTES, UNCOUNTED, type CommandDomain } from './routes';
 import { applyControl, onOsc, remoteState } from './control';
 import { beginCommand, clearHistory, historyState, recordStep } from './history';
@@ -73,6 +74,7 @@ export interface AppServiceOptions {
   updater?: Updater;
   /** HTML → PDF (Electron's printToPDF); absent in tests, where only the CSV export is available. */
   renderPdf?(html: string): Promise<Uint8Array>;
+  licensePublicKey?: string; // absente (tests, développement) : aucune fonction restreinte
 }
 
 export { UserError };
@@ -131,11 +133,13 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
   timecodeAt = 0;
   logSink: FileLogSink | null = null;
   readonly usage: UsageStats;
+  readonly license: LicenseManager;
   readonly hardware = new HardwareSession();
 
   constructor(readonly opts: AppServiceOptions) {
     super();
     this.usage = new UsageStats(path.join(opts.dataDir, 'usage.json'));
+    this.license = new LicenseManager(path.join(opts.dataDir, 'license.key'), opts.licensePublicKey ?? null);
     this.project = createProject('Nouveau projet');
     this.index = new ProjectIndex(this.project);
     this.outputs = new OutputManager(opts.adapterFactory ?? ((c) => createAdapter(c, this.settings.sacn?.cid)));
@@ -167,6 +171,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   async init(): Promise<void> {
     await fs.mkdir(this.opts.dataDir, { recursive: true });
+    await this.license.load();
     if (this.opts.logDir !== false) {
       try {
         this.logSink = new FileLogSink(this.opts.logDir ?? path.join(this.opts.dataDir, 'logs'));
@@ -367,6 +372,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
 
   /** Routes a command to the handler of its domain (the part of the type before the dot). */
   async handle(cmd: Command): Promise<unknown> {
+    this.license.assertAllowed(cmd.type);
     if (!UNCOUNTED.has(cmd.type)) this.usage.command(cmd.type);
     beginCommand(this, cmd.type);
     const domain = cmd.type.slice(0, cmd.type.indexOf('.')) as CommandDomain;

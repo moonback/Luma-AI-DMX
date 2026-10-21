@@ -26,6 +26,7 @@ import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 import type { PhotoScene } from '../core/ai/sceneFromPhoto';
 import type { PhotoProfile } from '../core/ai/profileFromPhoto';
 import type { StorageReport } from '../core/app/storage';
+import type { LicenseStatus } from '../core/license/license';
 import type { AiUsageDay } from '../core/ai/usage';
 import type { HardwareSession } from '../core/app/hardware';
 
@@ -300,6 +301,10 @@ export const commandSchema = z.discriminatedUnion('type', [
     includeUsage: z.boolean().default(true),
     path: optPath,
   }),
+  // Licence
+  empty('license.get'),
+  z.object({ type: z.literal('license.activate'), key: z.string().trim().min(10).max(2000) }),
+  empty('license.remove'),
   // Application
   empty('app.info'),
   empty('app.checkUpdates'),
@@ -488,6 +493,9 @@ export interface CommandResults {
   'usage.get': { enabled: boolean; data: UsageData };
   'usage.clear': Void;
   'feedback.export': { path: string | null };
+  'license.get': LicenseStatus;
+  'license.activate': LicenseStatus;
+  'license.remove': LicenseStatus;
   'app.info': { name: string; version: string; updates: UpdateStatus };
   'app.checkUpdates': UpdateStatus;
   'storage.report': StorageReport;
