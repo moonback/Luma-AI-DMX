@@ -7,7 +7,7 @@ import { frScreens } from './fr.screens';
 export const fr = {
   'nav.aria': 'Espaces de travail',
   'nav.dashboard': 'Dashboard',
-  'nav.fixtures': 'Fixtures',
+  'nav.fixtures': 'Machines',
   'nav.console': 'Console Live ',
   'nav.programmer': 'Programmer',
   'nav.cues': 'Cues & Sequences',
@@ -15,7 +15,7 @@ export const fr = {
   'nav.quick': 'Actions rapides',
   'nav.timeline': 'Timeline',
   'nav.ai': 'Shows IA',
-  'nav.visualizer': 'Stage',
+  'nav.visualizer': 'Scene 2D/3D',
   'nav.audio': 'Audio Reactive',
   'nav.music': 'Show Musique',
   'nav.output': 'DMX Output',
