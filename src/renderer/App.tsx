@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
+  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, Crosshair, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, Mic, MicOff, OctagonX, Palette,
   Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
@@ -13,6 +13,7 @@ import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings
 import { Dashboard } from './features/Dashboard';
 import { Fixtures } from './features/Fixtures';
 import { DETACHED_CONSOLE_HASH, LiveConsole, openDetachedConsole } from './features/LiveConsole';
+import { PanTiltConsole } from './features/PanTiltConsole';
 import { Programmer } from './features/Programmer';
 import { Cues } from './features/Cues';
 import { Effects } from './features/Effects';
@@ -31,13 +32,14 @@ import { LicenseBadge } from './features/LicenseBadge';
 import { MiniPlayer } from './features/music/MiniPlayer';
 import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/WhatsNew';
 import { t, useT, type MessageKey } from './i18n';
+import { startVoice, type VoiceState } from './voice/session';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
-  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
+  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, pantilt: Crosshair, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
   timeline: ChartGantt, ai: Bot, visualizer: Theater, audio: AudioLines, music: Music2, output: Cable, settings: SettingsIcon,
 };
 const VIEWS: Record<PageId, ComponentType> = {
-  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
+  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, pantilt: PanTiltConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
   timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
 };
 
@@ -217,6 +219,74 @@ function StatusPills() {
   );
 }
 
+/* ── Voice assistant button ───────────────────────────────────────────────── */
+const VOICE_STATE_CLASSES: Record<VoiceState, string> = {
+  connecting: 'accent',
+  listening: 'accent solid',
+  speaking:  'accent solid',
+  working:   'accent solid',
+};
+
+const VOICE_STATE_ICONS: Record<VoiceState, typeof Mic> = {
+  connecting: Mic,
+  listening:  Mic,
+  speaking:   Mic,
+  working:    Mic,
+};
+
+function VoiceButton() {
+  const tr = useT();
+  const rt = useStore((s) => s.runtime);
+  const hasVoiceKey = rt?.ai.hasVoiceKey ?? false;
+  const [state, setState] = useState<VoiceState | null>(null);
+  const stopRef = useRef<(() => void) | null>(null);
+
+  const toggle = async () => {
+    // If already active → stop
+    if (stopRef.current) {
+      stopRef.current();
+      stopRef.current = null;
+      setState(null);
+      return;
+    }
+    try {
+      const session = await startVoice(
+        (s) => setState(s),
+        () => { stopRef.current = null; setState(null); },
+      );
+      if (session) stopRef.current = session.stop;
+    } catch (err) {
+      console.error('[Voice] Failed to start:', err);
+      useStore.getState().toast({ kind: 'error', title: tr('voice.micError') });
+      setState(null);
+    }
+  };
+
+  if (!hasVoiceKey) return null;
+
+  const active = state !== null;
+  const Icon = active ? VOICE_STATE_ICONS[state] : Mic;
+  const btnClass = active ? `btn ${VOICE_STATE_CLASSES[state]} icon` : 'btn ghost icon';
+
+  const label = active
+    ? (state === 'connecting' ? tr('voice.connecting') : state === 'speaking' ? tr('voice.speaking') : state === 'working' ? tr('voice.working') : tr('voice.listening'))
+    : tr('voice.start');
+
+  return (
+    <button
+      className={`${btnClass} voice-btn`}
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onClick={() => void toggle()}
+      style={active && state === 'listening' ? { animation: 'voice-pulse 1.4s ease-in-out infinite' } : undefined}
+    >
+      {active ? <Icon size={16} /> : <Mic size={16} />}
+      {active && <span className="voice-btn-label">{label}</span>}
+    </button>
+  );
+}
+
 function TopBar() {
   const tr = useT();
   const project = useStore((s) => s.project);
@@ -258,6 +328,7 @@ function TopBar() {
 
       {/* ── Right zone: alerts + critical actions ── */}
       <div className="top-right">
+        <VoiceButton />
         <LicenseBadge />
         <HelpButton />
         <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
@@ -291,7 +362,7 @@ function TopBar() {
 }
 
 const NAV_GROUPS: { key: MessageKey; ids: PageId[] }[] = [
-  { key: 'nav.group.live', ids: ['dashboard', 'console', 'programmer', 'cues', 'quick'] },
+  { key: 'nav.group.live', ids: ['dashboard', 'console', 'pantilt', 'programmer', 'cues', 'quick'] },
   { key: 'nav.group.create', ids: ['effects', 'timeline', 'ai', 'music'] },
   { key: 'nav.group.stage', ids: ['visualizer', 'fixtures', 'audio'] },
   { key: 'nav.group.config', ids: ['output', 'settings'] },
@@ -485,6 +556,15 @@ export function App() {
   const collapsed = useStore((s) => s.collapsed);
   const ready = useStore((s) => !!s.project);
   useShortcuts();
+  // Navigation demandée pendant le verrouillage « console simplifiée » : on ne quitte qu'après confirmation.
+  const leaveRequest = useStore((s) => s.leaveRequest);
+  useEffect(() => {
+    if (!leaveRequest) return;
+    void confirmAction({ title: t('simple.leaveTitle'), message: t('simple.leaveMessage'), confirmLabel: t('simple.leaveConfirm') }).then((ok) => {
+      useStore.setState(ok ? { leaveRequest: null, simpleLocked: false } : { leaveRequest: null });
+      if (ok) useStore.getState().setPage(leaveRequest);
+    });
+  }, [leaveRequest]);
   const View = VIEWS[page];
   return (
     <div className={`app ${collapsed ? 'collapsed' : ''}`}>
@@ -531,5 +611,7 @@ export async function bootstrap(): Promise<void> {
   if (main) void offerRecovery();
   detachStageOnOpen = settings.general.detachStage3dOnStart && main;
   detachConsoleOnOpen = settings.general.detachConsoleOnStart && main;
+  // Lu au démarrage seulement : le réglage s'applique au prochain redémarrage, pas à la session en cours.
+  if (main && settings.general.simpleConsoleOnStart) useStore.setState({ simpleLocked: true, page: 'pantilt' });
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

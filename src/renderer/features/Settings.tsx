@@ -332,6 +332,7 @@ export function SettingsPage() {
   const [saved, setSaved] = useState<Settings | null>(null);
   const [tab, setTab] = useState<TabId>('general');
   const [key, setKey] = useState('');
+  const [voiceKey, setVoiceKey] = useState('');
   const [recovery, setRecovery] = useState<RecoveryEntry[]>([]);
   const rt = useStore((st) => st.runtime);
   const project = useStore((st) => st.project!);
@@ -370,6 +371,7 @@ export function SettingsPage() {
                 <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-console-on-start" checked={s.general.detachConsoleOnStart} onChange={(e) => set('general', { detachConsoleOnStart: e.target.checked })} />{tr('settings.general.detachConsole')}</label>
+                <label className="check" title={tr('settings.general.simpleConsoleHint')}><input type="checkbox" data-testid="simple-console-on-start" checked={s.general.simpleConsoleOnStart} onChange={(e) => set('general', { simpleConsoleOnStart: e.target.checked })} />{tr('settings.general.simpleConsole')}</label>
                 <label className="check" title={tr('settings.general.installPlanHint')}><input type="checkbox" data-testid="install-plan-button" checked={s.general.installPlanButton} onChange={(e) => set('general', { installPlanButton: e.target.checked })} />{tr('settings.general.installPlan')}</label>
               </div>
             </div>
@@ -463,6 +465,13 @@ export function SettingsPage() {
                 <p className="small dim" style={{ margin: 0 }}>{tr('settings.ai.privacy')}</p>
               </div>
             )}
+            <Field label={tr('settings.ai.voiceKey')} hint={tr('settings.ai.voiceKeyHint')}>
+              <div className="row">
+                <input className="input mono" type="password" autoComplete="off" placeholder={rt?.ai.hasVoiceKey ? tr('settings.ai.keySaved') : 'AIza…'} value={voiceKey} onChange={(e) => setVoiceKey(e.target.value)} />
+                <button className="btn primary" disabled={voiceKey.trim().length < 10} onClick={() => void act({ type: 'ai.voiceKey', key: voiceKey.trim() }).then((r) => r && setVoiceKey(''))}><KeyRound size={13} />{tr('common.save')}</button>
+                <button className="btn danger" disabled={!rt?.ai.hasVoiceKey} onClick={() => void act({ type: 'ai.voiceKey', key: null })}>{tr('common.delete')}</button>
+              </div>
+            </Field>
           </Panel>
         )}
         {tab === 'audio' && (

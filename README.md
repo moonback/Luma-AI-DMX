@@ -15,6 +15,7 @@ Le nom et la marque sont centralisés dans [`src/shared/brand.ts`](src/shared/br
 - [Configuration DMX](#configuration-dmx)
 - [Mode virtuel](#mode-virtuel)
 - [Configuration de l'IA](#configuration-de-lia)
+- [Licences et abonnements](#licences-et-abonnements)
 - [Sécurité](#sécurité)
 - [Limites matérielles](#limites-matérielles)
 - [Problèmes connus](#problèmes-connus)
@@ -116,6 +117,28 @@ La sortie virtuelle (univers 1 à 4 par défaut) enregistre les trames reçues, 
 - **Mode local déterministe (par défaut)** : règles et modèles intégrés, en français et en partie en anglais, sans réseau. Il comprend notamment les ambiances (lounge, club…), les couleurs, les durées, les intensités, les cibles (« les quatre lyres », noms de groupes), les effets (chase, vague, arc-en-ciel, pulse, mouvements, strobe si autorisé), les drops, les shows de N minutes, les variantes et les ajustements (« plus chaud et moins agressif »). Ce mode est signalé comme tel et ne se présente jamais comme un modèle de langage. Une demande non reconnue est déclarée comme telle.
 - **OpenRouter** : *Settings › IA et fournisseurs* : fournisseur « OpenRouter », puis choix du modèle. *Charger la liste des modèles* affiche le catalogue OpenRouter avec recherche, contexte, prix par million de jetons et format pris en charge. On peut aussi saisir un identifiant `fournisseur/modèle` ; `openrouter/auto` laisse OpenRouter choisir. La clé API (`sk-or-v1-…`) est chiffrée par le système (Electron `safeStorage`) dans le processus principal. Elle n'est jamais renvoyée à l'interface ni écrite dans un projet. Le format JSON est imposé selon les capacités du modèle : sortie structurée (`json_schema`), sinon mode JSON, sinon consigne seule. La réponse est ensuite **revalidée** par le schéma strict de l'application. L'effort de raisonnement n'est transmis qu'aux modèles qui le prennent en charge. Si le fournisseur est indisponible (réseau, clé, crédits, modèle), l'application bascule sur le mode local et le signale. Données envoyées : la demande et une description du kit (noms, types, capacités, groupes, scènes).
 - L'IA ne produit **que** des actions typées (`setIntensity`, `setColor`, `setPosition`, `startEffect`, `stopEffect`, `createScene`, `applyScene`, `createCue`, `createSequence`, `setBpm`, `releaseAi`). Elle n'envoie jamais de DMX, n'exécute aucun code et n'a pas accès aux fonctions spéciales (reset, lampe). Le strobe exige l'autorisation explicite *Autoriser l'IA à proposer des effets strobe*.
+
+## Licences et abonnements
+Trois paliers contrôlent l'accès aux fonctions. La vérification est **hors ligne** : aucune connexion n'est nécessaire sur scène.
+
+| Palier | Fonctions |
+|---|---|
+| **Starter** (sans licence) | Console, patch, scènes, cues, effets, visualiseur, audio réactif, sorties DMX |
+| **Standard** | Starter + assistant IA (`ai.*`), Musique / Song-to-Show (`music.*`), Timeline (`timeline.*`) |
+| **Pro** | Standard + RDM (`rdm.*`) et localisation par caméra (`locate.*`) |
+
+- **Activation** : *Réglages › Général › Licence*, collez la clé puis *Activer*. Le badge du palier s'affiche dans la barre supérieure (violet = active, orange = période de grâce, rouge = expirée ou invalide) ; un clic ouvre les réglages. La clé est enregistrée dans `license.key`, dans le dossier de données de l'application.
+- **Abonnements** : une licence peut avoir une échéance. Après celle-ci, le palier reste actif **7 jours** (période de grâce), puis l'application revient en Starter. Sans échéance, la licence est perpétuelle.
+- **Format** : clé `payload.signature`, signée Ed25519 ; seule la clé publique ([`src/core/license/publicKey.ts`](src/core/license/publicKey.ts)) est dans l'application. Toute commande réservée à un palier supérieur est refusée par le processus principal, y compris via la télécommande.
+- **Émettre des licences** (vendeur) :
+```bash
+node scripts/license.mjs keygen
+```
+```bash
+node scripts/license.mjs issue --tier pro --sub client@exemple.fr --days 365
+```
+  `keygen` crée la clé privée dans `~/.luma-license-private.pem` (ou `LUMA_LICENSE_KEY`), **hors du dépôt : sauvegardez-la**, sa perte empêche d'émettre de nouvelles licences. Collez ensuite la clé publique affichée dans `publicKey.ts`. Sans `--days`, la licence est perpétuelle.
+- **Limites** : vérification côté client, sans serveur : l'horloge de la machine n'est pas contrôlée, le nombre d'appareils n'est pas limité et une licence ne peut pas être révoquée. Aucune restriction n'est appliquée en développement et dans les tests (pas de clé publique fournie au service).
 
 ## Sécurité
 - Electron : `contextIsolation`, `sandbox`, `nodeIntegration: false`, CSP stricte, navigation bloquée, nouvelles fenêtres limitées à la vue 3D détachée, seules les permissions micro (audio réactif, LTC) et MIDI sont accordées. Le renderer ne reçoit qu'une API à deux fonctions (`invoke` et `on`). Chaque commande IPC est validée par Zod dans le processus principal ; les origines inconnues sont refusées.

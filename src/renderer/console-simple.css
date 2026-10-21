@@ -1,0 +1,114 @@
+/* ------------------------------------------------------------------ */
+/* Console Simplifiée — couche de finition, chargée après futuristic.  */
+/* Même langage visuel que le reste de l'app (verre, filets dégradés,  */
+/* lueur violette = sélection, cyan = valeur programmée). Animations   */
+/* en transform / opacity uniquement.                                  */
+/* ------------------------------------------------------------------ */
+
+@keyframes sc-rise { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+@keyframes sc-drop { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes sc-fade { from { opacity: 0; } }
+@keyframes sc-check-pop { 0% { transform: scale(0); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes sc-selected-pulse { 50% { box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.75), 0 10px 34px -6px rgba(139, 92, 246, 0.8); } }
+
+/* Bandeau de verrouillage (réglage « ouvrir la console simplifiée au démarrage ») */
+.sc-lock-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 7px 12px; border-radius: 10px; font-size: 12px; color: #fcd34d; background: linear-gradient(90deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.04)); border: 1px solid rgba(245, 158, 11, 0.35); animation: sc-drop 260ms var(--ease-out); }
+.sc-lock-bar .btn { margin-left: auto; }
+
+/* ── Panneau groupes ───────────────────────────────────────────────── */
+.sc-groups-panel { background: var(--glass); border-color: rgba(255, 255, 255, 0.07); border-radius: 12px; box-shadow: 0 18px 40px -26px rgba(0, 0, 0, 0.9); animation: sc-rise var(--enter) var(--ease-out) backwards; }
+.sc-groups-header { border-bottom-color: rgba(255, 255, 255, 0.06); }
+.sc-group-btn { border-radius: 8px; background: rgba(255, 255, 255, 0.03); transition: transform var(--dur) var(--ease-out), border-color var(--dur), background var(--dur), box-shadow var(--dur); }
+.sc-group-btn:hover { transform: translateX(3px); }
+.sc-group-btn:active { transform: translateX(3px) scale(0.98); }
+.sc-group-btn--on { box-shadow: var(--glow-violet); }
+.sc-group-create { animation: sc-drop 220ms var(--ease-out); }
+.sc-group-row { animation: sc-rise 320ms var(--ease-out) backwards; }
+.sc-group-row:nth-child(2) { animation-delay: 40ms; }
+.sc-group-row:nth-child(3) { animation-delay: 80ms; }
+.sc-group-row:nth-child(n + 4) { animation-delay: 120ms; }
+
+/* ── Bandeau de sélection ──────────────────────────────────────────── */
+.sc-sel-bar { border-radius: 10px; border-color: rgba(139, 92, 246, 0.45); background: linear-gradient(90deg, rgba(139, 92, 246, 0.22), rgba(34, 211, 238, 0.08)); box-shadow: 0 10px 30px -18px rgba(139, 92, 246, 0.8); justify-content: space-between; animation: sc-drop 260ms var(--ease-out); }
+
+/* ── Tuiles ────────────────────────────────────────────────────────── */
+.sc-tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
+.sc-tile { width: auto; border-radius: 12px; border-color: rgba(255, 255, 255, 0.07); background: var(--glass); box-shadow: 0 12px 28px -20px rgba(0, 0, 0, 0.95); animation: sc-rise 420ms var(--ease-out) backwards; transition: transform var(--dur) var(--ease-out), border-color var(--dur), box-shadow var(--dur), background var(--dur); }
+.sc-tile:nth-child(2) { animation-delay: 30ms; }
+.sc-tile:nth-child(3) { animation-delay: 60ms; }
+.sc-tile:nth-child(4) { animation-delay: 90ms; }
+.sc-tile:nth-child(5) { animation-delay: 120ms; }
+.sc-tile:nth-child(6) { animation-delay: 150ms; }
+.sc-tile:nth-child(7) { animation-delay: 180ms; }
+.sc-tile:nth-child(8) { animation-delay: 210ms; }
+.sc-tile:nth-child(n + 9) { animation-delay: 240ms; }
+.sc-tile:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.18); box-shadow: 0 18px 34px -18px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(139, 92, 246, 0.18); }
+.sc-tile:active { transform: translateY(-1px) scale(0.97); }
+.sc-tile:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.sc-tile-intensity { font-variant-numeric: tabular-nums; }
+
+/* Lampe : halo = couleur émise, éclat = intensité */
+.sc-tile-lamp { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--text); background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--sc-glow, var(--text-3)) calc(20% + var(--sc-level, 0) * 60%), transparent), rgba(255, 255, 255, 0.04) 72%); border: 1px solid color-mix(in srgb, var(--sc-glow, var(--text-3)) calc(20% + var(--sc-level, 0) * 50%), rgba(255, 255, 255, 0.08)); box-shadow: 0 0 calc(var(--sc-level, 0) * 22px) -2px var(--sc-glow, transparent); transition: box-shadow 160ms linear, background 160ms linear, border-color 160ms linear, transform 260ms var(--ease-out); }
+.sc-tile:hover .sc-tile-lamp { transform: scale(1.08) rotate(-4deg); }
+.sc-tile-addr { text-align: center; }
+
+/* Pan/tilt des lyres : mini carte de position */
+.sc-tile-pt { position: relative; width: 38px; height: 26px; border-radius: 4px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px); background-size: 50% 50%; background-position: center; }
+.sc-tile-pt i { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); transition: left 120ms linear, top 120ms linear; }
+
+/* Barre d'intensité */
+.sc-tile-bar { width: 80%; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.sc-tile-bar i { display: block; height: 100%; width: 100%; transform-origin: left; border-radius: 2px; transition: transform 120ms linear; }
+
+/* Programmé : filet cyan + point qui respire */
+.sc-tile--active { border-color: rgba(34, 211, 238, 0.55); box-shadow: inset 0 2px 0 var(--cyan), 0 12px 28px -20px rgba(0, 0, 0, 0.95), var(--glow-cyan); }
+.sc-tile-dot { animation: led-breathe 2.4s ease-in-out infinite; }
+
+/* Sélectionné : lueur violette pulsée et pastille de coche */
+.sc-tile--selected { border-color: var(--violet); background: linear-gradient(180deg, rgba(139, 92, 246, 0.24), rgba(15, 18, 27, 0.88)); box-shadow: var(--glow-violet); animation: sc-rise 420ms var(--ease-out) backwards, sc-selected-pulse 3.2s ease-in-out 600ms infinite; }
+.sc-tile--selected.sc-tile--active { box-shadow: inset 0 2px 0 var(--cyan), var(--glow-violet); }
+.sc-tile-check { position: absolute; top: 6px; left: 6px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--violet); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; box-shadow: 0 0 12px rgba(139, 92, 246, 0.8); animation: sc-check-pop 320ms var(--ease-out); }
+
+/* Déplacement : la tuile saisie s'efface, la cible montre où elle se posera */
+.sc-tile { cursor: grab; }
+.sc-tile:active { cursor: grabbing; }
+.sc-tile--dragging { opacity: 0.4; transform: scale(0.94); }
+.sc-tile--over { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.55), var(--glow-cyan); transform: translateY(-3px) scale(1.04); }
+
+/* ── Plein écran de réglages ───────────────────────────────────────── */
+.sc-modal-head { justify-content: flex-start; gap: 12px; }
+.sc-modal-preview { flex: none; width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0, var(--sc-glow) 45%, rgba(0, 0, 0, 0.5) 100%); opacity: calc(0.25 + var(--sc-level, 0) * 0.75); box-shadow: 0 0 calc(var(--sc-level, 0) * 26px) var(--sc-glow); transition: opacity 160ms linear, box-shadow 160ms linear, background 160ms linear; border: 1px solid rgba(255, 255, 255, 0.2); }
+.sc-modal-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; max-height: 56px; overflow-y: auto; }
+.sc-badge-x { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-left: 2px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; opacity: 0.7; transition: background var(--dur), opacity var(--dur), transform var(--dur) var(--ease-out); }
+.sc-badge-x:hover { background: rgba(255, 255, 255, 0.2); opacity: 1; transform: scale(1.15); }.sc-modal-backdrop { animation: sc-fade 200ms ease-out; }
+.sc-modal { background: transparent; animation: drawer-up 320ms var(--ease-out); }
+.sc-modal-head { background: var(--glass); border-bottom-color: rgba(255, 255, 255, 0.07); position: relative; }
+.sc-modal-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, transparent, var(--violet), var(--cyan), transparent); opacity: 0.55; }
+.sc-col { animation: sc-rise 460ms var(--ease-out) backwards; }
+.sc-col:nth-child(2) { animation-delay: 60ms; }
+.sc-col:nth-child(3) { animation-delay: 120ms; }
+.sc-col:nth-child(4) { animation-delay: 180ms; }
+.sc-col + .sc-col { border-left: 1px solid; border-image: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.12), transparent) 1; }
+.sc-section-label { display: flex; align-items: center; gap: 7px; border-top-color: rgba(255, 255, 255, 0.06); }
+.sc-section-label::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sc-fam, var(--text-3)); box-shadow: 0 0 8px var(--sc-fam, transparent); }
+
+/* Fader, couleur et pastilles */
+.sc-fader, .sc-row input[type='range'] { accent-color: var(--violet); }
+.sc-fader-val { background: linear-gradient(180deg, #fff, #c4b5fd); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
+.sc-color-big, .sc-color-row input[type='color'] { transition: box-shadow var(--dur), transform var(--dur) var(--ease-out); }
+.sc-color-big:hover, .sc-color-row input[type='color']:hover { box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.6), 0 8px 20px -8px rgba(139, 92, 246, 0.7); }
+.sc-swatch { transition: transform var(--dur) var(--ease-out), box-shadow var(--dur); }
+.sc-swatch:hover { transform: scale(1.14); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 6px 14px -4px rgba(0, 0, 0, 0.8); }
+.sc-swatch:active { transform: scale(0.94); }
+.sc-pct-btns .btn { transition: transform var(--dur) var(--ease-out), background var(--dur), border-color var(--dur); }
+.sc-pct-btns .btn:active { transform: scale(0.96); }
+.sc-row.touched .mono { text-shadow: 0 0 10px rgba(34, 211, 238, 0.55); }
+.sc-col-empty { font-style: italic; }
+
+@media (max-width: 600px) { .sc-tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-groups-panel, .sc-group-row, .sc-group-create, .sc-sel-bar, .sc-tile, .sc-tile--selected, .sc-tile-check, .sc-tile-dot, .sc-modal-backdrop, .sc-modal, .sc-col { animation: none; }
+  .sc-tile, .sc-tile-lamp, .sc-tile-bar i, .sc-group-btn { transition: none; }
+  .sc-tile:hover, .sc-tile:hover .sc-tile-lamp, .sc-group-btn:hover { transform: none; }
+}
