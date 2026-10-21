@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, Mic, MicOff, OctagonX, Palette,
+  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, Crosshair, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, Mic, MicOff, OctagonX, Palette,
   Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
@@ -13,6 +13,7 @@ import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings
 import { Dashboard } from './features/Dashboard';
 import { Fixtures } from './features/Fixtures';
 import { DETACHED_CONSOLE_HASH, LiveConsole, openDetachedConsole } from './features/LiveConsole';
+import { PanTiltConsole } from './features/PanTiltConsole';
 import { Programmer } from './features/Programmer';
 import { Cues } from './features/Cues';
 import { Effects } from './features/Effects';
@@ -34,11 +35,11 @@ import { t, useT, type MessageKey } from './i18n';
 import { startVoice, type VoiceState } from './voice/session';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
-  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
+  dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, pantilt: Crosshair, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
   timeline: ChartGantt, ai: Bot, visualizer: Theater, audio: AudioLines, music: Music2, output: Cable, settings: SettingsIcon,
 };
 const VIEWS: Record<PageId, ComponentType> = {
-  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
+  dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, pantilt: PanTiltConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
   timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
 };
 
@@ -361,7 +362,7 @@ function TopBar() {
 }
 
 const NAV_GROUPS: { key: MessageKey; ids: PageId[] }[] = [
-  { key: 'nav.group.live', ids: ['dashboard', 'console', 'programmer', 'cues', 'quick'] },
+  { key: 'nav.group.live', ids: ['dashboard', 'console', 'pantilt', 'programmer', 'cues', 'quick'] },
   { key: 'nav.group.create', ids: ['effects', 'timeline', 'ai', 'music'] },
   { key: 'nav.group.stage', ids: ['visualizer', 'fixtures', 'audio'] },
   { key: 'nav.group.config', ids: ['output', 'settings'] },

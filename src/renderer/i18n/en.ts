@@ -7,6 +7,7 @@ export const en: Record<MessageKey, string> = {
   'nav.dashboard': 'Dashboard',
   'nav.fixtures': 'Fixtures',
   'nav.console': 'Live Console',
+  'nav.pantilt': 'Simple Console',
   'nav.programmer': 'Programmer',
   'nav.cues': 'Cues & Sequences',
   'nav.effects': 'Effects',
@@ -251,6 +252,13 @@ export const en: Record<MessageKey, string> = {
   'console.fanHint': 'Spreads the value across the selection, in selection order (2 fixtures minimum)',
   'console.fanPan': 'Pan fan',
   'console.center': 'Center',
+
+  'pantilt.title': 'Simple Console',
+  'pantilt.subtitle': 'One card per fixture — all parameters as sliders',
+  'pantilt.centerAll': 'Center all',
+  'pantilt.releaseAll': 'Release all',
+  'pantilt.noMovers': 'No fixtures in the patch',
+  'pantilt.noMoversHint': 'Add fixtures in the patch to use this view.',
 
   'settings.subtitle': 'Application settings (stored on this computer, not in the project)',
   'settings.discard': 'Discard changes',

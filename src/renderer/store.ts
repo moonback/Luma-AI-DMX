@@ -12,6 +12,7 @@ export const PAGES = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'fixtures', label: 'Fixtures' },
   { id: 'console', label: 'Live Console' },
+  { id: 'pantilt', label: 'Pan / Tilt' },
   { id: 'programmer', label: 'Programmer' },
   { id: 'cues', label: 'Cues & Sequences' },
   { id: 'effects', label: 'Effects' },
