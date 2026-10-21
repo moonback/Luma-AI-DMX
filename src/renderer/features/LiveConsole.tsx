@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Columns2, Eraser, ExternalLink, GripHorizontal, Plus, Save, SlidersHorizontal, Users, X } from 'lucide-react';
+import { Columns2, Eraser, ExternalLink, GripHorizontal, Pin, PinOff, Plus, Save, SlidersHorizontal, Users, X } from 'lucide-react';
 import { useStore, confirmAction, EMPTY_OBJ } from '../store';
 import { useT } from '../i18n';
 import { act, newId } from '../api';
@@ -204,6 +204,7 @@ function RecordSceneDialog({ onClose }: { onClose: () => void }) {
 }
 
 const PANEL_IDS = ['intensity', 'color', 'cells', 'position', 'beam', 'dmx'];
+const PIN_KEY = 'luma.consoleFixturesPinned';
 const ORDER_KEY = 'luma.console.order';
 const COLS_KEY = 'luma.console.cols';
 
@@ -441,6 +442,9 @@ export function LiveConsole({ detached = false }: { detached?: boolean }) {
   const selection = useStore((s) => s.selection);
   const rt = useStore((s) => s.runtime);
   const [recording, setRecording] = useState(false);
+  // Fixture list pinned open (default) or folded into a hover rail; remembered per machine.
+  const [pinned, setPinned] = useState(() => { try { return localStorage.getItem(PIN_KEY) !== '0'; } catch { return true; } });
+  const togglePin = () => { const n = !pinned; setPinned(n); try { localStorage.setItem(PIN_KEY, n ? '1' : '0'); } catch { /* not persisted */ } };
   const selected = selection.map((id) => byId.get(id)).filter((x): x is ResolvedFixture => !!x);
   const master = useThrottled((v: number) => void act({ type: 'engine.master', value: v }), 30);
   return (
@@ -461,13 +465,19 @@ export function LiveConsole({ detached = false }: { detached?: boolean }) {
       ) : (
         <div className="console-layout">
           {/* Rail that expands over the content on hover / keyboard focus, then retracts by itself. */}
-          <aside className="console-side" data-testid="console-side" tabIndex={0} aria-label={tr('console.fixtures')}>
+          <aside className={`console-side ${pinned ? 'pinned' : ''}`} data-testid="console-side" tabIndex={0} aria-label={tr('console.fixtures')}>
             <div className="console-side-inner">
-              <div className="console-side-rail" title={tr('console.fixtures')}>
+              <button className="console-side-rail" title={tr('console.pinFixtures')} aria-label={tr('console.pinFixtures')} onClick={togglePin}>
                 <Users size={18} />
                 <span className="badge violet mono">{selection.length}</span>
+              </button>
+              <div className="console-side-body">
+                <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span className="small muted">{tr('console.fixtures')}</span>
+                  <button className="btn ghost sm icon" data-testid="console-side-pin" title={pinned ? tr('console.unpinFixtures') : tr('console.pinFixtures')} aria-pressed={pinned} onClick={togglePin}>{pinned ? <PinOff size={13} /> : <Pin size={13} />}</button>
+                </div>
+                <FixtureTiles />
               </div>
-              <div className="console-side-body"><FixtureTiles /></div>
             </div>
           </aside>
           <div className="console-main">

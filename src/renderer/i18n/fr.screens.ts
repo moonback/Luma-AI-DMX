@@ -61,6 +61,8 @@ export const frScreens = {
   'console.openPatch': 'Ouvrir le patch',
   'console.noFixturesHint': 'Patchez des projecteurs pour les piloter.',
   'console.fixtures': 'Projecteurs',
+  'console.pinFixtures': 'Garder la liste des projecteurs ouverte',
+  'console.unpinFixtures': 'Replier la liste en rail (se déplie au survol)',
   'console.controls': 'Contrôles',
   'console.cols': 'Palettes par ligne (1 ou 2)',
   'console.drag': 'Glisser pour déplacer la palette',

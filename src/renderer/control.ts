@@ -24,6 +24,8 @@ class ExternalControl {
   private readonly mtc = new MtcDecoder();
   private ltc: { ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode } | null = null;
   private lastTcSent = 0;
+  /** Last value per CC key: a mapped command fires on the rising edge only (a fader sweep is not a burst of GOs). */
+  private readonly lastCc = new Map<string, number>();
   private readonly listeners = new Set<() => void>();
 
   subscribe(l: () => void): () => void {
@@ -78,10 +80,12 @@ class ExternalControl {
       return;
     }
     if (!cfg.midi.enabled) return;
+    const prev = this.lastCc.get(ev.key) ?? 0;
+    this.lastCc.set(ev.key, ev.value);
     for (const m of cfg.midi.mappings) {
       if (m.key !== ev.key) continue;
       if (m.action === 'master') void act({ type: 'engine.master', value: ev.value });
-      else if (ev.key.startsWith('note:') || ev.value >= 0.5) runShortcut(m.action as ShortcutAction);
+      else if (ev.key.startsWith('note:') || (ev.value >= 0.5 && prev < 0.5)) runShortcut(m.action as ShortcutAction);
     }
   }
 

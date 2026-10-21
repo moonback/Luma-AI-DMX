@@ -4,7 +4,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 
 ## [Non publié]
 
+### Modifié
+- Console Live : la liste des projecteurs est de nouveau visible par défaut (colonne épinglée) ; un bouton la replie en rail qui se déplie au survol, et le choix est mémorisé sur la machine.
+- La page d'accueil au premier lancement redevient le Dashboard (« Actions rapides » vide s'ouvrait par défaut depuis un commit sans rapport) ; la dernière page visitée reste mémorisée.
+- E2E : délais Playwright doublés (test 120 s, attente 10 s) car l'application tourne sous rendu logiciel SwiftShader dans ces tests.
+
 ### Corrigé
+- Thème animé : la couche « aurora », la scan-line de la barre supérieure et la respiration des LED repeignaient toute la fenêtre à chaque image (2 i/s sous rendu logiciel, page IA et vue 3D figées en E2E) ; elles vivent maintenant sur leur propre couche composée (27 i/s mesurés, mêmes visuels).
+- MIDI : une commande mappée sur un contrôleur continu (CC) ne se déclenche plus à chaque message ≥ 50 % mais au front montant (un fader qui monte envoyait une rafale de GO). Test : `tests/components/midi-edge.test.tsx`.
+- E2E : la liste des projecteurs de la Console Live est un rail qui ne se déplie qu'au survol depuis les panneaux déplaçables ; les scénarios la survolent avant de cliquer ; galerie des démos comptée depuis le catalogue ; vérification F11 de la fenêtre 3D détachée (LUMA-024).
 - Sûreté de l'armement (LUMA-036) : un désarmement pendant une reconnexion ou pendant l'ouverture du transport laissait la sortie réelle repasser « prête » et émettre ; `OutputAdapter` reste désarmé dans ces deux courses et `OutputManager.sendFrames` exige aussi l'armement. Tests de régression : `tests/unit/protocols.test.ts`.
 - Porte qualité rouge : test du contrat IA sensible aux fins de ligne CRLF (`core.autocrlf`), test des démos figé à 20 projets (21 depuis la démo stade), deux erreurs ESLint (import et variable inutilisés).
 - `npm run lint` : quatre fichiers au-dessus de la limite de 600 lignes découpés sans changement de comportement (`QuickActionsParts.tsx`, `model/primitives.ts`, `music/intent.ts`, `demo/catalogStadium.ts`).
