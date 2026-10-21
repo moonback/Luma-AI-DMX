@@ -10,12 +10,18 @@ const MIN_SECONDS = 4;
  * shortcut: signal rules, not a trained voice detector (a lead synth in the same register also counts); upgrade to a
  * model if follow-spot cues land on instrumentals.
  */
+const MIN_SECONDS_VOCALS = 1.5; // Reduced from 4s to detect shorter vocal phrases
+const MIN_GAP_SECONDS_VOCALS = 0.5; // Reduced from 1s to bridge shorter gaps
+
 export function detectVocals(bands: readonly Float32Array[], chroma: readonly Float32Array[], rms: Float32Array, fr: number, offset: number): { t: number; duration: number }[] {
   const n = bands.length;
-  if (n < fr * 4) return [];
+  if (n < fr * 2) return []; // Reduced from 4s to 2s minimum
   const centre = (b: number) => BAND_LO * (BAND_HI / BAND_LO) ** ((b + 0.5) / N_BANDS);
-  const voiceBand = Array.from({ length: N_BANDS }, (_, b) => centre(b) >= 300 && centre(b) <= 3000);
+  
+  // Voice range: 200 Hz - 4 kHz (slightly wider to catch more voice energy)
+  const voiceBand = Array.from({ length: N_BANDS }, (_, b) => centre(b) >= 200 && centre(b) <= 4000);
   const aboveBass = Array.from({ length: N_BANDS }, (_, b) => centre(b) >= 150);
+  
   const presence = new Float32Array(n), harmony = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     let v = 0, all = 0;
@@ -47,17 +53,26 @@ export function detectVocals(bands: readonly Float32Array[], chroma: readonly Fl
   const ps = smooth(presence), hs = smooth(harmony);
   let peak = 0;
   for (let i = 0; i < n; i++) peak = Math.max(peak, rms[i]!);
-  const sounding = (i: number) => rms[i]! > 0.05 * peak;
+  
+  // Lower threshold for sounding: 2% of peak to catch quieter vocals
+  const sounding = (i: number) => rms[i]! > 0.02 * peak;
   const live = Array.from({ length: n }, (_, i) => i).filter(sounding);
+  
+  if (live.length === 0) return [];
+  
   const pMed = median(live.map((i) => ps[i]!)), hMed = median(live.map((i) => hs[i]!));
-  const on = (i: number) => sounding(i) && ps[i]! > pMed * 1.1 && hs[i]! > hMed * 1.2;
-  // Segments of at least MIN_SECONDS, gaps under 1 s bridged (breaths between phrases).
+  
+  // Even more lenient thresholds: 1.02x for presence and 1.05x for harmony
+  // This will catch more vocal sections while still filtering out non-vocal content
+  const on = (i: number) => sounding(i) && ps[i]! > pMed * 1.02 && hs[i]! > hMed * 1.05;
+  
+  // Segments of at least MIN_SECONDS_VOCALS, gaps under MIN_GAP_SECONDS_VOCALS bridged (breaths between phrases).
   const out: { t: number; duration: number }[] = [];
   let start = -1, last = -1;
-  const flush = () => { if (start >= 0 && (last - start + 1) / fr >= MIN_SECONDS) out.push({ t: start / fr + offset, duration: (last - start + 1) / fr }); };
+  const flush = () => { if (start >= 0 && (last - start + 1) / fr >= MIN_SECONDS_VOCALS) out.push({ t: start / fr + offset, duration: (last - start + 1) / fr }); };
   for (let i = 0; i < n; i++) {
     if (!on(i)) continue;
-    if (start >= 0 && (i - last) / fr > 1) { flush(); start = -1; }
+    if (start >= 0 && (i - last) / fr > MIN_GAP_SECONDS_VOCALS) { flush(); start = -1; }
     if (start < 0) start = i;
     last = i;
   }

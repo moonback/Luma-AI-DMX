@@ -212,6 +212,9 @@ function similarity(bars: Bar[]): number[][] {
  *  phraseLen = 4 for common time (4/4), 3 for waltz/6/8 (3/4). */
 function boundaries(bars: Bar[], S: number[][], phraseLen = 4): number[] {
   const n = bars.length;
+  if (n <= 2) return [];
+  
+  // 1. Checkerboard novelty (original method)
   const R = 4;
   const nov = new Array<number>(n).fill(0);
   for (let b = 1; b < n; b++) {
@@ -224,20 +227,56 @@ function boundaries(bars: Bar[], S: number[][], phraseLen = 4): number[] {
     }
     nov[b] = Math.max(0, s);
   }
+  
   const maxNov = nov.reduce((m, x) => Math.max(m, x), 0) || 1;
   const maxRms = bars.reduce((m, b) => Math.max(m, b.rms), 0) || 1;
-  const score = nov.map((v, b) => {
-    if (b < 2 || b > n - 2) return 0;
+  
+  // 2. Energy change detection (normalized to 0-1 range)
+  const energyScores = new Array<number>(n).fill(0);
+  for (let b = 1; b < n - 1; b++) {
     const before = mean(bars.slice(Math.max(0, b - 2), b).map((x) => x.rms));
     const after = mean(bars.slice(b, b + 2).map((x) => x.rms));
-    // Bonus for phrase boundaries: full phrase (+0.3), half phrase (+0.1).
-    const phrase = b % phraseLen === 0 ? 0.3 : b % Math.ceil(phraseLen / 2) === 0 ? 0.1 : 0;
-    return v / maxNov + Math.abs(after - before) / maxRms + phrase;
+    energyScores[b] = Math.abs(after - before) / maxRms;
+  }
+  
+  // 3. Harmony change detection (using chroma)
+  const harmonyScores = new Array<number>(n).fill(0);
+  for (let b = 1; b < n - 1; b++) {
+    const beforeBars = bars.slice(Math.max(0, b - 2), b);
+    const afterBars = bars.slice(b, Math.min(n, b + 2));
+    const beforeChroma = avgVec(beforeBars.map((x) => x.chroma), 0, beforeBars.length, 12);
+    const afterChroma = avgVec(afterBars.map((x) => x.chroma), 0, afterBars.length, 12);
+    harmonyScores[b] = 1 - cosine(beforeChroma, afterChroma); // 0 = same, 1 = completely different
+  }
+  
+  // 4. Combined score with weighted contributions
+  // Use higher weight for checkerboard novelty (the proven method) and lower weights for new criteria
+  const score = nov.map((v, b) => {
+    if (b < 2 || b > n - 2) return 0;
+    const energyScore = energyScores[b] || 0;
+    const harmonyScore = harmonyScores[b] || 0;
+    
+    // Bonus for phrase boundaries: full phrase (+0.2), half phrase (+0.05)
+    // Only apply if novelty also suggests a boundary
+    const phrase = b % phraseLen === 0 ? 0.2 : b % Math.ceil(phraseLen / 2) === 0 ? 0.05 : 0;
+    
+    // Weighted combination: heavily favor checkerboard novelty, use others as supplementary
+    // novelty: 0.6, energy: 0.2, harmony: 0.2
+    return (v / maxNov) * 0.6 + 
+           energyScore * 0.2 + 
+           harmonyScore * 0.2 + 
+           phrase;
   });
-  const sorted = score.map((s, b) => ({ s, b })).filter((x) => x.s > 0.45).sort((a, b) => b.s - a.s);
+  
+  // 5. Dynamic threshold - use the original approach's threshold logic
+  const sorted = score.map((s, b) => ({ s, b })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+  // More conservative threshold: take median of top scores, with minimum of 0.35
+  const threshold = sorted.length > 0 ? Math.max(0.35, sorted[Math.min(Math.floor(sorted.length * 0.5), sorted.length - 1)]!.s * 0.7) : 0.45;
+  
   const minDist = phraseLen; // at least one full phrase between boundaries
   const picked: number[] = [];
   for (const c of sorted) {
+    if (c.s < threshold) break; // Stop when below threshold
     if (c.b < minDist || n - c.b < 2 || picked.some((p) => Math.abs(p - c.b) < minDist)) continue;
     picked.push(c.b);
   }
@@ -331,11 +370,51 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
   const mi = mean(idx), mt = mean(beats);
   const slope = beats.reduce((s, t, i) => s + (i - mi) * (t - mt), 0) / (idx.reduce((s, i) => s + (i - mi) ** 2, 0) || 1);
   const bpm = slope > 0 ? 60 / slope : tempo0;
+  
+  // Detect tempo changes: sliding window approach for variable tempo tracks
+  const tempoChanges: Array<{ t: number; from: number; to: number }> = [];
+  const localTempos: number[] = [];
+  
+  if (beatFrames.length >= 16) { // Need at least 16 beats (4 measures at 4/4)
+    const windowSize = 8; // 8 beats per window (2 measures at 4/4)
+    const step = 4; // 4 beats step (1 measure at 4/4)
+    
+    for (let i = 0; i + windowSize < beatFrames.length; i += step) {
+      const windowBeats = beatFrames.slice(i, i + windowSize);
+      const startT = toT(windowBeats[0]!);
+      const endT = toT(windowBeats[windowSize - 1]!);
+      const windowBpm = (60 * (windowSize - 1)) / (endT - startT);
+      localTempos.push(windowBpm);
+    }
+    
+    // Detect significant tempo changes (> 15% change)
+    for (let i = 1; i < localTempos.length; i++) {
+      const prev = localTempos[i - 1]!;
+      const curr = localTempos[i]!;
+      const ratio = curr / prev;
+      
+      // Significant change: >15% increase or >20% decrease (hysteresis)
+      if ((ratio > 1.15 && curr > prev) || (ratio < 0.8 && curr < prev)) {
+        // Find the exact change point
+        const changeFrame = beatFrames[Math.floor(i * step + windowSize / 2)]!;
+        const changeT = toT(changeFrame);
+        
+        // Avoid duplicates (within 2 seconds of previous change)
+        const isDuplicate = tempoChanges.some(c => Math.abs(c.t - changeT) < 2);
+        if (!isDuplicate) {
+          tempoChanges.push({ t: changeT, from: prev, to: curr });
+        }
+      }
+    }
+  }
+  
+  // Calculate tempoStable based on the original 8-beat segments (for backward compatibility)
   const local: number[] = [];
   for (let i = 0; i + 8 < beats.length; i += 8) local.push((60 * 8) / (beats[i + 8]! - beats[i]!));
   const localMax = local.length ? local.reduce((m, x) => Math.max(m, x), 0) : 0;
   const localMin = local.length ? local.reduce((m, x) => Math.min(m, x), Infinity) : 0;
-  const tempoStable = local.length < 2 || (localMax - localMin) / median(local) < 0.03;
+  // If we detected tempo changes, it's not stable
+  const tempoStable = local.length < 2 || ((localMax - localMin) / median(local) < 0.03 && tempoChanges.length === 0);
 
   const { phase, meter } = detectMeter(f, beatFrames);
   const downFrames = beatFrames.filter((_, j) => j % meter === phase);
@@ -428,13 +507,14 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
     version: 1,
     duration,
     bpm: Math.round(bpm * 100) / 100,
-    tempoStable,
+    tempoStable: tempoStable && tempoChanges.length === 0,
     meter,
     beats: beats.map((t) => Math.round(t * 1000) / 1000),
     downbeats: downbeats.map((t) => Math.round(t * 1000) / 1000),
     sections,
     key: detectKey(totalChroma),
     events: events.slice(0, 2000),
+    tempoChanges,
   };
 }
 
