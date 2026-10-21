@@ -10,3 +10,6 @@ export interface SceneSnapshot { visualizer: Project['visualizer']; fixtures: Re
 export const SCENE_HISTORY_MAX = 100;
 
 export const OPENROUTER_KEY = 'openrouter-api-key';
+export const GEMINI_KEY = 'gemini-api-key';
+/** Gemini Live model of the voice assistant. */
+export const VOICE_MODEL = 'gemini-3.8-live';

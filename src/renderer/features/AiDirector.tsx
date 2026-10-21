@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { useStore } from '../store';
 import { act } from '../api';
 import { PageHead, Panel, useResolved } from '../components/ui';
+import { VoiceButton } from '../components/VoiceButton';
 import type { AiExecutionReport, AiProposal } from '../../core/ai/actions';
 import type { CommandResults } from '../../shared/commands';
 import { StageCanvas } from './visualizer/StageCanvas';
@@ -147,6 +148,7 @@ export function AiDirector() {
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
       <PageHead title="AI Lighting Director" subtitle={rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? `Fournisseur : OpenRouter (${rt.ai.model}) — repli local si indisponible` : 'Mode local déterministe : règles et modèles intégrés, sans modèle de langage (configurable dans Paramètres › IA)'}>
+        <VoiceButton />
         <button className="btn" onClick={() => void act({ type: 'ai.release' })} disabled={!rt?.engine.aiActive && !rt?.engine.effects.some((e) => e.owner === 'ai')} title="Retire la couche IA et arrête les effets lancés par l’IA"><RotateCcw size={14} />Relâcher l’IA</button>
         {usage && usage.month.calls > 0 && <span className="small dim" data-testid="ai-usage">{t('ai.usageLine', { calls: usage.month.calls, tokens: usage.month.promptTokens + usage.month.completionTokens, cost: usage.month.cost.toFixed(2), budget: usage.budget === null ? '—' : `${usage.budget} $` })}</span>}
         <button className="btn" data-testid="ai-undo" onClick={() => void act({ type: 'ai.undoApply' })} title={t('ai.undoHint')}><Undo2 size={14} />{t('ai.undo')}</button>

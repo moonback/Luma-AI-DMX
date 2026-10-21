@@ -255,6 +255,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   /** Photos of a manual's DMX chart (consecutive pages) → fixture profile, for review before `profile.save`. */
   z.object({ type: z.literal('ai.profileFromPhoto'), images: z.array(photoSchema).min(1).max(4) }),
   z.object({ type: z.literal('ai.setKey'), key: z.string().trim().min(10).max(500).nullable() }),
+  /** Gemini API key of the voice assistant (encrypted in the OS keychain, never sent to the renderer). */
+  z.object({ type: z.literal('ai.voiceKey'), key: z.string().trim().min(10).max(500).nullable() }),
+  /** Single-use ephemeral token for one Gemini Live session: the renderer never holds the real key. */
+  empty('ai.voiceToken'),
   // Audio
   z.object({
     type: z.literal('audio.features'),
@@ -344,7 +348,7 @@ export interface RuntimeState {
   outputs: OutputStatus[];
   transmitting: boolean;
   liveMode: boolean;
-  ai: { provider: 'local' | 'openrouter'; hasKey: boolean; busy: boolean; lastError: string | null; model: string };
+  ai: { provider: 'local' | 'openrouter'; hasKey: boolean; hasVoiceKey: boolean; busy: boolean; lastError: string | null; model: string };
   audio: AudioStatus;
   alerts: Alert[];
   /** Camera localisation in progress (frame shown, photo awaited from the smartphone). */
@@ -475,6 +479,8 @@ export interface CommandResults {
   'ai.undoApply': Void;
   'ai.listModels': OpenRouterModel[];
   'ai.setKey': Void;
+  'ai.voiceKey': Void;
+  'ai.voiceToken': { token: string; model: string };
   'ai.sceneFromPhoto': PhotoScene & { model: string; notices: string[] };
   'ai.profileFromPhoto': PhotoProfile & { model: string; notices: string[] };
   'audio.features': Void;

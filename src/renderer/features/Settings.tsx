@@ -332,6 +332,7 @@ export function SettingsPage() {
   const [saved, setSaved] = useState<Settings | null>(null);
   const [tab, setTab] = useState<TabId>('general');
   const [key, setKey] = useState('');
+  const [voiceKey, setVoiceKey] = useState('');
   const [recovery, setRecovery] = useState<RecoveryEntry[]>([]);
   const rt = useStore((st) => st.runtime);
   const project = useStore((st) => st.project!);
@@ -463,6 +464,13 @@ export function SettingsPage() {
                 <p className="small dim" style={{ margin: 0 }}>{tr('settings.ai.privacy')}</p>
               </div>
             )}
+            <Field label={tr('settings.ai.voiceKey')} hint={tr('settings.ai.voiceKeyHint')}>
+              <div className="row">
+                <input className="input mono" type="password" autoComplete="off" placeholder={rt?.ai.hasVoiceKey ? tr('settings.ai.keySaved') : 'AIza…'} value={voiceKey} onChange={(e) => setVoiceKey(e.target.value)} />
+                <button className="btn primary" disabled={voiceKey.trim().length < 10} onClick={() => void act({ type: 'ai.voiceKey', key: voiceKey.trim() }).then((r) => r && setVoiceKey(''))}><KeyRound size={13} />{tr('common.save')}</button>
+                <button className="btn danger" disabled={!rt?.ai.hasVoiceKey} onClick={() => void act({ type: 'ai.voiceKey', key: null })}>{tr('common.delete')}</button>
+              </div>
+            </Field>
           </Panel>
         )}
         {tab === 'audio' && (

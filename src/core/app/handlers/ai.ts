@@ -6,7 +6,7 @@ import type { Project } from '../../model/schemas';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
 import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
 import { profileFromPhotoWithOpenRouter } from '../../ai/profileFromPhoto';
-import { OPENROUTER_KEY, UserError } from '../shared';
+import { GEMINI_KEY, OPENROUTER_KEY, UserError, VOICE_MODEL } from '../shared';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { AiUsageLedger, type AiUsage } from '../../ai/usage';
@@ -107,6 +107,47 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       app.opts.secrets.set(OPENROUTER_KEY, cmd.key);
       app.logger.info('IA', cmd.key ? 'Clé API enregistrée (stockage chiffré du système)' : 'Clé API supprimée');
       return ok;
+    case 'ai.voiceKey':
+      app.opts.secrets.set(GEMINI_KEY, cmd.key);
+      app.logger.info('IA', cmd.key ? 'Clé Gemini (assistant vocal) enregistrée' : 'Clé Gemini (assistant vocal) supprimée');
+      return ok;
+    case 'ai.voiceToken': {
+      const apiKey = app.opts.secrets.get(GEMINI_KEY);
+      if (!apiKey) throw new UserError('Clé Gemini manquante : saisissez-la dans Paramètres › IA');
+      const { GoogleGenAI, Modality, Behavior, Type } = await import('@google/genai');
+      const now = Date.now();
+      // systemInstruction and tools MUST be locked inside liveConnectConstraints so that the
+      // constrained WebSocket endpoint enforces them server-side. A constrained token ignores
+      // any config sent by the client — if these fields are omitted here, the model will never
+      // use the declared tools (it just speaks freely without calling them).
+      const token = await new GoogleGenAI({ apiKey }).authTokens.create({
+        config: {
+          uses: 1,
+          expireTime: new Date(now + 30 * 60_000).toISOString(),
+          newSessionExpireTime: new Date(now + 60_000).toISOString(),
+          liveConnectConstraints: {
+            model: VOICE_MODEL,
+            config: {
+              responseModalities: [Modality.AUDIO],
+              systemInstruction: `Tu es l'assistant vocal d'une console d'éclairage DMX. Réponds en français, en une ou deux phrases courtes.
+Pour toute demande d'éclairage (ambiance, couleur, intensité, effet, scène…), appelle propose_lighting avec la demande de l'utilisateur, mot pour mot.
+Lis ensuite à voix haute le résumé de la proposition (compréhension, actions, avertissements) et demande « J'applique ? ».
+N'appelle apply_proposal qu'après un accord explicite (« oui », « vas-y », « applique »). Sans accord clair ou si l'utilisateur change d'avis, n'applique rien.
+Pour revenir en arrière (« annule »), appelle undo_last. N'invente jamais d'action : tout passe par ces outils.`,
+              tools: [{
+                functionDeclarations: [
+                  { name: 'propose_lighting', behavior: Behavior.NON_BLOCKING, description: "Prépare une proposition d'actions d'éclairage à partir de la demande. N'applique rien.", parameters: { type: Type.OBJECT, properties: { request: { type: Type.STRING, description: "La demande de l'utilisateur, telle qu'il l'a dite." } }, required: ['request'] } },
+                  { name: 'apply_proposal', description: "Applique la dernière proposition, UNIQUEMENT après l'accord explicite de l'utilisateur." },
+                  { name: 'undo_last', description: 'Annule la dernière application et rend la main.' },
+                ],
+              }],
+            },
+          },
+        },
+      });
+      if (!token.name) throw new UserError('Jeton Gemini non délivré');
+      return { token: token.name, model: VOICE_MODEL };
+    }
   }
 }
 

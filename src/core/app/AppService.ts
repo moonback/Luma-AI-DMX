@@ -27,7 +27,7 @@ import { RemoteServer } from '../control/remote';
 import type { Sequence } from '../vision/locate';
 import { interpretLocally } from '../ai/local/interpreter';
 import type { OpenRouterModel } from '../ai/providers/openrouter';
-import { OPENROUTER_KEY, SCENE_FIELDS, SCENE_HISTORY_MAX, UserError, type SceneFields, type SceneSnapshot } from './shared';
+import { GEMINI_KEY, OPENROUTER_KEY, SCENE_FIELDS, SCENE_HISTORY_MAX, UserError, type SceneFields, type SceneSnapshot } from './shared';
 import { endLocate, onLocatePhoto } from './handlers/locate';
 import { configureUpdates } from './handlers/system';
 import { LicenseManager } from '../license/manager';
@@ -269,7 +269,7 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
       outputs: this.outputs.status(),
       transmitting: this.outputs.transmitting,
       liveMode: this.outputs.liveMode,
-      ai: { provider: this.settings.ai.provider, hasKey: this.opts.secrets.has?.(OPENROUTER_KEY) ?? !!this.opts.secrets.get(OPENROUTER_KEY), busy: this.aiBusy, lastError: this.aiLastError, model: this.settings.ai.model },
+      ai: { provider: this.settings.ai.provider, hasKey: this.opts.secrets.has?.(OPENROUTER_KEY) ?? !!this.opts.secrets.get(OPENROUTER_KEY), hasVoiceKey: this.opts.secrets.has?.(GEMINI_KEY) ?? !!this.opts.secrets.get(GEMINI_KEY), busy: this.aiBusy, lastError: this.aiLastError, model: this.settings.ai.model },
       audio: this.audio.status(),
       alerts: [...this.alerts],
       safety: { flashGuard: this.settings.engine.flashGuard, ...this.flash },
