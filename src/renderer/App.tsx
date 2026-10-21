@@ -556,6 +556,15 @@ export function App() {
   const collapsed = useStore((s) => s.collapsed);
   const ready = useStore((s) => !!s.project);
   useShortcuts();
+  // Navigation demandée pendant le verrouillage « console simplifiée » : on ne quitte qu'après confirmation.
+  const leaveRequest = useStore((s) => s.leaveRequest);
+  useEffect(() => {
+    if (!leaveRequest) return;
+    void confirmAction({ title: t('simple.leaveTitle'), message: t('simple.leaveMessage'), confirmLabel: t('simple.leaveConfirm') }).then((ok) => {
+      useStore.setState(ok ? { leaveRequest: null, simpleLocked: false } : { leaveRequest: null });
+      if (ok) useStore.getState().setPage(leaveRequest);
+    });
+  }, [leaveRequest]);
   const View = VIEWS[page];
   return (
     <div className={`app ${collapsed ? 'collapsed' : ''}`}>
@@ -602,5 +611,7 @@ export async function bootstrap(): Promise<void> {
   if (main) void offerRecovery();
   detachStageOnOpen = settings.general.detachStage3dOnStart && main;
   detachConsoleOnOpen = settings.general.detachConsoleOnStart && main;
+  // Lu au démarrage seulement : le réglage s'applique au prochain redémarrage, pas à la session en cours.
+  if (main && settings.general.simpleConsoleOnStart) useStore.setState({ simpleLocked: true, page: 'pantilt' });
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });
 }

@@ -65,8 +65,10 @@ export const settingsSchema = z.object({
       autoArmOnStart: z.boolean().default(false),
       /** Shows the « Plan d’installation » export button in the header. Off by default. */
       installPlanButton: z.boolean().default(false),
+      /** At the next launch, opens on the Console Simplifiée and asks for confirmation before leaving it. Off by default. */
+      simpleConsoleOnStart: z.boolean().default(false),
     })
-    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false, detachConsoleOnStart: false, autoArmOnStart: false, installPlanButton: false }),
+    .default({ autosaveMinutes: 2, recentProjects: [], confirmDangerous: true, updateChannel: 'stable', autoUpdate: true, detachStage3dOnStart: false, detachConsoleOnStart: false, autoArmOnStart: false, installPlanButton: false, simpleConsoleOnStart: false }),
   /** First-run onboarding: welcome + guided tour done, "first steps" checklist hidden. */
   onboarding: z
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })

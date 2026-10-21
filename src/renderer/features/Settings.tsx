@@ -371,6 +371,7 @@ export function SettingsPage() {
                 <label className="check"><input type="checkbox" checked={s.general.confirmDangerous} onChange={(e) => set('general', { confirmDangerous: e.target.checked })} />{tr('settings.general.confirmDangerous')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-stage3d-on-start" checked={s.general.detachStage3dOnStart} onChange={(e) => set('general', { detachStage3dOnStart: e.target.checked })} />{tr('settings.general.detachStage3d')}</label>
                 <label className="check"><input type="checkbox" data-testid="detach-console-on-start" checked={s.general.detachConsoleOnStart} onChange={(e) => set('general', { detachConsoleOnStart: e.target.checked })} />{tr('settings.general.detachConsole')}</label>
+                <label className="check" title={tr('settings.general.simpleConsoleHint')}><input type="checkbox" data-testid="simple-console-on-start" checked={s.general.simpleConsoleOnStart} onChange={(e) => set('general', { simpleConsoleOnStart: e.target.checked })} />{tr('settings.general.simpleConsole')}</label>
                 <label className="check" title={tr('settings.general.installPlanHint')}><input type="checkbox" data-testid="install-plan-button" checked={s.general.installPlanButton} onChange={(e) => set('general', { installPlanButton: e.target.checked })} />{tr('settings.general.installPlan')}</label>
               </div>
             </div>

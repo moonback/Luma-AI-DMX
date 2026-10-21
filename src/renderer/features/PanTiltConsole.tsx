@@ -5,7 +5,7 @@
  * - Gestion des groupes : créer, sélectionner, supprimer directement depuis cette vue
  */
 import { useRef, useState } from 'react';
-import { Crosshair, Eraser, SlidersHorizontal } from 'lucide-react';
+import { Crosshair, Eraser, Lock, SlidersHorizontal } from 'lucide-react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { act } from '../api';
@@ -14,16 +14,19 @@ import type { ResolvedFixture } from '../../core/fixtures/profiles';
 import { FixtureTile } from './pantilt/FixtureTile';
 import { GroupsPanel } from './pantilt/GroupsPanel';
 import { SelectionModal } from './pantilt/SelectionModal';
+import { useTileOrder } from './pantilt/useTileOrder';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function PanTiltConsole() {
   const tr = useT();
+  const locked = useStore((s) => s.simpleLocked);
   const { fixtures, byId } = useResolved();
   const [picked, setSelIds] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const lastClicked = useRef<string | null>(null);
 
-  const allIds = fixtures.map((rf) => rf.fixture.id);
+  const { ordered, move } = useTileOrder(fixtures);
+  const allIds = ordered.map((rf) => rf.fixture.id);
   // Une machine supprimée du patch sort de la sélection (et du compteur).
   const selIds = picked.filter((id) => allIds.includes(id));
   const moverIds = fixtures
@@ -52,6 +55,12 @@ export function PanTiltConsole() {
 
   return (
     <div className="page">
+      {locked && (
+        <div className="sc-lock-bar" role="status">
+          <Lock size={14} /> <span>{tr('simple.locked')}</span>
+          <button className="btn ghost sm" onClick={() => useStore.getState().setPage('dashboard')}>{tr('simple.leave')}</button>
+        </div>
+      )}
       <PageHead title={tr('pantilt.title')} subtitle={tr('pantilt.subtitle')}>
         <button className="btn ghost sm" onClick={() => setSelIds(allIds)}>Tout sélectionner</button>
         <button className="btn ghost sm" onClick={() => setSelIds([])} disabled={selIds.length === 0}>Désélectionner</button>
@@ -106,10 +115,12 @@ export function PanTiltConsole() {
               </div>
             )}
             <div className="sc-tile-grid">
-              {fixtures.map((rf) => (
+              {ordered.map((rf, i) => (
                 <FixtureTile
                   key={rf.fixture.id}
                   rf={rf}
+                  onDropFrom={(from) => move(from, rf.fixture.id)}
+                  onNudge={(dir) => { const t = ordered[i + dir]; if (t) move(rf.fixture.id, t.fixture.id); }}
                   selected={selIds.includes(rf.fixture.id)}
                   onToggle={(range) => toggle(rf.fixture.id, range)}
                   onOpen={() => openSingle(rf.fixture.id)}
@@ -121,7 +132,15 @@ export function PanTiltConsole() {
       )}
 
       {modalOpen && selectedFixtures.length > 0 && (
-        <SelectionModal selected={selectedFixtures} onClose={closeModal} />
+        <SelectionModal
+          selected={selectedFixtures}
+          onClose={closeModal}
+          onRemove={(id) => setSelIds((prev) => prev.filter((x) => x !== id))}
+          onStep={(dir) => {
+            const next = allIds[(allIds.indexOf(selIds[0]!) + dir + allIds.length) % allIds.length];
+            if (next) setSelIds([next]);
+          }}
+        />
       )}
     </div>
   );

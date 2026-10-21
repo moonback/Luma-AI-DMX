@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Eraser, Crosshair, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eraser, Crosshair, X } from 'lucide-react';
 import { useStore, EMPTY_OBJ } from '../../store';
 import { useT } from '../../i18n';
 import { act } from '../../api';
@@ -127,9 +127,15 @@ function SectionLabel({ label, color }: { label: string; color: string }) {
 export function SelectionModal({
   selected,
   onClose,
+  onRemove,
+  onStep,
 }: {
   selected: ResolvedFixture[];
   onClose: () => void;
+  /** Retire une machine de la sélection (puces de l'en-tête). */
+  onRemove: (id: string) => void;
+  /** Machine précédente / suivante, quand une seule est ouverte. */
+  onStep: (dir: -1 | 1) => void;
 }) {
   const tr = useT();
   const values = useStore((s) => s.values);
@@ -188,6 +194,17 @@ export function SelectionModal({
 
         {/* En-tête */}
         <div className="sc-modal-head">
+          {selected.length === 1 && (
+            <button className="btn ghost sm icon" onClick={() => onStep(-1)} aria-label="Machine précédente" title="Machine précédente">
+              <ChevronLeft size={16} />
+            </button>
+          )}
+          {/* Aperçu vivant : couleur et intensité de la machine de référence */}
+          <span
+            className="sc-modal-preview"
+            aria-hidden="true"
+            style={{ '--sc-glow': rgbToHex(d.color) === '#000000' ? 'var(--text-3)' : rgbToHex(d.color), '--sc-level': cur('dimmer') } as React.CSSProperties}
+          />
           <div className="sc-modal-title">
             {selected.length === 1 ? (
               <>
@@ -199,14 +216,26 @@ export function SelectionModal({
             ) : (
               <>
                 <span className="sc-name">{selected.length} machines sélectionnées</span>
+                <span className="muted small">Valeurs affichées : {ref.fixture.name} · les réglages s'appliquent à toutes</span>
                 <div className="sc-modal-badges">
                   {selected.map((rf) => (
-                    <span key={rf.fixture.id} className="badge violet">{rf.fixture.name}</span>
+                    <span key={rf.fixture.id} className="badge violet">
+                      {rf.fixture.name}
+                      <button className="sc-badge-x" onClick={() => onRemove(rf.fixture.id)} aria-label={`Retirer ${rf.fixture.name}`} title="Retirer de la sélection">
+                        <X size={10} />
+                      </button>
+                    </span>
                   ))}
                 </div>
               </>
             )}
           </div>
+          {selected.length === 1 && (
+            <button className="btn ghost sm icon" onClick={() => onStep(1)} aria-label="Machine suivante" title="Machine suivante">
+              <ChevronRight size={16} />
+            </button>
+          )}
+          <div className="grow" />
           <div className="row" style={{ gap: 6 }}>
             {anyTouched && (
               <button

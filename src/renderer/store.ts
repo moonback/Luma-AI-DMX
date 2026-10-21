@@ -116,6 +116,10 @@ interface State {
   help: 'welcome' | 'tour' | 'demos' | 'stage' | 'whatsnew' | null;
   setHelp(h: State['help']): void;
   setPage(p: PageId): void;
+  /** Console Simplifiée verrouillée (réglage « ouvrir au démarrage ») : quitter demande une confirmation, traitée par App. */
+  simpleLocked: boolean;
+  /** Page demandée pendant le verrouillage, en attente de confirmation. */
+  leaveRequest: PageId | null;
   stageMode: StageMode;
   setStageMode(m: StageMode): void;
   toggleCollapsed(): void;
@@ -163,7 +167,13 @@ export const useStore = create<State>((set, get) => ({
   onboarding: null,
   help: null,
   setHelp: (help) => set({ help }),
+  simpleLocked: false,
+  leaveRequest: null,
   setPage: (page) => {
+    if (get().simpleLocked && page !== 'pantilt') {
+      set({ leaveRequest: page });
+      return;
+    }
     set({ page });
     savePrefs({ page, collapsed: get().collapsed });
   },
