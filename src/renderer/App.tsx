@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, OctagonX, Palette,
+  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, Mic, MicOff, OctagonX, Palette,
   Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
 } from 'lucide-react';
 import { BRAND } from '../shared/brand';
@@ -31,6 +31,7 @@ import { LicenseBadge } from './features/LicenseBadge';
 import { MiniPlayer } from './features/music/MiniPlayer';
 import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/WhatsNew';
 import { t, useT, type MessageKey } from './i18n';
+import { startVoice, type VoiceState } from './voice/session';
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
@@ -217,6 +218,74 @@ function StatusPills() {
   );
 }
 
+/* ── Voice assistant button ───────────────────────────────────────────────── */
+const VOICE_STATE_CLASSES: Record<VoiceState, string> = {
+  connecting: 'accent',
+  listening: 'accent solid',
+  speaking:  'accent solid',
+  working:   'accent solid',
+};
+
+const VOICE_STATE_ICONS: Record<VoiceState, typeof Mic> = {
+  connecting: Mic,
+  listening:  Mic,
+  speaking:   Mic,
+  working:    Mic,
+};
+
+function VoiceButton() {
+  const tr = useT();
+  const rt = useStore((s) => s.runtime);
+  const hasVoiceKey = rt?.ai.hasVoiceKey ?? false;
+  const [state, setState] = useState<VoiceState | null>(null);
+  const stopRef = useRef<(() => void) | null>(null);
+
+  const toggle = async () => {
+    // If already active → stop
+    if (stopRef.current) {
+      stopRef.current();
+      stopRef.current = null;
+      setState(null);
+      return;
+    }
+    try {
+      const session = await startVoice(
+        (s) => setState(s),
+        () => { stopRef.current = null; setState(null); },
+      );
+      if (session) stopRef.current = session.stop;
+    } catch (err) {
+      console.error('[Voice] Failed to start:', err);
+      useStore.getState().toast({ kind: 'error', title: tr('voice.micError') });
+      setState(null);
+    }
+  };
+
+  if (!hasVoiceKey) return null;
+
+  const active = state !== null;
+  const Icon = active ? VOICE_STATE_ICONS[state] : Mic;
+  const btnClass = active ? `btn ${VOICE_STATE_CLASSES[state]} icon` : 'btn ghost icon';
+
+  const label = active
+    ? (state === 'connecting' ? tr('voice.connecting') : state === 'speaking' ? tr('voice.speaking') : state === 'working' ? tr('voice.working') : tr('voice.listening'))
+    : tr('voice.start');
+
+  return (
+    <button
+      className={`${btnClass} voice-btn`}
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onClick={() => void toggle()}
+      style={active && state === 'listening' ? { animation: 'voice-pulse 1.4s ease-in-out infinite' } : undefined}
+    >
+      {active ? <Icon size={16} /> : <Mic size={16} />}
+      {active && <span className="voice-btn-label">{label}</span>}
+    </button>
+  );
+}
+
 function TopBar() {
   const tr = useT();
   const project = useStore((s) => s.project);
@@ -258,6 +327,7 @@ function TopBar() {
 
       {/* ── Right zone: alerts + critical actions ── */}
       <div className="top-right">
+        <VoiceButton />
         <LicenseBadge />
         <HelpButton />
         <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>

@@ -769,3 +769,14 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   }
 }
 
+
+/* ── Voice assistant button ─────────────────────────────────────────────── */
+.voice-btn { gap: 6px; transition: background var(--dur), border-color var(--dur), box-shadow var(--dur); }
+.voice-btn.accent.solid { min-width: 30px; width: auto; padding: 0 10px; }
+.voice-btn-label { font-size: 12px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap; }
+
+/* Pulsing ring when actively listening */
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(34, 211, 238, 0); }
+}
