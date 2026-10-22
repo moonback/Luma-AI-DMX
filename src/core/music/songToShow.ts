@@ -273,11 +273,17 @@ function splitAround(e: TimelineEvent, a: number, b: number): TimelineEvent[] {
   return out;
 }
 
-export function compileShow(index: ProjectIndex, trackName: string, analysis: SongAnalysis, plan: ShowPlan, opts: { maxStrobeHz: number; allowStrobe: boolean; phraseBars?: number }): CompileResult {
+export function compileShow(
+  index: ProjectIndex,
+  trackName: string,
+  analysis: SongAnalysis,
+  plan: ShowPlan,
+  opts: { maxStrobeHz: number; allowStrobe: boolean; phraseBars?: number } = { maxStrobeHz: 10, allowStrobe: true, phraseBars: 8 },
+): CompileResult {
   // Number of bars per phrase for cue generation - smaller values create more cues/tableaux
   // Default is 8, but can be configured via opts.phraseBars
   // For backward compatibility, we use 8 bars by default
-  const phraseBars = opts.phraseBars ?? 8;
+  const phraseBars = opts?.phraseBars ?? 8;
   
   // Calculate bar duration for detecting long sections
   const barDuration = 60 / analysis.bpm * 4;
@@ -465,3 +471,6 @@ export function compileShow(index: ProjectIndex, trackName: string, analysis: So
 
 export type { ShowIntegrityReport } from './showIntegrity';
 export { validateShowIntegrity } from './showIntegrity';
+export type { ArtisticQualityReport } from './artisticQuality';
+export { evaluateArtisticQuality } from './artisticQuality';
+export { ARTISTIC_STRATEGIES, type ArtisticStrategy } from './showPlanner';

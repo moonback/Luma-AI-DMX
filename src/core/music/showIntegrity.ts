@@ -20,8 +20,10 @@ export interface ShowIntegrityReport {
 export function validateShowIntegrity(
   result: CompileResult,
   analysis: SongAnalysis,
-  opts: { allowStrobe: boolean; maxStrobeHz: number },
+  opts: { allowStrobe?: boolean; maxStrobeHz?: number } = {},
 ): ShowIntegrityReport {
+  const allowStrobe = opts.allowStrobe ?? true;
+  const maxStrobeHz = opts.maxStrobeHz ?? 10;
   const errors: string[] = [];
   const warnings: string[] = [];
   const sceneIds = new Set(result.scenes.map((s) => s.id));
@@ -69,13 +71,13 @@ export function validateShowIntegrity(
   // 4. Strobe & photosensitive safety
   for (const ef of result.effects) {
     if (ef.type === 'strobe') {
-      if (!opts.allowStrobe) {
+      if (!allowStrobe) {
         errors.push(`Effet strobe ${ef.id} (${ef.name}) présent alors que le strobe est interdit`);
       }
       const speed = ef.params.speed ?? 1;
-      if (speed > opts.maxStrobeHz) {
+      if (speed > maxStrobeHz) {
         errors.push(
-          `Effet strobe ${ef.id} avec une vitesse de ${speed} Hz dépassant la limite max de ${opts.maxStrobeHz} Hz`,
+          `Effet strobe ${ef.id} avec une vitesse de ${speed} Hz dépassant la limite max de ${maxStrobeHz} Hz`,
         );
       }
     }

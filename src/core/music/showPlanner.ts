@@ -44,13 +44,26 @@ export function escalation(analysis: SongAnalysis, i: number): number {
   return k ? Math.min(1, 0.5 * k + (last ? 0.5 : 0)) : 0;
 }
 
-/* ── sectionPlan (local rules) ──────────────────────────────────────────── */
+/* ── Artistic Strategies (Phase 3) ────────────────────────────────────────── */
+
+export type ArtisticStrategy = 'balanced' | 'cinematic' | 'rhythmic' | 'choreographic' | 'minimalist';
+
+export const ARTISTIC_STRATEGIES: Record<number, { name: ArtisticStrategy; label: string; desc: string }> = {
+  0: { name: 'balanced', label: 'Équilibrée', desc: 'Progression classique et contrastes équilibrés' },
+  1: { name: 'cinematic', label: 'Cinématographique', desc: 'Mouvements lents et amples, faisceaux denses et contrastes marqués' },
+  2: { name: 'rhythmic', label: 'Rythmique', desc: 'Très synchronisée aux temps et percussions, accents et pulsations vives' },
+  3: { name: 'choreographic', label: 'Choréographique', desc: 'Figures géométriques des lyres (fan, ballyhoo, figure8, cercles)' },
+  4: { name: 'minimalist', label: 'Minimaliste', desc: 'Épurée, priorité aux wash et à la lisibilité, rares accents percutants' },
+};
+
+/* ── sectionPlan (local rules & strategies) ─────────────────────────────── */
 
 function sectionPlan(
   index: number, energy: number, palette: string[], rig: RigInfo, intent: Intent,
   variant: number, label: SectionLabel, bars = 0, bassShare = 0.5, perBeat = 2, brightness = 0.5,
   _hasVocals = false, _confidence = 1,
 ): ShowSectionPlan {
+  const strat = ARTISTIC_STRATEGIES[variant % 5]?.name ?? 'balanced';
   const peak = label === 'chorus' || label === 'drop';
   const alt = (variant + index) % 2 === 0;
   const singer = rig.moving > 0 ? singerMarker(rig.markers ?? []) : null;
@@ -58,29 +71,39 @@ function sectionPlan(
   const me = intent.moreMovement ? Math.min(5, energy + 1) : energy;
 
   let movement: ShowSectionPlan['movement'] = intent.noMovement || me <= 1 ? 'none'
+    : strat === 'cinematic'
+      ? (me <= 2 ? 'slow' : me === 3 ? (alt ? 'slow' : 'sweep') : (alt ? 'sweep' : 'pendulum'))
+    : strat === 'choreographic'
+      ? (me <= 2 ? (alt ? 'circle' : 'slow') : me === 3 ? (alt ? 'figure8' : 'sweep') : (alt ? 'ballyhoo' : 'fan'))
+    : strat === 'minimalist'
+      ? (me <= 3 ? 'none' : alt ? 'slow' : 'pan')
     : me === 2 ? (alt ? 'slow' : 'circle')
     : me === 3 ? (alt ? 'sweep' : 'figure8')
     : me === 4 ? (alt ? 'fast' : 'fan')
     : alt ? (perBeat >= 3 ? 'zigzag' : 'ballyhoo') : (perBeat >= 3 ? 'pendulum' : 'fast');
 
-  if (label === 'bridge' && me >= 3) movement = alt ? 'pendulum' : 'zigzag';
-  if (label === 'build' && me >= 3) movement = alt ? 'figure8' : 'sweep';
-  if (label === 'intro' && me >= 2) movement = 'circle';
+  if (label === 'bridge' && me >= 3) movement = strat === 'cinematic' ? 'sweep' : strat === 'minimalist' ? 'pan' : alt ? 'pendulum' : 'zigzag';
+  if (label === 'build' && me >= 3) movement = strat === 'choreographic' ? 'fan' : strat === 'minimalist' ? 'slow' : alt ? 'figure8' : 'sweep';
+  if (label === 'intro' && me >= 2) movement = strat === 'cinematic' ? 'slow' : strat === 'minimalist' ? 'none' : 'circle';
   if (label === 'outro' && me >= 2) movement = alt ? 'pan' : 'slow';
-  if (peak && me >= 4 && brightness >= 0.7) movement = alt ? 'ballyhoo' : 'random';
+  if (peak && me >= 4 && brightness >= 0.7) movement = strat === 'cinematic' ? 'sweep' : strat === 'minimalist' ? (alt ? 'slow' : 'pan') : alt ? 'ballyhoo' : 'random';
   if (focus && focus !== 'audience') movement = 'none';
 
   let effect: ShowSectionPlan['effect'] = 'none', effectBeats = 4;
 
-  if (energy <= 2) {
+  if (strat === 'minimalist') {
+    effect = energy >= 4 ? (alt ? 'pulse' : 'dimmerWave') : 'none';
+    effectBeats = 4;
+  } else if (energy <= 2) {
     effect = brightness >= 0.7 ? (alt ? 'dimmerWave' : 'glow') : 'wave';
-    effectBeats = 8;
+    effectBeats = strat === 'cinematic' ? 12 : 8;
   } else if (energy === 3) {
-    if (perBeat >= 2.5) { effect = alt ? 'pulse' : 'flicker'; effectBeats = 2; }
+    if (strat === 'rhythmic' || perBeat >= 2.5) { effect = alt ? 'pulse' : 'flicker'; effectBeats = 2; }
     else if (brightness >= 0.6) { effect = alt ? 'pulse' : 'dimmerWave'; effectBeats = 4; }
     else { effect = alt ? 'pulse' : 'chase'; effectBeats = 2; }
   } else if (energy === 4) {
-    if (brightness >= 0.7) { effect = alt ? 'gradient' : 'colorChase'; effectBeats = alt ? 8 : 4; }
+    if (strat === 'rhythmic') { effect = alt ? 'chase' : 'pulse'; effectBeats = 1; }
+    else if (brightness >= 0.7) { effect = alt ? 'gradient' : 'colorChase'; effectBeats = alt ? 8 : 4; }
     else if (perBeat >= 3) { effect = alt ? 'chase' : 'pulse'; effectBeats = 1; }
     else { effect = alt ? 'chase' : 'colorChase'; effectBeats = alt ? 1 : 4; }
   } else if (energy >= 5) {
@@ -98,22 +121,28 @@ function sectionPlan(
   else if (perBeat < 1) effectBeats = Math.min(16, effectBeats * 2);
 
   const beamFrost = energy <= 1 && brightness < 0.4;
-  const beam: ShowSectionPlan['beam'] = peak && energy >= 5 ? 'prism' : energy >= 3 ? 'gobo' : beamFrost ? 'frost' : 'open';
+  const beam: ShowSectionPlan['beam'] = peak && energy >= 5 ? 'prism' : energy >= 3 ? 'gobo' : beamFrost ? 'frost' : (strat === 'cinematic' && energy >= 2 ? 'gobo' : 'open');
   const layers = {
     wash: rig.wash > 0 || (rig.bars === 0 && rig.moving === 0),
-    moving: rig.moving > 0 && (energy >= 2 || peak || !!focus),
+    moving: rig.moving > 0 && (energy >= 2 || peak || !!focus || (strat === 'choreographic' && energy >= 1)),
     bars: rig.bars > 0 && energy >= 2,
   };
+  const accents = strat === 'rhythmic' ? (energy >= 3 || peak) : energy >= 4;
   const extras: ShowExtra[] = [];
   if (!peak && bars >= 8 && energy >= 1 && energy <= 4 && ['intro', 'verse', 'prechorus', 'build'].includes(label)) extras.push('ramp');
   if (label === 'drop' || (peak && energy >= 5)) extras.push('blinder');
-  if (layers.moving && energy >= 1 && energy <= 2) extras.push('breathe');
+  if (layers.moving && energy >= 1 && energy <= 2 && strat !== 'minimalist') extras.push('breathe');
   if (intent.bassFollow ? energy >= 3 : label === 'drop' || (peak && bassShare >= 0.65)) extras.push('bassFollow');
   if (intent.colorFollow ? energy >= 1 && effect !== 'rainbow' : (label === 'break' || (energy <= 2 && brightness >= 0.6)) && energy >= 1) extras.push('colorFollow');
+
+  const selectedPalette = strat === 'minimalist' && energy <= 2
+    ? palette.slice(0, 1)
+    : peak ? palette.slice(0, 2) : palette.slice(0, energy >= 3 ? 2 : 1);
+
   return {
     index, energy, beam,
-    palette: peak ? palette.slice(0, 2) : palette.slice(0, energy >= 3 ? 2 : 1),
-    layers, movement, effect, effectBeats, accents: energy >= 4, groups: [], focus, extras, locked: false, note: '', why: '',
+    palette: selectedPalette,
+    layers, movement, effect, effectBeats, accents, groups: [], focus, extras, locked: false, note: '', why: '',
   };
 }
 
@@ -126,9 +155,13 @@ const EXTRA_WHY: Record<ShowExtra, string> = {
   colorFollow: 'couleur qui suit la brillance',
 };
 
-function explain(analysis: SongAnalysis, i: number, p: ShowSectionPlan, intent: Intent, rig: RigInfo): string {
+function explain(analysis: SongAnalysis, i: number, p: ShowSectionPlan, intent: Intent, rig: RigInfo, variant = 0): string {
   const s = analysis.sections[i]!;
-  const parts = [`${SECTION_NAMES[s.label]}, énergie mesurée ${dec(s.energy)} → niveau ${p.energy}/5`];
+  const parts: string[] = [];
+  if (variant % 5 !== 0) {
+    parts.push(`style ${ARTISTIC_STRATEGIES[variant % 5]?.label.toLowerCase()}`);
+  }
+  parts.push(`${SECTION_NAMES[s.label]}, énergie mesurée ${dec(s.energy)} → niveau ${p.energy}/5`);
   const first = analysis.sections.findIndex((x) => x.cluster === s.cluster);
   if (first < i) parts.push(`même musique que la section ${first + 1} (${SECTION_NAMES[analysis.sections[first]!.label].toLowerCase()}) → même palette`);
   const peak = s.label === 'chorus' || s.label === 'drop';
@@ -161,6 +194,9 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
   const accent = (intent.warmth === 'cold' || (!intent.warmth && !modeIsMajor) ? WARM : COLD)[variant % 4]!;
   const byLabel = groupsBySection(intentText, rig.groups ?? []);
   const barSec = (analysis.meter ?? 4) * 60 / analysis.bpm;
+  const strat = ARTISTIC_STRATEGIES[variant % 5] ?? ARTISTIC_STRATEGIES[0]!;
+  const stratDesc = variant % 5 !== 0 ? ` [Variante ${strat.label}]` : '';
+
   const sections = analysis.sections.map((s, i): ShowSectionPlan => {
     const kept = previous?.sections[i];
     if (kept?.locked && previous!.sections.length === analysis.sections.length) return kept;
@@ -173,12 +209,12 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     if ((label === 'chorus' || label === 'drop') && !intent.colors.length) palette.splice(1, 0, accent);
     const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60), s.brightness, s.hasVocals, s.confidence);
     const out = { ...plan, groups: byLabel.get(label) ?? [] };
-    return { ...out, why: explain(analysis, i, out, intent, rig) };
+    return { ...out, why: explain(analysis, i, out, intent, rig, variant) };
   });
   const peaks = analysis.sections.filter((s) => s.label === 'chorus' || s.label === 'drop').length;
   return {
     intent: intentText.slice(0, 500), provider: 'local', model: null, variant,
-    summary: `${sections.length} sections, ${peaks} temps fort(s) ; palette ${intent.colors.length ? 'demandée' : (intent.warmth && { warm: 'chaude', cold: 'froide' }[intent.warmth]) ?? (!modeIsMajor ? `froide (${keyConfident ? 'tonalité mineure' : 'tonalité incertaine, brillance faible'})` : `chaude (${keyConfident ? 'tonalité majeure' : 'tonalité incertaine, brillance élevée'})`)}${intent.strobe === 'forbid' ? ', sans strobe' : ''}${intent.noMovement ? ', sans mouvement' : ''}${byLabel.size ? `, groupes : ${[...byLabel].map(([l, ids]) => `${SECTION_NAMES[l].toLowerCase()} → ${ids.map((id) => rig.groups!.find((g) => g.id === id)!.name).join(' + ')}`).join(', ')}` : ''}.`,
+    summary: `${sections.length} sections, ${peaks} temps fort(s)${stratDesc} ; palette ${intent.colors.length ? 'demandée' : (intent.warmth && { warm: 'chaude', cold: 'froide' }[intent.warmth]) ?? (!modeIsMajor ? `froide (${keyConfident ? 'tonalité mineure' : 'tonalité incertaine, brillance faible'})` : `chaude (${keyConfident ? 'tonalité majeure' : 'tonalité incertaine, brillance élevée'})`)}${intent.strobe === 'forbid' ? ', sans strobe' : ''}${intent.noMovement ? ', sans mouvement' : ''}${byLabel.size ? `, groupes : ${[...byLabel].map(([l, ids]) => `${SECTION_NAMES[l].toLowerCase()} → ${ids.map((id) => rig.groups!.find((g) => g.id === id)!.name).join(' + ')}`).join(', ')}` : ''}.`,
     sections,
   };
 }
