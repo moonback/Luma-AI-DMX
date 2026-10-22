@@ -105,7 +105,7 @@ function groupRe(name: string): RegExp {
   return new RegExp(`\\b${escapeRe(stem.length >= 4 ? stem : n)}${stem.length >= 4 ? 's?' : ''}\\b`);
 }
 
-function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; label: string } {
+export function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; label: string } {
   const groupNames = ctx.groups.filter((g) => g.name.length > 1 && groupRe(g.name).test(text)).map((g) => g.name);
   const fixtureNames = ctx.fixtures.filter((f) => new RegExp(`\\b${escapeRe(normalize(f.name))}\\b`).test(text)).map((f) => f.name);
   const limitMatch = new RegExp(`\\b${NUM}\\s+(premieres?\\s+)?(lyres?|moving|spots?|wash|pars?|projecteurs?|strobes?|stroboscopes?)\\b`).exec(text);
@@ -141,7 +141,7 @@ function typeLabel(types: FixtureType[]): string {
 }
 
 /** Fixture names a target designates in the interpreter's view of the rig (groups need their members). */
-function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
+export function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
   const explicit = new Set([...(t.fixtureNames ?? []), ...ctx.groups.filter((g) => t.groupNames?.includes(g.name)).flatMap((g) => g.members ?? [])]);
   let pool = ctx.fixtures.filter((f) => !explicit.size || explicit.has(f.name));
   if (t.fixtureTypes?.length) pool = pool.filter((f) => t.fixtureTypes!.includes(f.type));
@@ -150,22 +150,23 @@ function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
 }
 
 /** « … sauf les lyres » / « sans toucher aux PAR » : splits off the exclusion clause so it never becomes the target. */
-const EXCLUDE_RE = /\b(sauf|excepte|hormis|a part|sans toucher(?: aux?| a la| a l| les?)?|sans modifier|ne touche pas(?: aux?| a la| a l| les?)?|mais garde\w*|garde (?:les?|la|l)|(?<!\bne? \w+ )pas (?:les?|la|l|aux?)|except|but not)\b(.*)$/;
+export const EXCLUDE_RE = /\b(sauf|excepte|hormis|a part|sans toucher(?: aux?| a la| a l| les?)?|sans modifier|ne touche pas(?: aux?| a la| a l| les?)?|mais garde\w*|garde (?:les?|la|l)|(?<!\bne? \w+ )pas (?:les?|la|l|aux?)|except|but not)\b(.*)$/;
 
 /** « sans strobe », « pas de rouge », « sans utiliser de chase » : the negated effect or colour, stripped from the text. */
 const NEGATED_RE = /\b(?:sans|pas de|pas d|pas du|aucune?|jamais de|without|no)\s+(?:(?:utiliser|mettre|faire)\s+)?(?:(?:de|d|du|le|la|les)\s+)?(?:(?:effets?|effect)\s+(?:de\s+)?)?([a-z-]+)/g;
 
-function stripNegations(text: string): { text: string; effects: Set<string>; labels: string[] } {
-  const effects = new Set<string>(), labels: string[] = [];
+export function stripNegations(text: string): { text: string; effects: Set<string>; colors: Set<string>; labels: string[] } {
+  const effects = new Set<string>(), colors = new Set<string>(), labels: string[] = [];
   const out = text.replace(NEGATED_RE, (m, word: string) => {
     const fx = EFFECT_WORDS.find(([re]) => re.test(word));
     const color = COLORS.find((c) => c.forms.includes(word));
     if (!fx && !color) return m;
     fx?.[1].forEach((t) => effects.add(t));
+    if (!fx) colors.add(color!.hex);
     labels.push(fx ? fx[2] : color!.label);
     return ' ';
   });
-  return { text: out, effects, labels };
+  return { text: out, effects, colors, labels };
 }
 
 /** Per-fixture « baisse de 20 % »: each targeted fixture keeps its own level, scaled by `factor`. */

@@ -118,8 +118,10 @@ export const settingsSchema = z.object({
       voice: z.enum(ASSISTANT_VOICES).default('Puck'),
       directorPrompt: customText.default(null),
       voicePrompt: customText.default(null),
+      /** Proposals are applied as soon as they are validated, without the « Appliquer » confirmation. Off by default. */
+      autoApply: z.boolean().default(false),
     })
-    .default({ name: 'Luma', voice: 'Puck', directorPrompt: null, voicePrompt: null }),
+    .default({ name: 'Luma', voice: 'Puck', directorPrompt: null, voicePrompt: null, autoApply: false }),
   audio: z.object({ deviceId: z.string().max(300).nullable().default(null) }).default({ deviceId: null }),
   /** External control: MIDI mappings (renderer, Web MIDI), OSC over UDP (main) and timecode chase of the timeline. */
   control: z

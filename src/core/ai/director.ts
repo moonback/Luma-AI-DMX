@@ -9,45 +9,19 @@ import type { ProjectIndex } from '../engine/resolve';
 import { hexToRgb, rgbToHex } from '../util/math';
 import {
   aiActionSchema, AI_ACTIONS_VERSION, MAX_ACTIONS_PER_PROPOSAL, migrateAiActions,
-  type AiAction, type AiEffectSpec, type AiExecutionReport, type AiProposal, type AiTarget, type LookPart, type ValidatedAction,
+  type AiAction, type AiEffectSpec, type AiExecutionReport, type AiProposal, type LookPart, type ValidatedAction,
 } from './actions';
 import { interpretLocally, normalize, type InterpreterContext } from './local/interpreter';
 import { effectFlashViolation } from '../safety/flashGuard';
 import { pruneTransientEffects } from './transient';
+import { resolveAiTarget } from './target';
 import type { LiveState } from './providers/openrouter';
 
 /* ------------------------------------------------------------------ */
 /* Target resolution & validation                                      */
 /* ------------------------------------------------------------------ */
 
-export function resolveAiTarget(index: ProjectIndex, t: AiTarget): { ids: string[]; problems: string[] } {
-  const problems: string[] = [];
-  const all = [...index.fixtures.values()];
-  const explicit = new Set<string>();
-  for (const gname of t.groupNames ?? []) {
-    const g = [...index.groups.values()].find((x) => normalize(x.name) === normalize(gname));
-    if (!g) problems.push(`Groupe inconnu « ${gname} »`);
-    else g.fixtureIds.forEach((id) => explicit.add(id));
-  }
-  for (const fname of t.fixtureNames ?? []) {
-    const f = all.find((x) => normalize(x.fixture.name) === normalize(fname));
-    if (!f) problems.push(`Projecteur inconnu « ${fname} »`);
-    else explicit.add(f.fixture.id);
-  }
-  let pool: ResolvedFixture[] = explicit.size ? all.filter((r) => explicit.has(r.fixture.id)) : all;
-  const hasSelector = explicit.size > 0 || t.all === true;
-  if (t.fixtureTypes?.length) pool = pool.filter((r) => t.fixtureTypes!.includes(r.profile.type));
-  if (t.tags?.length) pool = pool.filter((r) => r.fixture.tags.some((tag) => t.tags!.map(normalize).includes(normalize(tag))));
-  if (t.module) {
-    const before = pool.length;
-    pool = pool.filter((r) => findModule(r.profile, t.module!));
-    if (before && !pool.length) problems.push(`Aucun projecteur ciblé n’a de module « ${t.module} »`);
-  }
-  if (!hasSelector && ((t.groupNames?.length ?? 0) + (t.fixtureNames?.length ?? 0) > 0 || (!t.fixtureTypes?.length && !t.tags?.length && problems.length))) pool = []; // unresolved names never widen to a whole type
-  let ids = pool.map((r) => r.fixture.id);
-  if (t.limit) ids = ids.slice(0, t.limit);
-  return { ids, problems };
-}
+export { resolveAiTarget };
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 

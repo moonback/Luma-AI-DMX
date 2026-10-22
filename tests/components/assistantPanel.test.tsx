@@ -22,7 +22,9 @@ describe('Paramètres › Assistant', () => {
     fireEvent.change(director, { target: { value: 'Tu es un éclairagiste de théâtre.' } });
     fireEvent.change(screen.getByTestId('assistant-name'), { target: { value: 'Nova' } });
     fireEvent.change(screen.getByTestId('assistant-voice'), { target: { value: 'Kore' } });
-    expect(latest).toMatchObject({ name: 'Nova', voice: 'Kore', directorPrompt: 'Tu es un éclairagiste de théâtre.' });
+    expect(screen.getByTestId<HTMLInputElement>('assistant-auto-apply').checked).toBe(false);
+    fireEvent.click(screen.getByTestId('assistant-auto-apply'));
+    expect(latest).toMatchObject({ name: 'Nova', voice: 'Kore', directorPrompt: 'Tu es un éclairagiste de théâtre.', autoApply: true });
     expect(settingsSchema.safeParse({ assistant: latest }).success).toBe(true); // what « Enregistrer » sends
 
     fireEvent.click(screen.getByTestId('assistant-director-prompt-reset'));

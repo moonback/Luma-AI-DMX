@@ -84,10 +84,12 @@ Si omis et qu'une seule cue list est active, elle est utilisée automatiquement.
 export function summarize(p: AiProposal) {
   return {
     understanding: p.understanding,
+    ...(p.question ? { question: p.question } : {}),
     notices: p.notices,
     actions: p.actions.map((a) => ({ summary: a.summary, status: a.status, problems: a.messages })),
     appliable: p.actions.filter((a) => a.status !== 'rejected').length,
     rejected: p.actions.filter((a) => a.status === 'rejected').length,
+    ...(p.autoApplied ? { autoApplied: { executed: p.autoApplied.executed.map((e) => e.summary), skipped: p.autoApplied.skipped.map((s) => `${s.summary} : ${s.reason}`) } } : {}),
   };
 }
 
@@ -125,7 +127,7 @@ export function createToolRunner(): (name: string, args: Record<string, unknown>
           return fail('Proposition impossible (voir le message affiché)');
         }
 
-        last = p;
+        last = p.autoApplied ? null : p; // already applied: nothing left to confirm
         const summary = summarize(p);
         console.log(LOG, `propose_lighting — success | appliable: ${summary.appliable} | rejected: ${summary.rejected} | summary:`, JSON.stringify(summary));
         return summary;

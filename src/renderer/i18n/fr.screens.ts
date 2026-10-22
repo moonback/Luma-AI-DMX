@@ -177,6 +177,8 @@ export const frScreens = {
   'music.genStep.compile': 'Création des scènes, effets et timeline…',
   'music.genCancel': 'Annuler',
   'ai.undo': 'Défaire',
+  'ai.question': 'Question de l’assistant :',
+  'ai.autoApplied': '{n} action(s) appliquée(s) automatiquement',
   'ai.usageLine': 'Ce mois : {calls} appel(s), {tokens} jetons, {cost} $ (budget {budget})',
   'ai.undoHint': 'Rétablit le projet tel qu’avant la dernière proposition appliquée et relâche sa couche IA',
   'ai.cancel': 'Annuler',
@@ -552,5 +554,7 @@ export const frScreens = {
   'settings.assistant.default': 'Texte par défaut',
   'settings.assistant.custom': 'Texte personnalisé',
   'settings.assistant.reset': 'Rétablir le texte par défaut',
+  'settings.assistant.autoApply': 'Appliquer les propositions sans confirmation',
+  'settings.assistant.autoApplyHint': 'Chaque proposition validée est exécutée aussitôt, sans le bouton « Appliquer ». Les contrôles restent actifs (validation, contraintes de la demande, garde-fou photosensible) et « Défaire » annule la dernière application. Désactivé par défaut.',
 } as const;
 

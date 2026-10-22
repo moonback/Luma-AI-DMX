@@ -179,6 +179,8 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'music.genStep.compile': 'Creating scenes, effects and timeline…',
   'music.genCancel': 'Cancel',
   'ai.undo': 'Undo',
+  'ai.question': 'Assistant question:',
+  'ai.autoApplied': '{n} action(s) applied automatically',
   'ai.usageLine': 'This month: {calls} call(s), {tokens} tokens, ${cost} (budget {budget})',
   'ai.undoHint': 'Restores the project as it was before the last applied proposal and releases its AI layer',
   'ai.cancel': 'Cancel',
@@ -554,5 +556,7 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'settings.assistant.default': 'Default text',
   'settings.assistant.custom': 'Custom text',
   'settings.assistant.reset': 'Restore the default text',
+  'settings.assistant.autoApply': 'Apply proposals without confirmation',
+  'settings.assistant.autoApplyHint': 'Each validated proposal runs immediately, without the « Apply » button. Checks stay active (validation, request constraints, photosensitive guard) and « Undo » reverts the last application. Off by default.',
 };
 

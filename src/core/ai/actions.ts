@@ -19,6 +19,8 @@ export const aiTargetSchema = z.object({
   limit: z.number().int().min(1).max(512).optional(),
   /** One head of multi-head fixtures (module name, or « anneau » / « tête principale »); fixtures without it are skipped. */
   module: z.string().trim().min(1).max(48).optional(),
+  /** Groups or fixtures left out of the target (contract v3): « tout sauf les faces ». */
+  exclude: z.object({ groupNames: z.array(z.string().max(80)).max(32).optional(), fixtureNames: z.array(z.string().max(80)).max(256).optional() }).optional(),
 });
 export type AiTarget = z.infer<typeof aiTargetSchema>;
 
@@ -109,13 +111,15 @@ export const MAX_ACTIONS_PER_PROPOSAL = 50;
  * checks that the samples of every past version still validate once migrated: a stored plan or a model prompted
  * with an older contract keeps working.
  */
-export const AI_ACTIONS_VERSION = 2;
+export const AI_ACTIONS_VERSION = 3;
 
 type RawAction = Record<string, unknown>;
 /** `AI_ACTION_MIGRATIONS[n]` turns a version-n action into a version n + 1 action (null drops it). */
 export const AI_ACTION_MIGRATIONS: Record<number, (a: RawAction) => RawAction | null> = {
   // v1 → v2 is additive (three new effect types): every v1 action is a valid v2 action.
   1: (a) => a,
+  // v2 → v3 is additive (`target.exclude`).
+  2: (a) => a,
 };
 
 /** Brings raw actions written for `fromVersion` to the current contract. Unknown future versions are refused. */
@@ -168,6 +172,10 @@ export interface AiProposal {
   createdAt: string;
   /** Digest of the patch, groups and scene names the proposal was validated against (set when stored). */
   basis?: string;
+  /** Clarifying question of the model when the request is ambiguous (then there are usually no actions). */
+  question?: string;
+  /** Report of the automatic application (Paramètres › Assistant › appliquer sans confirmation). */
+  autoApplied?: AiExecutionReport;
 }
 
 export interface AiExecutionReport {

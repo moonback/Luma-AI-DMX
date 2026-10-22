@@ -7,7 +7,7 @@ import { proposeWithOpenRouter } from '../../src/core/ai/providers/openrouter';
 
 describe('réglages de l’assistant', () => {
   it('valeurs par défaut, et un ancien fichier sans section assistant reste valide', () => {
-    expect(defaultSettings().assistant).toEqual({ name: 'Luma', voice: 'Puck', directorPrompt: null, voicePrompt: null });
+    expect(defaultSettings().assistant).toEqual({ name: 'Luma', voice: 'Puck', directorPrompt: null, voicePrompt: null, autoApply: false });
     expect(settingsSchema.parse({ ai: { provider: 'local' } }).assistant.name).toBe('Luma');
   });
 

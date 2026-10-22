@@ -113,6 +113,24 @@ Performance : l'objectif « < 100 ms » pour les commandes locales est tenu avec
 aucune optimisation n'a été entreprise, faute de goulot mesuré. L'écart avec la mesure initiale vient du
 préchauffage JIT, pas d'un gain de code. La latence fournisseur n'a pas pu être mesurée (pas d'appel réel).
 
+## 7 bis. Lot 2 — garde-fous, contrat v3, prompt, application automatique
+
+- **Contraintes appliquées par le code** (`src/core/ai/guards.ts`) : les négations, exclusions et « ne touche pas aux
+  couleurs » de la demande sont relues avec les règles du mode local, et toute action (locale ou OpenRouter) qui les
+  enfreint est refusée avec la raison ; l'aperçu est recalculé. `ai.revise` refait le contrôle, donc une action refusée
+  ne revient pas par une révision.
+- **Contrat v3** (additif, migration identité, échantillons figés) : `target.exclude` (groupes / projecteurs exclus).
+  `resolveAiTarget` déplacé dans `src/core/ai/target.ts`.
+- **`adjustIntensity`** : action du modèle uniquement, convertie à la réception en `setIntensity` par niveau actuel,
+  pour que la proposition et l'aperçu montrent les niveaux réels. Ce n'est pas une action du moteur.
+- **Prompt** : règles `exclude` / `adjustIntensity` / `question`, cinq exemples demande → JSON ; champ `question`
+  affiché dans l'Assistant IA et transmis à l'assistant vocal. La compaction de la description du kit n'a **pas** été
+  faite : son gain ne peut pas être mesuré sans appel payant, et elle risque d'appauvrir les demandes spatiales.
+- **Application automatique** (Paramètres › Assistant, désactivée par défaut) : une proposition validée est exécutée
+  aussitôt par le même chemin que le bouton « Appliquer » (empreinte du kit, anti-rebond, une seule application),
+  jamais quand le modèle pose une question ; « Défaire » reste disponible ; l'assistant vocal est prévenu par son prompt.
+- Tests : `tests/unit/ai-guards.test.ts` (11), `tests/components/assistantPanel.test.tsx` complété.
+
 ## 8. Problèmes restants et limites
 
 - **P2** — Une cible nommée par un mot inconnu du projet (« les contre-jours » quand le groupe s'appelle « Contres »)

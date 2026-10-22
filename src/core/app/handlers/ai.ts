@@ -1,5 +1,6 @@
-import type { AiProposal } from '../../ai/actions';
-import { buildProposal, executeProposal, guardProposalFlashes, liveState, proposeLocally } from '../../ai/director';
+import type { AiExecutionReport, AiProposal } from '../../ai/actions';
+import { buildProposal, executeProposal, guardProposalFlashes, interpreterContext, liveState, proposeLocally } from '../../ai/director';
+import { enforceConstraints, expandRelativeIntensity, promptConstraints } from '../../ai/guards';
 import { pruneTransientEffects } from '../../ai/transient';
 import { ProjectIndex } from '../../engine/resolve';
 import type { Project } from '../../model/schemas';
@@ -27,57 +28,12 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       const prev = app.proposals.get(cmd.proposalId);
       if (!prev) throw new UserError('Proposition expirée');
       const p = buildProposal({ prompt: prev.prompt, provider: prev.provider, model: prev.model, understanding: `${prev.understanding} (modifiée par l’utilisateur)`, notices: [], rawActions: cmd.actions, ctx: validationCtx(app) });
+      guardConstraints(app, p);
       guardFlashes(app, p);
       storeProposal(app, p);
       return p;
     }
-    case 'ai.apply': {
-      const p = app.proposals.get(cmd.proposalId);
-      if (!p) throw new UserError('Proposition expirée ou inconnue');
-      // What was previewed must be what is applied: refuse when the rig the actions were resolved against has changed.
-      if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.');
-      if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)');
-      app.lastAiApply = Date.now();
-      app.proposals.delete(cmd.proposalId); // a proposal is applied at most once
-      // All or nothing: every creation goes to one draft, validated and committed once; effects start after the commit.
-      const before = app.project;
-      let draft: Project | null = null;
-      let index = app.index;
-      const deferred: (() => void)[] = [];
-      const report = executeProposal(p, {
-        index: () => index,
-        mutate: (fn) => {
-          draft ??= structuredClone(app.project);
-          fn(draft);
-          index = new ProjectIndex(draft, app.userProfiles);
-        },
-        defer: (fn) => deferred.push(fn),
-        engine: e,
-        maxStrobeHz: app.settings.engine.maxStrobeHz,
-      });
-      if (draft) {
-        const next: Project = draft;
-        try {
-          app.mutate((d) => { Object.assign(d, next); });
-        } catch (err) {
-          e.releaseAi();
-          throw err;
-        }
-      }
-      for (const start of deferred) {
-        try {
-          start();
-        } catch (err) {
-          app.logger.warn('IA', (err as Error).message);
-        }
-      }
-      app.lastAiUndo = { proposalId: p.id, project: before, revision: app.revision };
-      const thread = threads.get(app); // only executed actions are remembered, never skipped or refused ones
-      if (thread) thread.last = { basis: rigBasis(app), fixtures: [...new Set(report.executed.flatMap((x) => p.actions[x.index]?.fixtureIds ?? []))].flatMap((id) => app.index.fixtures.get(id)?.fixture.name ?? []) };
-      app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s)`);
-      for (const s of report.skipped) app.logger.warn('IA', `Ignorée — ${s.summary} : ${s.reason}`);
-      return report;
-    }
+    case 'ai.apply': return applyProposal(app, cmd.proposalId);
     case 'ai.release':
       e.releaseAi();
       for (const fx of e.snapshot().effects) if (fx.owner === 'ai') e.stopEffect(fx.instanceId);
@@ -133,7 +89,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
             model: VOICE_MODEL,
             config: {
               responseModalities: [Modality.AUDIO],
-              systemInstruction: voicePrompt(app.settings.assistant.name, app.settings.assistant.voicePrompt),
+              systemInstruction: voicePrompt(app.settings.assistant.name, app.settings.assistant.voicePrompt, app.settings.assistant.autoApply),
               speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: app.settings.assistant.voice } } },
               tools: [{
                 functionDeclarations: [
@@ -186,6 +142,55 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
   }
 }
 
+/** Executes a stored proposal once (button « Appliquer », voice « vas-y » or automatic application). */
+function applyProposal(app: AppService, id: string): AiExecutionReport {
+  const p = app.proposals.get(id);
+  if (!p) throw new UserError('Proposition expirée ou inconnue');
+  // What was previewed must be what is applied: refuse when the rig the actions were resolved against has changed.
+  if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.');
+  if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)');
+  app.lastAiApply = Date.now();
+  app.proposals.delete(id); // a proposal is applied at most once
+  // All or nothing: every creation goes to one draft, validated and committed once; effects start after the commit.
+  const before = app.project;
+  let draft: Project | null = null;
+  let index = app.index;
+  const deferred: (() => void)[] = [];
+  const report = executeProposal(p, {
+    index: () => index,
+    mutate: (fn) => {
+      draft ??= structuredClone(app.project);
+      fn(draft);
+      index = new ProjectIndex(draft, app.userProfiles);
+    },
+    defer: (fn) => deferred.push(fn),
+    engine: app.engine,
+    maxStrobeHz: app.settings.engine.maxStrobeHz,
+  });
+  if (draft) {
+    const next: Project = draft;
+    try {
+      app.mutate((d) => { Object.assign(d, next); });
+    } catch (err) {
+      app.engine.releaseAi();
+      throw err;
+    }
+  }
+  for (const start of deferred) {
+    try {
+      start();
+    } catch (err) {
+      app.logger.warn('IA', (err as Error).message);
+    }
+  }
+  app.lastAiUndo = { proposalId: p.id, project: before, revision: app.revision };
+  const thread = threads.get(app); // only executed actions are remembered, never skipped or refused ones
+  if (thread) thread.last = { basis: rigBasis(app), fixtures: [...new Set(report.executed.flatMap((x) => p.actions[x.index]?.fixtureIds ?? []))].flatMap((id) => app.index.fixtures.get(id)?.fixture.name ?? []) };
+  app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s)`);
+  for (const s of report.skipped) app.logger.warn('IA', `Ignorée — ${s.summary} : ${s.reason}`);
+  return report;
+}
+
 /** OpenRouter catalogue, cached 10 min (public endpoint, no key needed). */
 export function openRouterModels(app: AppService): Promise<OpenRouterModel[]> {
   if (!app.modelCache || Date.now() - app.modelCache.at > 600_000) {
@@ -198,6 +203,12 @@ export function openRouterModels(app: AppService): Promise<OpenRouterModel[]> {
 
 export function validationCtx(app: AppService) {
   return { index: app.index, allowStrobe: app.settings.ai.allowStrobe, maxStrobeHz: app.settings.engine.maxStrobeHz };
+}
+
+/** What the request forbids (« sans strobe », « sauf les faces ») is enforced by code on every proposal, local or remote. */
+function guardConstraints(app: AppService, p: AiProposal): void {
+  const n = enforceConstraints(p, promptConstraints(p.prompt, interpreterContext(app.index, app.engine, app.settings.ai.allowStrobe)), app.index);
+  if (n) p.notices.push(`${n} action(s) refusée(s) : elles ne respectaient pas une contrainte de la demande.`);
 }
 
 export function guardFlashes(app: AppService, p: AiProposal): void {
@@ -277,7 +288,8 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
         const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
         const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app), history: continueThread ? threadHistory(app) : [], instructions: app.settings.assistant.directorPrompt });
         // Validated against the project as it is now: it may have changed during the request.
-        proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx: validationCtx(app) });
+        proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: expandRelativeIntensity(r.actions, app.index, liveState(app.index, app.engine).current), ctx: validationCtx(app) });
+        if (r.question) proposal.question = r.question;
         app.aiLastError = null;
       } catch (err) {
         if (abort.signal.aborted) throw new UserError('Demande IA annulée');
@@ -292,6 +304,7 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
       proposal = proposeLocally(prompt, validationCtx(app), app.engine, continueThread ? lastTargets(app) : undefined);
       if (ai.provider === 'openrouter') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
     }
+    guardConstraints(app, proposal);
     guardFlashes(app, proposal);
     storeProposal(app, proposal);
     if (!continueThread) threads.delete(app);
@@ -302,6 +315,14 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
     if (clean) {
       app.savedRevision = app.revision;
       app.emitProject();
+    }
+    // Paramètres › Assistant › « Appliquer sans confirmation »: same checks as the button, never on a question.
+    if (app.settings.assistant.autoApply && !proposal.question && proposal.actions.some((a) => a.status !== 'rejected')) {
+      try {
+        proposal.autoApplied = applyProposal(app, proposal.id);
+      } catch (err) {
+        proposal.notices.push(`Application automatique impossible : ${(err as Error).message}`);
+      }
     }
     return proposal;
   } finally {

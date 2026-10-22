@@ -36,6 +36,8 @@ export function AssistantPanel({ value, onChange }: { value: Assistant; onChange
             </select>
           </Field>
         </div>
+        <label className="check" title={tr('settings.assistant.autoApplyHint')}><input type="checkbox" checked={value.autoApply} onChange={(e) => onChange({ autoApply: e.target.checked })} data-testid="assistant-auto-apply" />{tr('settings.assistant.autoApply')}</label>
+        {value.autoApply && <p className="small" style={{ color: '#f59e0b' }}>{tr('settings.assistant.autoApplyHint')}</p>}
       </Panel>
       <Panel title={tr('settings.assistant.prompts')}>
         <p className="small muted">{tr('settings.assistant.safety')}</p>
