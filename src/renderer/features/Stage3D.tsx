@@ -4,7 +4,7 @@ import { Camera, CircleStop, Cloud, Lightbulb, Link2, Moon, Crosshair, Copy, Exp
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { useResolved } from '../components/ui';
-import { useT } from '../i18n';
+import { useT, type MessageKey } from '../i18n';
 import { buildVisualModel, type VisualFixture } from '../../core/visualizer/model';
 import type { Fixture, FixtureValues, Project } from '../../core/model/schemas';
 import { audienceGlare } from '../../core/visualizer/beam';
@@ -12,8 +12,8 @@ import { stageGeometry } from './stage3d/environment';
 import { AMBIENCES, FLOORS, LIGHT_BUDGET, type AmbienceId, type FloorId } from './stage3d/quality';
 import { DARK_LEVEL, performerLight } from '../../core/visualizer/lighting';
 import { acceptLibraryDrag, dropLibraryItem, duplicateSceneElement, hangFixture, removeSceneElement } from '../sceneActions';
-import type { SceneRef } from '../../core/visualizer/sceneEdit';
-import { GRIDS, VIEWS, loadPrefs, mountStage3D, savePrefs, type CtxTarget, type Prefs, type StageApi } from './stage3d/scene';
+import { findElement, SCENE_LABEL, type SceneRef } from '../../core/visualizer/sceneEdit';
+import { GRIDS, QUALITY_PRESETS, VIEWS, loadPrefs, mountStage3D, savePrefs, type CtxTarget, type Prefs, type StageApi } from './stage3d/scene';
 
 /** Edit-mode right-click menu on a fixture, a truss or a set piece. */
 function ContextMenu({ ctx, model, vis, patch, onClose }: { ctx: { x: number; y: number; target: CtxTarget }; model: readonly VisualFixture[]; vis: Project['visualizer']; patch: readonly Fixture[]; onClose: () => void }) {
@@ -56,6 +56,167 @@ function ContextMenu({ ctx, model, vis, patch, onClose }: { ctx: { x: number; y:
   );
 }
 
+/** Contextual inspector showing properties of the current selection (fixture or scene element). */
+function Inspector3D({
+  selection,
+  sceneSel,
+  model,
+  vis,
+  t,
+  onClose,
+}: {
+  selection: readonly string[];
+  sceneSel: SceneRef | null;
+  model: readonly VisualFixture[];
+  vis: Project['visualizer'];
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
+  onClose: () => void;
+}) {
+  const f = selection.length === 1 ? model.find((x) => x.id === selection[0]) : null;
+  const elem = sceneSel ? findElement(vis, sceneSel) : null;
+
+  if (!f && !elem && selection.length === 0) return null;
+
+  return (
+    <aside className="stage3d-inspector" data-testid="stage3d-inspector" aria-label={t('stage3d.inspector')}>
+      <div className="stage3d-inspector-head">
+        <span className="stage3d-inspector-title">
+          {f ? f.name : elem ? elem.name : t('stage3d.fixtures', { count: selection.length })}
+        </span>
+        <button className="chip-link" onClick={onClose} aria-label={t('stage3d.inspectorClose')} title={t('stage3d.inspectorClose')}><X size={12} /></button>
+      </div>
+
+      {f && (
+        <>
+          <div className="stage3d-inspector-grid">
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorType')}</span>
+              <span>{f.type}</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorIntensity')}</span>
+              <span>{Math.round(f.intensity * 100)} %</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorX')}</span>
+              <span className="mono">{f.x.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorY')}</span>
+              <span className="mono">{f.y.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorHeight')}</span>
+              <span className="mono">{f.height.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorColor')}</span>
+              <span className="stage3d-inspector-color mono">
+                <span className="stage3d-inspector-swatch" style={{ backgroundColor: f.color }} />
+                {f.color.toUpperCase()}
+              </span>
+            </div>
+            {f.movable && (
+              <>
+                <div className="stage3d-inspector-cell">
+                  <span className="dim">{t('stage3d.inspectorPan')}</span>
+                  <span className="mono">{f.panDeg.toFixed(0)}°</span>
+                </div>
+                <div className="stage3d-inspector-cell">
+                  <span className="dim">{t('stage3d.inspectorTilt')}</span>
+                  <span className="mono">{f.tiltDeg.toFixed(0)}°</span>
+                </div>
+              </>
+            )}
+            {f.beamAngle > 0 && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorBeam')}</span>
+                <span className="mono">{f.beamAngle.toFixed(0)}°</span>
+              </div>
+            )}
+            {f.strobeHz > 0 && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorStrobe')}</span>
+                <span className="mono">{f.strobeHz.toFixed(1)} Hz</span>
+              </div>
+            )}
+          </div>
+          <button
+            className="btn ghost sm"
+            style={{ marginTop: 4, justifyContent: 'center' }}
+            onClick={() => useStore.getState().setScenePanel('selection')}
+          >
+            {t('stage3d.inspectorEdit')}
+          </button>
+        </>
+      )}
+
+      {elem && sceneSel && (
+        <>
+          <div className="stage3d-inspector-grid">
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorCat')}</span>
+              <span>{SCENE_LABEL[sceneSel.kind]}</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorX')}</span>
+              <span className="mono">{elem.x.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorY')}</span>
+              <span className="mono">{elem.y.toFixed(2)} m</span>
+            </div>
+            {'height' in elem && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorHeight')}</span>
+                <span className="mono">{(elem.height as number).toFixed(2)} m</span>
+              </div>
+            )}
+            {'elevation' in elem && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorElevation')}</span>
+                <span className="mono">{(elem.elevation as number).toFixed(2)} m</span>
+              </div>
+            )}
+            {'length' in elem && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorLength')}</span>
+                <span className="mono">{(elem.length as number).toFixed(2)} m</span>
+              </div>
+            )}
+            {sceneSel.kind === 'truss' && 'rotationDeg' in elem && typeof (elem as { rotationDeg?: number }).rotationDeg === 'number' && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorRotation')}</span>
+                <span className="mono">{(elem as { rotationDeg: number }).rotationDeg}°</span>
+              </div>
+            )}
+          </div>
+          <button
+            className="btn ghost sm"
+            style={{ marginTop: 4, justifyContent: 'center' }}
+            onClick={() => useStore.getState().setScenePanel('selection')}
+          >
+            {t('stage3d.inspectorEdit')}
+          </button>
+        </>
+      )}
+
+      {!f && !elem && selection.length > 1 && (
+        <div className="col" style={{ gap: 4 }}>
+          <span className="small muted">{t('stage3d.inspectorMulti', { count: selection.length })}</span>
+          <button
+            className="btn ghost sm"
+            style={{ marginTop: 4, justifyContent: 'center' }}
+            onClick={() => useStore.getState().setScenePanel('selection')}
+          >
+            {t('stage3d.inspectorEdit')}
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+}
+
 /**
  * 3D stage preview (three.js) fed by the renderer-agnostic VisualFixture model.
  * Volumetric-looking beams, light pools with gobos on the floor and cyclorama, strobe flashes, prism facets and
@@ -93,11 +254,20 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const selSet = sceneSel && (sceneSel.kind === 'truss' || sceneSel.kind === 'prop') ? sceneSel : null;
   const [dims, setDims] = useState<string | null>(null);
   const [lights, setLights] = useState(0);
-  const [shadows, setShadows] = useState(0);
+  const [_shadows, setShadows] = useState(0);
   const [menu, setMenu] = useState(false);
   const [spin, setSpin] = useState(false);
   const [solo, setSolo] = useState(false);
   const [bare, setBare] = useState(false);
+  const [showInspector, setShowInspector] = useState(true);
+  const selKey = `${selection.join(',')}|${selSet ? `${selSet.kind}:${selSet.id}` : ''}`;
+  const prevSelKey = useRef(selKey);
+  useEffect(() => {
+    if (prevSelKey.current !== selKey) {
+      prevSelKey.current = selKey;
+      setShowInspector(true);
+    }
+  }, [selKey]);
   const t = useT();
   const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo });
   latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo };
@@ -185,14 +355,14 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
     else void el.requestFullscreen().catch(() => undefined);
   };
 
-  if (error) return <div className="empty">{error}. Utilisez la vue 2D.</div>;
+  if (error) return <div className="empty">{error}. {t('stage3d.errorFallback')}</div>;
   return (
     <div ref={wrap} className="canvas-wrap stage3d" style={{ height: '100%' }}>
       <div ref={host} style={{ position: 'absolute', inset: 0, cursor: placing ? 'crosshair' : undefined }} onPointerDown={() => { setMenu(false); setCtx(null); }} onDragOver={acceptLibraryDrag} onDrop={(e) => dropLibraryItem(e, api.current?.groundAt(e.clientX, e.clientY) ?? null)} data-testid="stage-3d" />
       <div className="stage3d-vignette" aria-hidden />
       {bare && <button className="chip stage3d-unbare" onClick={() => setBare(false)} title={t('stage3d.presentExit')} aria-label={t('stage3d.presentExit')} data-testid="present-exit"><Presentation size={12} /></button>}
       {!bare && <div className="stage3d-toolbar">
-        <div className="chips" role="group" aria-label="Caméras">
+        <div className="chips" role="group" aria-label={t('stage3d.cameras')}>
           <Camera size={14} className="dim" />
           {VIEWS.map((v) => (
             <button key={v.id} className={`chip ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid={`cam-${v.id}`} onClick={() => pickView(v.id)}>{v.label}</button>
@@ -200,10 +370,10 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           {vis.views.map((v) => (
             <span key={v.id} className={`chip ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid="cam-saved">
               <button className="chip-link" onClick={() => pickView(v.id)}>{v.name}</button>
-              <button className="chip-link" onClick={() => deleteView(v.id)} title={`Supprimer « ${v.name} »`} aria-label={`Supprimer la vue ${v.name}`}><X size={10} /></button>
+              <button className="chip-link" onClick={() => deleteView(v.id)} title={t('stage3d.viewDelete', { name: v.name })} aria-label={t('stage3d.viewDeleteAria', { name: v.name })}><X size={10} /></button>
             </span>
           ))}
-          {vis.views.length < 20 && <button className="chip" onClick={saveView} title="Enregistrer le point de vue actuel dans le projet" aria-label="Enregistrer la vue" data-testid="cam-save"><Plus size={12} /></button>}
+          {vis.views.length < 20 && <button className="chip" onClick={saveView} title={t('stage3d.viewSaveTitle')} aria-label={t('stage3d.viewSaveAria')} data-testid="cam-save"><Plus size={12} /></button>}
         </div>
         <div className="grow" />
         <div className="chips" role="group">
@@ -213,31 +383,43 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
           <button className={`chip ${prefs.room > 0 ? 'on' : ''}`} onClick={() => setPrefs({ room: prefs.room > 0 ? 0 : 0.7 })} title={t('stage3d.lightTitle')} aria-pressed={prefs.room > 0} data-testid="room-light"><SunMedium size={12} /> <span className="lbl">{t('stage3d.light')}</span></button>
         </div>
         <span className="stage3d-sep" />
-        <button className={`chip ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title="Édition directe : déplacer et pivoter projecteurs et structures" data-testid="edit3d"><Move3d size={12} /> <span className="lbl">Éditer</span></button>
+        <button className={`chip ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title={t('stage3d.editTitle')} data-testid="edit3d"><Move3d size={12} /> <span className="lbl">{t('stage3d.edit')}</span></button>
         {edit && (
           <>
-            <div className="chips" role="group" aria-label="Outil">
-              <button className={`chip ${tool === 'translate' ? 'on' : ''}`} onClick={() => setTool('translate')} title="Déplacer (et monter / descendre)" data-testid="tool-move"><Move3d size={12} /></button>
-              <button className={`chip ${tool === 'rotate' ? 'on' : ''}`} onClick={() => setTool('rotate')} title="Pivoter autour de la verticale" data-testid="tool-rotate"><Rotate3d size={12} /></button>
+            <div className="chips" role="group" aria-label={t('stage3d.toolGroup')}>
+              <button className={`chip ${tool === 'translate' ? 'on' : ''}`} onClick={() => setTool('translate')} title={t('stage3d.editTitle')} aria-label={t('stage3d.move')} data-testid="tool-move"><Move3d size={12} /></button>
+              <button className={`chip ${tool === 'rotate' ? 'on' : ''}`} onClick={() => setTool('rotate')} title={t('stage3d.editTitle')} aria-label={t('stage3d.rotate')} data-testid="tool-rotate"><Rotate3d size={12} /></button>
             </div>
-            <label className="row small" title="Aimantation à la grille (et rotations par 15°)">Grille
+            <label className="row small" title={t('stage3d.gridTitle')}>{t('stage3d.gridLabel')}
               <select className="select" style={{ width: 82, height: 26 }} value={prefs.grid} onChange={(e) => setPrefs({ grid: Number(e.target.value) })} data-testid="grid">
-                {GRIDS.map((g) => <option key={g} value={g}>{g ? `${String(g).replace('.', ',')} m` : 'Libre'}</option>)}
+                {GRIDS.map((g) => <option key={g} value={g}>{g ? `${String(g).replace('.', ',')} m` : t('stage3d.gridFree')}</option>)}
               </select>
             </label>
           </>
         )}
         <span className="stage3d-sep" />
-        <button className={`chip ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)} aria-expanded={menu} title="Brume, halo, taches, fumée, ombres, ambiance, sol, noms" data-testid="render-menu"><SlidersHorizontal size={12} /> <span className="lbl">Rendu</span></button>
-        <button className="chip" onClick={() => api.current?.capture()} title="Capture d’image (PNG)" aria-label="Capture d’image" data-testid="capture"><ImageDown size={12} /></button>
-        <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} aria-label={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
-        <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)" aria-label="Plein écran"><Expand size={12} /></button>
+        <button className={`chip ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)} aria-expanded={menu} title={t('stage3d.renderTitle')} data-testid="render-menu"><SlidersHorizontal size={12} /> <span className="lbl">{t('stage3d.renderBtn')}</span></button>
+        <button className="chip" onClick={() => api.current?.capture()} title={t('stage3d.captureTitle')} aria-label={t('stage3d.captureAria')} data-testid="capture"><ImageDown size={12} /></button>
+        <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? t('stage3d.recordStopTitle') : t('stage3d.recordStartTitle')} aria-label={recording ? t('stage3d.recordStopAria') : t('stage3d.recordStartAria')} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
+        <button className="chip" onClick={fullscreen} title={t('stage3d.fullscreenTitle')} aria-label={t('stage3d.fullscreenAria')}><Expand size={12} /></button>
         <button className="chip" onClick={() => setBare(true)} title={t('stage3d.present')} aria-label={t('stage3d.present')} data-testid="present"><Presentation size={12} /></button>
-        <span className={`stage3d-fps mono ${fps >= 45 ? 'ok' : fps >= 25 ? 'mid' : 'low'}`} data-testid="fps">{fps} i/s</span>
         {menu && (
-          <div className="stage3d-pop" role="dialog" aria-label="Réglages de rendu" data-testid="render-pop">
-            <label className="row small" title="Densité de brume : visibilité des faisceaux dans l’air">
-              <Sun size={13} className="dim" /><span className="grow">Brume</span>
+          <div className="stage3d-pop" role="dialog" aria-label={t('stage3d.renderDialog')} data-testid="render-pop">
+            <div className="stage3d-presets" role="group" aria-label={t('stage3d.presetsTitle')}>
+              {QUALITY_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  className="chip"
+                  title={t(preset.hintKey)}
+                  onClick={() => setPrefs(preset.patch)}
+                  data-testid={`preset-${preset.id}`}
+                >
+                  {t(preset.labelKey)}
+                </button>
+              ))}
+            </div>
+            <label className="row small" title={t('stage3d.hazeTitle')}>
+              <Sun size={13} className="dim" /><span className="grow">{t('stage3d.hazeLabel')}</span>
               <input type="range" min={0} max={100} value={Math.round(prefs.haze * 100)} style={{ width: 130 }} onChange={(e) => setPrefs({ haze: Number(e.target.value) / 100 })} data-testid="haze" />
             </label>
             <label className="row small" title={t('stage3d.exposureTitle')}>
@@ -249,18 +431,18 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
               <input type="range" min={0} max={100} value={Math.round(prefs.room * 100)} style={{ width: 130 }} onChange={(e) => setPrefs({ room: Number(e.target.value) / 100 })} onDoubleClick={() => setPrefs({ room: 0 })} data-testid="room" />
             </label>
             <div className="chips">
-              <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title="Halo lumineux (bloom)"><Sparkles size={12} /> Glow</button>
-              <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title="Taches de lumière et gobos au sol et sur le cyclorama"><Eye size={12} /> Taches</button>
-              <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title="Fumée lourde au sol" data-testid="smoke"><Cloud size={12} /> Fumée</button>
-              <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title="Noms des projecteurs"><Tag size={12} /> Noms</button>
-              <button className={`chip ${prefs.real ? 'on' : ''}`} onClick={() => setPrefs({ real: !prefs.real })} title={`Éclairage réel avec ombres : les projecteurs les plus intenses (budget adaptatif ${LIGHT_BUDGET.min}–${LIGHT_BUDGET.max} sources, dont ${shadows || 'jusqu’à'} ombrées selon la carte graphique)`} data-testid="real-lights"><Lightbulb size={12} /> Ombres{prefs.real && lights ? ` · ${lights}` : ''}</button>
+              <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title={t('stage3d.glowTitle')}><Sparkles size={12} /> {t('stage3d.glowBtn')}</button>
+              <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title={t('stage3d.poolsTitle')}><Eye size={12} /> {t('stage3d.poolsBtn')}</button>
+              <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title={t('stage3d.smokeTitle')} data-testid="smoke"><Cloud size={12} /> {t('stage3d.smokeBtn')}</button>
+              <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title={t('stage3d.labelsTitle')}><Tag size={12} /> {t('stage3d.labelsBtn')}</button>
+              <button className={`chip ${prefs.real ? 'on' : ''}`} onClick={() => setPrefs({ real: !prefs.real })} title={`${t('stage3d.shadowsBtn')} (${LIGHT_BUDGET.min}–${LIGHT_BUDGET.max})`} data-testid="real-lights"><Lightbulb size={12} /> {prefs.real && lights ? t('stage3d.shadowsBtnActive', { n: lights }) : t('stage3d.shadowsBtn')}</button>
             </div>
-            <label className="row small"><span className="grow">Ambiance</span>
+            <label className="row small"><span className="grow">{t('stage3d.ambienceLabel')}</span>
               <select className="select" style={{ width: 160, height: 26 }} value={prefs.ambience} onChange={(e) => setPrefs({ ambience: e.target.value as AmbienceId })} data-testid="ambience">
                 {(Object.keys(AMBIENCES) as AmbienceId[]).map((id) => <option key={id} value={id}>{AMBIENCES[id].label}</option>)}
               </select>
             </label>
-            <label className="row small" title="Laqué / mouillé : reflets (un rendu de plus)"><span className="grow">Sol</span>
+            <label className="row small" title={t('stage3d.floorTitle')}><span className="grow">{t('stage3d.floorLabel')}</span>
               <select className="select" style={{ width: 160, height: 26 }} value={prefs.floor} onChange={(e) => setPrefs({ floor: e.target.value as FloorId })} data-testid="floor">
                 {(Object.keys(FLOORS) as FloorId[]).map((id) => <option key={id} value={id}>{FLOORS[id]}</option>)}
               </select>
@@ -276,23 +458,41 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       )}
       {dims && <div className="stage3d-dims mono small" data-testid="dims">{dims}</div>}
       {ctx && <ContextMenu ctx={ctx} model={model} vis={vis} patch={project.patch} onClose={() => setCtx(null)} />}
-      {!bare && <div className="stage3d-status">
-        {(dark.length > 0 || glare.length > 0) && (
-          <div className="row" style={{ gap: 6 }}>
-            {dark.length > 0 && (
-              <span className="badge warn" data-testid="dark" title={`Visage peu ou pas éclairé : ${dark.map((x) => x.name).join(', ')}. Estimation sans occultation.`}>
-                <Moon size={12} /> Dans le noir : {dark.length}
-              </span>
-            )}
-            {glare.length > 0 && (
-              <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
-                <TriangleAlert size={12} /> Éblouissement public : {glare.length}
-              </span>
+      {!bare && showInspector && (selection.length > 0 || selSet !== null) && (
+        <Inspector3D
+          selection={selection}
+          sceneSel={selSet}
+          model={model}
+          vis={vis}
+          t={t}
+          onClose={() => setShowInspector(false)}
+        />
+      )}
+      {!bare && (
+        <div className="stage3d-status">
+          <div className="stage3d-status-meta">
+            <span className={`badge ${edit ? 'violet' : ''}`}>{edit ? t('stage3d.modeEdit') : t('stage3d.modeOrbit')}</span>
+            <span className="small">{t('stage3d.fixtures', { count: model.length })}</span>
+            {edit && <span className="small dim">· {prefs.grid > 0 ? t('stage3d.gridStep', { grid: prefs.grid }) : t('stage3d.gridFree')}</span>}
+            <span className={`stage3d-fps mono ${fps >= 45 ? 'ok' : fps >= 25 ? 'mid' : 'low'}`} data-testid="fps">{fps} i/s</span>
+            {(dark.length > 0 || glare.length > 0) && (
+              <div className="row" style={{ gap: 6 }}>
+                {dark.length > 0 && (
+                  <span className="badge warn" data-testid="dark" title={t('stage3d.darkTitle', { names: dark.map((x) => x.name).join(', ') })}>
+                    <Moon size={12} /> {t('stage3d.darkBadge', { n: dark.length })}
+                  </span>
+                )}
+                {glare.length > 0 && (
+                  <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
+                    <TriangleAlert size={12} /> Éblouissement public : {glare.length}
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        )}
-        <div className="small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · clic droit : menu · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}<span className="stage3d-keys"> · {t('stage3d.keys')}</span></div>
-      </div>}
+          <div className="small dim">{edit ? t('stage3d.helpEdit') : t('stage3d.helpOrbit')}<span className="stage3d-keys"> · {t('stage3d.keys')}</span></div>
+        </div>
+      )}
     </div>
   );
 }

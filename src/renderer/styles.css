@@ -448,12 +448,23 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .stage3d-panel { position: absolute; right: 10px; bottom: 34px; width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.92); border: 1px solid var(--border-strong); z-index: 2; }
 .stage3d-tip { position: absolute; pointer-events: none; display: flex; flex-direction: column; padding: 6px 9px; border-radius: 6px; background: rgba(18, 22, 32, 0.95); border: 1px solid var(--border-strong); z-index: 3; white-space: nowrap; }
 .stage3d-dims { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); pointer-events: none; padding: 5px 10px; border-radius: 6px; background: rgba(18, 22, 32, 0.95); border: 1px solid var(--violet); color: var(--text); z-index: 3; white-space: nowrap; }
-.stage3d-status { position: absolute; left: 12px; bottom: 8px; right: 290px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; z-index: 2; pointer-events: none; }
+.stage3d-status { position: absolute; left: 12px; bottom: 8px; right: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; z-index: 2; pointer-events: none; }
+.stage3d-status-meta { pointer-events: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 10px; border-radius: 999px; background: rgba(11, 13, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(8px); }
 .stage3d-status > .small { padding: 3px 10px; border-radius: 999px; background: rgba(11, 13, 18, 0.6); border: 1px solid rgba(255, 255, 255, 0.06); backdrop-filter: blur(6px); }
 .stage3d-keys { color: var(--text-3); }
 .stage3d-status .badge { pointer-events: auto; }
 .stage3d-sep { width: 1px; height: 18px; background: var(--border); }
 .stage3d-pop { position: absolute; top: calc(100% + 6px); right: 0; width: 290px; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.96); border: 1px solid var(--border-strong); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); z-index: 4; }
+.stage3d-presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.stage3d-presets .chip { justify-content: center; font-size: 11px; padding: 3px 6px; }
+.stage3d-inspector { position: absolute; top: 54px; right: 12px; width: 230px; max-height: calc(100% - 110px); overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.94); border: 1px solid var(--border-strong); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px); z-index: 3; }
+.stage3d-inspector-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.stage3d-inspector-title { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage3d-inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; font-size: 11px; }
+.stage3d-inspector-cell { display: flex; flex-direction: column; gap: 1px; }
+.stage3d-inspector-cell .dim { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px; }
+.stage3d-inspector-color { display: inline-flex; align-items: center; gap: 6px; }
+.stage3d-inspector-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; }
 .stage3d-ctx { top: auto; right: auto; width: 200px; gap: 2px; padding: 8px; z-index: 6; }
 .stage3d-ctx .btn { justify-content: flex-start; }
 

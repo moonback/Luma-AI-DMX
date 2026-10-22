@@ -88,6 +88,7 @@ Effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaines et plus
 - Un interprète lâché près d'un point s'y pose, comme en 2D.
 
 #### 2.2 Inspecteur unifié · M
+> **Complété (22/10/2026)** : inspecteur contextuel escamotable intégré sur le flanc droit de la vue 3D affichant les coordonnées métriques (X, Y, Z), angles et rotations, couleurs et intensités des projecteurs ou éléments sélectionnés.
 - Le panneau latéral gagne un onglet **Sélection** qui remplace les panneaux flottants (projecteur, structure) : mêmes cartes, mêmes champs.
 - Cliquer une carte sélectionne l'objet dans la vue (et cadre la caméra au double-clic) ; sélectionner dans la vue fait défiler la liste jusqu'à la carte et la met en surbrillance.
 
@@ -97,7 +98,8 @@ Effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaines et plus
 ### Étape 3 — Lisibilité et confort (priorité moyenne)
 
 #### 3.1 Préréglages de rendu · S
-- En tête du menu Rendu : **Rapide / Équilibré / Qualité** (bloom, taches, ombres, sol réfléchissant), les réglages fins restant en dessous. Choix automatique selon les i/s mesurés au premier affichage.
+> **Livré (22/10/2026)** : 4 préréglages de qualité de rendu en un clic (Édition, Équilibré, Qualité, Présentation) dans le panneau Rendu, avec configuration cohérente de la brume, bloom, ombres et reflets.
+- En tête du menu Rendu : **Édition / Équilibré / Qualité / Présentation** (bloom, taches, ombres, sol réfléchissant), les réglages fins restant en dessous. Choix automatique selon les i/s mesurés au premier affichage.
 
 #### 3.2 Raccourcis clavier affichés · S
 - 1–5 : caméras ; E : Éditer ; G : grille ; T / R : déplacer / pivoter ; F : cadrer la sélection ; ? : aide des raccourcis.

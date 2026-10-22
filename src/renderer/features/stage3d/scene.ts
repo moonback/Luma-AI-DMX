@@ -11,7 +11,7 @@ import { type VisualFixture } from '../../../core/visualizer/model';
 import type { Project, StageProp, Truss } from '../../../core/model/schemas';
 import { followTruss, snapToTrusses, snapTrussEnds } from '../../../core/visualizer/truss';
 import { beamDirection, type StageGeometry } from '../../../core/visualizer/beam';
-import { buildRig, disposeRig, rigKey, updateRig, type Rig } from './rig';
+import { buildRig, disposeGeometries, disposeRig, rigKey, updateRig, type Rig } from './rig';
 import { buildEnvironment, buildLowFog, disposeGroup, propObjectName, setLowFog, trussObjectName } from './environment';
 import { disposeTextures } from './textures';
 import { buildPerformer, buildScreen, disposeScreen, screenKey, updatePerformer, updateScreen, type PerformerRig, type ScreenRig } from './actors';
@@ -19,6 +19,7 @@ import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeRe
 import { screenMediaVersion } from '../../screenMedia';
 import { addSceneElement } from '../../sceneActions';
 import type { SceneRef } from '../../../core/visualizer/sceneEdit';
+import type { MessageKey } from '../../i18n';
 
 /*
  * Imperative three.js side of the 3D stage view: renderer, cameras, rig and environment objects, gizmo and pointer
@@ -34,6 +35,16 @@ export const VIEWS: { id: ViewId; label: string }[] = [
 /** `view`: a built-in camera id or the id of a view saved in the project. */
 export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number; room: number }
 const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte', exposure: 1, room: 0 };
+
+/** Quality presets: a coherent set of rendering options selectable in one click. */
+export type QualityPresetId = 'edit' | 'balanced' | 'quality' | 'present';
+export const QUALITY_PRESETS: { id: QualityPresetId; labelKey: MessageKey; hintKey: MessageKey; patch: Partial<Prefs> }[] = [
+  { id: 'edit',     labelKey: 'stage3d.preset.edit',     hintKey: 'stage3d.preset.editHint',     patch: { glow: false, pools: false, smoke: false, real: false, haze: 0.3,  exposure: 1,   ambience: 'work',    floor: 'matte'  } },
+  { id: 'balanced', labelKey: 'stage3d.preset.balanced', hintKey: 'stage3d.preset.balancedHint', patch: { glow: true,  pools: true,  smoke: false, real: false, haze: 0.55, exposure: 1,   ambience: 'black',   floor: 'matte'  } },
+  { id: 'quality',  labelKey: 'stage3d.preset.quality',  hintKey: 'stage3d.preset.qualityHint',  patch: { glow: true,  pools: true,  smoke: false, real: true,  haze: 0.65, exposure: 1,   ambience: 'black',   floor: 'lacquer'} },
+  { id: 'present',  labelKey: 'stage3d.preset.present',  hintKey: 'stage3d.preset.presentHint',  patch: { glow: true,  pools: true,  smoke: true,  real: false, haze: 0.8,  exposure: 1.1, ambience: 'club',    floor: 'wet'    } },
+];
+
 /** Editor grid steps in meters (0 = free); rotations snap to 15° whenever a grid is on. */
 export const GRIDS = [0, 0.25, 0.5, 1];
 const ROTATION_SNAP_DEG = 15;
@@ -572,6 +583,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     for (const r of screens.values()) disposeScreen(r);
     real.dispose();
     disposeTextures();
+    disposeGeometries();
     composer.dispose();
     renderer.dispose();
     renderer.domElement.remove();
