@@ -117,6 +117,18 @@ export function ConfirmHost() {
   );
 }
 
+export function NoticeHost() {
+  const tr = useT();
+  const n = useStore((s) => s.notice);
+  if (!n) return null;
+  const close = () => useStore.getState().setNotice(null);
+  return (
+    <Modal title={n.title} onClose={close} footer={<button className="btn primary" autoFocus onClick={close}>{tr('common.close')}</button>}>
+      <p style={{ whiteSpace: 'pre-line', margin: 0 }}>{n.detail}</p>
+    </Modal>
+  );
+}
+
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: readonly { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
     <div className="tabs" role="tablist">

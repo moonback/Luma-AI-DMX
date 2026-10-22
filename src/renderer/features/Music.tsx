@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lock, LockOpen, Music2, Pause, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
+import { Activity, Clock, Layers, Lock, LockOpen, Music2, Pause, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -61,7 +61,7 @@ function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; s
           ))}
         </div>
         {a.events.map((e, i) => e.kind !== 'silence' && (
-          <span key={i} className={`sec-event ${e.kind}`} title={t(`music.event.${e.kind}`)} style={{ left: `${(e.t / a.duration) * 100}%`, width: e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : 2, background: EVENT_STYLE[e.kind][1] }} />
+          <span key={i} className={`sec-event ${e.kind}`} title={t(`music.event.${e.kind}`)} style={{ left: `${(e.t / a.duration) * 100}%`, width: e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : 3, background: EVENT_STYLE[e.kind][1] }} />
         ))}
         {pos !== null && <span className="sec-playhead" style={{ left: `${Math.min(100, (pos / a.duration) * 100)}%` }} />}
       </div>
@@ -234,129 +234,216 @@ export function MusicPage() {
       ) : (
         <div className="col gap-lg">
           {tracks.length > 1 && (
-            <div className="chips">{tracks.map((tk) => <button key={tk.id} className={`chip ${tk.id === track.id ? 'on' : ''}`} onClick={() => { setTrackId(tk.id); setSelected(0); setNotices([]); }}>{tk.name}</button>)}</div>
+            <div className="chips" style={{ marginBottom: -4 }}>{tracks.map((tk) => <button key={tk.id} className={`chip ${tk.id === track.id ? 'on' : ''}`} onClick={() => { setTrackId(tk.id); setSelected(0); setNotices([]); }}>{tk.name}</button>)}</div>
           )}
-          <Panel title={track.name} actions={
-            <div className="row">
-              {musicPlayer.hasAudio(track.hash) ? (
-                playing?.trackId === track.id ? (
-                  <>
-                    <button className="btn" onClick={() => musicPlayer.pause()} data-testid="music-pause"><Pause size={13} />{t('music.pause')}</button>
-                    <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
-                  </>
-                ) : musicPlayer.paused?.trackId === track.id ? (
-                  <>
-                    <button className="btn accent" onClick={() => play(track, musicPlayer.paused!.at)} data-testid="music-resume"><Play size={13} />{t('music.resume')}</button>
-                    <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(musicPlayer.paused.at) })}</button>
-                  </>
-                ) : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
-              ) : <span className="small dim">{t('music.noAudio')}</span>}
+
+          {/* 2. Lecteur et timeline */}
+          <Panel title={track.name} actions={<span className="badge">{track.analysis.sections.length} {t('music.sections').toLowerCase()}</span>}>
+            {/* Informations sous forme de petits indicateurs */}
+            <div className="music-indicators" data-testid="music-summary">
+              <div className="music-indicator-pill">
+                <Activity size={13} style={{ color: '#22d3ee' }} />
+                <span className="small muted">{t('music.tempo')} </span>
+                <b className="mono">{track.analysis.bpm.toFixed(1)}</b>
+                <span>BPM</span>
+                {!track.analysis.tempoStable && <span className="badge warn sm">{t('music.variable')}</span>}
+              </div>
+              <div className="music-indicator-pill">
+                <Music2 size={13} style={{ color: '#a78bfa' }} />
+                <span className="small muted">{t('music.key')} </span>
+                <b>{KEY_NAMES[track.analysis.key.tonic]} {t(track.analysis.key.mode === 'major' ? 'music.major' : 'music.minor')}</b>
+                <span className="small dim">({Math.round(track.analysis.key.confidence * 100)} %)</span>
+              </div>
+              <div className="music-indicator-pill">
+                <Clock size={13} style={{ color: '#38bdf8' }} />
+                <span className="small muted">{t('music.duration')} </span>
+                <b className="mono">
+                  {playing?.trackId === track.id
+                    ? `${fmt(pos)} / ${fmt(track.analysis.duration)}`
+                    : musicPlayer.paused?.trackId === track.id
+                    ? `${fmt(musicPlayer.paused.at)} / ${fmt(track.analysis.duration)}`
+                    : fmt(track.analysis.duration)}
+                </b>
+              </div>
+              <div className="music-indicator-pill">
+                <Layers size={13} style={{ color: '#f472b6' }} />
+                <span className="small muted">{t('music.sections')} </span>
+                <b>{track.analysis.sections.length}</b>
+              </div>
+              <div className="music-indicator-pill dim small" style={{ marginLeft: 'auto' }}>
+                <Sparkles size={12} style={{ color: '#fde047' }} />
+                <span>{t('music.eventsSummary', { impacts: track.analysis.events.filter((e) => e.kind === 'impact').length, risers: track.analysis.events.filter((e) => e.kind === 'riser').length, vocal: Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0)) })}</span>
+              </div>
+            </div>
+
+            {/* Commandes de lecture regroupées */}
+            <div className="music-player-bar">
+              <div className="music-player-controls">
+                {musicPlayer.hasAudio(track.hash) ? (
+                  playing?.trackId === track.id ? (
+                    <>
+                      <button className="btn" onClick={() => musicPlayer.pause()} data-testid="music-pause"><Pause size={13} />{t('music.pause')}</button>
+                      <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
+                    </>
+                  ) : musicPlayer.paused?.trackId === track.id ? (
+                    <>
+                      <button className="btn accent" onClick={() => play(track, musicPlayer.paused!.at)} data-testid="music-resume"><Play size={13} />{t('music.resume')}</button>
+                      <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(musicPlayer.paused.at) })}</button>
+                    </>
+                  ) : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
+                ) : <span className="small dim">{t('music.noAudio')}</span>}
+              </div>
               <button className="btn ghost sm" onClick={() => { if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop(); void act({ type: 'music.removeTrack', id: track.id }); }}>{t('music.remove')}</button>
             </div>
-          }>
-            <div className="row wrap" style={{ gap: 18, marginBottom: 12 }} data-testid="music-summary">
-              <span><span className="small muted">{t('music.tempo')} </span><b className="mono">{track.analysis.bpm.toFixed(1)}</b> BPM {track.analysis.tempoStable ? '' : <span className="badge warn">{t('music.variable')}</span>}</span>
-              <span><span className="small muted">{t('music.key')} </span><b>{KEY_NAMES[track.analysis.key.tonic]} {t(track.analysis.key.mode === 'major' ? 'music.major' : 'music.minor')}</b> <span className="small dim">({Math.round(track.analysis.key.confidence * 100)} %)</span></span>
-              <span><span className="small muted">{t('music.duration')} </span><b className="mono">{fmt(track.analysis.duration)}</b></span>
-              <span><span className="small muted">{t('music.sections')} </span><b>{track.analysis.sections.length}</b></span>
-              <span className="small dim">{t('music.eventsSummary', { impacts: track.analysis.events.filter((e) => e.kind === 'impact').length, risers: track.analysis.events.filter((e) => e.kind === 'riser').length, vocal: Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0)) })}</span>
-            </div>
+
+            {/* Timeline plus large */}
             <SectionStrip track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} pos={playing?.trackId === track.id ? pos : null} />
+
             {(playing?.trackId ?? musicPlayer.paused?.trackId) === track.id && (
-              <input type="range" className="mini-player-seek" min={0} max={track.analysis.duration} step={0.1} value={playing ? pos : musicPlayer.paused!.at} aria-label={t('music.seek')} data-testid="music-seek" onChange={(e) => play(track, Number(e.target.value))} />
+              <div className="music-seek-row">
+                <span className="small mono dim" style={{ minWidth: 32 }}>{fmt(playing ? pos : musicPlayer.paused!.at)}</span>
+                <input type="range" className="mini-player-seek" min={0} max={track.analysis.duration} step={0.1} value={playing ? pos : musicPlayer.paused!.at} aria-label={t('music.seek')} data-testid="music-seek" onChange={(e) => play(track, Number(e.target.value))} />
+                <span className="small mono dim" style={{ minWidth: 32, textAlign: 'right' }}>{fmt(track.analysis.duration)}</span>
+              </div>
             )}
-            <p className="small dim" style={{ marginBottom: 0 }}>{t('music.strip.hint')}</p>
           </Panel>
 
+          {/* 3. Configuration IA */}
           <Panel title={t('music.intent')} actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : t('music.localRules')} · {t('music.variantN', { n: track.plan.variant })}</span> : null}>
-            <div className="col">
-              <textarea className="input" rows={2} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
-              {(aiOn || suggestions.length > 0) && (
-              <div className="chips" data-testid="music-intent-suggestions">
-                <span className="muted small">{t('music.suggestions')}</span>
-                {suggestions.map((text) => <button key={text} className="chip" title={t('music.suggestions.hint')} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{text}</button>)}
-                {aiOn && (
-                  <button className="chip" data-testid="music-intent-suggest-ai" disabled={suggesting || busy} title={t('music.suggestions.aiHint')} onClick={() => requestSuggestions(track.id, intent)}>
-                    {suggesting ? t('music.suggestions.aiBusy') : t('music.suggestions.ai')}
-                  </button>
+            <div className="col gap-lg">
+              {/* Zone de description plus confortable */}
+              <textarea className="input music-intent-area" rows={3} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
+
+              {/* Préréglages regroupés et mieux espacés */}
+              <div className="music-presets-block">
+                {(aiOn || suggestions.length > 0) && (
+                  <div className="music-preset-row" data-testid="music-intent-suggestions">
+                    <span className="music-preset-label">{t('music.suggestions')}</span>
+                    <div className="chips">
+                      {suggestions.map((text) => <button key={text} className="chip" title={t('music.suggestions.hint')} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{text}</button>)}
+                      {aiOn && (
+                        <button className="chip" data-testid="music-intent-suggest-ai" disabled={suggesting || busy} title={t('music.suggestions.aiHint')} onClick={() => requestSuggestions(track.id, intent)}>
+                          {suggesting ? t('music.suggestions.aiBusy') : t('music.suggestions.ai')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
+                <div className="music-preset-row" data-testid="music-intent-presets">
+                  <span className="music-preset-label">Styles</span>
+                  <div className="chips" style={{ flex: 1 }}>
+                    {INTENT_PRESETS.map(([key, text]) => <button key={key} className="chip" title={text} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{t(`music.preset.${key}`)}</button>)}
+                  </div>
+                  {history.length > 0 && (
+                    <select className="select" value="" onChange={(e) => e.target.value && setIntent(e.target.value)} aria-label={t('music.recentIntents')} data-testid="music-intent-history" style={{ maxWidth: 220 }}>
+                      <option value="">{t('music.recentIntents')}</option>
+                      {history.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  )}
+                </div>
               </div>
-              )}
-              <div className="chips" data-testid="music-intent-presets">
-                {INTENT_PRESETS.map(([key, text]) => <button key={key} className="chip" title={text} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{t(`music.preset.${key}`)}</button>)}
-                {history.length > 0 && (
-                  <select className="select" value="" onChange={(e) => e.target.value && setIntent(e.target.value)} aria-label={t('music.recentIntents')} data-testid="music-intent-history" style={{ maxWidth: 260 }}>
-                    <option value="">{t('music.recentIntents')}</option>
-                    {history.map((h) => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                )}
-              </div>
+
+              {/* Réglages d'ambiance présentés en grille */}
               <div className="mood-grid" data-testid="music-mood">
                 {MOOD_KEYS.map((k) => (
-                  <label key={k} className="mood-slider small">
-                    <span className="muted">{t(`music.mood.${k}`)}</span>
-                    <span className="dim">{t(`music.mood.${k}.low`)}</span>
-                    <input type="range" min={-1} max={1} step={1} value={mood[k]} onChange={(e) => setMood({ ...mood, [k]: Number(e.target.value) })} data-testid={`mood-${k}`} />
-                    <span className="dim">{t(`music.mood.${k}.high`)}</span>
-                    <b className={mood[k] ? '' : 'dim'}>{mood[k] ? t(`music.mood.${k}.${mood[k] < 0 ? 'low' : 'high'}`) : t('music.mood.auto')}</b>
-                  </label>
+                  <div key={k} className="mood-card">
+                    <div className="mood-card-head">
+                      <span className="mood-card-title">{t(`music.mood.${k}`)}</span>
+                      <b className={`badge ${mood[k] ? 'violet' : ''}`}>{mood[k] ? t(`music.mood.${k}.${mood[k] < 0 ? 'low' : 'high'}`) : t('music.mood.auto')}</b>
+                    </div>
+                    <div className="mood-slider-row">
+                      <span className="dim">{t(`music.mood.${k}.low`)}</span>
+                      <input type="range" min={-1} max={1} step={1} value={mood[k]} onChange={(e) => setMood({ ...mood, [k]: Number(e.target.value) })} data-testid={`mood-${k}`} />
+                      <span className="dim">{t(`music.mood.${k}.high`)}</span>
+                    </div>
+                  </div>
                 ))}
               </div>
-              <div className="row">
-                <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>
-                <button className="btn" disabled={busy || !track.plan} onClick={() => void generate(true)} title={t('music.variantHint')}><Shuffle size={14} />{t('music.variant')}</button>
-                <button className="btn" disabled={busy || !track.previousPlan} onClick={() => void restore()} title={t('music.restoreHint')} data-testid="music-restore"><Undo2 size={14} />{t('music.restore')}</button>
-                {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>{t('music.openTimeline')}</button>}
+
+              {/* Actions principales regroupées en bas du panneau */}
+              <div className="music-ai-footer">
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>
+                  <button className="btn" disabled={busy || !track.plan} onClick={() => void generate(true)} title={t('music.variantHint')}><Shuffle size={14} />{t('music.variant')}</button>
+                  <button className="btn" disabled={busy || !track.previousPlan} onClick={() => void restore()} title={t('music.restoreHint')} data-testid="music-restore"><Undo2 size={14} />{t('music.restore')}</button>
+                  {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>{t('music.openTimeline')}</button>}
+                </div>
+                {track.plan && <div className="row small" style={{ gap: 6 }} data-testid="music-plan-summary"><Sparkles size={13} style={{ color: '#22d3ee' }} /><span>{track.plan.summary}</span></div>}
               </div>
-              {track.plan && <p className="small" style={{ margin: 0 }} data-testid="music-plan-summary"><Sparkles size={12} /> {track.plan.summary}</p>}
               {notices.map((n, i) => <div key={i} className="small" style={{ color: '#fcd34d' }}>{n}</div>)}
-              <p className="small dim" style={{ margin: 0 }}>{t('music.privacy')}</p>
             </div>
           </Panel>
 
+          {/* 4. Tableau des sections musicales */}
           <Panel title={t('music.sections')} flush>
-            <table className="table small" data-testid="music-sections">
-              <thead><tr><th>#</th><th>{t('music.col.section')}</th><th>{t('music.col.start')}</th><th>{t('music.col.energy')}</th><th>{t('music.col.plan')}</th><th>{t('music.col.instruction')}</th><th /></tr></thead>
-              <tbody>
-                {track.analysis.sections.map((s, i) => {
-                  const p = track.plan?.sections[i];
-                  return (
-                    <tr key={i} className={`clickable ${i === selected ? 'sel' : ''} ${i === nowIdx ? 'active' : ''}`} onClick={() => setSelected(i)}>
-                      <td className="mono">{i + 1}</td>
-                      <td>
-                        <select className="select" value={s.label} onChange={(e) => void act({ type: 'music.setSection', trackId: track.id, index: i, label: e.target.value as SectionLabel })}>
-                          {SECTION_LABELS.map((l) => <option key={l} value={l}>{SECTION_NAMES[l]}</option>)}
-                        </select>
-                      </td>
-                      <td className="mono">{fmt(s.start)}</td>
-                      <td style={{ width: 90 }}><div className="meter"><div style={{ width: `${s.energy * 100}%` }} /></div></td>
-                      <td>
-                        {p ? (<>
-                          <span className="row" style={{ gap: 6 }}>
-                            <span className="mono" title={t('music.planEnergy')}>{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
-                            {p.palette.map((c) => <span key={c} style={{ width: 12, height: 12, borderRadius: 3, background: c, display: 'inline-block' }} />)}
-                            <span>{EFFECT_NAMES[p.effect]}{p.effect !== 'none' ? ` ${p.effectBeats} t` : ''}</span>
-                            <span className="dim">· {MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}{p.focus ? (p.focus === 'audience' ? t('music.towardAudience') : t('music.towardMarker', { name: markers.find((m) => m.id === p.focus)?.name ?? t('music.aMarker') })) : ''}</span>
-                            {p.groups.length > 0 && <span className="dim">· {p.groups.map((g) => groups.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}</span>}
-                            {p.extras.length > 0 && <span className="dim">· {p.extras.map((x) => EXTRA_NAMES[x]).join(', ')}</span>}
-                            {p.note && <span className="badge">{p.note}</span>}
-                          </span>
-                          {p.why && <div className="small dim" style={{ marginTop: 2 }} data-testid="music-section-why">{t('music.edit.why', { why: p.why })}</div>}
-                        </>) : <span className="dim">—</span>}
-                      </td>
-                      <td style={{ width: 200 }}>
-                        <input className="input" disabled={!p} placeholder={t('music.instrPlaceholder')} value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                        <button className="btn ghost sm icon" title={t('music.edit.open')} onClick={(e) => { e.stopPropagation(); setEditing(i); }} data-testid="section-edit"><Pencil size={12} /></button>
-                        <button className="btn ghost sm icon" disabled={!p || busy} title={t('music.regenSection')} onClick={() => void regenerate(i)}><RefreshCw size={12} /></button>
-                        <button className={`btn ghost sm icon ${p?.locked ? 'on' : ''}`} disabled={!p} title={t(p?.locked ? 'music.unlock' : 'music.lock')} onClick={() => void act({ type: 'music.setSection', trackId: track.id, index: i, locked: !p?.locked })}>{p?.locked ? <Lock size={12} /> : <LockOpen size={12} />}</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="music-table-wrap">
+              <table className="table small music-table" data-testid="music-sections">
+                <thead>
+                  <tr>
+                    <th className="col-idx">#</th>
+                    <th className="col-sec">{t('music.col.section')}</th>
+                    <th className="col-start">{t('music.col.start')}</th>
+                    <th className="col-energy">{t('music.col.energy')}</th>
+                    <th className="col-plan">{t('music.col.plan')}</th>
+                    <th className="col-instr">{t('music.col.instruction')}</th>
+                    <th className="col-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {track.analysis.sections.map((s, i) => {
+                    const p = track.plan?.sections[i];
+                    return (
+                      <tr key={i} className={`clickable ${i === selected ? 'sel' : ''} ${i === nowIdx ? 'active' : ''}`} onClick={() => setSelected(i)}>
+                        <td className="mono col-idx">{i + 1}</td>
+                        <td className="col-sec">
+                          <div className="sec-label-cell">
+                            <span className="sec-color-bar" style={{ background: LABEL_COLOR[s.label] }} />
+                            <select className="select" value={s.label} onChange={(e) => void act({ type: 'music.setSection', trackId: track.id, index: i, label: e.target.value as SectionLabel })}>
+                              {SECTION_LABELS.map((l) => <option key={l} value={l}>{SECTION_NAMES[l]}</option>)}
+                            </select>
+                          </div>
+                        </td>
+                        <td className="mono col-start">{fmt(s.start)}</td>
+                        <td className="col-energy">
+                          <div className="row" style={{ gap: 6 }}>
+                            <div className="meter grow"><div style={{ width: `${s.energy * 100}%` }} /></div>
+                            <span className="mono small dim" style={{ minWidth: 26, textAlign: 'right' }}>{Math.round(s.energy * 100)}%</span>
+                          </div>
+                        </td>
+                        <td className="col-plan">
+                          {p ? (
+                            <div className="col" style={{ gap: 4 }}>
+                              <div className="music-plan-chips">
+                                <span className="music-plan-energy-dots mono" title={t('music.planEnergy')}>{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
+                                <div className="row" style={{ gap: 3 }}>
+                                  {p.palette.map((c) => <span key={c} className="music-palette-swatch" style={{ background: c }} title={c} />)}
+                                </div>
+                                <span className="music-tag effect">{EFFECT_NAMES[p.effect]}{p.effect !== 'none' ? ` ${p.effectBeats} t` : ''}</span>
+                                <span className="music-tag">{MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}{p.focus ? (p.focus === 'audience' ? t('music.towardAudience') : t('music.towardMarker', { name: markers.find((m) => m.id === p.focus)?.name ?? t('music.aMarker') })) : ''}</span>
+                                {p.groups.length > 0 && <span className="music-tag dim">{p.groups.map((g) => groups.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}</span>}
+                                {p.extras.length > 0 && <span className="music-tag dim">{p.extras.map((x) => EXTRA_NAMES[x]).join(', ')}</span>}
+                                {p.note && <span className="badge">{p.note}</span>}
+                              </div>
+                              {p.why && <div className="small dim" data-testid="music-section-why">{t('music.edit.why', { why: p.why })}</div>}
+                            </div>
+                          ) : <span className="dim">—</span>}
+                        </td>
+                        <td className="col-instr">
+                          <input className="input" disabled={!p} placeholder={t('music.instrPlaceholder')} value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
+                        </td>
+                        <td className="col-actions">
+                          <div className="music-actions-cell">
+                            <button className="btn ghost sm icon" title={t('music.edit.open')} onClick={(e) => { e.stopPropagation(); setEditing(i); }} data-testid="section-edit"><Pencil size={13} /></button>
+                            <button className="btn ghost sm icon" disabled={!p || busy} title={t('music.regenSection')} onClick={(e) => { e.stopPropagation(); void regenerate(i); }}><RefreshCw size={13} /></button>
+                            <button className={`btn ghost sm icon ${p?.locked ? 'on' : ''}`} disabled={!p} title={t(p?.locked ? 'music.unlock' : 'music.lock')} onClick={(e) => { e.stopPropagation(); void act({ type: 'music.setSection', trackId: track.id, index: i, locked: !p?.locked }); }}>{p?.locked ? <Lock size={13} /> : <LockOpen size={13} />}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </Panel>
         </div>
       )}

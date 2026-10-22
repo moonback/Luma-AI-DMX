@@ -95,6 +95,9 @@ interface State {
   capturingShortcut: boolean;
   toasts: Toast[];
   confirm: ConfirmRequest | null;
+  /** Message bloquant affiché dans une modale (ex. commande refusée par la licence). */
+  notice: { title: string; detail?: string } | null;
+  setNotice(n: State['notice']): void;
   /** Values shown by the visualizer instead of live values (AI or scene preview). */
   preview: { label: string; title?: string; values: FixtureValues } | null;
   /** Selected stage element (point, truss, performer, screen) and the kind being placed by a click on the stage. */
@@ -153,6 +156,8 @@ export const useStore = create<State>((set, get) => ({
   capturingShortcut: false,
   toasts: [],
   confirm: null,
+  notice: null,
+  setNotice: (notice) => set({ notice }),
   preview: null,
   sceneSel: null,
   placing: null,

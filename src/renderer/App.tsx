@@ -7,7 +7,7 @@ import { BRAND } from '../shared/brand';
 import logo from '../../public/logo.png';
 import { PAGES, useStore, confirmAction, type PageId } from './store';
 import { act, call } from './api';
-import { ConfirmHost, Modal, Field } from './components/ui';
+import { ConfirmHost, NoticeHost, Modal, Field } from './components/ui';
 import { allowedWhileTyping, bindingsFrom, comboFromEvent } from './shortcuts';
 import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings';
 import { Dashboard } from './features/Dashboard';
@@ -579,6 +579,7 @@ export function App() {
       <WhatsNewHost />
       <StartScreen />
       <ConfirmHost />
+      <NoticeHost />
     </div>
   );
 }

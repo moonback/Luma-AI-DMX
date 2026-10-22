@@ -5,7 +5,7 @@ import { useStore } from './store';
 export async function call<T extends CommandType>(cmd: Extract<CommandInput, { type: T }>): Promise<CommandResults[T]> {
   const r = await window.luma.invoke<T>(cmd);
   if (!r.ok) {
-    useStore.getState().toast({ kind: 'error', title: 'Action impossible', detail: r.error });
+    useStore.getState().setNotice({ title: 'Action impossible', detail: r.error });
     throw new Error(r.error);
   }
   return r.data;
