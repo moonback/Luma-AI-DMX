@@ -96,7 +96,15 @@ function geometries() {
   return geo;
 }
 
+/** Release the shared geometry cache. Call when the 3D view is fully disposed (not between scene changes). */
+export function disposeGeometries(): void {
+  if (!geo) return;
+  for (const g of Object.values(geo)) g.dispose();
+  geo = null;
+}
+
 const bodyMaterial = () => new THREE.MeshStandardMaterial({ color: 0x1c2230, roughness: 0.55, metalness: 0.45 });
+
 
 /* ------------------------------------------------------------------ */
 /* Rig                                                                 */

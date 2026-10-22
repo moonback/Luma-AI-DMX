@@ -4,12 +4,21 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 
 ## [Non publié]
 
+### Ajouté
+- Stage 3D : 4 préréglages de qualité de rendu en un clic (Édition, Équilibré, Qualité, Présentation).
+- Stage 3D : barre d'état enrichie (mode Orbite/Édition, compteur de projecteurs, grille active, indicateur de framerate déplacé depuis la barre d'outils).
+- Stage 3D : inspecteur contextuel escamotable affichant les propriétés géométriques et photométriques des projecteurs ou éléments de scène sélectionnés (position, hauteur, rotation/pan/tilt, couleur, intensité).
+- Stage 3D : suite de tests unitaires dédiés `tests/unit/stage3d.test.ts` (persistance des préférences, préréglages de rendu, libération des géométries partagées, géométrie du plateau).
+
 ### Modifié
 - Console Live : la liste des projecteurs est de nouveau visible par défaut (colonne épinglée) ; un bouton la replie en rail qui se déplie au survol, et le choix est mémorisé sur la machine.
 - La page d'accueil au premier lancement redevient le Dashboard (« Actions rapides » vide s'ouvrait par défaut depuis un commit sans rapport) ; la dernière page visitée reste mémorisée.
 - E2E : délais Playwright doublés (test 120 s, attente 10 s) car l'application tourne sous rendu logiciel SwiftShader dans ces tests.
 
 ### Corrigé
+- Stage 3D : libération mémoire systématique des géométries Three.js partagées (`disposeGeometries()`) au démontage de la vue 3D.
+- Stage 3D : correction de la contrainte CSS `right: 290px` sur `.stage3d-status` qui tronquait inutilement la barre d'état.
+- Accessibilité Stage 3D : ajout des `aria-label` manquants sur les boutons d'outils Déplacer et Pivoter.
 - Thème animé : la couche « aurora », la scan-line de la barre supérieure et la respiration des LED repeignaient toute la fenêtre à chaque image (2 i/s sous rendu logiciel, page IA et vue 3D figées en E2E) ; elles vivent maintenant sur leur propre couche composée (27 i/s mesurés, mêmes visuels).
 - MIDI : une commande mappée sur un contrôleur continu (CC) ne se déclenche plus à chaque message ≥ 50 % mais au front montant (un fader qui monte envoyait une rafale de GO). Test : `tests/components/midi-edge.test.tsx`.
 - E2E : la liste des projecteurs de la Console Live est un rail qui ne se déplie qu'au survol depuis les panneaux déplaçables ; les scénarios la survolent avant de cliquer ; galerie des démos comptée depuis le catalogue ; vérification F11 de la fenêtre 3D détachée (LUMA-024).

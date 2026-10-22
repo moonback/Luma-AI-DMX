@@ -12,8 +12,8 @@ import { stageGeometry } from './stage3d/environment';
 import { AMBIENCES, FLOORS, LIGHT_BUDGET, type AmbienceId, type FloorId } from './stage3d/quality';
 import { DARK_LEVEL, performerLight } from '../../core/visualizer/lighting';
 import { acceptLibraryDrag, dropLibraryItem, duplicateSceneElement, hangFixture, removeSceneElement } from '../sceneActions';
-import type { SceneRef } from '../../core/visualizer/sceneEdit';
-import { GRIDS, VIEWS, loadPrefs, mountStage3D, savePrefs, type CtxTarget, type Prefs, type StageApi } from './stage3d/scene';
+import { findElement, SCENE_LABEL, type SceneRef } from '../../core/visualizer/sceneEdit';
+import { GRIDS, QUALITY_PRESETS, VIEWS, loadPrefs, mountStage3D, savePrefs, type CtxTarget, type Prefs, type StageApi } from './stage3d/scene';
 
 /** Edit-mode right-click menu on a fixture, a truss or a set piece. */
 function ContextMenu({ ctx, model, vis, patch, onClose }: { ctx: { x: number; y: number; target: CtxTarget }; model: readonly VisualFixture[]; vis: Project['visualizer']; patch: readonly Fixture[]; onClose: () => void }) {
@@ -53,6 +53,167 @@ function ContextMenu({ ctx, model, vis, patch, onClose }: { ctx: { x: number; y:
       <button role="menuitem" className="btn ghost sm" onClick={run(() => useStore.getState().frameOn(at))} data-testid="ctx-frame"><Focus size={12} />Centrer la vue</button>
       {f && <button role="menuitem" className="btn ghost sm" onClick={run(() => useStore.getState().setBeamView(f.id))} data-testid="ctx-beam"><Crosshair size={12} />Vue projecteur</button>}
     </div>
+  );
+}
+
+/** Contextual inspector showing properties of the current selection (fixture or scene element). */
+function Inspector3D({
+  selection,
+  sceneSel,
+  model,
+  vis,
+  t,
+  onClose,
+}: {
+  selection: readonly string[];
+  sceneSel: SceneRef | null;
+  model: readonly VisualFixture[];
+  vis: Project['visualizer'];
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  onClose: () => void;
+}) {
+  const f = selection.length === 1 ? model.find((x) => x.id === selection[0]) : null;
+  const elem = sceneSel ? findElement(vis, sceneSel) : null;
+
+  if (!f && !elem && selection.length === 0) return null;
+
+  return (
+    <aside className="stage3d-inspector" data-testid="stage3d-inspector" aria-label={t('stage3d.inspector')}>
+      <div className="stage3d-inspector-head">
+        <span className="stage3d-inspector-title">
+          {f ? f.name : elem ? elem.name : t('stage3d.fixtures', { count: selection.length })}
+        </span>
+        <button className="chip-link" onClick={onClose} aria-label={t('stage3d.inspectorClose')} title={t('stage3d.inspectorClose')}><X size={12} /></button>
+      </div>
+
+      {f && (
+        <>
+          <div className="stage3d-inspector-grid">
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorType')}</span>
+              <span>{f.type}</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorIntensity')}</span>
+              <span>{Math.round(f.intensity * 100)} %</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorX')}</span>
+              <span className="mono">{f.x.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorY')}</span>
+              <span className="mono">{f.y.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorHeight')}</span>
+              <span className="mono">{f.height.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorColor')}</span>
+              <span className="stage3d-inspector-color mono">
+                <span className="stage3d-inspector-swatch" style={{ backgroundColor: f.color }} />
+                {f.color.toUpperCase()}
+              </span>
+            </div>
+            {f.movable && (
+              <>
+                <div className="stage3d-inspector-cell">
+                  <span className="dim">{t('stage3d.inspectorPan')}</span>
+                  <span className="mono">{f.panDeg.toFixed(0)}°</span>
+                </div>
+                <div className="stage3d-inspector-cell">
+                  <span className="dim">{t('stage3d.inspectorTilt')}</span>
+                  <span className="mono">{f.tiltDeg.toFixed(0)}°</span>
+                </div>
+              </>
+            )}
+            {f.beamAngle > 0 && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorBeam')}</span>
+                <span className="mono">{f.beamAngle.toFixed(0)}°</span>
+              </div>
+            )}
+            {f.strobeHz > 0 && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorStrobe')}</span>
+                <span className="mono">{f.strobeHz.toFixed(1)} Hz</span>
+              </div>
+            )}
+          </div>
+          <button
+            className="btn ghost sm"
+            style={{ marginTop: 4, justifyContent: 'center' }}
+            onClick={() => useStore.getState().setScenePanel('selection')}
+          >
+            {t('stage3d.inspectorEdit')}
+          </button>
+        </>
+      )}
+
+      {elem && sceneSel && (
+        <>
+          <div className="stage3d-inspector-grid">
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorCat')}</span>
+              <span>{SCENE_LABEL[sceneSel.kind]}</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorX')}</span>
+              <span className="mono">{elem.x.toFixed(2)} m</span>
+            </div>
+            <div className="stage3d-inspector-cell">
+              <span className="dim">{t('stage3d.inspectorY')}</span>
+              <span className="mono">{elem.y.toFixed(2)} m</span>
+            </div>
+            {'height' in elem && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorHeight')}</span>
+                <span className="mono">{(elem.height as number).toFixed(2)} m</span>
+              </div>
+            )}
+            {'elevation' in elem && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorElevation')}</span>
+                <span className="mono">{(elem.elevation as number).toFixed(2)} m</span>
+              </div>
+            )}
+            {'length' in elem && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorLength')}</span>
+                <span className="mono">{(elem.length as number).toFixed(2)} m</span>
+              </div>
+            )}
+            {sceneSel.kind === 'truss' && 'rotationDeg' in elem && typeof (elem as { rotationDeg?: number }).rotationDeg === 'number' && (
+              <div className="stage3d-inspector-cell">
+                <span className="dim">{t('stage3d.inspectorRotation')}</span>
+                <span className="mono">{(elem as { rotationDeg: number }).rotationDeg}°</span>
+              </div>
+            )}
+          </div>
+          <button
+            className="btn ghost sm"
+            style={{ marginTop: 4, justifyContent: 'center' }}
+            onClick={() => useStore.getState().setScenePanel('selection')}
+          >
+            {t('stage3d.inspectorEdit')}
+          </button>
+        </>
+      )}
+
+      {!f && !elem && selection.length > 1 && (
+        <div className="col" style={{ gap: 4 }}>
+          <span className="small muted">{t('stage3d.inspectorMulti', { count: selection.length })}</span>
+          <button
+            className="btn ghost sm"
+            style={{ marginTop: 4, justifyContent: 'center' }}
+            onClick={() => useStore.getState().setScenePanel('selection')}
+          >
+            {t('stage3d.inspectorEdit')}
+          </button>
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -98,6 +259,15 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
   const [spin, setSpin] = useState(false);
   const [solo, setSolo] = useState(false);
   const [bare, setBare] = useState(false);
+  const [showInspector, setShowInspector] = useState(true);
+  const selKey = `${selection.join(',')}|${selSet ? `${selSet.kind}:${selSet.id}` : ''}`;
+  const prevSelKey = useRef(selKey);
+  useEffect(() => {
+    if (prevSelKey.current !== selKey) {
+      prevSelKey.current = selKey;
+      setShowInspector(true);
+    }
+  }, [selKey]);
   const t = useT();
   const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo });
   latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo };
@@ -217,8 +387,8 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         {edit && (
           <>
             <div className="chips" role="group" aria-label="Outil">
-              <button className={`chip ${tool === 'translate' ? 'on' : ''}`} onClick={() => setTool('translate')} title="Déplacer (et monter / descendre)" data-testid="tool-move"><Move3d size={12} /></button>
-              <button className={`chip ${tool === 'rotate' ? 'on' : ''}`} onClick={() => setTool('rotate')} title="Pivoter autour de la verticale" data-testid="tool-rotate"><Rotate3d size={12} /></button>
+              <button className={`chip ${tool === 'translate' ? 'on' : ''}`} onClick={() => setTool('translate')} title="Déplacer (et monter / descendre)" aria-label={t('stage3d.move')} data-testid="tool-move"><Move3d size={12} /></button>
+              <button className={`chip ${tool === 'rotate' ? 'on' : ''}`} onClick={() => setTool('rotate')} title="Pivoter autour de la verticale" aria-label={t('stage3d.rotate')} data-testid="tool-rotate"><Rotate3d size={12} /></button>
             </div>
             <label className="row small" title="Aimantation à la grille (et rotations par 15°)">Grille
               <select className="select" style={{ width: 82, height: 26 }} value={prefs.grid} onChange={(e) => setPrefs({ grid: Number(e.target.value) })} data-testid="grid">
@@ -233,9 +403,21 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
         <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo de la vue (WebM)'} aria-label={recording ? 'Arrêter l’enregistrement' : 'Enregistrer une vidéo'} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
         <button className="chip" onClick={fullscreen} title="Plein écran (Échap pour sortir)" aria-label="Plein écran"><Expand size={12} /></button>
         <button className="chip" onClick={() => setBare(true)} title={t('stage3d.present')} aria-label={t('stage3d.present')} data-testid="present"><Presentation size={12} /></button>
-        <span className={`stage3d-fps mono ${fps >= 45 ? 'ok' : fps >= 25 ? 'mid' : 'low'}`} data-testid="fps">{fps} i/s</span>
         {menu && (
           <div className="stage3d-pop" role="dialog" aria-label="Réglages de rendu" data-testid="render-pop">
+            <div className="stage3d-presets" role="group" aria-label={t('stage3d.presetsTitle')}>
+              {QUALITY_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  className="chip"
+                  title={t(preset.hintKey)}
+                  onClick={() => setPrefs(preset.patch)}
+                  data-testid={`preset-${preset.id}`}
+                >
+                  {t(preset.labelKey)}
+                </button>
+              ))}
+            </div>
             <label className="row small" title="Densité de brume : visibilité des faisceaux dans l’air">
               <Sun size={13} className="dim" /><span className="grow">Brume</span>
               <input type="range" min={0} max={100} value={Math.round(prefs.haze * 100)} style={{ width: 130 }} onChange={(e) => setPrefs({ haze: Number(e.target.value) / 100 })} data-testid="haze" />
@@ -276,23 +458,41 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       )}
       {dims && <div className="stage3d-dims mono small" data-testid="dims">{dims}</div>}
       {ctx && <ContextMenu ctx={ctx} model={model} vis={vis} patch={project.patch} onClose={() => setCtx(null)} />}
-      {!bare && <div className="stage3d-status">
-        {(dark.length > 0 || glare.length > 0) && (
-          <div className="row" style={{ gap: 6 }}>
-            {dark.length > 0 && (
-              <span className="badge warn" data-testid="dark" title={`Visage peu ou pas éclairé : ${dark.map((x) => x.name).join(', ')}. Estimation sans occultation.`}>
-                <Moon size={12} /> Dans le noir : {dark.length}
-              </span>
-            )}
-            {glare.length > 0 && (
-              <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
-                <TriangleAlert size={12} /> Éblouissement public : {glare.length}
-              </span>
+      {!bare && showInspector && (selection.length > 0 || selSet !== null) && (
+        <Inspector3D
+          selection={selection}
+          sceneSel={selSet}
+          model={model}
+          vis={vis}
+          t={t}
+          onClose={() => setShowInspector(false)}
+        />
+      )}
+      {!bare && (
+        <div className="stage3d-status">
+          <div className="stage3d-status-meta">
+            <span className={`badge ${edit ? 'violet' : ''}`}>{edit ? t('stage3d.modeEdit') : t('stage3d.modeOrbit')}</span>
+            <span className="small">{t('stage3d.fixtures', { count: model.length })}</span>
+            {edit && <span className="small dim">· {prefs.grid > 0 ? t('stage3d.gridStep', { grid: prefs.grid }) : t('stage3d.gridFree')}</span>}
+            <span className={`stage3d-fps mono ${fps >= 45 ? 'ok' : fps >= 25 ? 'mid' : 'low'}`} data-testid="fps">{fps} i/s</span>
+            {(dark.length > 0 || glare.length > 0) && (
+              <div className="row" style={{ gap: 6 }}>
+                {dark.length > 0 && (
+                  <span className="badge warn" data-testid="dark" title={`Visage peu ou pas éclairé : ${dark.map((x) => x.name).join(', ')}. Estimation sans occultation.`}>
+                    <Moon size={12} /> Dans le noir : {dark.length}
+                  </span>
+                )}
+                {glare.length > 0 && (
+                  <span className="badge warn" data-testid="glare" title={`Faisceau à hauteur des yeux du public : ${glare.map((f) => f.name).join(', ')}. Estimation sur l’axe du faisceau.`}>
+                    <TriangleAlert size={12} /> Éblouissement public : {glare.length}
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        )}
-        <div className="small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · clic droit : menu · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}<span className="stage3d-keys"> · {t('stage3d.keys')}</span></div>
-      </div>}
+          <div className="small dim">{edit ? 'Édition : cliquer un projecteur ou une structure, puis tirer les flèches du gizmo · clic droit : menu · Ctrl+Z : annuler' : 'Glisser : orbite · clic droit : déplacer · molette : zoom · clic : sélection · aperçu non photométrique'}<span className="stage3d-keys"> · {t('stage3d.keys')}</span></div>
+        </div>
+      )}
     </div>
   );
 }
