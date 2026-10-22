@@ -13,11 +13,12 @@ import { audioEngine } from '../audioEngine';
 import type { UpdateStatus } from '../../core/app/updates';
 import { FeedbackPanel, UsagePanel } from './settings/BetaPanel';
 import { LicensePanel } from './settings/LicensePanel';
+import { AssistantPanel } from './settings/AssistantPanel';
 import { useT } from '../i18n';
 import { openProject } from '../App';
 import { splitPath } from './StartScreen';
 
-const TAB_IDS = ['general', 'appearance', 'engine', 'network', 'ai', 'audio', 'shortcuts', 'control', 'logs', 'backups'] as const;
+const TAB_IDS = ['general', 'appearance', 'engine', 'network', 'ai', 'assistant', 'audio', 'shortcuts', 'control', 'logs', 'backups'] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 function ShortcutEditor({ value, onChange }: { value: Record<string, string>; onChange: (v: Record<string, string>) => void }) {
@@ -474,6 +475,7 @@ export function SettingsPage() {
             </Field>
           </Panel>
         )}
+        {tab === 'assistant' && <AssistantPanel value={s.assistant} onChange={(v) => set('assistant', v)} />}
         {tab === 'audio' && (
           <Panel title={tr('settings.tab.audio')}>
             <p className="muted" style={{ margin: 0 }}>{tr('settings.audio.before')}<button className="btn sm" onClick={() => useStore.getState().setPage('audio')}>{tr('nav.audio')}</button>{tr('settings.audio.after')}</p>
