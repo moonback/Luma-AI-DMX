@@ -1,794 +1,900 @@
-# MISSION CODEX — Refonte professionnelle complète de l’interface Stage de Luma-AI-DMX
+# AUDIT COMPLET ET AMÉLIORATION DE L'ASSISTANT IA — LUMA AI DMX
 
-## 1. Objectif général
+## 1. TON RÔLE
 
-Tu interviens directement dans le dépôt existant de **Luma-AI-DMX**.
+Tu es un ingénieur logiciel senior spécialisé dans les systèmes d'intelligence artificielle, les agents capables d'exécuter des actions, le TypeScript strict, Electron, React, les LLM, les systèmes déterministes, les architectures à outils, l'optimisation des performances et les tests automatisés.
 
-Ta mission est de refondre l’interface de l’espace **Stage** pour obtenir un véritable environnement professionnel de conception scénique et de prévisualisation lumière, inspiré de l’image de référence fournie.
+Tu travailles directement dans le dépôt existant de **Luma AI DMX**, une application desktop utilisant Electron, React et TypeScript pour contrôler et programmer des éclairages DMX avec l'aide d'un assistant IA.
 
-Le résultat doit associer :
+Tu disposes des capacités d'un agent de programmation : tu peux explorer le dépôt, lire les fichiers, rechercher des symboles, modifier le code, créer des tests, exécuter les commandes du projet et corriger les problèmes détectés.
 
-- Une interface sombre, moderne, précise et cohérente.
-- Un plan scénique 2D vu du dessus.
-- Une prévisualisation 3D réaliste et interactive.
-- Un panneau de construction organisé en cinq catégories.
-- Une hiérarchie des éléments de scène.
-- Un inspecteur de propriétés contextuel.
-- Une synchronisation réelle avec le modèle de scène et le moteur DMX.
-- Des outils de manipulation adaptés aux professionnels du spectacle.
+Tu ne dois pas te comporter comme un simple conseiller qui liste des améliorations possibles. Tu dois analyser le système existant, démontrer les défauts avec des preuves, implémenter les corrections pertinentes et vérifier leurs résultats.
 
-**Exigence fondamentale :** il s’agit d’une véritable refonte fonctionnelle. Tous les contrôles visibles doivent être opérationnels ou explicitement identifiés comme non disponibles. Ne crée pas de fausses fonctionnalités, de données fictives utilisées en production ou de composants purement décoratifs qui remplacent les capacités existantes.
+**Mission principale : transformer l'assistant IA existant en un assistant plus intelligent, plus précis, plus fiable, plus rapide et capable d'exécuter correctement les actions demandées, tout en préservant la sécurité du moteur d'éclairage.**
+
+Ne présume jamais qu'une fonctionnalité fonctionne simplement parce qu'elle existe dans le code ou dans la documentation.
 
 ---
 
-## 2. Phase obligatoire : audit du code existant
+## 2. CONTEXTE TECHNIQUE DU PROJET
 
-Avant toute modification, examine l’architecture réelle du projet.
+Le dépôt est celui de Luma AI DMX.
 
-Inspecte notamment, si ces fichiers existent :
+Les composants connus à examiner en priorité comprennent :
 
-- `src/renderer/features/Stage3D.tsx`
-- `src/renderer/features/stage3d/`
-- `src/renderer/features/Visualizer.tsx`
-- `src/renderer/features/visualizer/`
-- `src/renderer/sceneActions.ts`
+### Intelligence artificielle
+- `src/core/ai/actions.ts`
+- `src/core/ai/director.ts`
+- `src/core/ai/local/interpreter.ts`
+- `src/core/ai/providers/openrouter.ts`
+- `src/core/ai/responseCache.ts`
+- `src/core/ai/transient.ts`
+- `src/core/ai/usage.ts`
+
+### Intégration dans l'application
+- `src/core/app/AppService.ts`
+- `src/core/app/control.ts`
+- `src/core/app/routes.ts`
+- `src/core/app/handlers/ai.ts`
+- `src/core/app/handlers/fixtures.ts`
+- `src/core/app/handlers/music.ts`
+- `src/core/app/handlers/output.ts`
+- `src/core/app/handlers/programming.ts`
+- `src/core/app/handlers/project.ts`
+- `src/core/app/handlers/system.ts`
+- `src/shared/commands.ts`
+- `src/shared/api.ts`
+
+### État de l'interface et expérience utilisateur
+- `src/renderer/features/AiDirector.tsx`
+- `src/renderer/api.ts`
 - `src/renderer/store.ts`
-- `src/core/visualizer/`
-- `src/core/model/schemas.ts`
-- Les composants de navigation, les panneaux latéraux, les styles, les tests et les mécanismes de sauvegarde.
+- Les autres composants réellement utilisés par le parcours de l'assistant.
 
-Adapte cette liste aux fichiers réellement présents. Ne suppose pas que les chemins, les APIs ou les fonctionnalités sont identiques à cette liste.
+### Moteur, programmation et sécurité
+- `src/core/engine/`
+- `src/core/fixtures/`
+- `src/core/project/`
+- `src/core/music/`
+- `src/core/safety/`
+- `src/main/ipc.ts`
+- `src/preload/index.ts`
 
-### Vérifications à effectuer
+### Tests et évaluations existants
+- `tests/eval/ai.eval.test.ts`
+- `tests/eval/cases.json`
+- `tests/eval/openrouter.replay.test.ts`
+- `tests/fixtures/ai-contract/`
+- `tests/unit/ai.test.ts`
+- `tests/unit/ai-contract.test.ts`
+- `tests/unit/safety.test.ts`
+- `tests/integration/workflow.test.ts`
+- Les tests de composants, de performance et de bout en bout pertinents.
 
-1. Identifier les composants responsables du Stage, du plan 2D et de la vue 3D.
-2. Identifier le modèle de scène, les types d’objets et les mécanismes de création, modification, suppression et sauvegarde.
-3. Identifier le système de sélection, le placement des éléments et les outils de transformation.
-4. Vérifier le fonctionnement de l’historique undo/redo.
-5. Vérifier comment les fixtures sont reliées à leurs paramètres DMX.
-6. Identifier les fonctions de rendu Three.js, les caméras, les lumières, les matériaux et les ressources.
-7. Identifier les dépendances UI et les conventions de style déjà utilisées.
-8. Vérifier les fonctions réellement opérationnelles par rapport aux fonctionnalités seulement annoncées dans la documentation.
-9. Repérer les composants redondants, les états dupliqués et les problèmes de synchronisation.
-10. Établir une stratégie de migration progressive qui conserve la compatibilité avec les projets existants.
+Cette liste constitue un point de départ, pas une liste exhaustive. Explore les imports, les appels, les dépendances et les implémentations réelles pour découvrir tous les composants qui participent au fonctionnement de l'assistant.
 
-Produis un audit synthétique dans `docs/audits/stage-interface-audit.md`, avec les fichiers concernés, les problèmes constatés, leur gravité et les corrections recommandées.
-
-Ne t’arrête pas à l’audit : passe ensuite à l’implémentation.
-
----
-
-## 3. Direction artistique
-
-Reproduis l’esprit visuel de l’image de référence, avec une finition adaptée à un logiciel professionnel.
-
-### Palette
-
-- Fond général : bleu-noir profond, proche de `#080D16`.
-- Surfaces et panneaux : `#0D1421` et `#111B2B`.
-- Bordures discrètes : `#233249`.
-- Bleu principal : `#3478F6`.
-- Bleu de sélection : `#244D91`.
-- Texte principal : `#F1F5FC`.
-- Texte secondaire : `#96A6BF`.
-- États positifs : vert doux.
-- Avertissements : ambre.
-- Erreurs : rouge contrôlé.
-
-Ces valeurs sont indicatives : centralise les tokens de couleur et adapte-les au système de design existant.
-
-### Style
-
-- Interface desktop dense, lisible et précise.
-- Panneaux à bordures fines et rayons modérés.
-- Icônes vectorielles cohérentes, de préférence issues de la bibliothèque déjà installée.
-- Typographie sans-serif professionnelle.
-- Espacements réguliers et hiérarchie visuelle claire.
-- États hover, focus, actif, désactivé et sélectionné distincts.
-- Transitions courtes et discrètes.
-- Contraste suffisant pour les longues sessions de travail.
-- Pas d’effets glassmorphism excessifs, de dégradés omniprésents ou de grandes cartes décoratives qui réduisent l’espace de travail.
-
-Le rendu doit évoquer un outil de production scénique, pas un tableau de bord marketing.
+Ne modifie pas un fichier simplement parce qu'il apparaît dans cette liste.
 
 ---
 
-## 4. Structure générale de la fenêtre
+## 3. RÈGLE FONDAMENTALE : AUDITER AVANT DE MODIFIER
 
-Organise l’espace Stage en quatre zones principales.
+Commence par examiner le dépôt et établir son état réel.
 
-### A. Barre supérieure globale
+Avant toute modification :
 
-Conserve la navigation existante de Luma-AI-DMX et intègre, selon l’architecture actuelle :
+1. Vérifie le répertoire de travail et la branche Git.
+2. Examine `git status`, les changements non commités et les fichiers non suivis.
+3. Identifie la version de Node.js, le gestionnaire de paquets, les scripts disponibles dans `package.json` et les règles du projet.
+4. Lis les documents d'architecture pertinents, notamment `docs/ARCHITECTURE.md`, les ADR concernés et les règles de contribution.
+5. Examine les implémentations, pas seulement les déclarations TypeScript.
+6. Exécute les tests ciblés et les vérifications initiales raisonnablement disponibles.
+7. Consigne les résultats initiaux avant de commencer les corrections.
 
-- Logo et nom de l’application.
-- Sélecteur de projet.
-- Navigation principale : Scène, Stage, DMX, Média, Prévisualisation, Paramètres.
-- Annuler et rétablir.
-- État de connexion du moteur.
-- État de sauvegarde du projet.
-- Action d’export.
+Respecte impérativement les changements déjà présents dans le workspace. Ne les écrase pas, ne les annule pas et ne les reformate pas inutilement.
 
-La navigation doit rester cohérente avec les autres pages de l’application. Ne duplique pas une barre de navigation globale déjà présente.
+Ne réalise aucune opération Git destructive. Ne supprime pas les travaux de l'utilisateur, ne réinitialise pas sa branche et ne crée pas de commit sans demande explicite.
 
-Les indicateurs de moteur et de sauvegarde doivent refléter leur état réel.
+Si une vérification échoue avant tes modifications, détermine si cet échec est préexistant, intermittent ou lié à ton environnement. Ne l'attribue pas automatiquement à ton code.
 
-### B. Barre latérale de navigation
-
-Conserve les sections existantes et distingue clairement :
-
-- Accueil
-- Construire
-- Sélection
-- Scène
-- Propriétés, si cette section existe
-- DMX
-- Média
-- Rendu ou prévisualisation, selon la navigation réelle
-
-La section active doit être clairement identifiable.
-
-Ne crée pas de routes mortes ou de pages fictives pour correspondre à la maquette.
-
-### C. Panneau gauche : Construire
-
-Ce panneau contient les cinq catégories détaillées dans la section suivante.
-
-### D. Zone centrale : Stage
-
-Elle contient le plan 2D et la vue 3D, avec un mode de présentation adaptable.
-
-### E. Panneau droit : Sélection et propriétés
-
-Il présente les éléments sélectionnés et leurs propriétés réelles, selon leur type.
-
-L’ensemble doit rester utilisable sur les tailles d’écran desktop prises en charge par l’application.
+**Tu dois pouvoir distinguer un défaut démontré d'une simple hypothèse.**
 
 ---
 
-## 5. Panneau Construire : cinq catégories obligatoires
+## 4. PHASE 1 — CARTOGRAPHIE COMPLÈTE DE L'ASSISTANT
 
-Le panneau Construire doit présenter exactement cinq catégories principales :
+Reconstitue le chemin complet entre la demande de l'utilisateur et le résultat visible ou appliqué dans l'application.
 
-1. **Point**
-2. **Structure**
-3. **Décor**
-4. **Interprète**
-5. **Écran**
+Examine notamment :
 
-Chaque catégorie est représentée par une entrée visuelle avec une icône, un titre et une courte description.
+- La réception du message utilisateur.
+- La normalisation du texte.
+- La détection de l'intention.
+- L'interprétation locale déterministe.
+- La décision d'utiliser le fournisseur distant.
+- La construction du contexte transmis au modèle.
+- La description des projecteurs, groupes, scènes et capacités.
+- La génération des actions.
+- Le parsing des réponses.
+- La validation des données.
+- La réparation éventuelle des réponses invalides.
+- La présentation de la proposition à l'utilisateur.
+- L'approbation, la modification ou l'exclusion des actions.
+- L'application des actions par le service applicatif.
+- La vérification du résultat réellement obtenu.
+- La génération du rapport d'exécution.
+- La gestion des erreurs, du cache, des délais et des solutions de repli.
 
-Au clic, le contenu de sélection correspondant s’affiche dans le panneau gauche sans quitter la page Stage.
+Pour chaque étape, identifie :
 
-Une seule catégorie est active à la fois.
+- Son fichier et ses fonctions responsables.
+- Ses entrées et ses sorties.
+- Les validations exécutées.
+- Les erreurs possibles.
+- Les dépendances et les effets de bord.
+- Les tests qui prouvent son fonctionnement.
+- Les défauts confirmés.
+- Les risques de régression.
 
-Prévois un moyen évident de revenir à la liste des catégories.
+Produis un schéma du parcours actuel et un inventaire des composants qui constituent le véritable pipeline d'exécution.
 
-### 5.1 Point
-
-Cette catégorie est consacrée aux équipements d’éclairage compatibles avec le système existant.
-
-Exemples de types à afficher uniquement s’ils sont disponibles dans le catalogue réel :
-
-- Lyre Wash.
-- Lyre Beam.
-- Lyre Spot.
-- PAR LED.
-- Barre LED.
-- Stroboscope.
-- Fresnel.
-- Blinder.
-- Autres appareils présents dans le catalogue.
-
-Le catalogue doit utiliser les définitions existantes des fixtures et les informations disponibles.
-
-Chaque carte d’équipement présente, lorsque l’information existe :
-
-- Une vignette ou une représentation de l’appareil.
-- Son nom.
-- Son type.
-- Une référence ou un modèle.
-- Les caractéristiques utiles à la sélection.
-
-Au clic sur un équipement, active son placement dans la scène.
-
-Les fixtures doivent conserver leur fonctionnement réel : univers DMX, adresse, personnalité, canaux, intensité, couleur, pan, tilt, zoom, gobo et autres fonctions prises en charge.
-
-Ne crée pas un deuxième catalogue indépendant qui divergerait du moteur DMX.
-
-### 5.2 Structure
-
-Permets de construire l’infrastructure scénique.
-
-Éléments à prendre en charge selon les modèles disponibles :
-
-- Ponts et segments de structure.
-- Truss horizontal.
-- Truss vertical.
-- Pieds et supports.
-- Structures rectangulaires.
-- Éléments de liaison.
-
-Les structures doivent être représentées dans le plan et dans la vue 3D.
-
-Quand l’architecture le permet, un élément de structure doit pouvoir accueillir des fixtures et les déplacer avec lui lorsqu’il est déplacé.
-
-Respecte les relations parent-enfant existantes.
-
-N’invente pas de mécanisme de fixation physique s’il n’existe pas encore : documente les limites et implémente les relations manquantes de manière cohérente si elles sont nécessaires.
-
-### 5.3 Décor
-
-Prévois un catalogue pour les éléments de décor disponibles :
-
-- Praticables.
-- Plateformes.
-- Escaliers.
-- Mobilier.
-- Accessoires.
-- Éléments de scène complémentaires.
-
-Chaque élément doit avoir une géométrie et des dimensions appropriées lorsqu’elles sont définies.
-
-Les objets doivent être sélectionnables, déplaçables, rotatifs et supprimables.
-
-Si un type d’objet ne dispose pas encore de modèle de données, commence par définir un modèle extensible et versionnable compatible avec la scène existante.
-
-Ne simule pas sa persistance uniquement dans l’état local d’un composant React.
-
-### 5.4 Interprète
-
-Prévois une catégorie pour les personnes et éléments représentant la présence scénique :
-
-- Chanteur.
-- Musicien.
-- Danseur.
-- Silhouette générique.
-- Autres profils disponibles.
-
-Utilise des modèles légers ou des représentations adaptées à la prévisualisation.
-
-Chaque interprète doit pouvoir être positionné, sélectionné et orienté.
-
-L’interprète doit être identifiable dans le plan 2D et reconnaissable dans la vue 3D.
-
-Évite les modèles excessivement lourds qui dégradent les performances.
-
-### 5.5 Écran
-
-Prévois les éléments d’affichage scénique :
-
-- Écran LED.
-- Mur vidéo.
-- Surface de projection.
-- Écran de retour.
-- Surface d’affichage complémentaire.
-
-Les propriétés doivent inclure, si elles sont pertinentes pour le modèle :
-
-- Largeur et hauteur.
-- Position.
-- Rotation.
-- Orientation de la face avant.
-- Contenu affiché ou matériau.
-- Luminosité ou paramètres de rendu disponibles.
-
-Le rendu doit permettre de distinguer clairement un écran d’une surface décorative ordinaire.
-
-La gestion réelle des contenus vidéo doit rester liée aux capacités existantes du projet. Ne prétends pas qu’une lecture vidéo fonctionne si elle n’est pas implémentée.
+Repère particulièrement les fonctionnalités déclarées mais non raccordées, les chemins alternatifs oubliés, les erreurs silencieuses et les écarts entre ce que l'interface annonce et ce que le moteur exécute.
 
 ---
 
-## 6. Catalogue de sélection
+## 5. PHASE 2 — AMÉLIORER LA COMPRÉHENSION DES DEMANDES
 
-Quand l’utilisateur clique sur une catégorie, affiche un catalogue cohérent.
+L'objectif est que l'assistant comprenne mieux l'intention réelle, y compris lorsque l'utilisateur écrit naturellement, de manière imprécise, avec des fautes ou en plusieurs étapes.
 
-Fonctionnalités attendues :
+### 5.1 Compréhension du langage naturel
 
-- Retour aux catégories.
-- Recherche par nom.
-- Filtrage par type si le catalogue le permet.
-- Grille de cartes compacte.
-- Vignettes homogènes.
-- Nom et informations essentielles.
-- États hover et sélection.
-- Indication de placement actif.
-- Retour visuel après sélection d’un élément.
+Évalue la reconnaissance des intentions et améliore, lorsque cela est justifié :
 
-Les cartes doivent utiliser les données réelles du catalogue.
+- Les formulations naturelles et conversationnelles.
+- Les fautes de frappe et les variations orthographiques.
+- Les synonymes et les expressions du métier de l'éclairage.
+- Les formulations françaises et anglaises déjà prises en charge.
+- Les négations et les exclusions.
+- Les demandes contenant plusieurs contraintes.
+- Les demandes comportant plusieurs actions.
+- Les ajustements relatifs à l'état existant.
+- Les références aux actions et aux objets évoqués précédemment.
+- Les demandes incomplètes ou ambiguës.
+- Les corrections et les reformulations successives.
 
-Les vignettes peuvent provenir de ressources déjà présentes ou être générées à partir de représentations 3D légères. Utilise des icônes de remplacement cohérentes lorsque les ressources manquent.
+Exemples de demandes à prendre en charge correctement :
 
-Ne télécharge pas de modèles externes sans nécessité, licence adaptée et mécanisme de gestion des ressources.
+- « Mets une ambiance plus chaude. »
+- « Fais quelque chose de plus énergique sans utiliser de strobe. »
+- « Passe les quatre lyres en bleu, mais garde les faces blanches. »
+- « Réduis un peu l'intensité des contre-jours. »
+- « Reprends la scène précédente et rends-la plus dynamique. »
+- « Arrête les effets, mais ne touche pas aux couleurs. »
+- « Fais monter progressivement l'intensité jusqu'au refrain. »
+- « Utilise les projecteurs disponibles, sans modifier ceux du chanteur. »
+- « Divise par deux la vitesse de cet effet. »
+- « Annule uniquement la dernière modification de l'assistant. »
 
-### Comportement de placement
+Ces exemples sont des cas de test, pas la preuve que les fonctionnalités correspondantes existent déjà.
 
-1. L’utilisateur choisit une catégorie.
-2. Il sélectionne un élément.
-3. L’application active le mode de placement.
-4. Le curseur ou l’aperçu indique l’élément à placer, si le moteur le permet.
-5. L’utilisateur clique sur le plan 2D ou dans la vue 3D.
-6. L’élément est créé dans le modèle de scène.
-7. Les vues sont actualisées.
-8. L’élément placé devient sélectionné.
-9. Le panneau droit affiche ses propriétés.
+Vérifie si chaque demande est réellement reconnue, si ses contraintes sont conservées et si les actions obtenues correspondent à l'intention.
 
-Respecte les conventions de coordonnées et les transformations déjà utilisées dans le projet.
+### 5.2 Gestion des ambiguïtés
 
-Prévois l’annulation du placement et une sortie explicite du mode placement.
+L'assistant doit distinguer :
 
-Le placement ne doit pas créer de doublons involontaires à chaque rafraîchissement ou changement d’onglet.
+- Une demande suffisamment précise pour être exécutée.
+- Une demande qui nécessite de sélectionner une cible.
+- Une demande dont un paramètre peut raisonnablement être déduit.
+- Une demande ambiguë dont les interprétations entraîneraient des résultats différents.
+- Une demande impossible dans l'état actuel du projet.
 
----
+Lorsqu'une information essentielle manque, pose une question courte et pertinente.
 
-## 7. Zone centrale : plan 2D et vue 3D
+Ne pose pas de question si le contexte suffit déjà à répondre.
 
-La zone centrale est le cœur de l’interface.
+Ne prétends jamais comprendre une commande qui n'a pas été correctement interprétée.
 
-Elle doit prendre le maximum d’espace utile disponible.
+### 5.3 Négations et contraintes
 
-### 7.1 Modes de présentation
+Les négations sont prioritaires dans l'interprétation.
 
-Conserve et améliore les modes compatibles avec l’application :
+Exemples :
+- « Pas de strobe » interdit de proposer un strobe dans la proposition concernée.
+- « Ne touche pas aux couleurs » doit empêcher les modifications de couleur.
+- « Garde les faces blanches » impose une contrainte qui doit être conservée dans toutes les actions concernées.
+- « Ne change rien pour l'instant » ne doit pas produire de modification.
 
-- Plan 2D.
-- Vue 3D.
-- Vue divisée 2D + 3D.
+Vérifie les contradictions entre contraintes, paramètres et actions générées.
 
-Ajoute une commande claire pour basculer entre ces modes.
+Une contrainte importante ne doit pas disparaître lors de la traduction du message en actions structurées.
 
-La vue divisée doit permettre de visualiser simultanément le plan et la prévisualisation 3D.
+### 5.4 Résolution des cibles
 
-Les dimensions des deux vues doivent être ajustables si cela peut être intégré proprement.
+Teste la résolution des noms de projecteurs, des groupes, des sélections, des scènes et des références contextuelles.
 
-Conserve le mode choisi selon les mécanismes de persistance existants.
+Examine :
+- Les correspondances exactes.
+- Les correspondances partielles.
+- Les noms similaires.
+- Les accents et la casse.
+- Les pluriels.
+- Les groupes inexistants.
+- Les cibles multiples.
+- Les sélections vides.
+- Les cibles qui ne possèdent pas l'attribut demandé.
+- Les changements d'état entre la génération et l'application.
 
-### 7.2 Plan 2D
-
-Le plan doit présenter :
-
-- Une grille graduée.
-- Les limites de la scène.
-- Les dimensions de la scène.
-- Les éléments de structure.
-- Les fixtures.
-- Les décors.
-- Les interprètes.
-- Les écrans.
-- Les labels utiles.
-- Les repères d’axes.
-- Les éléments sélectionnés.
-- Les outils de navigation.
-
-Fonctions attendues selon les capacités existantes :
-
-- Zoom.
-- Panoramique.
-- Sélection.
-- Placement.
-- Déplacement.
-- Rotation.
-- Alignement.
-- Accrochage à la grille.
-- Affichage ou masquage des catégories.
-- Ajustement à la scène.
-
-La grille doit avoir une échelle cohérente avec les unités du modèle.
-
-Les interactions de sélection ne doivent pas être perturbées par les interactions de déplacement de la caméra.
-
-### 7.3 Vue 3D
-
-Améliore la qualité et la lisibilité de la scène :
-
-- Géométrie de scène cohérente.
-- Sol et fond.
-- Structure scénique.
-- Fixtures avec leur apparence distinctive.
-- Décors et plateformes.
-- Interprètes.
-- Écrans.
-- Matériaux adaptés.
-- Éclairage de prévisualisation.
-- Faisceaux lumineux lorsque les fonctions existent.
-- Contrôle de caméra.
-
-Prévois des commandes adaptées aux usages professionnels :
-
-- Perspective.
-- Vue de face.
-- Vue de dessus.
-- Vue de côté.
-- Réinitialisation de la caméra.
-- Ajustement de la caméra à la scène.
-- Plein écran.
-
-N’ajoute pas plusieurs commandes qui exécutent la même action.
-
-### 7.4 Sélection et transformation 3D
-
-Si un système de gizmos existe déjà, réutilise-le.
-
-L’utilisateur doit pouvoir sélectionner un objet et, selon son type :
-
-- Le déplacer.
-- Le faire pivoter.
-- Modifier ses dimensions.
-- Ajuster sa hauteur.
-- L’aligner.
-- Le rattacher à une structure lorsque cela est pris en charge.
-
-La transformation doit mettre à jour le modèle de scène et non uniquement le mesh Three.js.
-
-Le plan 2D, la vue 3D, l’inspecteur et les données persistées doivent refléter la même transformation.
-
-Les unités et axes doivent être cohérents entre les deux vues.
+Ne sélectionne jamais arbitrairement un projecteur lorsque plusieurs correspondances sont plausibles.
 
 ---
 
-## 8. Panneau droit : Sélection et propriétés
+## 6. PHASE 3 — INTELLIGENCE CONTEXTUELLE ET MÉMOIRE DE TRAVAIL
 
-Le panneau droit doit être contextuel.
+Analyse les mécanismes existants de contexte, d'historique, d'état transitoire et de cache.
 
-### 8.1 Liste de sélection
+Détermine ce que l'assistant sait réellement au moment de chaque demande.
 
-Affiche les éléments de la scène avec :
+Améliore si nécessaire la gestion de :
 
-- Une vignette ou une icône.
-- Leur nom.
-- Leur catégorie.
-- Leur type.
-- Un indicateur de visibilité si cette fonction existe.
-- Une action de sélection.
-- Un menu d’actions secondaires.
+- La conversation en cours.
+- La dernière proposition générée.
+- Les actions appliquées précédemment.
+- Le projet et les scènes actifs.
+- Les groupes et les projecteurs actuellement disponibles.
+- Les sélections de l'utilisateur.
+- Les paramètres et les effets existants.
+- Les contraintes explicites.
+- Les modifications récentes du projet.
+- Les erreurs rencontrées pendant une exécution.
 
-Les éléments doivent provenir du modèle de scène réel.
+Exemple :
 
-Prévois un état vide lorsque rien n’est sélectionné.
+Utilisateur : « Passe les lyres en violet. »
 
-La sélection dans la hiérarchie doit être synchronisée avec les vues 2D et 3D.
+Utilisateur : « Maintenant, baisse leur intensité de 20 %. »
 
-### 8.2 Inspecteur
+L'assistant doit résoudre correctement le référent de « leur » et appliquer la diminution conformément à la sémantique déjà définie par le projet.
 
-Quand un élément est sélectionné, affiche ses propriétés selon son type.
+Il ne doit ni perdre les cibles ni appliquer une baisse de 20 points lorsque la demande et le contrat définissent une réduction relative de 20 %, ou inversement.
 
-Propriétés communes :
+Définis clairement les règles de conservation du contexte, les limites de taille et les conditions d'invalidation.
 
-- Nom.
-- Position X, Y et Z.
-- Rotation.
-- Dimensions ou échelle.
-- Visibilité.
-- Catégorie.
-- Actions de suppression et de duplication si prises en charge.
+Évite les historiques inutilement longs, les contextes périmés et les données redondantes.
 
-Pour une fixture, ajoute les propriétés réellement disponibles :
+La mémoire de travail doit rester cohérente avec l'état réel du projet. Une action refusée ou échouée ne doit pas être mémorisée comme une modification réussie.
 
-- Univers DMX.
-- Adresse DMX.
-- Mode ou personnalité.
-- Couleur.
-- Intensité.
-- Pan.
-- Tilt.
-- Zoom.
-- Focus ou paramètres optiques disponibles.
-- Autres paramètres propres à l’appareil.
-
-Pour une structure, affiche ses dimensions, ses transformations et ses relations éventuelles avec les fixtures.
-
-Pour un décor, affiche ses dimensions, son orientation et ses paramètres spécifiques.
-
-Pour un interprète, affiche sa position, son orientation et les caractéristiques de représentation disponibles.
-
-Pour un écran, affiche ses dimensions, son orientation et ses paramètres d’affichage disponibles.
-
-### 8.3 Édition des propriétés
-
-Les modifications doivent être immédiates et fiables.
-
-- Valider les valeurs numériques.
-- Respecter les limites du modèle.
-- Utiliser les unités cohérentes.
-- Préserver les valeurs existantes.
-- Gérer les erreurs de saisie.
-- Synchroniser les changements avec le modèle de scène.
-- Intégrer les modifications à undo/redo lorsque le système le permet.
-- Préserver la compatibilité avec le moteur DMX.
-
-Ne crée pas un inspecteur universel contenant les mêmes champs pour tous les types d’objets.
+Ne crée pas une mémoire persistante illimitée. Privilégie un contexte structuré, borné, vérifiable et adapté au besoin.
 
 ---
 
-## 9. Synchronisation avec le moteur
+## 7. PHASE 4 — FIABILITÉ DU SYSTÈME D'ACTIONS
 
-C’est une exigence non négociable.
+C'est l'une des priorités majeures de l'audit.
 
-L’interface ne doit pas devenir une couche visuelle indépendante du fonctionnement réel de Luma-AI-DMX.
+L'assistant peut générer une réponse qui semble correcte sans que les opérations correspondantes soient réellement exécutées. Tu dois détecter et éliminer ce type de défaut.
 
-### Architecture attendue
+### 7.1 Contrat des actions
 
-- Le modèle de scène existant reste la source de vérité.
-- Les actions passent par les mécanismes de modification de scène existants.
-- Les composants React affichent l’état issu du modèle.
-- Les objets 3D reflètent les transformations du modèle.
-- Le plan 2D représente les mêmes éléments.
-- Les modifications DMX conservent leur fonctionnement.
-- La sauvegarde et le chargement restaurent correctement les éléments.
-- Les changements de sélection ne doivent pas modifier accidentellement les données.
-- L’historique doit rester cohérent.
+Examine le contrat versionné existant et toutes les actions prises en charge.
 
-Si un nouveau type d’objet nécessite une extension du schéma, prévois :
+Vérifie :
+- Les schémas et leurs contraintes.
+- Les types TypeScript.
+- La validation à l'exécution.
+- Les paramètres obligatoires.
+- Les plages de valeurs.
+- Les identifiants de cibles.
+- La compatibilité avec les anciennes versions.
+- Les migrations.
+- La gestion des champs inconnus.
+- La validation des réponses distantes.
+- Les données malformées ou contradictoires.
 
-1. Un type explicitement défini.
-2. Une validation des données.
-3. Une sérialisation et une désérialisation.
-4. Une compatibilité avec les projets existants.
-5. Une stratégie de versionnement ou de migration.
-6. Des tests de persistance.
+Conserve la compatibilité avec les contrats existants, sauf si une migration explicite, testée et justifiée est indispensable.
 
-Ne modifie pas les contrats du moteur DMX sans nécessité démontrée.
+N'affaiblis jamais les schémas pour faire accepter une réponse incorrecte.
 
-Ne contourne pas les actions centralisées en modifiant directement le store depuis plusieurs composants.
+### 7.2 Actions reconnues et réellement disponibles
 
----
+Pour chaque action déclarée, vérifie le parcours complet :
 
-## 10. Rendu 3D et performance
+1. Peut-elle être générée ?
+2. Est-elle correctement validée ?
+3. Est-elle présentée à l'utilisateur ?
+4. Peut-elle être modifiée ou exclue ?
+5. Est-elle correctement routée vers son handler ?
+6. Le handler modifie-t-il le bon état ?
+7. Le moteur accepte-t-il cette modification ?
+8. L'état final correspond-il à la demande ?
+9. Le rapport décrit-il le résultat exact ?
 
-Améliore le rendu sans compromettre la fluidité de l’éditeur.
+Examine particulièrement les opérations liées à l'intensité, à la couleur, à la position, aux effets, aux scènes, aux cues, aux séquences, au BPM et à la libération des contrôles IA.
 
-### Priorités
+Identifie les actions qui ne fonctionnent que partiellement, celles qui sont impossibles dans certains contextes et celles dont l'échec est masqué.
 
-- Réutiliser les géométries et matériaux lorsque cela est possible.
-- Éviter de recréer les objets 3D à chaque rendu React.
-- Libérer correctement les ressources.
-- Éviter les fuites mémoire.
-- Limiter les calculs inutiles.
-- Utiliser l’instanciation pour les éléments répétitifs lorsque cela est adapté.
-- Préserver la réactivité des manipulations.
-- Adapter la qualité du rendu aux performances de la machine.
-- Prévoir un mode de qualité réduite si nécessaire.
-- Gérer proprement le redimensionnement du viewport.
-- Arrêter ou réduire le travail de rendu lorsque la vue n’est plus visible, si l’architecture le permet.
+### 7.3 Exécution et confirmation du résultat
 
-Examine particulièrement le cycle de vie de Three.js, les caméras, les matériaux, les lumières, les ressources GPU et les boucles de rendu.
+Sépare clairement les états suivants :
 
-Ne sacrifie pas la précision de la scène pour obtenir uniquement un rendu plus spectaculaire.
+- Demande comprise.
+- Proposition générée.
+- Proposition validée.
+- Action acceptée.
+- Action exécutée.
+- État final vérifié.
+- Action partiellement exécutée.
+- Action ignorée ou refusée.
+- Action échouée.
 
-Ne promets aucun objectif de FPS sans mesures réelles.
+Ne confonds jamais la validation d'une action avec sa réussite effective.
 
----
+Lorsqu'une action échoue, fournis une erreur exploitable et indique son statut exact.
 
-## 11. Ergonomie professionnelle
+Lorsqu'une action n'a pas pu être vérifiée, ne la déclare pas réussie.
 
-L’interface doit être rapide à utiliser lors d’une préparation de spectacle.
+### 7.4 Actions multiples
 
-Prévois, lorsque les mécanismes existants le permettent :
+Teste les propositions comprenant plusieurs actions dépendantes.
 
-- Raccourcis clavier.
-- Annuler et rétablir.
-- Duplication.
-- Suppression.
-- Sélection multiple.
-- Accrochage à la grille.
-- Alignement.
-- Commandes de caméra.
-- Ajustement de la vue.
-- Indication du mode actif.
-- Retour visuel après une action.
-- Confirmation pour les suppressions importantes.
-- États de chargement, d’erreur et d’absence de données.
-- Infobulles pour les icônes peu explicites.
+Exemples :
+- Créer une scène puis l'appliquer.
+- Créer plusieurs cues puis les relier dans une séquence.
+- Modifier une couleur et une intensité.
+- Démarrer un effet puis modifier ses paramètres.
+- Générer un show puis appliquer ses changements.
 
-Les actions destructives ne doivent pas être placées à côté des actions fréquemment utilisées sans distinction visuelle.
+Détermine les dépendances, l'ordre d'exécution, les risques de résultats partiels et les possibilités d'annulation.
 
-Les boutons doivent être suffisamment grands pour être utilisés avec précision.
+Si une action échoue au milieu d'une opération composée, le rapport doit préciser les actions déjà effectuées et celles qui ne l'ont pas été.
 
-Respecte les conventions clavier existantes et évite les conflits avec les commandes de caméra ou les champs de saisie.
+N'implémente pas de fausse atomicité si le moteur ne permet pas de restaurer l'état précédent.
 
----
+### 7.5 Contrôle des répétitions
 
-## 12. Responsive et gestion de l’espace
+Vérifie les doubles exécutions dues aux nouvelles tentatives, aux réponses réseau tardives, aux événements répétés et aux appels concurrents.
 
-La cible principale est l’application desktop.
+Les opérations non idempotentes ne doivent pas être rejouées aveuglément.
 
-Le layout doit néanmoins s’adapter aux différentes tailles de fenêtre :
-
-- Panneau gauche redimensionnable ou repliable.
-- Panneau droit redimensionnable ou repliable.
-- Zone centrale prioritaire.
-- Mode 2D seul et mode 3D seul toujours accessibles.
-- Vue divisée lorsque l’espace est suffisant.
-- Défilement dans les panneaux, pas sur toute l’application.
-- Pas de débordement horizontal involontaire.
-- Pas de texte tronqué sans alternative.
-- Gestion correcte du redimensionnement de la fenêtre Electron.
-
-Les panneaux ne doivent jamais réduire les viewports au point de rendre les outils inutilisables.
+Ajoute des mécanismes d'idempotence uniquement lorsqu'ils sont nécessaires et compatibles avec les contrats actuels.
 
 ---
 
-## 13. Architecture du code et qualité
+## 8. PHASE 5 — AMÉLIORER L'INTERPRÉTEUR LOCAL
 
-Respecte la stack réelle, les conventions et les dépendances installées.
+L'interpréteur local doit être utile, prévisible et capable de répondre rapidement aux commandes qu'il sait traiter.
 
-Évite :
+Analyse `src/core/ai/local/interpreter.ts` et ses dépendances.
 
-- Les composants géants qui mélangent toutes les responsabilités.
-- Les états dupliqués entre le parent et les enfants.
-- Les mutations directes et non contrôlées.
-- Les types TypeScript permissifs inutiles.
-- Les nouveaux packages sans justification.
-- Les effets React dont les dépendances sont incorrectes.
-- Les identifiants instables.
-- Les abonnements qui ne sont jamais nettoyés.
-- Les boutons sans comportement.
-- Les données fictives présentées comme réelles.
-- Les régressions dans les fonctions DMX existantes.
+Examine :
+- La couverture des intentions.
+- L'ordre des règles.
+- Les conflits entre règles.
+- Les expressions régulières fragiles.
+- La normalisation du texte.
+- Les faux positifs.
+- Les demandes composées.
+- Les valeurs numériques et les unités.
+- Les négations.
+- Les cibles.
+- Les commandes non reconnues.
+- Les limites entre interprétation locale et fournisseur distant.
 
-Sépare proprement, selon l’architecture en place :
+Améliore la reconnaissance sans transformer l'interpréteur en une collection incontrôlable de règles qui se contredisent.
 
-- Le layout Stage.
-- Le panneau Construire.
-- Les catalogues par catégorie.
-- Le viewport 2D.
-- Le viewport 3D.
-- La hiérarchie de scène.
-- L’inspecteur.
-- Les actions de scène.
-- Les types et schémas.
-- Les fonctions de rendu.
+Si cela apporte une amélioration démontrable, sépare la détection d'intention, l'extraction des entités, la résolution des cibles, la validation des contraintes et la production des actions.
 
-Ne crée pas une nouvelle architecture parallèle si les composants existants peuvent être améliorés proprement.
+Conserve les avantages du mode local : rapidité, fonctionnement hors ligne, déterminisme et coût nul d'appel à un fournisseur.
 
----
+Pour les demandes prises en charge localement, évite les appels réseau inutiles.
 
-## 14. Tests obligatoires
+Pour les demandes non reconnues, affiche clairement cette limite et utilise le repli prévu par l'architecture lorsque cela est approprié.
 
-Ajoute ou mets à jour les tests selon les outils déjà utilisés dans le projet.
-
-### Tests fonctionnels
-
-1. Afficher les cinq catégories dans Construire.
-2. Ouvrir chaque catégorie.
-3. Revenir à la liste des catégories.
-4. Rechercher un élément dans un catalogue.
-5. Sélectionner un élément et activer son placement.
-6. Placer un élément dans la scène.
-7. Sélectionner un élément existant.
-8. Modifier sa position.
-9. Modifier sa rotation.
-10. Vérifier la synchronisation entre le plan et la vue 3D.
-11. Supprimer un élément.
-12. Annuler et rétablir une modification.
-13. Sauvegarder puis recharger la scène.
-14. Vérifier la persistance des relations entre fixtures et structures si elles sont prises en charge.
-15. Vérifier qu’une modification de fixture ne casse pas son adressage DMX.
-16. Vérifier les états vides et les erreurs.
-17. Vérifier le changement de mode 2D, 3D et divisé.
-18. Vérifier les interactions clavier et souris.
-19. Vérifier le redimensionnement des panneaux et de la fenêtre.
-20. Vérifier qu’il n’y a pas de duplication involontaire d’objets.
-
-Les tests doivent vérifier le comportement réel, pas uniquement la présence de composants dans le DOM.
-
-### Vérifications techniques
-
-Exécute les commandes adaptées au projet :
-
-- Vérification TypeScript.
-- Lint.
-- Tests unitaires.
-- Tests d’intégration.
-- Tests E2E existants.
-- Build de production.
-
-Utilise les scripts réellement déclarés dans `package.json`.
-
-Ne désactive pas les tests existants pour faire passer la refonte.
-
-Corrige les régressions introduites par tes changements et indique clairement les problèmes préexistants qui restent non résolus.
+Ne simule jamais une compréhension avancée que le système ne possède pas.
 
 ---
 
-## 15. Plan d’implémentation
+## 9. PHASE 6 — AMÉLIORER OPENROUTER ET LES LLM
 
-Travaille dans cet ordre.
+Analyse l'implémentation réelle du fournisseur OpenRouter et la manière dont ses réponses sont utilisées.
 
-### Phase 1 — Audit et conception
+### 9.1 Construction du prompt
 
-- Examiner le code.
-- Identifier les composants à réutiliser.
-- Identifier les fonctions manquantes.
-- Établir une cartographie des flux de données.
-- Documenter les risques.
-- Définir le plan de migration.
+Vérifie que le contexte transmis au modèle est :
+- Suffisant pour comprendre le projet.
+- À jour.
+- Structuré.
+- Débarrassé des informations inutiles.
+- Adapté à l'intention détectée.
+- Clair sur les actions autorisées.
+- Clair sur les contraintes de sécurité.
+- Clair sur le format de sortie attendu.
 
-### Phase 2 — Refonte visuelle
+Améliore les instructions pour réduire les réponses vagues, les actions inutiles, les paramètres inventés et les interprétations incorrectes.
 
-- Harmoniser les tokens et les styles.
-- Refaire le layout Stage.
-- Refaire le panneau Construire.
-- Organiser les zones 2D et 3D.
-- Refaire le panneau Sélection.
-- Améliorer les états visuels.
+N'envoie pas systématiquement l'intégralité du projet si un contexte réduit et ciblé suffit.
 
-Cette phase doit préserver les fonctions existantes.
+### 9.2 Sorties structurées
 
-### Phase 3 — Construction et placement
+Utilise les mécanismes de sortie structurée déjà compatibles avec les modèles configurés.
 
-- Connecter les cinq catégories aux données réelles.
-- Améliorer les catalogues.
-- Fiabiliser le placement.
-- Connecter les transformations au modèle de scène.
-- Vérifier la synchronisation entre les vues.
+Conserve les stratégies de repli existantes lorsqu'un modèle ne prend pas en charge un format donné.
 
-### Phase 4 — Inspecteur et cohérence
+Vérifie la gestion :
+- Du JSON invalide.
+- Des blocs de code parasites.
+- Des champs manquants.
+- Des actions inconnues.
+- Des réponses tronquées.
+- Des sorties vides.
+- Des réponses incohérentes.
+- Des refus du fournisseur.
+- Des erreurs de quota.
+- Des délais dépassés.
+- Des réponses tardives.
+- Des modèles indisponibles.
 
-- Implémenter les propriétés contextuelles.
-- Connecter les champs aux actions existantes.
-- Vérifier undo/redo.
-- Vérifier la sauvegarde et le rechargement.
-- Préserver l’intégration DMX.
+Toute réponse distante doit être considérée comme non fiable avant validation.
 
-### Phase 5 — Qualité et finition
+Une réponse invalide ne doit jamais parvenir directement au moteur.
 
-- Optimiser le rendu.
-- Vérifier les performances.
-- Améliorer les raccourcis et les retours visuels.
-- Tester les tailles de fenêtre.
-- Exécuter la suite de tests.
-- Documenter les limitations restantes.
+### 9.3 Réparation des réponses
 
-Priorise les améliorations de l’interface et les fonctionnalités de base avant les optimisations complexes du rendu.
+Si un mécanisme de réparation existe, vérifie qu'il corrige uniquement les erreurs réparables.
 
-Ne considère pas une phase terminée simplement parce que les composants ont été créés.
+Limite le nombre de tentatives et les coûts.
 
----
+Ne répare pas silencieusement une intention ambiguë en inventant des cibles ou des valeurs.
 
-## 16. Critères d’acceptation
+Si la réparation modifie le sens de la demande, exige une nouvelle clarification ou refuse l'exécution.
 
-La mission est considérée comme réussie uniquement si les conditions suivantes sont remplies :
+### 9.4 Choix du modèle
 
-- L’espace Stage présente une interface cohérente avec la référence.
-- Le panneau Construire présente les cinq catégories : Point, Structure, Décor, Interprète et Écran.
-- Cliquer sur une catégorie affiche son catalogue.
-- Les éléments proviennent des modèles ou catalogues réellement disponibles.
-- Le placement fonctionne avec les actions de scène réelles.
-- Le plan 2D et la vue 3D restent synchronisés.
-- La sélection ouvre le bon inspecteur.
-- Les propriétés affichées correspondent au type d’objet.
-- Les modifications sont persistées lorsque cela est prévu.
-- Undo/redo reste fonctionnel.
-- Le moteur DMX conserve son comportement existant.
-- Les contrôles visibles ont une action réelle ou un état indisponible explicite.
-- La console ne présente pas de nouvelles erreurs non maîtrisées.
-- Les vérifications techniques passent, ou les échecs préexistants sont documentés avec précision.
-- Les tests de régression pertinents sont exécutés.
-- Les limites non implémentées sont clairement signalées.
+Examine le choix du modèle et les paramètres existants.
+
+Si pertinent, distingue les besoins de compréhension, de génération structurée et de correction.
+
+Ne remplace pas le modèle configuré de l'utilisateur sans justification.
+
+Ne suppose pas qu'un modèle plus gros est toujours meilleur.
+
+Mesure la qualité réelle sur les cas d'évaluation, le coût, la latence et le taux d'erreurs.
+
+Ne réalise aucun appel payant réel sans autorisation explicite.
 
 ---
 
-## 17. Livrables finaux
+## 10. PHASE 7 — PERFORMANCES ET LATENCE
 
-À la fin de la mission :
+Mesure les performances avant de chercher à les optimiser.
 
-1. Implémente la refonte directement dans les fichiers concernés.
-2. Crée `docs/audits/stage-interface-audit.md`.
-3. Mets à jour la documentation technique utile.
-4. Ajoute ou adapte les tests.
-5. Liste les fichiers créés, modifiés et supprimés.
-6. Donne les résultats réels des vérifications exécutées.
-7. Distingue les fonctionnalités terminées, partielles et non implémentées.
-8. Indique les éventuelles migrations de données nécessaires.
-9. Liste les limitations restantes et les prochaines étapes recommandées.
+Examine les causes potentielles de lenteur :
+- Normalisation et parsing répétés.
+- Calculs redondants.
+- Construction excessive du contexte.
+- Sérialisation inutile.
+- Appels réseau évitables.
+- Mauvaise utilisation du cache.
+- Traitements bloquant le processus principal Electron.
+- Recalculs de l'état du projet.
+- Traitements répétés des projecteurs.
+- Requêtes concurrentes inutiles.
+- Attentes et délais mal configurés.
+- Rendu excessif de l'interface.
 
-Ne te contente pas de produire un rapport ou une liste de recommandations : réalise effectivement les changements.
+### 10.1 Mesures
 
-## Consigne finale
+Ajoute ou améliore une instrumentation locale et exploitable pour mesurer :
+- La latence totale.
+- La latence par étape.
+- Le temps d'interprétation locale.
+- Le temps de résolution des cibles.
+- Le temps de construction du contexte.
+- Le temps d'attente du fournisseur.
+- Le temps de parsing et de validation.
+- Le temps d'application des actions.
+- Le temps de vérification du résultat.
+- Le taux d'utilisation du cache.
+- Le taux d'échec et de nouvelle tentative.
 
-Prends l’image de référence comme guide visuel pour l’organisation, les proportions, les couleurs et la hiérarchie des panneaux.
+Distingue les durées réseau des durées de calcul local.
 
-Conserve les fondations techniques de Luma-AI-DMX, réutilise les fonctions existantes et fais évoluer l’application progressivement.
+N'enregistre pas les clés API, les secrets ou le contenu complet des conversations dans les métriques.
 
-**Le résultat attendu est un véritable éditeur scénique professionnel, opérationnel et maintenable, et non une simple imitation graphique de l’image.**
+### 10.2 Optimisation
+
+Applique uniquement des optimisations justifiées par les mesures.
+
+Examine notamment :
+- Le cache des réponses et son invalidation.
+- La déduplication des requêtes identiques.
+- La limitation des appels simultanés.
+- L'annulation des opérations devenues obsolètes.
+- La réduction du contexte.
+- La réutilisation des données calculées.
+- Les traitements asynchrones appropriés.
+- La réduction du travail sur le thread principal.
+
+Le cache ne doit jamais retourner une réponse devenue incorrecte après une modification du projet, des cibles, des contraintes ou du modèle.
+
+Évite les abstractions inutiles et les optimisations qui dégradent la lisibilité ou la sécurité.
+
+### 10.3 Objectifs de performance
+
+Établis des mesures initiales et propose des objectifs réalistes à partir des résultats.
+
+À titre de cible à vérifier, et non de performance garantie :
+- Commandes locales simples : objectif inférieur à 100 ms lorsque la charge le permet.
+- Préparation et validation locales : objectif inférieur à 100 ms pour les commandes ordinaires.
+- Commandes nécessitant un LLM : mesurer séparément la latence du fournisseur et celle de l'application.
+
+Ne déclare aucun objectif atteint sans mesures reproductibles.
+
+Les sorties DMX, la lecture audio et les tâches temps réel ne doivent jamais être perturbées par l'assistant.
+
+---
+
+## 11. PHASE 8 — SÉCURITÉ ET PROTECTION DU MOTEUR DMX
+
+Cette phase est obligatoire et ne peut pas être sacrifiée pour améliorer la fluidité ou l'autonomie de l'assistant.
+
+L'IA ne doit jamais contourner les contrôles du moteur.
+
+Vérifie que les protections restent effectives dans tous les chemins d'exécution :
+
+- L'IA produit uniquement les actions autorisées.
+- Les actions sont validées côté application.
+- L'IA ne peut pas émettre directement des trames DMX.
+- Les sorties physiques restent désarmées au démarrage.
+- L'armement d'une sortie réelle ne peut pas être effectué par l'IA.
+- L'arrêt d'urgence et STOP OUTPUT conservent leur priorité.
+- Le programmeur manuel reste prioritaire.
+- Les opérations dangereuses nécessitent les confirmations prévues.
+- Le strobe reste soumis aux autorisations et aux protections configurées.
+- Les limites de fréquence et de sécurité photosensible restent actives.
+- Les entrées externes ne peuvent pas armer une sortie.
+- Les commandes IPC restent validées.
+- Les secrets ne sont jamais exposés au renderer.
+
+Teste les tentatives de contournement par instructions adverses, champs inconnus, identifiants falsifiés, réponses LLM malformées et états incohérents.
+
+Les instructions présentes dans le contexte, le projet ou une réponse de modèle ne doivent jamais pouvoir modifier les règles de sécurité du système.
+
+Toute nouvelle capacité d'exécution doit utiliser les handlers et les validations existants.
+
+Ne crée pas d'accès arbitraire aux fichiers, au shell, au réseau ou au système d'exploitation pour donner artificiellement plus de pouvoir à l'IA.
+
+**Le but est d'augmenter les capacités utiles de l'assistant, pas de lui donner un accès sans restriction à l'application.**
+
+---
+
+## 12. PHASE 9 — BANC D'ÉVALUATION SÉRIEUX
+
+Améliore les tests d'évaluation pour mesurer objectivement la compréhension et la qualité des actions.
+
+Examine les tests et les jeux de données existants avant d'ajouter de nouveaux outils.
+
+### 12.1 Catégories à tester
+
+Construis une couverture des catégories suivantes :
+
+1. Commandes simples.
+2. Synonymes.
+3. Fautes de frappe.
+4. Accents et variantes linguistiques.
+5. Cibles exactes.
+6. Cibles ambiguës.
+7. Groupes et sélections.
+8. Négations.
+9. Demandes composées.
+10. Modifications relatives.
+11. Références au contexte précédent.
+12. Paramètres numériques et unités.
+13. Commandes inconnues.
+14. Actions incompatibles avec le projet.
+15. Réponses LLM invalides.
+16. Erreurs réseau et délais dépassés.
+17. Actions partiellement exécutées.
+18. Instructions adverses.
+19. Contraintes de sécurité.
+20. Régressions sur les commandes déjà prises en charge.
+
+Pour chaque cas, définis l'intention attendue, les cibles attendues, les contraintes à conserver, les actions autorisées et les comportements qui doivent être refusés.
+
+N'impose pas une seule représentation textuelle si plusieurs plans d'action sont légitimement équivalents.
+
+Compare la sémantique des actions, et pas uniquement le texte de la réponse.
+
+### 12.2 Métriques
+
+Mesure séparément :
+- La précision de classification des intentions.
+- Le rappel des intentions.
+- La résolution correcte des cibles.
+- La conservation des contraintes.
+- La validité structurelle des actions.
+- La réussite de leur exécution.
+- La correspondance entre l'état final et la demande.
+- Le taux de refus injustifiés.
+- Le taux de commandes inconnues correctement signalées.
+- La latence.
+- Les régressions.
+- Les violations de sécurité.
+
+Ne mélange pas la validité du JSON, la compréhension de la demande et la réussite de l'action dans un score unique.
+
+### 12.3 Tests de régression
+
+Ajoute des tests reproductibles pour chaque défaut corrigé.
+
+Exécute les cas existants avant et après les modifications.
+
+Conserve les cas de référence et les seuils du projet, sauf justification documentée.
+
+Si une nouvelle modification améliore une catégorie mais dégrade une autre, signale le compromis et corrige-le lorsque cela est possible.
+
+Les tests ne doivent pas être modifiés uniquement pour masquer un échec.
+
+Les tests du fournisseur distant doivent utiliser des réponses simulées ou enregistrées. Aucun appel payant réel ne doit être effectué sans autorisation.
+
+---
+
+## 13. PHASE 10 — AMÉLIORER LE RAPPORT ET LE FEEDBACK UTILISATEUR
+
+L'assistant doit expliquer clairement ce qu'il a compris et ce qu'il a réellement fait.
+
+Examine l'interface `AiDirector.tsx`, les réponses du service applicatif et les rapports d'exécution.
+
+Améliore si nécessaire :
+- Le résumé de l'intention comprise.
+- L'identification des projecteurs et des groupes ciblés.
+- L'aperçu des changements.
+- Les paramètres qui seront modifiés.
+- Les avertissements et contraintes.
+- Les actions exclues par l'utilisateur.
+- Le résultat réel de chaque action.
+- Les erreurs précises.
+- Les différences entre l'état prévu et l'état final.
+- La possibilité de corriger une proposition.
+- La possibilité de recommencer sans répéter inutilement les opérations déjà réussies.
+
+Le rapport doit être fondé sur les résultats du moteur, pas sur une déclaration du LLM.
+
+Une proposition ne doit pas être présentée comme une réussite.
+
+Respecte l'internationalisation existante : tout nouveau texte d'interface doit utiliser les catalogues français et anglais conformément aux règles du dépôt.
+
+Conserve les habitudes de l'interface existante et évite une refonte visuelle sans rapport avec les problèmes démontrés.
+
+---
+
+## 14. PHASE 11 — GESTION DES ERREURS ET RÉCUPÉRATION
+
+Teste les scénarios suivants :
+
+- Fournisseur indisponible.
+- Clé API absente ou invalide.
+- Crédits insuffisants.
+- Modèle indisponible.
+- Délai dépassé.
+- Réponse vide ou tronquée.
+- JSON incorrect.
+- Action inconnue.
+- Cible supprimée après génération.
+- Projet modifié pendant le traitement.
+- Application d'une action partiellement réussie.
+- Erreur d'un handler.
+- Réponse tardive d'une ancienne requête.
+- Deux demandes simultanées.
+- Annulation pendant une opération.
+- Interruption pendant une création de scène ou de séquence.
+
+Chaque erreur doit être traitée au bon niveau.
+
+Le mode local doit rester disponible lorsque cela est possible et sûr.
+
+Ne répète pas automatiquement une opération qui pourrait produire des effets de bord.
+
+Ne supprime jamais les erreurs pour donner l'impression que l'assistant fonctionne.
+
+---
+
+## 15. PHASE 12 — ARCHITECTURE ET MAINTENABILITÉ
+
+Améliore la conception uniquement lorsque cela simplifie réellement le système ou élimine un défaut.
+
+Respecte les principes architecturaux du projet :
+
+- `src/core` ne doit pas dépendre d'Electron ou de React.
+- Les communications entre les processus utilisent les contrats partagés existants.
+- Les validations importantes restent présentes à l'exécution.
+- Les actions sont routées vers leurs handlers responsables.
+- Les règles de sécurité ne sont pas dupliquées de manière incohérente.
+- Les erreurs ont des types et des traitements explicites.
+- Les tests couvrent les comportements métier.
+- Les changements restent compatibles avec les formats et contrats existants.
+
+Évite les fichiers géants, les abstractions excessives, les duplications et les dépendances cycliques.
+
+Respecte les limites de taille et les règles de lint du dépôt.
+
+Ne réécris pas entièrement le système si une correction ciblée est plus sûre.
+
+N'ajoute aucune dépendance npm sans nécessité démontrée.
+
+---
+
+## 16. MÉTHODE DE TRAVAIL OBLIGATOIRE
+
+Travaille par étapes courtes, vérifiables et réversibles.
+
+### Étape A — Diagnostic
+
+- Cartographie le pipeline.
+- Exécute les vérifications initiales.
+- Recense les défauts démontrés.
+- Identifie les zones insuffisamment testées.
+- Établis une liste de priorités.
+
+### Étape B — Plan d'intervention
+
+Classe les problèmes par ordre d'importance :
+
+- **P0 :** risque de sécurité, de corruption d'état ou de fonctionnement critique.
+- **P1 :** mauvaise exécution, erreurs majeures de compréhension ou blocage fonctionnel.
+- **P2 :** qualité, performance et fiabilité.
+- **P3 :** améliorations secondaires.
+
+Pour chaque problème, indique le symptôme, la cause racine, les preuves, les fichiers concernés, la correction prévue et les tests nécessaires.
+
+### Étape C — Correction ciblée
+
+Pour chaque défaut :
+1. Reproduis-le.
+2. Identifie sa cause.
+3. Ajoute ou améliore un test de régression.
+4. Applique la correction minimale suffisante.
+5. Exécute les tests ciblés.
+6. Vérifie les effets secondaires.
+7. Passe au défaut suivant.
+
+Ne change pas simultanément de nombreux composants indépendants sans nécessité.
+
+### Étape D — Évaluation globale
+
+Après les corrections :
+- Réexécute les tests concernés.
+- Relance les évaluations de l'IA.
+- Compare les résultats initiaux et finaux.
+- Vérifie les performances.
+- Contrôle les changements de contrats.
+- Recherche les régressions dans les fonctionnalités voisines.
+
+### Étape E — Validation finale
+
+Exécute les commandes réellement disponibles dans le `package.json`, en privilégiant les contrôles définis par le projet, notamment `npm run check`, `npm run eval` et les tests de bout en bout lorsque l'environnement le permet.
+
+Adapte l'ordre et les commandes aux scripts effectivement présents.
+
+Ne prétends jamais avoir exécuté une commande si ce n'est pas le cas.
+
+Si une commande échoue, analyse la cause et détermine si elle est liée aux modifications, à un défaut préexistant ou à l'environnement.
+
+Ne contourne pas un échec en désactivant un test, en supprimant une assertion ou en abaissant arbitrairement un seuil.
+
+---
+
+## 17. RÈGLES POUR ÉVITER LES ERREURS DE CODAGE
+
+Tu dois agir comme un agent de développement fiable.
+
+Respecte les règles suivantes :
+
+1. Lis les fichiers et les fonctions appelées avant de les modifier.
+2. Vérifie les types, les imports et les usages de chaque symbole touché.
+3. Ne suppose pas qu'une fonction existe : recherche sa définition.
+4. Ne remplace pas du code fonctionnel par un exemple simplifié.
+5. N'utilise pas de `any` pour contourner le typage.
+6. Ne désactive pas TypeScript strict, ESLint ou les contrôles de sécurité.
+7. Ne laisse pas de code mort, de TODO de façade ou de fonctions fictives.
+8. Ne prétends pas avoir implémenté une capacité si le parcours utilisateur n'est pas raccordé.
+9. Ne crée pas des tests qui ne vérifient que des mocks sans vérifier les résultats métier nécessaires.
+10. N'effectue pas de refactorisation sans rapport avec l'objectif.
+11. Ne touche pas aux secrets, aux fichiers personnels ou à la configuration locale sans nécessité.
+12. N'écrase jamais les changements préexistants.
+13. Vérifie les fins de ligne, l'encodage, les imports et les formats avant de terminer.
+14. Après une modification, examine le diff pour détecter les changements accidentels.
+15. Ne déclare jamais le travail terminé tant que les vérifications essentielles n'ont pas été effectuées ou que leurs limites ne sont pas explicitement indiquées.
+
+Si un problème nécessite une information que tu ne peux pas obtenir, documente précisément ce qui manque. N'invente pas de preuve et n'attends pas une clarification si tu peux avancer utilement sur les autres problèmes.
+
+---
+
+## 18. LIVRABLES ATTENDUS
+
+À la fin de l'intervention, produis des livrables concrets dans le dépôt.
+
+### A. Rapport d'audit
+
+Crée ou mets à jour `docs/AI-ASSISTANT-AUDIT.md`.
+
+Ce document doit contenir :
+- Le périmètre effectivement examiné.
+- L'architecture observée.
+- Le fonctionnement du pipeline.
+- Les problèmes confirmés.
+- Les risques et les limites de validation.
+- Les résultats initiaux.
+- Les améliorations implémentées.
+- Les tests exécutés et leurs résultats.
+- Les performances mesurées avant et après, si disponibles.
+- Les problèmes restant à résoudre.
+
+Distingue les faits, les hypothèses, les recommandations et les résultats démontrés.
+
+Ne copie pas de secrets ni de contenu sensible dans le rapport.
+
+### B. Plan de tests
+
+Documente les cas de régression ajoutés, les catégories couvertes et les métriques utilisées.
+
+### C. Améliorations du code
+
+Implémente réellement les corrections prioritaires et leurs tests. Ne te limite pas à produire une roadmap.
+
+### D. Rapport final dans ta réponse
+
+Présente un résumé avec :
+- Les principaux défauts détectés.
+- Les causes racines.
+- Les fichiers modifiés.
+- Les corrections réalisées.
+- Les nouvelles capacités réellement raccordées.
+- Les commandes exécutées.
+- Les résultats des tests.
+- Les performances mesurées.
+- Les problèmes non résolus.
+- Les prochaines priorités.
+
+Pour chaque résultat important, indique une preuve concrète : test, assertion, métrique, diff ou comportement reproductible.
+
+---
+
+## 19. CRITÈRES D'ACCEPTATION
+
+L'intervention est considérée comme réussie uniquement si les critères suivants sont vérifiés :
+
+- Les demandes prises en charge sont interprétées avec précision.
+- Les négations et les contraintes sont conservées jusqu'à l'exécution.
+- Les cibles correspondent aux objets réellement visés.
+- Les actions générées respectent les contrats existants.
+- Les actions sont routées et exécutées correctement.
+- Les résultats sont vérifiés et rapportés honnêtement.
+- Les erreurs ne sont pas masquées.
+- Le contexte n'utilise pas des états périmés.
+- Les performances sont mesurées et les optimisations sont justifiées.
+- Les protections du moteur DMX restent intactes.
+- Les tests existants ne régressent pas sans justification.
+- Les nouveaux tests détectent les défauts corrigés.
+- Le code respecte les règles du dépôt.
+- Les limites et les éléments non testés sont explicitement documentés.
+
+Ne vise pas un score artificiel de 100 %. Cherche une amélioration mesurée, reproductible et honnête.
+
+---
+
+## 20. INSTRUCTION FINALE
+
+Commence maintenant par examiner l'état du dépôt, les scripts de validation, l'architecture de l'assistant et les tests existants.
+
+Construis ensuite la cartographie du pipeline, exécute les vérifications initiales et identifie les problèmes prioritaires.
+
+**Ne t'arrête pas après le diagnostic.** Une fois les premières causes confirmées, corrige-les progressivement, ajoute les tests de régression et vérifie les résultats avant de poursuivre.
+
+Privilégie les améliorations qui augmentent directement la compréhension, la fiabilité des actions, la rapidité et la qualité des résultats.
+
+Si le chantier est trop important pour une seule intervention, termine un lot cohérent et validé, documente précisément ce qui reste et poursuis avec la priorité suivante lorsque le contexte et les capacités disponibles le permettent.
+
+Ton objectif n'est pas de modifier le plus de fichiers possible. Ton objectif est de rendre l'assistant réellement meilleur, sans casser l'application, sans compromettre la sécurité et sans inventer des résultats.
+
+**Commence par l'audit réel du code, puis passe à l'implémentation et à la validation.**

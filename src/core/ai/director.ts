@@ -43,7 +43,7 @@ export function resolveAiTarget(index: ProjectIndex, t: AiTarget): { ids: string
     pool = pool.filter((r) => findModule(r.profile, t.module!));
     if (before && !pool.length) problems.push(`Aucun projecteur ciblé n’a de module « ${t.module} »`);
   }
-  if (!hasSelector && !t.fixtureTypes?.length && !t.tags?.length && problems.length) pool = [];
+  if (!hasSelector && ((t.groupNames?.length ?? 0) + (t.fixtureNames?.length ?? 0) > 0 || (!t.fixtureTypes?.length && !t.tags?.length && problems.length))) pool = []; // unresolved names never widen to a whole type
   let ids = pool.map((r) => r.fixture.id);
   if (t.limit) ids = ids.slice(0, t.limit);
   return { ids, problems };
@@ -362,8 +362,8 @@ export function buildProposal(args: {
   };
 }
 
-export function proposeLocally(prompt: string, ctx: ValidationContext, engine: Engine): AiProposal {
-  const r = interpretLocally(prompt, interpreterContext(ctx.index, engine, ctx.allowStrobe));
+export function proposeLocally(prompt: string, ctx: ValidationContext, engine: Engine, lastTargets?: string[]): AiProposal {
+  const r = interpretLocally(prompt, { ...interpreterContext(ctx.index, engine, ctx.allowStrobe), lastTargets });
   return buildProposal({ prompt, provider: 'local', model: null, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx });
 }
 
@@ -479,11 +479,12 @@ export function executeProposal(proposal: AiProposal, ctx: ExecutionContext): Ai
         case 'startEffect': {
           const def = effectFromSpec(index, a.effect, 'manual', ctx.maxStrobeHz);
           ctx.mutate((d) => { d.effects.push(def); });
-          const start = () => { if (!engine.startEffect(def.id, 'ai')) throw new Error('Le moteur a refusé l’effet'); };
-          if (ctx.defer) ctx.defer(start);
-          else start();
+          const done = { index: v.index, summary: v.summary, detail: `Effet démarré sur ${def.targets.fixtureIds.length} projecteur(s)` };
+          report.executed.push(done);
           report.created.effects.push(def.name);
-          report.executed.push({ index: v.index, summary: v.summary, detail: `Effet démarré sur ${def.targets.fixtureIds.length} projecteur(s)` });
+          // Deferred after the commit: a refusal moves the action from executed to skipped (the report is returned after).
+          const start = () => { if (!engine.startEffect(def.id, 'ai')) { report.executed.splice(report.executed.indexOf(done), 1); report.skipped.push({ index: v.index, summary: v.summary, reason: 'Le moteur a refusé l’effet' }); } };
+          if (ctx.defer) ctx.defer(start); else start();
           break;
         }
         case 'stopEffect': {

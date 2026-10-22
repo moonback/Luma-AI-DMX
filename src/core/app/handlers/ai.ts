@@ -71,6 +71,8 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
         }
       }
       app.lastAiUndo = { proposalId: p.id, project: before, revision: app.revision };
+      const thread = threads.get(app); // only executed actions are remembered, never skipped or refused ones
+      if (thread) thread.last = { basis: rigBasis(app), fixtures: [...new Set(report.executed.flatMap((x) => p.actions[x.index]?.fixtureIds ?? []))].flatMap((id) => app.index.fixtures.get(id)?.fixture.name ?? []) };
       app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s)`);
       for (const s of report.skipped) app.logger.warn('IA', `Ignorée — ${s.summary} : ${s.reason}`);
       return report;
@@ -274,7 +276,10 @@ export async function guardBudget(app: AppService): Promise<void> {
 
 /** Last exchanges of the conversation with the remote model, for follow-up requests (« plutôt l’inverse »). */
 const THREAD_TURNS = 3;
-const threads = new WeakMap<AppService, { projectId: string; turns: { prompt: string; answer: string }[] }>();
+const threads = new WeakMap<AppService, { projectId: string; turns: { prompt: string; answer: string }[]; last?: { basis: string; fixtures: string[] } }>();
+
+/** Fixtures the last applied proposal of the thread really acted on (« baisse leur intensité »), while the rig is unchanged. */
+const lastTargets = (app: AppService): string[] | undefined => { const last = threads.get(app)?.last; return last?.basis === rigBasis(app) ? last.fixtures : undefined; };
 
 function threadHistory(app: AppService): { role: 'user' | 'assistant'; content: string }[] {
   const t = threads.get(app);
@@ -325,11 +330,11 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
         app.aiLastError = msg;
         app.logger.error('IA', `Fournisseur OpenRouter indisponible : ${msg}`);
         if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
-        proposal = proposeLocally(prompt, validationCtx(app), app.engine);
+        proposal = proposeLocally(prompt, validationCtx(app), app.engine, continueThread ? lastTargets(app) : undefined);
         proposal.notices.unshift(`Fournisseur OpenRouter indisponible (${msg}) : proposition générée par le mode local déterministe.`);
       }
     } else {
-      proposal = proposeLocally(prompt, validationCtx(app), app.engine);
+      proposal = proposeLocally(prompt, validationCtx(app), app.engine, continueThread ? lastTargets(app) : undefined);
       if (ai.provider === 'openrouter') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
     }
     guardFlashes(app, proposal);
@@ -387,5 +392,6 @@ async function withVision<T>(app: AppService, run: (opts: OpenRouterOptions) => 
     throw err instanceof UserError ? err : new UserError(`Analyse de photo impossible : ${msg}`);
   } finally {
     app.aiBusy = false;
+    app.aiAbort = null;
   }
 }
