@@ -22,10 +22,11 @@ export interface SynthSection {
   voice?: number;
 }
 
-export function synthSong(opts: { bpm: number; sections: SynthSection[]; sr?: number; seed?: number }) {
+export function synthSong(opts: { bpm: number; sections: SynthSection[]; sr?: number; seed?: number; meter?: 3 | 4 }) {
   const sr = opts.sr ?? 22050;
+  const meter = opts.meter ?? 4;
   const beat = 60 / opts.bpm;
-  const bar = 4 * beat;
+  const bar = meter * beat;
   const totalBars = opts.sections.reduce((s, x) => s + x.bars, 0);
   const n = Math.ceil(totalBars * bar * sr) + sr;
   const out = new Float32Array(n);
@@ -56,10 +57,10 @@ export function synthSong(opts: { bpm: number; sections: SynthSection[]; sr?: nu
           return g * s.pad * 0.06 * v * Math.min(1, t * 20);
         });
       }
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < meter; k++) {
         const tb = t0 + k * beat;
         if (s.voice) {
-          const f0 = hz(root + 12 + [0, 4, 7, 4][k]!);
+          const f0 = hz(root + 12 + [0, 4, 7, 4][k % 4]!);
           add(tb, beat * 0.95, (t) => {
             const ph = 2 * Math.PI * f0 * (t - (0.015 / (2 * Math.PI * 5.5)) * Math.cos(2 * Math.PI * 5.5 * t));
             let v = 0;
@@ -68,8 +69,8 @@ export function synthSong(opts: { bpm: number; sections: SynthSection[]; sr?: nu
           });
         }
         if (s.kick) add(tb, 0.25, (t) => g * 0.8 * Math.exp(-t * 18) * Math.sin(2 * Math.PI * (50 + 100 * Math.exp(-t * 30)) * t));
-        if (s.snare && k % 2 === 1) add(tb, 0.18, (t) => g * 0.35 * Math.exp(-t * 25) * rnd());
-        if (s.bass && k % 2 === 0) add(tb, beat * 0.9, (t) => g * (k === 0 ? 0.5 : 0.3) * Math.exp(-t * 3) * Math.sin(2 * Math.PI * hz(root - 24) * t));
+        if (s.snare && (meter === 3 ? k > 0 : k % 2 === 1)) add(tb, 0.18, (t) => g * 0.35 * Math.exp(-t * 25) * rnd());
+        if (s.bass && (meter === 3 ? k === 0 : k % 2 === 0)) add(tb, beat * 0.9, (t) => g * (k === 0 ? 0.5 : 0.3) * Math.exp(-t * 3) * Math.sin(2 * Math.PI * hz(root - 24) * t));
         if (s.hats) for (const h of [0, 0.5]) add(tb + h * beat, 0.05, (t) => g * 0.12 * Math.exp(-t * 80) * (rnd() - 0.8 * Math.sin(2 * Math.PI * 9000 * t)));
       }
       if (s.riser && b >= s.bars - s.riser) {

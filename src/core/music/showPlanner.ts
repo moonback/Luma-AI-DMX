@@ -49,6 +49,7 @@ export function escalation(analysis: SongAnalysis, i: number): number {
 function sectionPlan(
   index: number, energy: number, palette: string[], rig: RigInfo, intent: Intent,
   variant: number, label: SectionLabel, bars = 0, bassShare = 0.5, perBeat = 2, brightness = 0.5,
+  _hasVocals = false, _confidence = 1,
 ): ShowSectionPlan {
   const peak = label === 'chorus' || label === 'drop';
   const alt = (variant + index) % 2 === 0;
@@ -142,6 +143,8 @@ function explain(analysis: SongAnalysis, i: number, p: ShowSectionPlan, intent: 
   if (p.groups.length) parts.push(`groupes demandés : ${p.groups.map((g) => rig.groups?.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}`);
   if (p.focus === 'audience') parts.push('balayage du public');
   else if (p.focus) parts.push(`douche sur ${rig.markers?.find((m) => m.id === p.focus)?.name ?? 'le repère'}`);
+  if (s.confidence !== undefined && s.confidence < 0.7) parts.push(`classification estimée (confiance ${(s.confidence * 100).toFixed(0)} %)`);
+  if (s.hasVocals) parts.push('chant détecté');
   for (const x of p.extras) if (!['colorFollow', 'bassFollow'].includes(x) || (x === 'colorFollow' && intent.colorFollow) || (x === 'bassFollow' && intent.bassFollow)) parts.push(EXTRA_WHY[x]);
   return parts.join(' ; ').slice(0, 300);
 }
@@ -168,7 +171,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     const rot = (s.cluster + variant) % base.length;
     const palette = [...base.slice(rot), ...base.slice(0, rot)];
     if ((label === 'chorus' || label === 'drop') && !intent.colors.length) palette.splice(1, 0, accent);
-    const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60), s.brightness);
+    const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60), s.brightness, s.hasVocals, s.confidence);
     const out = { ...plan, groups: byLabel.get(label) ?? [] };
     return { ...out, why: explain(analysis, i, out, intent, rig) };
   });

@@ -23,9 +23,10 @@ const MIN_ACTIVE_BANDS = 4;
 /** Minimum number of frames required for a meaningful estimate. */
 const MIN_ANALYSIS_SECONDS = 2;
 
-type VocalSegment = {
+export type VocalSegment = {
   t: number;
   duration: number;
+  confidence?: number;
 };
 
 /**
@@ -333,9 +334,13 @@ export function detectVocals(
     const duration = (end - start) / fr;
 
     if (end - start >= minFrames) {
+      let presSum = 0;
+      for (let f = start; f < end; f++) presSum += presence[f] ?? 0;
+      const confidence = Math.max(0.1, Math.min(1, (presSum / (end - start)) * 1.5));
       out.push({
         t: start / fr + offset,
         duration,
+        confidence: Math.round(confidence * 100) / 100,
       });
     }
   }

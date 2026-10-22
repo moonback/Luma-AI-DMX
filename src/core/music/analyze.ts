@@ -156,9 +156,10 @@ function avgVec(vs: Float32Array[], from: number, to: number, dim: number): Floa
  *   bass flux at that beat + 2 × harmonic change from the previous beat.
  * The meter whose best-phase score is highest wins.
  */
-function detectMeter(f: Frames, beats: number[]): { phase: number; meter: 3 | 4 } {
-  if (beats.length < 2) return { phase: 0, meter: 4 };
+function detectMeter(f: Frames, beats: number[]): { phase: number; meter: 3 | 4; confidence: number } {
+  if (beats.length < 2) return { phase: 0, meter: 4, confidence: 1 };
   let bestScore = -Infinity, bestPhase = 0, bestMeter: 3 | 4 = 4;
+  const meterScores: Record<3 | 4, number> = { 3: -Infinity, 4: -Infinity };
   for (const meter of [3, 4] as const) {
     const scores = new Array<number>(meter).fill(0);
     const counts = new Array<number>(meter).fill(0);
@@ -171,10 +172,14 @@ function detectMeter(f: Frames, beats: number[]): { phase: number; meter: 3 | 4 
     }
     for (let k = 0; k < meter; k++) {
       const s = scores[k]! / (counts[k] || 1);
+      if (s > meterScores[meter]) meterScores[meter] = s;
       if (s > bestScore) { bestScore = s; bestPhase = k; bestMeter = meter; }
     }
   }
-  return { phase: bestPhase, meter: bestMeter };
+  const other = bestMeter === 4 ? meterScores[3] : meterScores[4];
+  const denom = Math.abs(bestScore) + Math.abs(other) || 1;
+  const conf = Math.max(0.4, Math.min(1, 0.5 + 0.5 * ((bestScore - other) / denom)));
+  return { phase: bestPhase, meter: bestMeter, confidence: Math.round(conf * 100) / 100 };
 }
 
 /* ---------------- Structure ---------------- */
@@ -416,10 +421,15 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
   for (let i = 0; i + 8 < beats.length; i += 8) local.push((60 * 8) / (beats[i + 8]! - beats[i]!));
   const localMax = local.length ? local.reduce((m, x) => Math.max(m, x), 0) : 0;
   const localMin = local.length ? local.reduce((m, x) => Math.min(m, x), Infinity) : 0;
-  // If we detected tempo changes, it's not stable
   const tempoStable = local.length < 2 || ((localMax - localMin) / median(local) < 0.03 && tempoChanges.length === 0);
 
-  const { phase, meter } = detectMeter(f, beatFrames);
+  const beatDiffs = beats.slice(1).map((t, i) => t - beats[i]!);
+  const meanDiff = mean(beatDiffs) || 1;
+  const stdDiff = Math.sqrt(mean(beatDiffs.map((d) => (d - meanDiff) ** 2))) || 0;
+  const cv = stdDiff / meanDiff;
+  const bpmConfidence = Math.max(0.2, Math.min(1, Math.round((1 - Math.min(0.8, cv * 3)) * 100) / 100));
+
+  const { phase, meter, confidence: meterConfidence } = detectMeter(f, beatFrames);
   const downFrames = beatFrames.filter((_, j) => j % meter === phase);
   const downbeats = downFrames.map(toT);
 
@@ -483,20 +493,46 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
     s.cluster = c;
   });
   const labels = label(raw, raw.map((s) => s.vector));
+  // Extract vocal events first so they can inform section metadata
+  const vocalEvents: SongAnalysis['events'] = [];
+  for (const v of detectVocals(f.bands, f.chroma, f.rms, f.fr, f.offset)) {
+    vocalEvents.push({ t: v.t, kind: 'vocal', duration: Math.min(600, v.duration), confidence: v.confidence ?? 0.8 });
+  }
+
   const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
-  const sections: SongSection[] = raw.map((s, i) => ({
-    start: s.start, end: s.end, label: labels[i]!, cluster: s.cluster,
-    energy: clamp01(s.energy), brightness: clamp01(s.brightness), density: Math.min(50, s.density), bassShare: clamp01(s.bassShare),
-  }));
+  const sections: SongSection[] = raw.map((s, i) => {
+    const span = Math.max(0.1, s.end - s.start);
+    const vocalDuration = vocalEvents.reduce((acc, v) => {
+      const vEnd = v.t + v.duration;
+      const overlap = Math.max(0, Math.min(s.end, vEnd) - Math.max(s.start, v.t));
+      return acc + overlap;
+    }, 0);
+    const vocalRatio = vocalDuration / span;
+    const hasVocals = vocalRatio > 0.12;
+    const vocalConfidence = hasVocals ? Math.min(1, Math.round(Math.min(1, vocalRatio * 1.8) * 100) / 100) : 0;
+
+    let baseConf = 0.85;
+    if (['chorus', 'verse', 'intro', 'outro'].includes(labels[i]!)) baseConf += 0.08;
+    if (span >= 8) baseConf += 0.05;
+    const confidence = Math.max(0.3, Math.min(1, Math.round(baseConf * 100) / 100));
+
+    return {
+      start: s.start, end: s.end, label: labels[i]!, cluster: s.cluster,
+      energy: clamp01(s.energy), brightness: clamp01(s.brightness), density: Math.min(50, s.density), bassShare: clamp01(s.bassShare),
+      confidence,
+      hasVocals,
+      vocalConfidence,
+    };
+  });
 
   // Events.
-  const events: SongAnalysis['events'] = [];
+  const events: SongAnalysis['events'] = [...vocalEvents];
   const peakRms = f.rms.reduce((m, x) => Math.max(m, x), 0) || 1;
   for (let i = 0, start = -1; i <= f.rms.length; i++) {
     const quiet = i < f.rms.length && f.rms[i]! < 0.02 * peakRms;
     if (quiet && start < 0) start = i;
     if (!quiet && start >= 0) {
-      if ((i - start) / f.fr >= 0.5) events.push({ t: toT(start), kind: 'silence', duration: (i - start) / f.fr });
+      if ((i - start) / f.fr >= 0.5) events.push({ t: toT(start), kind: 'silence', duration: (i - start) / f.fr, confidence: 0.95 });
       start = -1;
     }
   }
@@ -505,7 +541,9 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
   for (let i = wb; i < f.onset.length - wa; i++) {
     if (f.onset[i]! < 4 || f.onset[i]! < near(f.onset, i, 3)) continue;
     const before = mean(f.rms.subarray(i - wb, i)), after = mean(f.rms.subarray(i, i + wa));
-    if (after > 1.8 * before && after > 0.3 * peakRms && !events.some((e) => e.kind === 'impact' && Math.abs(e.t - toT(i)) < 2)) events.push({ t: toT(i), kind: 'impact', duration: 0 });
+    if (after > 1.8 * before && after > 0.3 * peakRms && !events.some((e) => e.kind === 'impact' && Math.abs(e.t - toT(i)) < 2)) {
+      events.push({ t: toT(i), kind: 'impact', duration: 0, confidence: 0.9 });
+    }
   }
   for (let k = 1; k < cuts.length - 1; k++) {
     const b = cuts[k]!;
@@ -514,9 +552,10 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
     let len = 0;
     while (b - len - 2 >= cuts[k - 1]! && bars[b - len - 1]!.high > bars[b - len - 2]!.high) len++;
     // At least 2 rising bars and a clear rise (log energy +0.5 ≈ ×1.65).
-    if (len >= 2 && bars[b - 1]!.high - bars[b - len - 1]!.high > 0.5) events.push({ t: bars[b - len - 1]!.start, kind: 'riser', duration: bars[b]!.start - bars[b - len - 1]!.start });
+    if (len >= 2 && bars[b - 1]!.high - bars[b - len - 1]!.high > 0.5) {
+      events.push({ t: bars[b - len - 1]!.start, kind: 'riser', duration: bars[b]!.start - bars[b - len - 1]!.start, confidence: 0.85 });
+    }
   }
-  for (const v of detectVocals(f.bands, f.chroma, f.rms, f.fr, f.offset)) events.push({ t: v.t, kind: 'vocal', duration: Math.min(600, v.duration) });
   events.sort((a, b) => a.t - b.t);
 
   const totalChroma = avgVec(f.chroma, 0, f.chroma.length, 12);
@@ -526,7 +565,9 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
     duration,
     bpm: Math.round((Number.isFinite(bpm) && bpm > 0 ? bpm : 120) * 100) / 100,
     tempoStable: tempoStable && tempoChanges.length === 0,
+    bpmConfidence,
     meter,
+    meterConfidence,
     beats: beats.map((t) => Math.round(t * 1000) / 1000),
     downbeats: downbeats.map((t) => Math.round(t * 1000) / 1000),
     sections,
