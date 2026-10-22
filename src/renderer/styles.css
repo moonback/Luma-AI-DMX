@@ -433,6 +433,7 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .legend { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* 3D stage */
+.stage3d { container-type: inline-size; container-name: stage3d; }
 .stage3d canvas { display: block; }
 .stage3d-toolbar {
   position: absolute;
@@ -450,7 +451,9 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   backdrop-filter: blur(12px) saturate(1.2);
   z-index: 2;
   user-select: none;
+  min-width: 0;
 }
+.stage3d-cam-select { display: none; }
 .stage3d-group {
   display: inline-flex;
   align-items: center;
@@ -611,9 +614,40 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .seg button:focus-visible { outline: 2px solid var(--violet); outline-offset: 1px; }
 .stage-split { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .stage-pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border); }
-.stage-pane .stage3d-toolbar { gap: 4px; }
-.stage-pane .stage3d-toolbar .chip { padding: 3px 6px; }
-.stage-pane .stage3d-toolbar .lbl, .stage-pane .stage3d-status > .small { display: none; }
+.stage-pane .stage3d-toolbar, .view-card .stage3d-toolbar { gap: 4px; }
+.stage-pane .stage3d-toolbar .chip, .view-card .stage3d-toolbar .chip { padding: 3px 6px; }
+
+/* Responsive Container Queries for 3D Viewport */
+@container stage3d (max-width: 920px) {
+  .stage3d-toolbar { gap: 4px; padding: 3px 5px; }
+  .stage3d-toolbar .lbl { display: none; }
+  .stage3d-btn { padding: 0 6px; }
+  .stage3d-status > .small { display: none; }
+}
+
+@container stage3d (max-width: 700px) {
+  .stage3d-cam-pills { display: none; }
+  .stage3d-cam-select {
+    display: inline-block;
+    height: 24px;
+    padding: 0 6px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    max-width: 95px;
+  }
+  .stage3d-cam-group { padding-left: 4px; }
+  .stage3d-group { padding: 1px; gap: 1px; }
+}
+
+@container stage3d (max-width: 500px) {
+  .stage3d-toolbar { gap: 2px; padding: 2px 4px; top: 6px; left: 6px; right: 6px; }
+  .stage3d-btn { padding: 0 4px; height: 23px; }
+  .stage3d-actions-group .stage3d-btn:nth-child(n+3) { display: none; }
+}
 @media (prefers-reduced-motion: reduce) { .stage-view { animation: none; } }
 .stage-empty { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100% - 40px); padding: 8px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.92); border: 1px solid var(--border-strong); z-index: 3; }
 .scene-panel { width: 300px; flex: none; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }

@@ -155,13 +155,35 @@ button.stage-card-head:hover h2 { color: #fff; }
 .fixture-tile-count { position: absolute; right: 7px; top: 6px; font: 500 10px var(--mono); color: var(--text-3); }
 .fixture-tile-fictional { position: absolute; left: 7px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 
-/* Centre: stacked view cards */
+/* Centre: stacked or side-by-side view cards */
 .stage-page .stage-view { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.stage-panes { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.stage-panes.stage-panes-h { flex-direction: row; }
+.stage-panes.stage-panes-h > .view-card { min-width: 0; }
+.stage-panes.stage-panes-h .view-tools .stage-mode-label { display: none; }
+.stage-panes.stage-panes-h .view-tools .seg button { padding: 4px 8px; }
+.stage-panes.stage-panes-h .stage3d-toolbar .lbl { display: none; }
+.stage-panes.stage-panes-h .stage3d-cam-pills { display: none; }
+.stage-panes.stage-panes-h .stage3d-cam-select {
+  display: inline-block;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  max-width: 95px;
+}
+.stage-panes.stage-panes-h .stage3d-toolbar { gap: 4px; padding: 3px 6px; }
+.stage-panes.stage-panes-h .stage3d-btn { padding: 0 6px; }
 .view-card { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .view-head { display: flex; align-items: center; gap: 12px; padding: 7px 10px 7px 14px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .view-head h2 { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; }
 .view-tools { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 .view-tools .btn, .view-tools .select { height: 30px; }
+.view-tools .seg button { display: inline-flex; align-items: center; gap: 5px; }
 .view-tools .seg button.on { background: var(--violet); color: #fff; }
 .view-sep { width: 1px; height: 20px; background: var(--border); }
 .view-body { flex: 1; min-height: 0; position: relative; background: #0a1120; }

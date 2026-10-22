@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Crosshair, ExternalLink, Move, PanelLeftOpen, PanelRightOpen, Theater, X } from 'lucide-react';
+import { Columns2, Crosshair, ExternalLink, Layers, Move, PanelLeft, PanelLeftOpen, PanelRightOpen, Rows2, Theater, X } from 'lucide-react';
 import { useStore, type StageMode } from '../store';
 import { useT } from '../i18n';
 import { useResolved } from '../components/ui';
@@ -33,11 +33,19 @@ export function DetachedStage3D() {
   return <div style={{ height: '100vh' }}>{ready ? <Stage3D /> : <div className="empty">{tr('stagePage.connecting')}</div>}</div>;
 }
 
-/** Plan, 3D, or both (the view choice is remembered in the store). */
+const MODE_ICONS: Record<StageMode, ReactNode> = {
+  '2d': <PanelLeft size={13} />,
+  '3d': <Layers size={13} />,
+  'split': <Rows2 size={13} />,
+  'split-h': <Columns2 size={13} />,
+};
+
+/** Plan, 3D, both stacked or both side by side (view choice remembered in the store). */
 const MODES = [
   { id: '2d', key: 'stagePage.modePlan' },
   { id: '3d', key: 'stagePage.mode3d' },
   { id: 'split', key: 'stagePage.modeSplit' },
+  { id: 'split-h', key: 'stagePage.modeSplitH' },
 ] as const satisfies readonly { id: StageMode; key: string }[];
 
 function StagePage() {
@@ -59,7 +67,19 @@ function StagePage() {
   const tools = (
     <>
       <div className="seg" role="group" aria-label={tr('stagePage.modeAria')} data-testid="stage-mode">
-        {MODES.map((m) => <button key={m.id} className={mode === m.id ? 'on' : ''} aria-pressed={mode === m.id} onClick={() => setMode(m.id)} data-testid={`stage-mode-${m.id}`}>{tr(m.key)}</button>)}
+        {MODES.map((m) => (
+          <button
+            key={m.id}
+            className={mode === m.id ? 'on' : ''}
+            aria-pressed={mode === m.id}
+            onClick={() => setMode(m.id)}
+            data-testid={`stage-mode-${m.id}`}
+            title={tr(m.key)}
+          >
+            {MODE_ICONS[m.id]}
+            <span className="stage-mode-label">{tr(m.key)}</span>
+          </button>
+        ))}
       </div>
       {mode !== '3d' && <button className={`btn sm ${edit ? 'on' : ''}`} aria-pressed={edit} onClick={() => setEdit(!edit)} title={tr('stagePage.positionHint')}><Move size={13} />{tr('stagePage.position')}</button>}
       <span className="view-sep" />
@@ -99,9 +119,6 @@ function StagePage() {
               <button className="btn sm" onClick={() => setPreview(null)}><X size={12} />{tr('stagePage.backLive')}</button>
             </div>
           )}
-          {mode === '2d' && plan(tools)}
-          {mode === '3d' && view3d(<>{tools}<span className="view-sep" />{detach}</>)}
-          {mode === 'split' && <>{plan(tools)}{view3d(detach)}</>}
           {placing && (
             <div className="stage-empty stage-placing" data-testid="placing">
               <Crosshair size={16} />
@@ -116,6 +133,12 @@ function StagePage() {
               {!panels.build && <button className="btn sm" onClick={() => setPanels({ build: true })}><PanelLeftOpen size={12} />{tr('stagePage.build')}</button>}
             </div>
           )}
+          <div className={`stage-panes ${mode === 'split-h' ? 'stage-panes-h' : ''}`}>
+            {mode === '2d' && plan(tools)}
+            {mode === '3d' && view3d(<>{tools}<span className="view-sep" />{detach}</>)}
+            {mode === 'split' && <>{plan(tools)}{view3d(detach)}</>}
+            {mode === 'split-h' && <>{plan(tools)}{view3d(detach)}</>}
+          </div>
         </div>
         {panels.inspect ? <SelectionPanel vis={project.visualizer} mode={mode} /> : (
           <nav className="scene-rail" aria-label={tr('select.expand')}>

@@ -366,7 +366,7 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
         {/* Caméras */}
         <div className="stage3d-group stage3d-cam-group" role="group" aria-label={t('stage3d.cameras')}>
           <span className="stage3d-cam-icon" title={t('stage3d.cameras')}><Camera size={13} /></span>
-          <div className="stage3d-seg">
+          <div className="stage3d-seg stage3d-cam-pills">
             {VIEWS.map((v) => (
               <button key={v.id} className={`chip stage3d-btn ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid={`cam-${v.id}`} onClick={() => pickView(v.id)}>{v.label}</button>
             ))}
@@ -377,6 +377,21 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
               </span>
             ))}
           </div>
+          <select
+            className="select stage3d-cam-select"
+            value={prefs.view}
+            onChange={(e) => pickView(e.target.value)}
+            aria-label={t('stage3d.cameras')}
+            title={t('stage3d.cameras')}
+            data-testid="cam-select"
+          >
+            {VIEWS.map((v) => (
+              <option key={v.id} value={v.id}>{v.label}</option>
+            ))}
+            {vis.views.map((v) => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
           {vis.views.length < 20 && <button className="chip stage3d-btn stage3d-add-cam" onClick={saveView} title={t('stage3d.viewSaveTitle')} aria-label={t('stage3d.viewSaveAria')} data-testid="cam-save"><Plus size={12} /></button>}
         </div>
 

@@ -27,9 +27,9 @@ export const PAGES = [
 ] as const;
 export type PageId = (typeof PAGES)[number]['id'];
 
-/** Stage page view: top-down plan, 3D, or both side by side. Remembered between sessions. */
-export type StageMode = '2d' | '3d' | 'split';
-const STAGE_MODES: readonly StageMode[] = ['2d', '3d', 'split'];
+/** Stage page view: top-down plan, 3D, both stacked or both side by side. Remembered between sessions. */
+export type StageMode = '2d' | '3d' | 'split' | 'split-h';
+const STAGE_MODES: readonly StageMode[] = ['2d', '3d', 'split', 'split-h'];
 const stageModeSaved = (): StageMode => {
   try {
     const v = localStorage.getItem('luma.stageMode') as StageMode | null;

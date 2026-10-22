@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChevronUp, Copy, EllipsisVertical, Focus, MapPin, MousePointer2, PanelRightClose, Trash2 } from 'lucide-react';
-import { confirmAction, useStore } from '../../store';
+import { confirmAction, useStore, type StageMode } from '../../store';
 import { act } from '../../api';
 import { t, useT, type MessageKey } from '../../i18n';
 import { NumberInput, useResolved, useThrottled } from '../../components/ui';
@@ -20,7 +20,7 @@ interface Row { target: Target; name: string; sub: string; icon: ReactNode; at: 
 /** At most this many fixture cards in the inspector (a whole rig selected stays readable). */
 const MAX_FIXTURE_CARDS = 12;
 
-export function SelectionPanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
+export function SelectionPanel({ vis, mode }: { vis: Vis; mode: StageMode }) {
   const tr = useT();
   const has = useStore((s) => !!s.sceneSel || s.selection.length > 0);
   const [propsOpen, setPropsOpen] = useState(true);
@@ -144,7 +144,7 @@ function RowMenu({ row, onClose }: { row: Row; onClose: () => void }) {
 }
 
 /** Properties of the selection, specific to its type (element card, or fixture placement + DMX + programmer). */
-function Inspector({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
+function Inspector({ vis, mode }: { vis: Vis; mode: StageMode }) {
   const tr = useT();
   const selection = useStore((s) => s.selection);
   const sceneSel = useStore((s) => s.sceneSel);
