@@ -15,7 +15,8 @@ import { buildRig, disposeGeometries, disposeRig, rigKey, updateRig, type Rig } 
 import { buildEnvironment, buildLowFog, disposeGroup, propObjectName, setLowFog, trussObjectName } from './environment';
 import { disposeTextures } from './textures';
 import { buildPerformer, buildScreen, disposeScreen, screenKey, updatePerformer, updateScreen, type PerformerRig, type ScreenRig } from './actors';
-import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeReflector, type AmbienceId, type FloorId } from './quality';
+import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeReflector, roomReflections, type AmbienceId, type FloorId } from './quality';
+import { buildCrowd, disposeCrowd, updateCrowd, type Crowd } from './crowd';
 import { screenMediaVersion } from '../../screenMedia';
 import { placeAt } from '../../sceneActions';
 import type { SceneRef } from '../../../core/visualizer/sceneEdit';
@@ -33,16 +34,16 @@ export const VIEWS: { id: ViewId; label: string }[] = [
 ];
 
 /** `view`: a built-in camera id or the id of a view saved in the project. */
-export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number; room: number }
-const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte', exposure: 1, room: 0 };
+export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number; room: number; crowd: boolean }
+const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte', exposure: 1, room: 0, crowd: true };
 
 /** Quality presets: a coherent set of rendering options selectable in one click. */
 export type QualityPresetId = 'edit' | 'balanced' | 'quality' | 'present';
 export const QUALITY_PRESETS: { id: QualityPresetId; labelKey: MessageKey; hintKey: MessageKey; patch: Partial<Prefs> }[] = [
-  { id: 'edit',     labelKey: 'stage3d.preset.edit',     hintKey: 'stage3d.preset.editHint',     patch: { glow: false, pools: false, smoke: false, real: false, haze: 0.3,  exposure: 1,   ambience: 'work',    floor: 'matte'  } },
-  { id: 'balanced', labelKey: 'stage3d.preset.balanced', hintKey: 'stage3d.preset.balancedHint', patch: { glow: true,  pools: true,  smoke: false, real: false, haze: 0.55, exposure: 1,   ambience: 'black',   floor: 'matte'  } },
-  { id: 'quality',  labelKey: 'stage3d.preset.quality',  hintKey: 'stage3d.preset.qualityHint',  patch: { glow: true,  pools: true,  smoke: false, real: true,  haze: 0.65, exposure: 1,   ambience: 'black',   floor: 'lacquer'} },
-  { id: 'present',  labelKey: 'stage3d.preset.present',  hintKey: 'stage3d.preset.presentHint',  patch: { glow: true,  pools: true,  smoke: true,  real: false, haze: 0.8,  exposure: 1.1, ambience: 'club',    floor: 'wet'    } },
+  { id: 'edit',     labelKey: 'stage3d.preset.edit',     hintKey: 'stage3d.preset.editHint',     patch: { glow: false, pools: false, smoke: false, real: false, haze: 0.3,  exposure: 1,   ambience: 'work',    floor: 'matte',   crowd: false } },
+  { id: 'balanced', labelKey: 'stage3d.preset.balanced', hintKey: 'stage3d.preset.balancedHint', patch: { glow: true,  pools: true,  smoke: false, real: false, haze: 0.55, exposure: 1,   ambience: 'black',   floor: 'matte',   crowd: true  } },
+  { id: 'quality',  labelKey: 'stage3d.preset.quality',  hintKey: 'stage3d.preset.qualityHint',  patch: { glow: true,  pools: true,  smoke: false, real: true,  haze: 0.65, exposure: 1,   ambience: 'black',   floor: 'lacquer', crowd: true  } },
+  { id: 'present',  labelKey: 'stage3d.preset.present',  hintKey: 'stage3d.preset.presentHint',  patch: { glow: true,  pools: true,  smoke: true,  real: false, haze: 0.8,  exposure: 1.1, ambience: 'club',    floor: 'wet',     crowd: true  } },
 ];
 
 /** Editor grid steps in meters (0 = free); rotations snap to 15° whenever a grid is on. */
@@ -156,6 +157,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
   renderer.toneMappingExposure = 1.1;
   el.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
+  scene.environment = roomReflections(renderer);
   scene.background = new THREE.Color(0x05060a);
   scene.fog = new THREE.Fog(0x05060a, 30, 70);
   const hemi = new THREE.HemisphereLight(0x8899bb, 0x0b0d14, 0.5);
@@ -292,6 +294,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
   let env: THREE.Group | null = null;
   let fog: THREE.Group | null = null;
   let envKey = '';
+  let crowd: Crowd | null = null;
   const rigs = new Map<string, Rig>();
 
   // Camera transitions.
@@ -443,6 +446,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       env.traverse((o) => { if (o instanceof THREE.Mesh) { o.receiveShadow = true; o.castShadow = !!(o.userData.trussId || o.userData.propId); } });
       fog = buildLowFog(st);
       scene.add(env, fog);
+      if (crowd) { scene.remove(crowd.mesh); disposeCrowd(crowd); } scene.add((crowd = buildCrowd(st)).mesh);
       envKey = k;
       ambienceKey = ''; // the floor mirror follows the stage outline
     }
@@ -537,6 +541,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       camera.lookAt(camera.position.clone().addScaledVector(dir, 10));
       anim = null;
     } else controls.update();
+    if (crowd) { crowd.mesh.visible = p.crowd; if (p.crowd) updateCrowd(crowd, (now - t0) / 1000, useStore.getState().runtime?.audio, camera.position); }
     if (bloom.enabled) composer.render();
     else renderer.render(scene, camera);
     if (wantCapture) {
@@ -578,6 +583,8 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     for (const r of rigs.values()) disposeRig(r, scene);
     if (env) disposeGroup(env);
     if (fog) disposeGroup(fog);
+    if (crowd) disposeCrowd(crowd);
+    scene.environment?.dispose(); // room reflections
     if (floorGroup) disposeReflector(floorGroup);
     for (const r of performers.values()) disposeGroup(r.group);
     for (const r of screens.values()) disposeScreen(r);

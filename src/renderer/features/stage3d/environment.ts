@@ -4,6 +4,7 @@ import type { StageGeometry } from '../../../core/visualizer/beam';
 import type { Project, StageMarker, StageProp, Truss } from '../../../core/model/schemas';
 import { JUNCTION_ARMS, trussSupports } from '../../../core/visualizer/truss';
 import { labelSprite } from './rig';
+import { DECK_TILE_M, textures } from './textures';
 
 /**
  * Stage set: deck, back wall (cyclorama catching the light), wings, audience floor, and box trusses built from
@@ -210,7 +211,15 @@ export function buildEnvironment(
   const { width: W, depth: D, wallHeight: H } = stage;
 
   const deckMat = new THREE.MeshStandardMaterial({ color: 0x14171f, roughness: 0.85, metalness: 0.05 });
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(W, 1, D), deckMat);
+  const planksMat = new THREE.MeshStandardMaterial({ color: 0x1d2029, roughness: 0.8, metalness: 0.05, map: textures().deck });
+  // Planks on the top face only (box faces: +x, -x, +y, -y, +z, -z), UVs in tiles so boards keep their real width.
+  const plankedBox = (w: number, d: number) => {
+    const geo = new THREE.BoxGeometry(w, 1, d);
+    const uv = geo.attributes.uv!;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / DECK_TILE_M, (uv.getY(i) * d) / DECK_TILE_M);
+    return new THREE.Mesh(geo, [deckMat, deckMat, planksMat, deckMat, deckMat, deckMat]);
+  };
+  const deck = plankedBox(W, D);
   deck.position.set(0, -0.5, -D / 2);
   env.add(deck);
   const lip = new THREE.Mesh(new THREE.BoxGeometry(W, 0.04, 0.04), new THREE.MeshBasicMaterial({ color: 0x8b5cf6 }));
@@ -225,7 +234,7 @@ export function buildEnvironment(
 
   if (stage.thrust) {
     const { width: tw, depth: td } = stage.thrust;
-    const runway = new THREE.Mesh(new THREE.BoxGeometry(tw, 1, td), deckMat);
+    const runway = plankedBox(tw, td);
     runway.position.set(0, -0.5, td / 2);
     env.add(runway);
     const edges = new THREE.LineSegments(
@@ -253,9 +262,14 @@ export function buildEnvironment(
     env.add(cyc);
   }
   if (!stage.arena) {
-    const wingMat = new THREE.MeshStandardMaterial({ color: 0x0a0b10, roughness: 1 });
+    // Black velvet: pleated cloth with a soft sheen catching the side light.
+    const wingMat = new THREE.MeshPhysicalMaterial({ color: 0x0a0b10, roughness: 1, sheen: 1, sheenColor: 0x2a2d3a, sheenRoughness: 0.6, side: THREE.DoubleSide });
+    const pleats = new THREE.PlaneGeometry(D, H, Math.max(16, Math.round(D * 10)), 1);
+    const pos = pleats.attributes.position!;
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * 11) * 0.06);
+    pleats.computeVertexNormals();
     for (const x of [-W / 2 - 0.5, W / 2 + 0.5]) {
-      const wing = new THREE.Mesh(new THREE.PlaneGeometry(D, H), wingMat);
+      const wing = new THREE.Mesh(x < 0 ? pleats : pleats.clone(), wingMat);
       wing.rotation.y = Math.PI / 2;
       wing.position.set(x, H / 2, -D / 2);
       env.add(wing);

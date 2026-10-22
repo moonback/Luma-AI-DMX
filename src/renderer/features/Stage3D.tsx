@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Camera, CircleStop, Cloud, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Orbit, Plus, Presentation, Rotate3d, ScanEye, SlidersHorizontal, Sparkles, SunMedium, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
+import { Camera, CircleStop, Cloud, Users, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Orbit, Plus, Presentation, Rotate3d, ScanEye, SlidersHorizontal, Sparkles, SunMedium, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { useResolved } from '../components/ui';
@@ -458,6 +458,7 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
               <button className={`chip ${prefs.glow ? 'on' : ''}`} onClick={() => setPrefs({ glow: !prefs.glow })} title={t('stage3d.glowTitle')}><Sparkles size={12} /> {t('stage3d.glowBtn')}</button>
               <button className={`chip ${prefs.pools ? 'on' : ''}`} onClick={() => setPrefs({ pools: !prefs.pools })} title={t('stage3d.poolsTitle')}><Eye size={12} /> {t('stage3d.poolsBtn')}</button>
               <button className={`chip ${prefs.smoke ? 'on' : ''}`} onClick={() => setPrefs({ smoke: !prefs.smoke })} title={t('stage3d.smokeTitle')} data-testid="smoke"><Cloud size={12} /> {t('stage3d.smokeBtn')}</button>
+              <button className={`chip ${prefs.crowd ? 'on' : ''}`} onClick={() => setPrefs({ crowd: !prefs.crowd })} title={t('stage3d.crowdTitle')} data-testid="crowd"><Users size={12} /> {t('stage3d.crowdBtn')}</button>
               <button className={`chip ${prefs.labels ? 'on' : ''}`} onClick={() => setPrefs({ labels: !prefs.labels })} title={t('stage3d.labelsTitle')}><Tag size={12} /> {t('stage3d.labelsBtn')}</button>
               <button className={`chip ${prefs.real ? 'on' : ''}`} onClick={() => setPrefs({ real: !prefs.real })} title={`${t('stage3d.shadowsBtn')} (${LIGHT_BUDGET.min}–${LIGHT_BUDGET.max})`} data-testid="real-lights"><Lightbulb size={12} /> {prefs.real && lights ? t('stage3d.shadowsBtnActive', { n: lights }) : t('stage3d.shadowsBtn')}</button>
             </div>
