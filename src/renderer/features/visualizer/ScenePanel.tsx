@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, ArrowLeft, Boxes, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, Music2, PanelLeftClose, Presentation, Radio, Redo2, Shapes, Sparkles, Theater, Undo2, UserRound, Wand2 } from 'lucide-react';
+import { Armchair, ArrowLeft, Boxes, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, Music2, PanelLeftClose, Presentation, Radio, Redo2, Shapes, Sparkles, Theater, Undo2, Unplug, UserRound, Wand2 } from 'lucide-react';
+import type { EquipDistributionMode } from '../../../core/visualizer/sceneEdit';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
 import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
@@ -10,7 +11,7 @@ import { setScreenVideo } from '../../screenMedia';
 import { JUNCTION_ARMS } from '../../../core/visualizer/truss';
 import { LIBRARY, type LibraryItem } from '../../../core/visualizer/library';
 import { SCENE_LABEL, canAdd, type SceneKind } from '../../../core/visualizer/sceneEdit';
-import { LIBRARY_MIME, addSceneElement, equipRig } from '../../sceneActions';
+import { LIBRARY_MIME, addSceneElement, equipRig, unhangRig } from '../../sceneActions';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate, type SceneTemplateId } from '../../../core/visualizer/templates';
 import { channelCount } from '../../../core/fixtures/profiles';
 import { FIXTURE_TYPES, type FixtureProfile, type FixtureType, type Truss } from '../../../core/model/schemas';
@@ -204,17 +205,88 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
   );
 }
 
+const DISTRIB_MODES: { id: EquipDistributionMode; label: string; title: string }[] = [
+  { id: 'standard',  label: 'Standard',  title: 'Lyres en contre (upstage), fixes en face (downstage)' },
+  { id: 'inverted',  label: 'Inversé',   title: 'Lyres en face (downstage), fixes en contre (upstage)' },
+  { id: 'balanced',  label: 'Équilibré', title: 'Tous les projecteurs mélangés sur toutes les structures' },
+];
+
 /** Hangs the hung fixtures (or the selection) evenly on the trusses; one undoable step. */
 function EquipButton({ vis }: { vis: Vis }) {
   const { fixtures } = useResolved();
   const selection = useStore((s) => s.selection);
+  const sceneSel = useStore((s) => s.sceneSel);
+  const selectedTruss = sceneSel?.kind === 'truss' ? vis.trusses.find((t) => t.id === sceneSel.id) : null;
+  const [mode, setMode] = useState<EquipDistributionMode>('standard');
+  // Build the visual model once; VisualFixture has trussId while ResolvedFixture does not.
+  const visualFixtures = useMemo(() => buildVisualModel(fixtures, {}), [fixtures]);
   if (!vis.trusses.length || !fixtures.length) return null;
+
+  const targetTrussId = selectedTruss?.id;
+  const hungCount = visualFixtures.filter((f) => f.trussId && (targetTrussId ? f.trussId === targetTrussId : true)).length;
+  // Show distribution toggle only when ≥2 non-totem trusses (otherwise the mode has no visible effect)
+  const nonTotems = vis.trusses.filter((t) => t.shape !== 'totem');
+  const showModeToggle = nonTotems.length >= 2;
+
+  let equipLabel = 'Équiper les structures';
+  if (selectedTruss) {
+    equipLabel = selection.length
+      ? `Équiper « ${selectedTruss.name} » (${selection.length})`
+      : `Équiper « ${selectedTruss.name} »`;
+  } else if (selection.length) {
+    equipLabel = `Équiper avec la sélection (${selection.length})`;
+  }
+
   return (
     <div className="build-equip-bar">
-      <button className="btn sm primary build-equip-btn" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
-        title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
-        <Wand2 size={13} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
-      </button>
+      <div className="build-equip-row">
+        <button
+          type="button"
+          className="btn sm primary build-equip-btn"
+          onClick={() => equipRig(visualFixtures, targetTrussId, { mode })}
+          data-testid="equip"
+          title={
+            selectedTruss
+              ? `Répartir les projecteurs sur « ${selectedTruss.name} » — mode ${mode} (Ctrl+Z pour annuler)`
+              : `Répartir les projecteurs sur les structures — mode ${mode} (Ctrl+Z pour annuler)`
+          }
+        >
+          <Wand2 size={13} />
+          <span>{equipLabel}</span>
+        </button>
+        {hungCount > 0 && (
+          <button
+            type="button"
+            className="btn sm ghost icon build-unhang-btn"
+            onClick={() => unhangRig(targetTrussId)}
+            data-testid="unhang"
+            title={
+              selectedTruss
+                ? `Décrocher les ${hungCount} projecteur(s) de « ${selectedTruss.name} » (Ctrl+Z pour annuler)`
+                : `Décrocher tous les projecteurs des structures (${hungCount}) (Ctrl+Z pour annuler)`
+            }
+          >
+            <Unplug size={14} />
+          </button>
+        )}
+      </div>
+      {showModeToggle && (
+        <div className="build-equip-modes" role="group" aria-label="Mode de répartition">
+          {DISTRIB_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className={`build-equip-mode-btn ${mode === m.id ? 'on' : ''}`}
+              onClick={() => setMode(m.id)}
+              title={m.title}
+              aria-pressed={mode === m.id}
+              data-testid={`equip-mode-${m.id}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

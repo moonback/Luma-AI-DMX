@@ -13,7 +13,7 @@ import { sceneFromText } from '../core/visualizer/sceneFromText';
 import { libraryItem } from '../core/visualizer/library';
 import {
   SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
-  type EquipFixture, type PlaceSpec, type SceneKind, type SceneRef,
+  type EquipFixture, type EquipOptions, type PlaceSpec, type SceneKind, type SceneRef,
 } from '../core/visualizer/sceneEdit';
 
 /** Scene-element actions shared by the scene panel, the 2D plan and the 3D view (all undoable with Ctrl+Z). */
@@ -128,17 +128,31 @@ export async function pasteSceneElement(): Promise<void> {
  * Hangs the selected fixtures (or every hung fixture, floor and wall ones staying put) evenly on the trusses:
  * moving heads at the back, the others at the front. One undo step.
  */
-export function equipRig(model: readonly VisualFixture[]): void {
+export function equipRig(model: readonly VisualFixture[], targetTrussId?: string, options?: EquipOptions): void {
   const v = vis();
   const patch = useStore.getState().project?.project.patch ?? [];
   if (!v?.trusses.length) return;
   const sel = new Set(useStore.getState().selection);
   const explicit = new Map(patch.map((f) => [f.id, f.mount ?? 'auto']));
   const chosen = model.filter((f) => (sel.size ? sel.has(f.id) : f.mount === 'hanging'));
+  const trussesToEquip = targetTrussId ? v.trusses.filter((t) => t.id === targetTrussId) : v.trusses;
   // A selected floor / wall fixture is re-mounted as hung; 'auto' follows its new height.
-  const placements = equipTrusses(chosen, v.trusses).map((p) => ({ ...p, ...(['floor', 'wall'].includes(explicit.get(p.id) ?? 'auto') ? { mount: 'hanging' as const } : {}) }));
+  const placements = equipTrusses(chosen, trussesToEquip.length ? trussesToEquip : v.trusses, options)
+    .map((p) => ({ ...p, ...(['floor', 'wall'].includes(explicit.get(p.id) ?? 'auto') ? { mount: 'hanging' as const } : {}) }));
   if (!placements.length) { toast('Rien à accrocher', 'Aucun projecteur suspendu ou sélectionné.'); return; }
   void act({ type: 'fixture.place', placements }).then((r) => r !== undefined && toast(`${placements.length} projecteur(s) accroché(s)`, 'Ctrl+Z pour annuler'));
+}
+
+/**
+ * Detaches fixtures from trusses (all trusses or targetTrussId); one undoable step.
+ */
+export function unhangRig(targetTrussId?: string): void {
+  const patch = useStore.getState().project?.project.patch ?? [];
+  const sel = new Set(useStore.getState().selection);
+  const toUnhang = patch.filter((f) => f.trussId && (targetTrussId ? f.trussId === targetTrussId : true) && (sel.size ? sel.has(f.id) : true));
+  if (!toUnhang.length) { toast('Rien à décrocher', 'Aucun projecteur accroché.'); return; }
+  const placements = toUnhang.map((f) => ({ id: f.id, position: f.position, height: f.height, trussId: null }));
+  void act({ type: 'fixture.place', placements }).then((r) => r !== undefined && toast(`${toUnhang.length} projecteur(s) décroché(s)`, 'Ctrl+Z pour annuler'));
 }
 
 /**

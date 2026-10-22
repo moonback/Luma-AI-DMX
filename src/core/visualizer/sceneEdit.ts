@@ -106,6 +106,12 @@ export function parseElement(text: string): { kind: SceneKind; el: Element } | n
 /** Share of a totem in the spread (as many fixtures as 1 m of straight truss), and spacing of stacked fixtures. */
 const TOTEM_SHARE = 1, TOTEM_STEP = 0.5;
 
+export type EquipDistributionMode = 'standard' | 'inverted' | 'balanced';
+
+export interface EquipOptions {
+  mode?: EquipDistributionMode;
+}
+
 export interface EquipFixture { id: string; movable: boolean; type?: string }
 export interface Placement { id: string; position: P2; height: number; trussId: string }
 
@@ -167,16 +173,31 @@ function mix(fx: readonly EquipFixture[]): EquipFixture[] {
  * Hangs fixtures evenly on the trusses: moving heads on the upstage half of the trusses (back light), the others on
  * the downstage half (front light); with a single truss, or when one family is missing, everything shares all trusses.
  */
-export function equipTrusses(fixtures: readonly EquipFixture[], trusses: readonly Truss[]): Placement[] {
+export function equipTrusses(
+  fixtures: readonly EquipFixture[],
+  trusses: readonly Truss[],
+  options?: EquipOptions,
+): Placement[] {
   const usable = trusses.filter((t) => t.shape === 'totem' || trussSegments(t).length);
   if (!usable.length || !fixtures.length) return [];
   const byDepth = [...usable].sort((a, b) => a.y - b.y);
   const half = Math.ceil(byDepth.length / 2);
   const movers = fixtures.filter((f) => f.movable), fixed = fixtures.filter((f) => !f.movable);
-  // Single truss: both families share it in one spread (two spreads would land on the same points).
-  const groups = movers.length && fixed.length && byDepth.length > 1
-    ? [{ fx: movers, on: byDepth.slice(half) }, { fx: fixed, on: byDepth.slice(0, half) }]
-    : [{ fx: [...fixtures], on: byDepth }];
+  const mode = options?.mode ?? 'standard';
+
+  let groups: { fx: EquipFixture[]; on: Truss[] }[];
+  if (movers.length && fixed.length && byDepth.length > 1 && mode !== 'balanced') {
+    if (mode === 'inverted') {
+      // Inverted: movers downstage (face / front), fixed upstage (contre / back)
+      groups = [{ fx: movers, on: byDepth.slice(0, half) }, { fx: fixed, on: byDepth.slice(half) }];
+    } else {
+      // Standard: movers upstage (contre / back), fixed downstage (face / front)
+      groups = [{ fx: movers, on: byDepth.slice(half) }, { fx: fixed, on: byDepth.slice(0, half) }];
+    }
+  } else {
+    // Single truss, missing family, or balanced: all fixtures share all trusses evenly
+    groups = [{ fx: [...fixtures], on: byDepth }];
+  }
   const onTotem = new Map<string, number>();
   return groups.flatMap(({ fx, on }) => {
     const pts = spread(on, fx.length), all = mix(fx);
