@@ -69,6 +69,8 @@ Effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaines et plus
 >
 > Pour poser une pièce : cliquer la tuile puis le plateau, ou glisser la tuile sur la vue 2D ou 3D (point d'impact sur le sol). Chaque tuile a un petit dessin vu de dessus.
 >
+> **Refonte (22/10/2026)** : le panneau Construire présente cinq catégories — Point (profils de projecteurs du patch, posés et adressés en un clic), Structure, Décor, Interprète, Écran — et un panneau Sélection à droite (hiérarchie + propriétés). Détails : `docs/audits/stage-interface-audit.md`.
+>
 > - **Nouveaux types de structure** : `corner`, `tee`, `cross` (bras mesurés depuis le nœud) et `totem` (tour verticale du sol à sa hauteur). Nouveau support « Posée (assemblage) » : ni pieds ni moteurs.
 > - **Aimantation bout à bout** (35 cm) à la pose, au glisser 2D et au gizmo 3D : la pièce rejoint l'extrémité la plus proche et prend sa hauteur (une droite sur un totem se pose à son sommet).
 > - **Décor** : nouveau tableau `visualizer.props` avec type, dimensions, élévation (empilement), rotation et couleur. Rendu 3D par type, avec ombres en mode éclairage réel. Section « Décor » dans le panneau.

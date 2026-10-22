@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, Boxes, Camera, Copy, Crosshair, LayoutTemplate, Library, MapPin, Monitor, PanelLeftClose, Redo2, Settings2, Theater, Trash2, Undo2, UserRound, Wand2 } from 'lucide-react';
+import { Armchair, ArrowLeft, Boxes, Camera, ChevronRight, Crosshair, LayoutTemplate, Lightbulb, MapPin, Monitor, PanelLeftClose, Redo2, Theater, Undo2, UserRound, Wand2 } from 'lucide-react';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
 import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
@@ -8,43 +8,45 @@ import { useResolved } from '../../components/ui';
 import { buildVisualModel } from '../../../core/visualizer/model';
 import { setScreenVideo } from '../../screenMedia';
 import { JUNCTION_ARMS } from '../../../core/visualizer/truss';
-import { LIBRARY, LIBRARY_GROUPS, type LibraryGroup, type LibraryItem } from '../../../core/visualizer/library';
-import { SCENE_LABEL, canAdd, findElement, type SceneKind } from '../../../core/visualizer/sceneEdit';
-import { LIBRARY_MIME, addSceneElement, duplicateSceneElement, equipRig, removeSceneElement } from '../../sceneActions';
+import { LIBRARY, type LibraryItem } from '../../../core/visualizer/library';
+import { SCENE_LABEL, canAdd, type SceneKind } from '../../../core/visualizer/sceneEdit';
+import { LIBRARY_MIME, addSceneElement, equipRig } from '../../sceneActions';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../../core/visualizer/templates';
-import { shrinkImage, type Vis, Section, Num, MarkerCard, PropCard, TrussCard, PerformerCard, ScreenCard, ElementCard, FixtureCard } from './sceneCards';
+import { channelCount } from '../../../core/fixtures/profiles';
+import { FIXTURE_TYPES, type FixtureProfile, type FixtureType, type Truss } from '../../../core/model/schemas';
+import { shrinkImage, type Vis, Section, Num, MarkerCard, PropCard, TrussCard, PerformerCard, ScreenCard } from './sceneCards';
 
-/* Side panel shared by the 2D and 3D views: templates, library, element lists, selection inspector, undo / redo. */
+/* Left panel of the Stage page: the five Construire categories, their catalogues (real fixture profiles and the stage
+   element library), the elements of each kind already on stage, the stage shape and starting templates. */
+
+export type BuildCat = 'point' | 'structure' | 'decor' | 'performer' | 'screen';
+
+const CATS: { id: BuildCat; icon: ReactNode; items: (x: LibraryItem) => boolean }[] = [
+  { id: 'point', icon: <Lightbulb size={22} />, items: () => false },
+  { id: 'structure', icon: <Boxes size={22} />, items: (x) => x.kind === 'truss' },
+  { id: 'decor', icon: <Armchair size={22} />, items: (x) => x.kind === 'prop' },
+  { id: 'performer', icon: <UserRound size={22} />, items: (x) => x.kind === 'performer' || x.kind === 'marker' },
+  { id: 'screen', icon: <Monitor size={22} />, items: (x) => x.kind === 'screen' },
+];
 
 const SHAPES: { id: Vis['shape']; label: string }[] = [
   { id: 'rect', label: 'Rectangle' }, { id: 'thrust', label: 'Avancée' }, { id: 'arena', label: 'Arène (360°)' },
 ];
 
+/** Lower-case, accent-free text for the catalogue search ("Écran" matches "ecran"). */
+export const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
 /** Quick-add tile: "+" (next free spot) and "place with a click on the stage" for one kind of element. */
 function AddBtn({ kind, label, icon, testId }: { kind: SceneKind; label: MessageKey; icon: ReactNode; testId: string }) {
   const tr = useT();
   const full = useStore((s) => !canAdd(s.project!.project.visualizer, kind));
-  const placing = useStore((s) => s.placing?.kind === kind && !s.placing.preset);
+  const placing = useStore((s) => s.placing?.kind === kind && !('preset' in s.placing && s.placing.preset));
   const name = SCENE_LABEL[kind].toLowerCase();
   return (
     <div className={`scene-add ${placing ? 'on' : ''}`}>
       <button className="scene-add-main" onClick={() => addSceneElement(kind)} disabled={full} title={tr('scene.addTitle', { name })} data-testid={testId}>{icon}<span>{tr(label)}</span></button>
       <button className="scene-add-place" onClick={() => useStore.getState().setPlacing(placing ? null : { kind, label: name })} disabled={full} aria-pressed={placing}
         title={tr('scene.placeTitle')} aria-label={tr('scene.placeLabel', { name })} data-testid={`${testId}-place`}><Crosshair size={11} /></button>
-    </div>
-  );
-}
-
-/** Always-visible add bar at the top of the build tab, so adding never needs scrolling to a section. */
-function QuickAdd() {
-  const tr = useT();
-  return (
-    <div className="scene-quickadd" role="toolbar" aria-label={tr('scene.addBar')}>
-      <AddBtn kind="marker" label="scene.addMarker" icon={<MapPin size={14} />} testId="marker-add" />
-      <AddBtn kind="truss" label="scene.addTruss" icon={<Boxes size={14} />} testId="truss-add" />
-      <AddBtn kind="prop" label="scene.addProp" icon={<Armchair size={14} />} testId="prop-add" />
-      <AddBtn kind="performer" label="scene.addPerformer" icon={<UserRound size={14} />} testId="performer-add" />
-      <AddBtn kind="screen" label="scene.addScreen" icon={<Monitor size={14} />} testId="screen-add" />
     </div>
   );
 }
@@ -71,78 +73,228 @@ function TemplatePicker({ vis }: { vis: Vis }) {
   );
 }
 
-/** Side panel shared by the 2D and 3D views: build the scene (template, library, elements) or inspect the selection. */
-export function ScenePanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
+/** Stage shape and size. */
+function StageSettings({ vis }: { vis: Vis }) {
   const tr = useT();
-  const tab = useStore((s) => s.scenePanel) ?? 'build';
-  const setTab = useStore((s) => s.setScenePanel);
-  const count = useStore((s) => (s.sceneSel ? 1 : s.selection.length));
   const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
   return (
-    <aside className="scene-panel" aria-label={tr('stagePanel.aria')}>
+    <Section icon={<Theater size={13} />} title={tr('build.stage')}>
+      <div className="chips" role="group" aria-label={tr('build.stage')}>
+        {SHAPES.map((sh) => <button key={sh.id} className={`chip ${vis.shape === sh.id ? 'on' : ''}`} data-testid={`shape-${sh.id}`} onClick={() => update({ shape: sh.id })}>{sh.label}</button>)}
+      </div>
+      <div className="scene-card-grid">
+        <Num label="Largeur" title="Largeur du plateau, jardin ↔ cour (m)" value={vis.stageWidth} min={2} max={200} step={1} onChange={(v) => update({ stageWidth: v })} />
+        <Num label="Profondeur" title="Profondeur du plateau (m)" value={vis.stageDepth} min={2} max={200} step={1} onChange={(v) => update({ stageDepth: v })} />
+        {vis.shape !== 'arena' && (
+          <label className="row small scene-check"><input type="checkbox" checked={vis.cyclo} onChange={(e) => update({ cyclo: e.target.checked })} data-testid="cyclo" />Cyclorama</label>
+        )}
+        {vis.shape === 'thrust' && (
+          <>
+            <Num label="Avancée L" title="Largeur de l’avancée (m)" value={vis.thrust.width} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, width: v } })} />
+            <Num label="Avancée P" title="Profondeur de l’avancée (m)" value={vis.thrust.depth} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, depth: v } })} />
+          </>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+/** Left panel of the Stage page: Construire categories → catalogue of the chosen category. */
+export function ScenePanel({ vis }: { vis: Vis }) {
+  const tr = useT();
+  const [cat, setCat] = useState<BuildCat | null>(null);
+  const current = CATS.find((c) => c.id === cat);
+  return (
+    <aside className="scene-panel build-panel" aria-label={tr('build.title')}>
       <div className="scene-panel-head">
-        <div className="chips grow" role="tablist" aria-label={tr('stagePanel.tabs')}>
-          <button role="tab" aria-selected={tab === 'build'} className={`chip ${tab === 'build' ? 'on' : ''}`} onClick={() => setTab('build')} data-testid="panel-build"><Settings2 size={12} />{tr('stagePanel.build')}</button>
-          <button role="tab" aria-selected={tab === 'selection'} className={`chip ${tab === 'selection' ? 'on' : ''}`} onClick={() => setTab('selection')} data-testid="panel-selection">{tr('stagePanel.selection')}{count ? ` (${count})` : ''}</button>
-        </div>
+        <h2 className="panel-title grow">{tr('build.title')}</h2>
         <button className="btn ghost sm icon" onClick={() => useStore.getState().setHelp('stage')} title={tr('stagePanel.wizardHint')} aria-label={tr('stagePanel.wizard')} data-testid="stage-wizard-open"><Wand2 size={14} /></button>
-        <button className="btn ghost sm icon" onClick={() => setTab(null)} title={tr('stagePanel.close')} aria-label={tr('stagePanel.close')}><PanelLeftClose size={14} /></button>
+        <button className="btn ghost sm icon" onClick={() => useStore.getState().setStagePanels({ build: false })} title={tr('build.collapse')} aria-label={tr('build.collapse')} data-testid="build-collapse"><PanelLeftClose size={14} /></button>
       </div>
-      {tab === 'selection' ? <div className="scene-panel-body" data-testid="stage-selection"><SelectionTab vis={vis} mode={mode} /></div> : (
       <div className="scene-panel-body" data-testid="stage-settings">
-        <QuickAdd />
-        <Section icon={<LayoutTemplate size={13} />} title="Partir d’un modèle" open={!hasSceneContent(vis)}>
-          <TemplatePicker vis={vis} />
-          <label className="btn sm" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
-            <Camera size={12} />{t('photo.button')}
-            <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
-            }} />
-          </label>
-        </Section>
-        <Section icon={<Theater size={13} />} title="Plateau">
-          <div className="chips" role="group" aria-label="Forme du plateau">
-            {SHAPES.map((sh) => <button key={sh.id} className={`chip ${vis.shape === sh.id ? 'on' : ''}`} data-testid={`shape-${sh.id}`} onClick={() => update({ shape: sh.id })}>{sh.label}</button>)}
-          </div>
-          <div className="scene-card-grid">
-            <Num label="Largeur" title="Largeur du plateau, jardin ↔ cour (m)" value={vis.stageWidth} min={2} max={200} step={1} onChange={(v) => update({ stageWidth: v })} />
-            <Num label="Profondeur" title="Profondeur du plateau (m)" value={vis.stageDepth} min={2} max={200} step={1} onChange={(v) => update({ stageDepth: v })} />
-            {vis.shape !== 'arena' && (
-              <label className="row small scene-check"><input type="checkbox" checked={vis.cyclo} onChange={(e) => update({ cyclo: e.target.checked })} data-testid="cyclo" />Cyclorama</label>
-            )}
-            {vis.shape === 'thrust' && (
-              <>
-                <Num label="Avancée L" title="Largeur de l’avancée (m)" value={vis.thrust.width} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, width: v } })} />
-                <Num label="Avancée P" title="Profondeur de l’avancée (m)" value={vis.thrust.depth} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, depth: v } })} />
-              </>
-            )}
-          </div>
-        </Section>
-        <Section icon={<Library size={13} />} title="Bibliothèque">
-          <LibraryPicker />
-        </Section>
-        <Section icon={<MapPin size={13} />} title="Points de scène" count={vis.markers.length}>
-          {vis.markers.map((m) => <MarkerCard key={m.id} m={m} vis={vis} />)}
-          <p className="scene-hint">Repères « chanteur », « batteur »… déplaçables en 2D (Positionner).</p>
-        </Section>
-        <TrussSettings vis={vis} />
-        <PropSettings vis={vis} />
-        <PerformerSettings vis={vis} />
-        <ScreenSettings vis={vis} />
+        {current ? (
+          <Catalogue key={current.id} cat={current} vis={vis} onBack={() => setCat(null)} />
+        ) : (
+          <>
+            <p className="build-sub">{tr('build.sub')}</p>
+            <nav className="build-cats" aria-label={tr('build.categories')}>
+              {CATS.map((c) => (
+                <button key={c.id} className="build-cat" onClick={() => setCat(c.id)} data-testid={`build-cat-${c.id}`}>
+                  <span className="build-cat-icon">{c.icon}</span>
+                  <span className="build-cat-text"><b>{tr(`build.cat.${c.id}` as MessageKey)}</b><span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span></span>
+                  <ChevronRight size={14} className="dim" />
+                </button>
+              ))}
+            </nav>
+            <StageSettings vis={vis} />
+            <Section icon={<LayoutTemplate size={13} />} title={tr('build.template')} open={!hasSceneContent(vis)}>
+              <TemplatePicker vis={vis} />
+              <label className="btn sm" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
+                <Camera size={12} />{t('photo.button')}
+                <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
+                }} />
+              </label>
+            </Section>
+          </>
+        )}
       </div>
-      )}
     </aside>
   );
 }
 
-/** Small top view of a library item (drawn, so every piece reads at a glance whatever the icon set). */
-function LibraryGlyph({ item }: { item: LibraryItem }) {
+/** Catalogue of one category: back, search, (type filter), tiles, then what of that kind is already on stage. */
+function Catalogue({ cat, vis, onBack }: { cat: (typeof CATS)[number]; vis: Vis; onBack: () => void }) {
+  const tr = useT();
+  const [query, setQuery] = useState('');
+  const title = tr(`build.cat.${cat.id}` as MessageKey);
+  return (
+    <div className="build-catalogue" data-testid={`catalogue-${cat.id}`}>
+      <div className="build-cat-head">
+        <button className="btn ghost sm" onClick={onBack} data-testid="build-back"><ArrowLeft size={13} />{tr('build.back')}</button>
+        <span className="build-cat-title">{cat.icon}{title}</span>
+      </div>
+      <input className="input" type="search" placeholder={tr('build.search', { cat: title })} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={tr('build.search', { cat: title })} data-testid="lib-search" />
+      {cat.id === 'point' ? <FixtureCatalogue query={query} /> : <LibraryTiles items={LIBRARY.filter(cat.items)} query={query} />}
+      {cat.id !== 'point' && <InScene cat={cat.id} vis={vis} />}
+    </div>
+  );
+}
+
+/** Library tiles: click then click the stage, or drag onto the 2D / 3D view. */
+function LibraryTiles({ items, query }: { items: LibraryItem[]; query: string }) {
+  const tr = useT();
+  const placing = useStore((s) => s.placing);
+  const q = fold(query.trim());
+  const shown = q ? items.filter((x) => fold(x.label).includes(q)) : items;
+  if (!shown.length) return <p className="scene-hint">{q ? tr('build.none', { q: query.trim() }) : tr('build.empty')}</p>;
+  return (
+    <div className="scene-library">
+      {shown.map((item) => (
+        <button key={item.id} className={`scene-lib-item ${placing?.label === item.label ? 'on' : ''}`} draggable data-testid={`lib-${item.id}`}
+          title={tr('build.tileHint', { name: item.label })} aria-pressed={placing?.label === item.label}
+          onClick={() => useStore.getState().setPlacing(placing?.label === item.label ? null : { kind: item.kind, label: item.label, preset: { ...item.preset } })}
+          onDragStart={(e) => { e.dataTransfer.setData(LIBRARY_MIME, item.id); e.dataTransfer.effectAllowed = 'copy'; }}>
+          <LibraryGlyph item={item} />
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Fixture profiles of the library (the same ones the patch and the DMX engine use), filtered by type. */
+function FixtureCatalogue({ query }: { query: string }) {
+  const tr = useT();
+  const { lib } = useResolved();
+  const patch = useStore((s) => s.project!.project.patch);
+  const placing = useStore((s) => s.placing);
+  const [type, setType] = useState<FixtureType | null>(null);
+  const profiles = lib.all();
+  const inPatch = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const f of patch) n.set(f.profileId, (n.get(f.profileId) ?? 0) + 1);
+    return n;
+  }, [patch]);
+  const types = FIXTURE_TYPES.filter((ty) => profiles.some((p) => p.type === ty));
+  const q = fold(query.trim());
+  const shown = profiles.filter((p) => (!type || p.type === type) && (!q || fold(`${p.name} ${p.manufacturer} ${tr(`build.type.${p.type}` as MessageKey)}`).includes(q)));
+  if (!profiles.length) return <p className="scene-hint">{tr('build.noProfiles')}</p>;
+  return (
+    <>
+      {types.length > 1 && (
+        <div className="chips" role="group" aria-label={tr('build.filterAria')}>
+          <button className={`chip ${!type ? 'on' : ''}`} aria-pressed={!type} onClick={() => setType(null)} data-testid="fixture-type-all">{tr('build.filterAll')}</button>
+          {types.map((ty) => <button key={ty} className={`chip ${type === ty ? 'on' : ''}`} aria-pressed={type === ty} onClick={() => setType(type === ty ? null : ty)} data-testid={`fixture-type-${ty}`}>{tr(`build.type.${ty}` as MessageKey)}</button>)}
+        </div>
+      )}
+      {!shown.length && <p className="scene-hint">{tr('build.none', { q: query.trim() })}</p>}
+      <div className="fixture-catalogue">
+        {shown.map((p) => {
+          const mode = p.modes[0]!.name;
+          const on = placing?.kind === 'fixture' && placing.profileId === p.id;
+          const n = inPatch.get(p.id) ?? 0;
+          return (
+            <button key={p.id} className={`fixture-tile ${on ? 'on' : ''}`} draggable aria-pressed={on} data-testid={`fixture-${p.id}`}
+              title={tr('build.tileHint', { name: p.name })}
+              onClick={() => useStore.getState().setPlacing(on ? null : { kind: 'fixture', label: p.name, profileId: p.id, mode })}
+              onDragStart={(e) => { e.dataTransfer.setData(LIBRARY_MIME, `fixture:${p.id}:${mode}`); e.dataTransfer.effectAllowed = 'copy'; }}>
+              <span className="fixture-tile-glyph"><FixtureGlyph type={p.type} />{n > 0 && <span className="fixture-tile-count" title={tr('build.inPatch', { n })}>×{n}</span>}</span>
+              <b>{p.name}</b>
+              <span className="small dim">{p.manufacturer}</span>
+              <span className="small muted">{tr(`build.type.${p.type}` as MessageKey)} · {tr('build.channels', { n: channelCount(p, mode) })}{p.modes.length > 1 ? ` · ${tr('build.modes', { n: p.modes.length })}` : ''}</span>
+              {p.fictional && <span className="badge warn" title={tr('build.fictionalHint')}>{tr('build.fictional')}</span>}
+            </button>
+          );
+        })}
+      </div>
+      <p className="scene-hint">{tr('build.pointHint')}</p>
+    </>
+  );
+}
+
+/** What of the category is already on stage, with quick add and editable cards. */
+function InScene({ cat, vis }: { cat: Exclude<BuildCat, 'point'>; vis: Vis }) {
+  const tr = useT();
+  const count = { structure: vis.trusses.length, decor: vis.props.length, performer: vis.performers.length + vis.markers.length, screen: vis.screens.length }[cat];
+  return (
+    <Section icon={<MapPin size={13} />} title={`${tr('build.inScene')} · ${tr(`build.cat.${cat}` as MessageKey)}`} count={count}>
+      <div className="scene-quickadd">
+        {cat === 'structure' && <AddBtn kind="truss" label="scene.addTruss" icon={<Boxes size={14} />} testId="truss-add" />}
+        {cat === 'decor' && <AddBtn kind="prop" label="scene.addProp" icon={<Armchair size={14} />} testId="prop-add" />}
+        {cat === 'performer' && <><AddBtn kind="performer" label="scene.addPerformer" icon={<UserRound size={14} />} testId="performer-add" /><AddBtn kind="marker" label="scene.addMarker" icon={<MapPin size={14} />} testId="marker-add" /></>}
+        {cat === 'screen' && <AddBtn kind="screen" label="scene.addScreen" icon={<Monitor size={14} />} testId="screen-add" />}
+      </div>
+      {cat === 'structure' && <EquipButton vis={vis} />}
+      {cat === 'structure' && vis.trusses.map((t) => <TrussCard key={t.id} t={t} vis={vis} />)}
+      {cat === 'decor' && vis.props.map((p) => <PropCard key={p.id} p={p} vis={vis} />)}
+      {cat === 'performer' && vis.performers.map((pf) => <PerformerCard key={pf.id} pf={pf} vis={vis} />)}
+      {cat === 'performer' && vis.markers.map((m) => <MarkerCard key={m.id} m={m} vis={vis} />)}
+      {cat === 'screen' && vis.screens.map((sc) => <ScreenCard key={sc.id} sc={sc} vis={vis} />)}
+    </Section>
+  );
+}
+
+/** Hangs the hung fixtures (or the selection) evenly on the trusses; one undoable step. */
+function EquipButton({ vis }: { vis: Vis }) {
+  const { fixtures } = useResolved();
+  const selection = useStore((s) => s.selection);
+  if (!vis.trusses.length || !fixtures.length) return null;
+  return (
+    <button className="btn sm primary" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
+      title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
+      <Wand2 size={12} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
+    </button>
+  );
+}
+
+const SVG = { stroke: 'currentColor', strokeWidth: 2, fill: 'none', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+/** Small drawn front view of a fixture type (no bitmap assets ship with the profiles). */
+export function FixtureGlyph({ type, size = 34 }: { type: FixtureProfile['type']; size?: number }) {
+  let body: ReactNode;
+  if (type.startsWith('moving')) {
+    body = <><path d="M8 30h20M12 30V14M24 30V14" {...SVG} /><rect x={11} y={6} width={14} height={14} rx={6} {...SVG} /><circle cx={18} cy={13} r={type === 'moving-head-wash' ? 3.5 : 2} fill="currentColor" /></>;
+  } else if (type === 'led-bar') {
+    body = <><rect x={3} y={13} width={30} height={10} rx={2} {...SVG} />{[8, 14, 20, 26].map((x) => <circle key={x} cx={x + 1} cy={18} r={1.6} fill="currentColor" />)}</>;
+  } else if (type === 'strobe') {
+    body = <><rect x={5} y={10} width={26} height={16} rx={2} {...SVG} /><path d="M19 12l-4 6h5l-3 6" {...SVG} /></>;
+  } else if (type === 'dimmer') {
+    body = <><circle cx={18} cy={17} r={10} {...SVG} /><circle cx={18} cy={17} r={5} {...SVG} /><path d="M18 27v5M12 32h12" {...SVG} /></>;
+  } else if (type === 'par') {
+    body = <><circle cx={18} cy={17} r={11} {...SVG} />{[[18, 11], [13, 17], [23, 17], [18, 23], [18, 17]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r={1.8} fill="currentColor" />)}</>;
+  } else body = <><circle cx={18} cy={18} r={11} {...SVG} /><circle cx={18} cy={18} r={3} fill="currentColor" /></>;
+  return <svg width={size} height={size} viewBox="0 0 36 36" aria-hidden>{body}</svg>;
+}
+
+/** Small top view of a library item or stage element (drawn, so every piece reads at a glance whatever the icon set). */
+export function LibraryGlyph({ item, size = 28 }: { item: { kind: LibraryItem['kind']; preset: Record<string, unknown> }; size?: number }) {
   const s = { stroke: 'currentColor', strokeWidth: 2, fill: 'none', strokeLinecap: 'round' as const };
   let body: ReactNode;
   if (item.kind === 'truss') {
-    const p = item.preset;
+    const p = item.preset as Partial<Truss>;
     const arms = JUNCTION_ARMS[p.shape ?? 'line'];
     if (arms) body = <>{arms.map((a) => <line key={a} x1={14} y1={14} x2={14 + 10 * Math.cos((a * Math.PI) / 180)} y2={14 - 10 * Math.sin((a * Math.PI) / 180)} {...s} strokeWidth={4} />)}<rect x={11} y={11} width={6} height={6} fill="currentColor" /></>;
     else if (p.shape === 'totem') body = <><rect x={11} y={3} width={6} height={20} {...s} /><line x1={6} y1={25} x2={22} y2={25} {...s} /></>;
@@ -164,125 +316,7 @@ function LibraryGlyph({ item }: { item: LibraryItem }) {
   } else if (item.kind === 'performer') body = <><circle cx={14} cy={7} r={4} {...s} /><path d="M7 25c0-6 3-10 7-10s7 4 7 10" {...s} /></>;
   else if (item.kind === 'screen') body = <rect x={3} y={7} width={22} height={13} {...s} />;
   else body = <path d="M14 4l8 10-8 10-8-10z" {...s} />;
-  return <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>{body}</svg>;
-}
-
-/** Lower-case, accent-free text for the library search ("Écran" matches "ecran"). */
-const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-
-/** Library of pieces: click a tile then the stage, or drag the tile onto the 2D / 3D view. */
-function LibraryPicker() {
-  const [group, setGroup] = useState<LibraryGroup>('truss');
-  const [query, setQuery] = useState('');
-  const tr = useT();
-  const placing = useStore((s) => s.placing);
-  const q = fold(query.trim());
-  // A search looks through every category, so a piece is found without knowing where it lives.
-  const items = q ? LIBRARY.filter((x) => fold(x.label).includes(q)) : LIBRARY.filter((x) => x.group === group);
-  return (
-    <>
-      <input className="input" type="search" placeholder={tr('scene.libSearch')} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={tr('scene.libSearch')} data-testid="lib-search" />
-      {!q && (
-        <div className="chips" role="tablist" aria-label="Catégories">
-          {LIBRARY_GROUPS.map((g) => <button key={g.id} role="tab" aria-selected={group === g.id} className={`chip ${group === g.id ? 'on' : ''}`} onClick={() => setGroup(g.id)} data-testid={`lib-group-${g.id}`}>{g.label}</button>)}
-        </div>
-      )}
-      {q && !items.length && <p className="scene-hint">{tr('scene.libNone', { q: query.trim() })}</p>}
-      <div className="scene-library">
-        {items.map((item) => (
-          <button key={item.id} className={`scene-lib-item ${placing?.label === item.label ? 'on' : ''}`} draggable data-testid={`lib-${item.id}`}
-            title={`${item.label} — cliquer puis cliquer sur le plateau, ou glisser sur la vue`}
-            onClick={() => useStore.getState().setPlacing(placing?.label === item.label ? null : { kind: item.kind, label: item.label, preset: { ...item.preset } })}
-            onDragStart={(e) => { e.dataTransfer.setData(LIBRARY_MIME, item.id); e.dataTransfer.effectAllowed = 'copy'; }}>
-            <LibraryGlyph item={item} />
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
-      <p className="scene-hint">Les pièces se raccordent bout à bout quand on les approche (aimantation 35 cm) et prennent la hauteur de la pièce rejointe.</p>
-    </>
-  );
-}
-
-/** At most this many fixture cards in the inspector (a whole rig selected stays readable). */
-const MAX_FIXTURE_CARDS = 12;
-
-/** Inspector tab: the cards of what is selected in the 2D / 3D view. */
-function SelectionTab({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
-  const selection = useStore((s) => s.selection);
-  const sceneSel = useStore((s) => s.sceneSel);
-  const values = useStore((s) => s.preview?.values ?? s.values);
-  const patch = useStore((s) => s.project!.project.patch);
-  const { fixtures } = useResolved();
-  const model = useMemo(() => buildVisualModel(fixtures.filter((f) => selection.includes(f.fixture.id)), values), [fixtures, selection, values]);
-  if (sceneSel && findElement(vis, sceneSel)) {
-    return (
-      <div className="col" style={{ gap: 8 }} data-testid="selection-element">
-        <ElementCard sel={sceneSel} vis={vis} />
-        <div className="row" style={{ gap: 6 }}>
-          <button className="btn sm" onClick={() => duplicateSceneElement(sceneSel)} title="Dupliquer (Ctrl+D)"><Copy size={12} />Dupliquer</button>
-          <button className="btn sm" onClick={() => removeSceneElement(sceneSel)} title="Supprimer (Suppr)"><Trash2 size={12} />Supprimer</button>
-        </div>
-        <p className="scene-hint">Double-clic sur la carte : cadrer la vue 3D.</p>
-      </div>
-    );
-  }
-  if (!model.length) return <p className="scene-hint" data-testid="selection-empty">Cliquez un projecteur ou un élément de scène dans la vue (Ctrl / Maj : plusieurs projecteurs).</p>;
-  return (
-    <div className="col" style={{ gap: 8 }}>
-      {model.slice(0, MAX_FIXTURE_CARDS).map((f) => <FixtureCard key={f.id} f={f} fixture={patch.find((x) => x.id === f.id)} trusses={vis.trusses} beamView={mode === '3d'} />)}
-      {model.length > MAX_FIXTURE_CARDS && <p className="scene-hint">… et {model.length - MAX_FIXTURE_CARDS} autre(s) projecteur(s).</p>}
-      <p className="scene-hint">Double-clic sur une carte : cadrer la vue 3D.</p>
-    </div>
-  );
-}
-
-/** Set pieces (risers, stairs, speakers, monitors, mic stands, tables, drapes, boxes, columns). */
-function PropSettings({ vis }: { vis: Vis }) {
-  return (
-    <Section icon={<Armchair size={13} />} title="Décor" count={vis.props.length}>
-      {vis.props.map((p) => <PropCard key={p.id} p={p} vis={vis} />)}
-      <p className="scene-hint">Plus de modèles dans la bibliothèque (onglet Décor) ; en mode Positionner, glisser pour déplacer.</p>
-    </Section>
-  );
-}
-
-/** Explicit trusses: hung fixtures follow them (handled by the main process when a truss changes). */
-function TrussSettings({ vis }: { vis: Vis }) {
-  const { fixtures } = useResolved();
-  const selection = useStore((s) => s.selection);
-  return (
-    <Section icon={<Boxes size={13} />} title="Structures (truss)" count={vis.trusses.length}>
-      {vis.trusses.length > 0 && fixtures.length > 0 && (
-        <button className="btn sm primary" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
-          title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
-          <Wand2 size={12} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
-        </button>
-      )}
-      {vis.trusses.map((t) => <TrussCard key={t.id} t={t} vis={vis} />)}
-      <p className="scene-hint">Les projecteurs accrochés suivent la structure ; aimantation au dépôt.</p>
-    </Section>
-  );
-}
-
-/** Performer and instrument silhouettes; their face shows the light received (2D disc, 3D tint). */
-function PerformerSettings({ vis }: { vis: Vis }) {
-  return (
-    <Section icon={<UserRound size={13} />} title="Interprètes et instruments" count={vis.performers.length}>
-      {vis.performers.map((pf) => <PerformerCard key={pf.id} pf={pf} vis={vis} />)}
-      <p className="scene-hint">Lâché sur un point de scène en 2D, l’interprète s’y pose et le suit ; sur un praticable, il monte dessus.</p>
-    </Section>
-  );
-}
-
-/** LED screens / video surfaces with a light spill on their surroundings. */
-function ScreenSettings({ vis }: { vis: Vis }) {
-  return (
-    <Section icon={<Monitor size={13} />} title="Écrans LED" count={vis.screens.length}>
-      {vis.screens.map((sc) => <ScreenCard key={sc.id} sc={sc} vis={vis} />)}
-      <p className="scene-hint">Couleur, image, vidéo (non enregistrée) ou pixel mapping des barres LED.</p>
-    </Section>
-  );
+  return <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden>{body}</svg>;
 }
 
 /** Scene-layout undo / redo (main-process history), with Ctrl+Z / Ctrl+Y outside text fields. */

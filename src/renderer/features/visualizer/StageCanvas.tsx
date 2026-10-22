@@ -7,7 +7,7 @@ import { buildVisualModel, type VisualFixture } from '../../../core/visualizer/m
 import type { FixtureValues, Performer, StageMarker, Truss } from '../../../core/model/schemas';
 import { nearestOnTruss, snapToTrusses, snapTrussEnds } from '../../../core/visualizer/truss';
 import { findElement, withPatched, type SceneRef } from '../../../core/visualizer/sceneEdit';
-import { acceptLibraryDrag, addSceneElement, dropLibraryItem } from '../../sceneActions';
+import { acceptLibraryDrag, dropLibraryItem, placeAt } from '../../sceneActions';
 
 
 /**
@@ -119,7 +119,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     if (placing && e.button === 0) {
       const r = wrap.current!.getBoundingClientRect();
-      addSceneElement(placing.kind, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale }, placing.preset);
+      placeAt(placing, { x: (e.clientX - r.left - view.ox) / view.scale, y: (view.oy - (e.clientY - r.top)) / view.scale });
       return;
     }
     const f = hit(e.clientX, e.clientY);

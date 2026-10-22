@@ -17,7 +17,7 @@ import { disposeTextures } from './textures';
 import { buildPerformer, buildScreen, disposeScreen, screenKey, updatePerformer, updateScreen, type PerformerRig, type ScreenRig } from './actors';
 import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeReflector, type AmbienceId, type FloorId } from './quality';
 import { screenMediaVersion } from '../../screenMedia';
-import { addSceneElement } from '../../sceneActions';
+import { placeAt } from '../../sceneActions';
 import type { SceneRef } from '../../../core/visualizer/sceneEdit';
 import type { MessageKey } from '../../i18n';
 
@@ -356,7 +356,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     const placing = useStore.getState().placing;
     if (placing) {
       const at = groundAt(e.clientX, e.clientY);
-      if (at) addSceneElement(placing.kind, at, placing.preset);
+      if (at) placeAt(placing, at);
       return;
     }
     const id = pick(e.clientX, e.clientY);

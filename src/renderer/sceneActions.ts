@@ -5,7 +5,7 @@ import { t } from './i18n';
 import { confirmAction, useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
-import { hangHeight, nearestOnTruss, snapTrussEnds, type P2 } from '../core/visualizer/truss';
+import { hangHeight, nearestOnTruss, snapToTrusses, snapTrussEnds, type P2 } from '../core/visualizer/truss';
 import { MAX_UNIVERSES, type Fixture, type Project, type Truss } from '../core/model/schemas';
 import { ProfileLibrary, channelCount } from '../core/fixtures/profiles';
 import { findFreeAddress } from '../core/fixtures/patch';
@@ -13,7 +13,7 @@ import { sceneFromText } from '../core/visualizer/sceneFromText';
 import { libraryItem } from '../core/visualizer/library';
 import {
   SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
-  type EquipFixture, type SceneKind, type SceneRef,
+  type EquipFixture, type PlaceSpec, type SceneKind, type SceneRef,
 } from '../core/visualizer/sceneEdit';
 
 /** Scene-element actions shared by the scene panel, the 2D plan and the 3D view (all undoable with Ctrl+Z). */
@@ -37,6 +37,39 @@ export function addSceneElement(kind: SceneKind, at?: P2, preset?: Record<string
   const snap = kind === 'truss' ? snapTrussEnds(el as Truss, v.trusses) : null;
   if (snap) Object.assign(el, { x: snap.x, y: snap.y, height: snap.height });
   void act({ type: 'project.update', visualizer: withElement(v, kind, el) }).then((r) => r && st.setSceneSel({ kind, id: el.id }));
+}
+
+/** Creates what the placement spec describes at a stage point (click or drop on the 2D plan / 3D view). */
+export function placeAt(spec: PlaceSpec, at: P2): void {
+  if (spec.kind === 'fixture') void addFixtureAt(spec.profileId, spec.mode, at);
+  else addSceneElement(spec.kind, at, spec.preset);
+}
+
+/**
+ * Patches one fixture of the profile (first universe with room, next free address, as the patch dialog does) and places
+ * it at `at`: hung on the closest truss within the snapping distance, otherwise at the default height. Then selects it.
+ */
+export async function addFixtureAt(profileId: string, mode: string, at: P2): Promise<string | undefined> {
+  const st = useStore.getState();
+  st.setPlacing(null);
+  const ps = st.project;
+  if (!ps) return undefined;
+  const lib = new ProfileLibrary([...(ps.library ?? []), ...ps.project.profiles]);
+  const profile = lib.get(profileId);
+  const chans = profile ? channelCount(profile, mode) : 0;
+  if (!profile || !chans) { toast(t('build.fixtureInvalid'), undefined, 'error'); return undefined; }
+  const universes = Math.min(MAX_UNIVERSES, ps.project.show.universes);
+  const universe = Array.from({ length: universes }, (_, i) => i + 1).find((u) => findFreeAddress(lib, ps.project.patch, u, chans) !== undefined);
+  if (universe === undefined) { toast(t('build.fixtureNoRoom'), t('build.fixtureNoRoomDetail', { n: chans }), 'error'); return undefined; }
+  const r = await act({ type: 'fixture.add', profileId, mode, universe, address: null, count: 1, namePrefix: profile.name, tags: [] });
+  const id = r?.ids[0];
+  if (!id) return undefined;
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const snap = snapToTrusses(vis()?.trusses ?? [], at.x, at.y);
+  const height = snap ? snap.height : useStore.getState().project?.project.patch.find((f) => f.id === id)?.height ?? 4;
+  await act({ type: 'fixture.place', placements: [{ id, position: snap ? { x: snap.x, y: snap.y } : { x: r2(at.x), y: r2(at.y) }, height, trussId: snap?.truss.id ?? null }] });
+  useStore.getState().setSelection([id]);
+  return id;
 }
 
 /** Hangs a fixture on a truss at the closest point of the truss to its current position (floor / wall: re-hung). */
@@ -150,12 +183,16 @@ export function acceptLibraryDrag(e: React.DragEvent): void {
   if (e.dataTransfer.types.includes(LIBRARY_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
 }
 
-/** Drop of a library tile at a stage position (null when the drop missed the floor). */
+/** Drop of a library tile (scene element id, or `fixture:<profileId>:<mode>`) at a stage position (null when the drop missed the floor). */
 export function dropLibraryItem(e: React.DragEvent, at: P2 | null): void {
-  const item = libraryItem(e.dataTransfer.getData(LIBRARY_MIME));
-  if (!item) return;
+  const data = e.dataTransfer.getData(LIBRARY_MIME);
+  const fx = /^fixture:([^:]+):(.+)$/u.exec(data);
+  const item = fx ? null : libraryItem(data);
+  if (!fx && !item) return;
   e.preventDefault();
-  if (at) addSceneElement(item.kind, at, item.preset);
+  if (!at) return;
+  if (fx) void addFixtureAt(fx[1]!, fx[2]!, at);
+  else addSceneElement(item!.kind, at, item!.preset);
 }
 
 /** Photos are downscaled before analysis (enough detail for structures, fewer tokens). */

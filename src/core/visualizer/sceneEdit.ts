@@ -8,8 +8,10 @@ import { hangHeight, JUNCTION_ARMS, nearestOnTruss, trussSegments, type P2 } fro
 type Vis = Project['visualizer'];
 export type SceneKind = 'marker' | 'truss' | 'performer' | 'screen' | 'prop';
 export interface SceneRef { kind: SceneKind; id: string }
-/** What a click (or drop) on the stage will create: a kind, its label for the hint, an optional library preset. */
-export interface PlaceSpec { kind: SceneKind; label: string; preset?: Record<string, unknown> }
+/** What a click (or drop) on the stage will create: a scene element (kind + optional library preset) or a fixture of a profile. */
+export type PlaceSpec =
+  | { kind: SceneKind; label: string; preset?: Record<string, unknown> }
+  | { kind: 'fixture'; label: string; profileId: string; mode: string };
 export type Element = StageMarker | Truss | Performer | StageScreen | StageProp;
 
 const LIST = { marker: 'markers', truss: 'trusses', performer: 'performers', screen: 'screens', prop: 'props' } as const;

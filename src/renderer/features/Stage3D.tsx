@@ -144,7 +144,7 @@ function Inspector3D({
           <button
             className="btn ghost sm"
             style={{ marginTop: 4, justifyContent: 'center' }}
-            onClick={() => useStore.getState().setScenePanel('selection')}
+            onClick={() => useStore.getState().setStagePanels({ inspect: true })}
           >
             {t('stage3d.inspectorEdit')}
           </button>
@@ -194,7 +194,7 @@ function Inspector3D({
           <button
             className="btn ghost sm"
             style={{ marginTop: 4, justifyContent: 'center' }}
-            onClick={() => useStore.getState().setScenePanel('selection')}
+            onClick={() => useStore.getState().setStagePanels({ inspect: true })}
           >
             {t('stage3d.inspectorEdit')}
           </button>
@@ -207,7 +207,7 @@ function Inspector3D({
           <button
             className="btn ghost sm"
             style={{ marginTop: 4, justifyContent: 'center' }}
-            onClick={() => useStore.getState().setScenePanel('selection')}
+            onClick={() => useStore.getState().setStagePanels({ inspect: true })}
           >
             {t('stage3d.inspectorEdit')}
           </button>
@@ -222,7 +222,8 @@ function Inspector3D({
  * Volumetric-looking beams, light pools with gobos on the floor and cyclorama, strobe flashes, prism facets and
  * per-cell beams for LED bars. A visual aid only: no photometry, shadows or real light transport.
  */
-export function Stage3D({ values, groupFilter }: { values?: FixtureValues; groupFilter?: string | null }) {
+/** `inspector`: floating summary of the selection (off on the Stage page, whose side panel inspects it). */
+export function Stage3D({ values, groupFilter, inspector = true }: { values?: FixtureValues; groupFilter?: string | null; inspector?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const live = useStore((s) => s.values);
@@ -458,7 +459,7 @@ export function Stage3D({ values, groupFilter }: { values?: FixtureValues; group
       )}
       {dims && <div className="stage3d-dims mono small" data-testid="dims">{dims}</div>}
       {ctx && <ContextMenu ctx={ctx} model={model} vis={vis} patch={project.patch} onClose={() => setCtx(null)} />}
-      {!bare && showInspector && (selection.length > 0 || selSet !== null) && (
+      {!bare && inspector && showInspector && (selection.length > 0 || selSet !== null) && (
         <Inspector3D
           selection={selection}
           sceneSel={selSet}

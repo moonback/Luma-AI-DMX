@@ -1,4 +1,5 @@
 import { frScreens } from './fr.screens';
+import { frStage } from './fr.stage';
 
 /**
  * French catalogue: the reference language. Every key here must exist in the other catalogues (en.ts is typed against
@@ -578,6 +579,7 @@ export const fr = {
   'cues.list.loop': 'Boucler à la fin de la liste',
 
   ...frScreens,
+  ...frStage,
 } as const;
 
 export type MessageKey = keyof typeof fr;

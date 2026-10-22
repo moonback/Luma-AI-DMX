@@ -22,7 +22,7 @@ test.beforeAll(async () => {
   });
   page = await app.firstWindow();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.getByTestId('mode')).toHaveText('SIMULATION');
+  await expect(page.getByTestId('mode')).toHaveText('SIM');
   // First run on a fresh profile: the welcome screen is shown once; the other scenarios start without it.
   await expect(page.getByTestId('welcome')).toBeVisible();
   await page.screenshot({ path: `${shots}/00-accueil.png` });
@@ -41,7 +41,14 @@ const tiles = async () => { await page.getByTestId('console-side').hover(); retu
 const nav2d = async () => { await nav('visualizer'); await page.getByTestId('stage-mode-2d').click(); };
 const nav3d = async () => { await nav('visualizer'); await page.getByTestId('stage-mode-3d').click(); };
 /** Opens the scene panel unless it already is (it stays open while the page does not change). */
-const openScenePanel = async () => { if (!(await page.getByTestId('stage-settings').isVisible())) await page.getByTestId('stage-settings-toggle').click(); };
+const openScenePanel = async () => {
+  if (!(await page.getByTestId('stage-settings').isVisible())) await page.getByTestId('stage-settings-toggle').click();
+  if (await page.getByTestId('build-back').isVisible()) await page.getByTestId('build-back').click();
+};
+/** Opens a Construire category (point, structure, decor, performer, screen) in the left panel. */
+const openCategory = async (cat: string) => { await openScenePanel(); await page.getByTestId(`build-cat-${cat}`).click(); };
+/** Element rows of the open category (the inspector on the right shows the selected one again). */
+const built = (id: string) => page.getByTestId('stage-settings').getByTestId(id);
 const channel = (ch: number) => page.locator(`.dmx-cell[data-ch="${ch}"]`);
 
 test('sécurité Electron : pas de Node dans le renderer, API minimale exposée', async () => {
@@ -184,7 +191,7 @@ test('sortie réelle armée → STOP OUTPUT coupe les émissions', async () => {
   await row.getByTestId('arm').click();
   await page.locator('.modal').getByRole('button', { name: 'Armer la sortie' }).click();
   await expect(row).toContainText('Prête');
-  await expect(page.getByTestId('mode')).not.toHaveText('SIMULATION');
+  await expect(page.getByTestId('mode')).not.toHaveText('SIM');
   await page.getByTestId('stop-output').click();
   await expect(page.locator('body')).toContainText('STOP — émissions réelles arrêtées');
   await page.getByRole('button', { name: 'Reprendre' }).first().click();
@@ -307,8 +314,9 @@ test('scène : avancée, point de scène, fumée, vue enregistrée, vue projecte
   await nav2d();
   await openScenePanel();
   await page.getByTestId('shape-thrust').click();
+  await openCategory('performer');
   await page.getByTestId('marker-add').click();
-  await expect(page.getByTestId('marker-row')).toHaveCount(1);
+  await expect(built('marker-row')).toHaveCount(1);
   await page.screenshot({ path: `${shots}/17-scene-reglages-2d.png` });
 
   // Moving heads aimed into the house at eye level → glare badge.
@@ -375,9 +383,9 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
 
   // A straight truss from the scene panel (10 m, 4 m upstage, 6 m high).
   await nav2d();
-  await openScenePanel();
+  await openCategory('structure');
   await page.getByTestId('truss-add').click();
-  await expect(page.getByTestId('truss-row')).toHaveCount(1);
+  await expect(built('truss-row')).toHaveCount(1);
 
   // Hang Lyre 1 on it from the 3D info panel.
   await nav3d();
@@ -394,8 +402,8 @@ test('structures : accroche, suivi, annuler / rétablir, édition directe au giz
 
   // Moving the truss carries the fixture; undo / redo walk it back and forth.
   await nav2d();
-  await openScenePanel();
-  const yField = page.getByTestId('truss-row').locator('input.mono').nth(2); // L, X, Y, H, rotation
+  await openCategory('structure');
+  const yField = built('truss-row').locator('input.mono').nth(2); // L, X, Y, H, rotation
   await yField.fill('5');
   await yField.press('Enter');
   await expect.poll(async () => (await lyre1()).position.y).toBe(5);
@@ -448,15 +456,16 @@ test('interprètes, écrans LED, éclairage réel avec ombres, ambiances et sol'
 
   // Two performers (one on the stage point), a drum kit and a pixel-mapped LED screen, from the scene panel.
   await nav2d();
-  await openScenePanel();
+  await openCategory('performer');
   await page.getByTestId('performer-add').click();
   await page.getByTestId('performer-add').click();
-  await expect(page.getByTestId('performer-row')).toHaveCount(2);
-  await page.getByTestId('performer-marker').first().selectOption({ label: 'Sur « Point 1 »' });
-  await page.getByTestId('performer-row').nth(1).locator('select').first().selectOption('drums');
+  await expect(built('performer-row')).toHaveCount(2);
+  await built('performer-marker').first().selectOption({ label: 'Sur « Point 1 »' });
+  await built('performer-row').nth(1).locator('select').first().selectOption('drums');
+  await openCategory('screen');
   await page.getByTestId('screen-add').click();
-  await page.getByTestId('screen-source').selectOption('pixels');
-  await expect(page.getByTestId('screen-row')).toHaveCount(1);
+  await built('screen-source').selectOption('pixels');
+  await expect(built('screen-row')).toHaveCount(1);
   await page.screenshot({ path: `${shots}/19-interpretes-ecrans-2d.png` });
 
   // Light the rig: every fixture full, moving heads straight down (tilt 0,5 = 0°).
@@ -506,7 +515,7 @@ test('création rapide : équiper les structures, poser au clic, dupliquer, supp
   const inv = (cmd: unknown) => page.evaluate((x) => (window as unknown as { luma: { invoke: Inv } }).luma.invoke(x), cmd);
   const patch = async () => ((await inv({ type: 'project.get' })).data as { project: { patch: Fx[] } }).project.patch;
   await nav2d();
-  await openScenePanel();
+  await openCategory('structure');
 
   // Equip without a selection (a click on an empty corner clears it): the hung fixtures spread over the trusses,
   // floor-standing ones stay put; one undoable step.
@@ -521,7 +530,8 @@ test('création rapide : équiper les structures, poser au clic, dupliquer, supp
   await expect.poll(async () => (await patch()).filter((f) => f.trussId).length).toBe(hungBefore);
 
   // Click placement on the 2D plan; the new point is selected, Ctrl+D duplicates it, Suppr deletes the copy.
-  const rows = page.getByTestId('marker-row');
+  await openCategory('performer');
+  const rows = built('marker-row');
   const before = await rows.count();
   await page.getByTestId('marker-add-place').click();
   await expect(page.getByTestId('placing')).toBeVisible();
@@ -537,6 +547,7 @@ test('création rapide : équiper les structures, poser au clic, dupliquer, supp
   await expect(rows).toHaveCount(before + 1);
 
   // Échap cancels a placement without releasing anything else.
+  await openCategory('structure');
   await page.getByTestId('truss-add-place').click();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('placing')).toHaveCount(0);
@@ -552,6 +563,7 @@ test('bibliothèque : totems, pièces de truss et décor, au clic ou glissés en
 
   // Library tile then a click on the plan: a 3 m totem lands there.
   const trusses = (await vis()).trusses.length;
+  await openCategory('structure');
   await page.getByTestId('lib-totem-3').click();
   await expect(page.getByTestId('placing')).toContainText('Totem 3 m');
   const box = (await page.getByTestId('stage-canvas').boundingBox())!;
@@ -561,15 +573,14 @@ test('bibliothèque : totems, pièces de truss et décor, au clic ou glissés en
 
   // Set pieces dragged from the library onto the 2D plan, then onto the 3D view.
   const props = (await vis()).props.length;
-  await page.getByTestId('lib-group-decor').click();
+  await openCategory('decor');
   await page.getByTestId('lib-riser-2x1').dragTo(page.getByTestId('stage-canvas'), { targetPosition: { x: box.width * 0.4, y: box.height * 0.5 } });
   await expect.poll(async () => (await vis()).props.length).toBe(props + 1);
-  await expect(page.getByTestId('prop-row')).toHaveCount(props + 1);
+  await expect(built('prop-row')).toHaveCount(props + 1);
   await page.screenshot({ path: `${shots}/21-bibliotheque-2d.png` });
 
   await nav3d();
-  await openScenePanel();
-  await page.getByTestId('lib-group-decor').click();
+  await openCategory('decor');
   const box3 = (await page.getByTestId('stage-3d').boundingBox())!;
   await page.getByTestId('lib-speaker').dragTo(page.getByTestId('stage-3d'), { targetPosition: { x: box3.width * 0.35, y: box3.height * 0.75 } });
   await expect.poll(async () => (await vis()).props.at(-1)?.kind).toBe('speaker');

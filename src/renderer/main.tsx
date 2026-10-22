@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 import './futuristic.css';
 import './console-simple.css';
+import './stage.css';
 import { App, bootstrap } from './App';
 import { connectEvents } from './store';
 import { DETACHED_STAGE_HASH, DetachedStage3D } from './features/Visualizer';

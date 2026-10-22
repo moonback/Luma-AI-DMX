@@ -1,5 +1,6 @@
 import type { MessageKey } from './fr';
 import { enScreens } from './en.screens';
+import { enStage } from './en.stage';
 
 /** English catalogue. Typed against fr.ts: a missing or extra key does not compile. */
 export const en: Record<MessageKey, string> = {
@@ -576,4 +577,5 @@ export const en: Record<MessageKey, string> = {
   'cues.list.loop': 'Loop at the end of the list',
 
   ...enScreens,
+  ...enStage,
 };
