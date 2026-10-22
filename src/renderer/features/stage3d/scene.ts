@@ -10,16 +10,18 @@ import { act, call } from '../../api';
 import { type VisualFixture } from '../../../core/visualizer/model';
 import type { Project, StageProp, Truss } from '../../../core/model/schemas';
 import { followTruss, snapToTrusses, snapTrussEnds } from '../../../core/visualizer/truss';
+import { moveAssembly } from '../../../core/visualizer/assembly';
 import { beamDirection, type StageGeometry } from '../../../core/visualizer/beam';
 import { buildRig, disposeGeometries, disposeRig, rigKey, updateRig, type Rig } from './rig';
 import { buildEnvironment, buildLowFog, disposeGroup, propObjectName, setLowFog, trussObjectName } from './environment';
 import { disposeTextures } from './textures';
+import { CONNECTORS_NAME } from './trussGeometry';
 import { buildPerformer, buildScreen, disposeScreen, screenKey, updatePerformer, updateScreen, type PerformerRig, type ScreenRig } from './actors';
-import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeReflector, type AmbienceId, type FloorId } from './quality';
+import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeReflector } from './quality';
 import { screenMediaVersion } from '../../screenMedia';
 import { placeAt } from '../../sceneActions';
 import type { SceneRef } from '../../../core/visualizer/sceneEdit';
-import type { MessageKey } from '../../i18n';
+import type { Prefs } from './prefs';
 
 /*
  * Imperative three.js side of the 3D stage view: renderer, cameras, rig and environment objects, gizmo and pointer
@@ -27,26 +29,12 @@ import type { MessageKey } from '../../i18n';
  * and the `ui` callbacks.
  */
 
+export { GRIDS, QUALITY_PRESETS, loadPrefs, savePrefs, type Prefs, type QualityPresetId } from './prefs';
 export type ViewId = 'foh' | 'front' | 'top' | 'left' | 'right';
 export const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'foh', label: 'Régie' }, { id: 'front', label: 'Face' }, { id: 'top', label: 'Dessus' }, { id: 'left', label: 'Jardin' }, { id: 'right', label: 'Cour' },
 ];
 
-/** `view`: a built-in camera id or the id of a view saved in the project. */
-export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number; room: number }
-const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: false, smoke: false, view: 'foh', grid: 0.25, real: false, ambience: 'black', floor: 'matte', exposure: 1, room: 0 };
-
-/** Quality presets: a coherent set of rendering options selectable in one click. */
-export type QualityPresetId = 'edit' | 'balanced' | 'quality' | 'present';
-export const QUALITY_PRESETS: { id: QualityPresetId; labelKey: MessageKey; hintKey: MessageKey; patch: Partial<Prefs> }[] = [
-  { id: 'edit',     labelKey: 'stage3d.preset.edit',     hintKey: 'stage3d.preset.editHint',     patch: { glow: false, pools: false, smoke: false, real: false, haze: 0.3,  exposure: 1,   ambience: 'work',    floor: 'matte'  } },
-  { id: 'balanced', labelKey: 'stage3d.preset.balanced', hintKey: 'stage3d.preset.balancedHint', patch: { glow: true,  pools: true,  smoke: false, real: false, haze: 0.55, exposure: 1,   ambience: 'black',   floor: 'matte'  } },
-  { id: 'quality',  labelKey: 'stage3d.preset.quality',  hintKey: 'stage3d.preset.qualityHint',  patch: { glow: true,  pools: true,  smoke: false, real: true,  haze: 0.65, exposure: 1,   ambience: 'black',   floor: 'lacquer'} },
-  { id: 'present',  labelKey: 'stage3d.preset.present',  hintKey: 'stage3d.preset.presentHint',  patch: { glow: true,  pools: true,  smoke: true,  real: false, haze: 0.8,  exposure: 1.1, ambience: 'club',    floor: 'wet'    } },
-];
-
-/** Editor grid steps in meters (0 = free); rotations snap to 15° whenever a grid is on. */
-export const GRIDS = [0, 0.25, 0.5, 1];
 const ROTATION_SNAP_DEG = 15;
 /** A fixture dropped this close (vertically) to a truss' hanging height snaps onto it. */
 const SNAP_HEIGHT = 1;
@@ -60,21 +48,6 @@ const wrapDeg = (d: number) => r2(((((d + 180) % 360) + 360) % 360) - 180);
 const placementOf = (o: THREE.Object3D): Placement => ({
   x: r2(clamp(o.position.x, -100, 100)), y: r2(clamp(-o.position.z, -100, 100)), height: r2(o.position.y), rotation: wrapDeg(THREE.MathUtils.radToDeg(o.rotation.y)),
 });
-export function loadPrefs(): Prefs {
-  try {
-    return { ...DEFAULT_PREFS, ...(JSON.parse(localStorage.getItem('luma.stage3d') ?? '{}') as Partial<Prefs>) };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-export function savePrefs(p: Prefs): void {
-  try {
-    localStorage.setItem('luma.stage3d', JSON.stringify(p));
-  } catch {
-    // preferences simply not persisted
-  }
-}
-
 function viewPose(id: ViewId, st: StageGeometry): { pos: THREE.Vector3; target: THREE.Vector3 } {
   const { width: W, wallHeight: H } = st;
   // Frame the whole playing area: deck plus thrust.
@@ -139,11 +112,13 @@ export interface StageUi {
   setLights: (n: number) => void;
   setShadows: (n: number) => void;
   setFps: (n: number) => void;
+  /** Click on a free connector marker of an assembly (opens the truss builder on it). */
+  onConnector: (c: { pieceId: string; id: string }) => void;
 }
 
 /** Mounts the 3D view in `el`; null when WebGL is unavailable (the error goes to `ui.setError`). */
 export function mountStage3D(el: HTMLDivElement, latest: { readonly current: StageLatest }, ui: StageUi): { api: StageApi; dispose: () => void } | null {
-  const { setError, setDims, setHover, setCtx, setLights, setShadows, setFps } = ui;
+  const { setError, setDims, setHover, setCtx, setLights, setShadows, setFps, onConnector } = ui;
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -199,17 +174,22 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     const snap = snapToTrusses(latest.current.vis.trusses, p.x, p.y);
     return snap && Math.abs(p.height - snap.height) <= SNAP_HEIGHT ? snap : null;
   };
-  const editedTruss = (): { before: Truss; after: Truss; joint?: Truss } | null => {
+  const editedTruss = (): { before: Truss; after: Truss; list: Truss[]; joint?: Truss } | null => {
     const id = attached.startsWith('truss:') ? attached.split(':')[1]! : null;
     const trusses = latest.current.vis.trusses;
     const before = id ? trusses.find((t) => t.id === id) : undefined;
     const obj = tc.object;
     if (!before || !obj) return null;
     const p = placementOf(obj);
+    if (before.pose) { // assembly piece: its whole assembly moves as one block (the group starts at the pose, yaw 0)
+      const { pos } = before.pose, list = moveAssembly(trusses, before.id, { dx: p.x - pos.x, dy: p.y - pos.y, dz: p.height - pos.z, yaw: p.rotation });
+      return { before, after: list.find((t) => t.id === before.id)!, list };
+    }
     const after = { ...before, x: p.x, y: p.y, height: r2(clamp(p.height, 0.5, 30)), rotation: p.rotation };
     // Moved close to another piece: end to end on it, at its height.
     const snap = latest.current.tool === 'translate' ? snapTrussEnds(after, trusses) : null;
-    return snap ? { before, after: { ...after, x: snap.x, y: snap.y, height: snap.height }, joint: snap.to } : { before, after };
+    const moved = snap ? { ...after, x: snap.x, y: snap.y, height: snap.height } : after;
+    return { before, after: moved, list: trusses.map((t) => (t.id === before.id ? moved : t)), joint: snap?.to };
   };
   const editedProp = (): { before: StageProp; after: StageProp } | null => {
     const id = attached.startsWith('prop:') ? attached.split(':')[1]! : null;
@@ -234,10 +214,12 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     } else {
       const tr = editedTruss();
       if (!tr) return;
-      // Hung fixtures ride along with the truss while it moves.
+      // Hung fixtures ride along with every truss that moves (a whole assembly for assembly pieces).
+      const was = new Map(latest.current.vis.trusses.map((t) => [t.id, t]));
       for (const f of useStore.getState().project?.project.patch ?? []) {
-        if (f.trussId !== tr.before.id) continue;
-        const n = followTruss(tr.before, tr.after, f);
+        const now = f.trussId ? tr.list.find((t) => t.id === f.trussId) : undefined, prev = now && was.get(now.id);
+        if (!now || !prev || prev === now) continue;
+        const n = followTruss(prev, now, f);
         overrides.set(f.id, { x: n.position.x, y: n.position.y, height: n.height, rotation: n.rotation });
       }
       setDims(describe(tr.after, tr.joint ? ` · raccord : ${tr.joint.name}` : ''));
@@ -270,8 +252,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     } else {
       const tr = editedTruss();
       if (!tr) return;
-      const trusses = latest.current.vis.trusses.map((t) => (t.id === tr.before.id ? tr.after : t));
-      void call({ type: 'project.update', visualizer: { trusses } })
+      void call({ type: 'project.update', visualizer: { trusses: tr.list } })
         .catch(() => { envKey = ''; }) // refused: rebuild the set at its saved place
         .finally(() => overrides.clear());
     }
@@ -343,6 +324,14 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     const o = ray.intersectObject(env, true).find((h) => h.object.userData.trussId || h.object.userData.propId)?.object;
     return o ? (o.userData.trussId ? { kind: 'truss', id: o.userData.trussId as string } : { kind: 'prop', id: o.userData.propId as string }) : undefined;
   };
+  /** Free-connector marker under the pointer (shown around a selected assembly piece). */
+  const pickConnector = (cx: number, cy: number): { pieceId: string; id: string } | undefined => {
+    const markers = env?.getObjectByName(CONNECTORS_NAME);
+    if (!markers) return undefined;
+    const r = renderer.domElement.getBoundingClientRect();
+    ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+    return ray.intersectObject(markers, true)[0]?.object.userData.connector as { pieceId: string; id: string } | undefined;
+  };
   /** Stage point under the pointer, where the view ray meets the floor (click placement, library drop). */
   const groundAt = (cx: number, cy: number): { x: number; y: number } | null => {
     const r = renderer.domElement.getBoundingClientRect();
@@ -359,6 +348,8 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       if (at) placeAt(placing, at);
       return;
     }
+    const conn = pickConnector(e.clientX, e.clientY);
+    if (conn) { onConnector(conn); return; }
     const id = pick(e.clientX, e.clientY);
     const st = useStore.getState();
     const set = !id ? pickSet(e.clientX, e.clientY) : undefined;

@@ -26,6 +26,7 @@ JSON UTF-8, indenté. Il est validé à l'ouverture par `projectSchema` ([src/co
 - Les valeurs d'attributs sont **normalisées de 0 à 1**. La conversion en DMX (8 ou 16 bits) se fait au rendu, selon le profil.
 - Les profils intégrés sont référencés par leur `id`. Les profils importés sont **embarqués** dans `profiles`, ce qui garde le projet autonome.
 - **Aucune clé API ni aucun secret** n'est stocké dans un projet (vérifié par un test).
+- Une truss de `visualizer.trusses` (512 au plus) peut être une **pièce assemblée** : champs optionnels `catalogId` (pièce de [trussCatalog.ts](../src/core/visualizer/trussCatalog.ts)), `pose` (`pos` en mètres, z vers le haut, et quaternion `quat`) et `links` (connecteur relié à `toConnector` de la pièce `to`). La `pose` fait foi ; `x`, `y`, `height`, `rotation`, `length` et `shape` en sont dérivés pour le plan 2D et l'accroche des projecteurs. Champs optionnels : pas de changement de version.
 
 ## Versions et migrations
 | Version | Contenu |

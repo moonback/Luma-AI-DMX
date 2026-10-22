@@ -480,6 +480,7 @@ export const stageViewSchema = z.object({ id: idSchema, name: nameSchema, pos: v
  * degrees around the vertical (counter-clockwise seen from above, 0 = parallel to the stage lip). Supported by towers
  * on the floor, hung from motors, or `none` when it rests on other pieces (totems, junctions).
  */
+const unit = z.number().min(-1).max(1);
 export const trussShapeSchema = z.enum(['line', 'circle', 'square', 'corner', 'tee', 'cross', 'totem']);
 export const trussSchema = z.object({
   id: idSchema,
@@ -491,6 +492,10 @@ export const trussSchema = z.object({
   length: z.number().min(0.5).max(60),
   rotation: z.number().min(-360).max(360),
   support: z.enum(['towers', 'hung', 'none']),
+  // Assembly piece (core/visualizer/assembly.ts): catalogue ref, 3D pose (z up) and connector links; the pose wins over the flat fields.
+  catalogId: z.string().min(1).max(64).optional(),
+  pose: z.object({ pos: vec3Schema, quat: z.object({ x: unit, y: unit, z: unit, w: unit }) }).optional(),
+  links: z.array(z.object({ connector: z.string().min(1).max(16), to: idSchema, toConnector: z.string().min(1).max(16) })).max(8).optional(),
 });
 export type Truss = z.infer<typeof trussSchema>;
 /** Performer or instrument silhouette (meters, y upstage, rotation like fixtures: 0 = facing the audience). */
@@ -579,7 +584,7 @@ export const projectSchema = z.object({
       cyclo: z.boolean().default(true),
       markers: z.array(stageMarkerSchema).max(64).default([]),
       views: z.array(stageViewSchema).max(20).default([]),
-      trusses: z.array(trussSchema).max(64).default([]),
+      trusses: z.array(trussSchema).max(512).default([]),
       performers: z.array(performerSchema).max(64).default([]),
       screens: z.array(screenSchema).max(16).default([]),
       props: z.array(propSchema).max(256).default([]),

@@ -4,6 +4,8 @@ import type { StageGeometry } from '../../../core/visualizer/beam';
 import type { Project, StageMarker, StageProp, Truss } from '../../../core/model/schemas';
 import { JUNCTION_ARMS, trussSupports } from '../../../core/visualizer/truss';
 import { labelSprite } from './rig';
+import { boxTruss, buildAssembledPiece, connectorMarkers } from './trussGeometry';
+import { catalogPiece } from '../../../core/visualizer/trussCatalog';
 
 /**
  * Stage set: deck, back wall (cyclorama catching the light), wings, audience floor, and box trusses built from
@@ -22,43 +24,20 @@ export function stageGeometry(vis: Project['visualizer'], fixtures: readonly Vis
   };
 }
 
-function boxTruss(length: number, mat: THREE.Material, lattice: THREE.Material): THREE.Group {
-  const g = new THREE.Group();
-  const w = 0.29;
-  const chord = new THREE.CylinderGeometry(0.024, 0.024, length, 8);
-  chord.rotateZ(Math.PI / 2);
-  for (const [y, z] of [[w / 2, w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [-w / 2, -w / 2]] as const) {
-    const m = new THREE.Mesh(chord, mat);
-    m.position.set(0, y, z);
-    g.add(m);
-  }
-  // Zig-zag lattice on the four faces (cheap line segments).
-  const pts: number[] = [];
-  const steps = Math.max(2, Math.round(length / 0.5));
-  for (let i = 0; i < steps; i++) {
-    const x0 = -length / 2 + (i * length) / steps, x1 = -length / 2 + ((i + 1) * length) / steps;
-    const zag = (a: [number, number], b: [number, number]) => pts.push(x0, a[0], a[1], x1, b[0], b[1]);
-    const h = w / 2;
-    if (i % 2) { zag([h, h], [-h, h]); zag([h, -h], [-h, -h]); zag([h, h], [h, -h]); zag([-h, h], [-h, -h]); }
-    else { zag([-h, h], [h, h]); zag([-h, -h], [h, -h]); zag([h, -h], [h, h]); zag([-h, -h], [-h, h]); }
-  }
-  const lines = new THREE.BufferGeometry();
-  lines.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-  g.add(new THREE.LineSegments(lines, lattice));
-  return g;
-}
-
 /** Name of the 3D group of an explicit truss (picked and moved by the editor). */
 export const trussObjectName = (id: string) => `truss:${id}`;
 
 /** One explicit truss, built around its centre at the truss height; every mesh carries `userData.trussId` for picking. */
 function buildTruss(t: Truss, selected: boolean): THREE.Group {
-  const g = new THREE.Group();
-  g.name = trussObjectName(t.id);
-  g.position.set(t.x, t.height, -t.y);
-  g.rotation.y = THREE.MathUtils.degToRad(t.rotation);
   const mat = new THREE.MeshStandardMaterial({ color: 0x9aa3b5, metalness: 0.85, roughness: 0.3, emissive: selected ? 0x3b1f8a : 0x000000 });
   const lattice = new THREE.LineBasicMaterial({ color: selected ? 0xa78bfa : 0x6b7385 });
+  // Assembly piece: placed by its 3D pose; its supports are the other pieces.
+  const piece = t.catalogId && t.pose ? catalogPiece(t.catalogId) : undefined;
+  const g = piece && t.pose ? buildAssembledPiece(t.pose, piece, mat, lattice) : new THREE.Group();
+  g.name = trussObjectName(t.id);
+  if (piece) { g.traverse((o) => { o.userData.trussId = t.id; }); return g; }
+  g.position.set(t.x, t.height, -t.y);
+  g.rotation.y = THREE.MathUtils.degToRad(t.rotation);
   const r = t.length / 2;
   const add = (o: THREE.Object3D, x: number, z: number, rotY: number) => { o.position.set(x, 0, z); o.rotation.y = rotY; g.add(o); };
   const arms = JUNCTION_ARMS[t.shape];
@@ -278,6 +257,8 @@ export function buildEnvironment(
   }
 
   for (const t of trusses) env.add(buildTruss(t, t.id === selected));
+  // Free connectors of the selected assembly, where the next piece can go.
+  if (selected && trusses.some((t) => t.id === selected && t.pose)) env.add(connectorMarkers(trusses, selected));
   for (const p of props) env.add(buildProp(p, p.id === selected));
 
   return env;

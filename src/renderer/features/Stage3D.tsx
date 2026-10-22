@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Camera, CircleStop, Cloud, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Orbit, Plus, Presentation, Rotate3d, ScanEye, SlidersHorizontal, Sparkles, SunMedium, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
+import { Boxes, Camera, CircleStop, Cloud, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Orbit, Plus, Presentation, Rotate3d, ScanEye, SlidersHorizontal, Sparkles, SunMedium, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { useResolved } from '../components/ui';
@@ -14,6 +14,7 @@ import { DARK_LEVEL, performerLight } from '../../core/visualizer/lighting';
 import { acceptLibraryDrag, dropLibraryItem, duplicateSceneElement, hangFixture, removeSceneElement } from '../sceneActions';
 import { findElement, SCENE_LABEL, type SceneRef } from '../../core/visualizer/sceneEdit';
 import { GRIDS, QUALITY_PRESETS, VIEWS, loadPrefs, mountStage3D, savePrefs, type CtxTarget, type Prefs, type StageApi } from './stage3d/scene';
+import { GHOST_PREFIX, NEW_BUILD, TrussBuilder, buildOn, buildResult, ghostIds, type BuildState } from './stage3d/TrussBuilder';
 
 /** Edit-mode right-click menu on a fixture, a truss or a set piece. */
 function ContextMenu({ ctx, model, vis, patch, onClose }: { ctx: { x: number; y: number; target: CtxTarget }; model: readonly VisualFixture[]; vis: Project['visualizer']; patch: readonly Fixture[]; onClose: () => void }) {
@@ -261,6 +262,7 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
   const [solo, setSolo] = useState(false);
   const [bare, setBare] = useState(false);
   const [showInspector, setShowInspector] = useState(true);
+  const [build, setBuild] = useState<BuildState | null>(null);
   const selKey = `${selection.join(',')}|${selSet ? `${selSet.kind}:${selSet.id}` : ''}`;
   const prevSelKey = useRef(selKey);
   useEffect(() => {
@@ -270,14 +272,33 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
     }
   }, [selKey]);
   const t = useT();
-  const latest = useRef({ model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo });
-  latest.current = { model, selection, groupFilter, prefs, stage, vis, follow, edit, tool, selSet, spin, solo };
+  // Truss builder: the pieces it would add hang in the view, highlighted, until validated (never in edit mode).
+  const preview = build?.catalogId && !edit ? buildResult(vis, build, ghostIds(build)) : null;
+  const ghost = preview && 'trusses' in preview ? preview.trusses.at(-1) : undefined;
+  const shown = preview && 'trusses' in preview ? { ...vis, trusses: preview.trusses } : vis;
+  const shownSel: SceneRef | null = ghost?.id.startsWith(GHOST_PREFIX) ? { kind: 'truss', id: ghost.id } : selSet;
+  const latest = useRef({ model, selection, groupFilter, prefs, stage, vis: shown, follow, edit, tool, selSet: shownSel, spin, solo });
+  latest.current = { model, selection, groupFilter, prefs, stage, vis: shown, follow, edit, tool, selSet: shownSel, spin, solo };
+  const addBuild = () => {
+    if (!build?.catalogId) return;
+    const r = buildResult(vis, build, Array.from({ length: build.count }, () => newId()));
+    if ('error' in r) return;
+    const last = r.trusses.at(-1);
+    void act({ type: 'project.update', visualizer: { trusses: r.trusses } }).then((ok) => { if (ok && last) useStore.getState().setSceneSel({ kind: 'truss', id: last.id }); });
+    setBuild({ ...build, anchor: r.next });
+  };
   const api = useRef<StageApi | null>(null);
 
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const mounted = mountStage3D(el, latest, { setError, setDims, setHover, setCtx, setLights, setShadows, setFps });
+    // A click on a free connector (orange sphere) opens the builder on it; preview pieces are not anchors.
+    const onConnector = (c: { pieceId: string; id: string }) => {
+      if (c.pieceId.startsWith(GHOST_PREFIX)) return;
+      setEdit(false);
+      setBuild((b) => ({ ...(b ?? NEW_BUILD), anchor: { pieceId: c.pieceId, connector: c.id } }));
+    };
+    const mounted = mountStage3D(el, latest, { setError, setDims, setHover, setCtx, setLights, setShadows, setFps, onConnector });
     if (!mounted) return;
     api.current = mounted.api;
     return () => {
@@ -335,6 +356,15 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
     if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable) return;
     const view = VIEWS[Number(e.key) - 1];
     const k = e.key.toLowerCase();
+    // Builder keys while a piece is previewed: R rotate, F flip, Enter add, Escape pick another piece.
+    if (build?.catalogId && !edit && (k === 'r' || k === 'f' || k === 'enter' || k === 'escape')) {
+      if (k === 'r') setBuild({ ...build, roll: build.roll + 1 });
+      else if (k === 'f') { if (build.anchor) setBuild({ ...build, connIdx: build.connIdx + 1 }); }
+      else if (k === 'enter') addBuild();
+      else setBuild({ ...build, catalogId: null });
+      e.preventDefault();
+      return;
+    }
     if (view) pickView(view.id);
     else if (k === 'f') frameSelection();
     else if (k === 'r') setSpin((v) => !v);
@@ -407,6 +437,10 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
               </label>
             </>
           )}
+        </div>
+
+        <div className="stage3d-group" role="group">
+          <button className={`chip stage3d-btn ${build ? 'on' : ''}`} onClick={() => { if (build) { setBuild(null); return; } setEdit(false); setBuild(buildOn(vis.trusses, selSet?.kind === 'truss' ? selSet.id : undefined)); }} title={t('truss.openTitle')} aria-pressed={!!build} data-testid="truss-open"><Boxes size={13} /> <span className="lbl">{t('truss.open')}</span></button>
         </div>
 
         {/* Rendu */}
@@ -483,6 +517,7 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
         </div>
       )}
       {dims && <div className="stage3d-dims mono small" data-testid="dims">{dims}</div>}
+      {!bare && build && <TrussBuilder vis={vis} build={build} setBuild={setBuild} onAdd={addBuild} onClose={() => setBuild(null)} />}
       {ctx && <ContextMenu ctx={ctx} model={model} vis={vis} patch={project.patch} onClose={() => setCtx(null)} />}
       {!bare && inspector && showInspector && (selection.length > 0 || selSet !== null) && (
         <Inspector3D

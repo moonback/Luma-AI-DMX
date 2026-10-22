@@ -616,6 +616,9 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .stage-pane .stage3d-toolbar .lbl, .stage-pane .stage3d-status > .small { display: none; }
 @media (prefers-reduced-motion: reduce) { .stage-view { animation: none; } }
 .stage-empty { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100% - 40px); padding: 8px 12px; border-radius: var(--radius); background: rgba(18, 22, 32, 0.92); border: 1px solid var(--border-strong); z-index: 3; }
+/* The hint sits over the 3D toolbar: clicks go through it, except on its own buttons. */
+.stage-empty { pointer-events: none; }
+.stage-empty .btn { pointer-events: auto; }
 .scene-panel { width: 300px; flex: none; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .scene-panel-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 12px; border-bottom: 1px solid var(--border); }
 .scene-panel-body { flex: 1; overflow-y: auto; }
@@ -1360,3 +1363,10 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   .sc-pos-row { flex-direction: column; }
   .sc-xy { width: 100% !important; height: 110px !important; }
 }
+
+/* Truss builder panel (3D view, left side) */
+/* Narrow so the structure stays visible beside it; the list scrolls. */
+.truss-builder { left: 12px; right: auto; width: 230px; top: auto; bottom: 64px; max-height: calc(100% - 140px); }
+.truss-builder .select { width: 130px; }
+.truss-builder-list { flex: 1 1 auto; min-height: 80px; max-height: 180px; overflow-y: auto; gap: 2px; }
+.truss-builder-list .btn { justify-content: flex-start; text-align: left; }

@@ -45,34 +45,38 @@ Point clé : ce n'est pas un placement libre. **Tout se construit de connecteur 
 - [ ] Systèmes de départ : **carré 4 membrures** en priorité (le plus courant), puis triangle et plat.
 
 ### Phase 1 — Modèle de connecteurs (core, sans UI) — 2 j
+> **Livré (22/10/2026)** : `src/core/visualizer/connectors.ts`, calculs de quaternion écrits à la main (le core n'importe pas `three`).
 Nouveau fichier : `src/core/visualizer/connectors.ts`
-- [ ] `ConnectorDef = { id; pos: vec3; dir: vec3 (sortie); up: vec3 (référence de roulis); system: 'duo' | 'trio' | 'quatro'; gender: 'm' | 'f' | 'h' }`.
-- [ ] `CatalogPiece = { id; label; system; category: 'straight' | 'corner' | 'junction' | 'circle' | 'base' | 'special'; length; weightKg; size: vec3; connectors: ConnectorDef[]; geometry: GeometrySpec }`.
-- [ ] `compatible(a, b)` : même système, genres compatibles (m↔f, h↔tout).
-- [ ] `rollStep(system)` : π (duo), 2π/3 (trio), π/2 (quatro).
-- [ ] `attach(parentPose, parentConn, piece, pieceConnIdx, rollIndex) → Pose` : aligne `dir` de la pièce en opposition avec celui du parent, puis roulis par pas de `rollStep`. Utiliser `three` (`Quaternion.setFromUnitVectors`), déjà en dépendance.
-- [ ] `freeConnectors(structure)` : connecteurs non liés, en coordonnées monde.
-- [ ] Tests `tests/unit/connectors.test.ts` : droite + droite = longueur cumulée ; angle 90° puis droite = coude correct ; 4 roulis en quatro reviennent à l'identité ; trio sur quatro refusé.
+- [x] `ConnectorDef = { id; pos: vec3; dir: vec3 (sortie); up: vec3 (référence de roulis); system: 'duo' | 'trio' | 'quatro'; gender: 'm' | 'f' | 'h' }`.
+- [x] `CatalogPiece = { id; label; system; category: 'straight' | 'corner' | 'junction' | 'circle' | 'base' | 'special'; length; weightKg; size: vec3; connectors: ConnectorDef[]; geometry: GeometrySpec }`.
+- [x] `compatible(a, b)` : même système, genres compatibles (m↔f, h↔tout).
+- [x] `rollStep(system)` : π (duo), 2π/3 (trio), π/2 (quatro).
+- [x] `attach(parentPose, parentConn, piece, pieceConnIdx, rollIndex) → Pose` : aligne `dir` de la pièce en opposition avec celui du parent, puis roulis par pas de `rollStep`. Utiliser `three` (`Quaternion.setFromUnitVectors`), déjà en dépendance.
+- [x] `freeConnectors(structure)` : connecteurs non liés, en coordonnées monde.
+- [x] Tests `tests/unit/connectors.test.ts` : droite + droite = longueur cumulée ; angle 90° puis droite = coude correct ; 4 roulis en quatro reviennent à l'identité ; trio sur quatro refusé.
 
 ### Phase 2 — Catalogue générique — 1–2 j
+> **Livré (22/10/2026)** : `src/core/visualizer/trussCatalog.ts`, 3 systèmes × 24 pièces. Pas encore visible dans `library.ts` : branché avec le panneau (phase 5).
 Nouveau fichier : `src/core/visualizer/trussCatalog.ts`
-- [ ] Droites 0,25 / 0,5 / 1 / 1,5 / 2 / 2,5 / 3 / 4 m (quatro, trio, duo).
-- [ ] Angles 2 départs : 45°, 60°, 90°, 120°, 135° ; nœuds 3D 3 à 6 départs (cube) ; té, croix.
-- [ ] Segments de cercle par diamètre, embases, totems, entretoises.
-- [ ] Poids indicatifs par pièce (ordre de grandeur : ~4–5 kg/m en carré 29 cm).
+- [x] Droites 0,25 / 0,5 / 1 / 1,5 / 2 / 2,5 / 3 / 4 m (quatro, trio, duo).
+- [x] Angles 2 départs : 45°, 60°, 90°, 120°, 135° ; nœuds 3D 3 à 6 départs (cube) ; té, croix.
+- [x] Segments de cercle par diamètre, embases, totems, entretoises.
+- [x] Poids indicatifs par pièce (ordre de grandeur : ~4–5 kg/m en carré 29 cm).
 - [ ] Brancher dans `library.ts` (groupe `'truss'` avec sous-filtres système / catégorie).
 
 ### Phase 3 — Schéma & persistance — 1 j
-- [ ] Étendre `trussSchema` avec `catalogId`, `pose`, `links` optionnels + dérivation des champs plats.
-- [ ] Opérations core `attachPiece`, `detachPiece`, `rollPiece`, `flipPiece`, `repeatPiece` qui renvoient la nouvelle liste `trusses`, appliquée via `project.update` (garde l'annuler / rétablir de la scène existant).
-- [ ] Mettre à jour `docs/PROJECT_FORMAT.md`.
+> **Livré (22/10/2026)** : champs `catalogId` / `pose` / `links`, opérations dans `src/core/visualizer/assembly.ts` (`startPiece`, `attachPiece`, `removePiece`, `billOfMaterials`…), limite portée à 512 truss. Pivoter = `roll + 1`, Retourner = connecteur suivant : pas d'opération séparée.
+- [x] Étendre `trussSchema` avec `catalogId`, `pose`, `links` optionnels + dérivation des champs plats.
+- [x] Opérations core `attachPiece`, `detachPiece`, `rollPiece`, `flipPiece`, `repeatPiece` qui renvoient la nouvelle liste `trusses`, appliquée via `project.update` (garde l'annuler / rétablir de la scène existant).
+- [x] Mettre à jour `docs/PROJECT_FORMAT.md`.
 
 ### Phase 4 — Rendu 3D des pièces — 2 j
+> **Livré (22/10/2026)** : `src/renderer/features/stage3d/trussGeometry.ts` (section carré / triangle / plat, nœuds, quarts de cercle, embase, placement par la pose). Les connecteurs libres de l'assemblage s'affichent quand une de ses pièces est sélectionnée (pas encore de mode assemblage : phase 5). Le gizmo déplace et tourne tout l'assemblage d'un bloc (`moveAssembly`), projecteurs accrochés compris. Instancing non fait : à reprendre si la perf l'exige.
 `src/renderer/features/stage3d/environment.ts`
-- [ ] Géométrie depuis `GeometrySpec` en réutilisant `boxTruss` ; variantes trio (3 membrures) et duo (échelle).
-- [ ] Angles et nœuds : nœud + bras (base existante : `JUNCTION_ARMS`).
-- [ ] Appliquer `pose` (quaternion) quand présent, sinon comportement actuel.
-- [ ] Sphères des connecteurs libres (orange translucide), visibles en mode assemblage ; surbrillance au survol (`userData.connector`).
+- [x] Géométrie depuis `GeometrySpec` en réutilisant `boxTruss` ; variantes trio (3 membrures) et duo (échelle).
+- [x] Angles et nœuds : nœud + bras (base existante : `JUNCTION_ARMS`).
+- [x] Appliquer `pose` (quaternion) quand présent, sinon comportement actuel.
+- [x] Sphères des connecteurs libres (orange translucide, `userData.connector`) ; surbrillance au survol reportée en phase 5 avec le clic.
 - [ ] Instancing au-delà de ~200 pièces (voir `quality.ts`).
 
 ### Phase 5 — Interaction « constructeur » — 3 j

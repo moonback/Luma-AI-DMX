@@ -79,7 +79,7 @@ export const commandSchema = z.discriminatedUnion('type', [
       cyclo: z.boolean().optional(),
       markers: z.array(stageMarkerSchema).max(64).optional(),
       views: z.array(stageViewSchema).max(20).optional(),
-      trusses: z.array(trussSchema).max(64).optional(),
+      trusses: z.array(trussSchema).max(512).optional(),
       performers: z.array(performerSchema).max(64).optional(),
       screens: z.array(screenSchema).max(16).optional(),
       props: z.array(propSchema).max(256).optional(),

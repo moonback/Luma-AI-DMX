@@ -1,5 +1,6 @@
 import { performerSchema, propSchema, screenSchema, stageMarkerSchema, trussSchema, type Performer, type Project, type StageMarker, type StageProp, type StageScreen, type Truss } from '../model/schemas';
 import { hangHeight, JUNCTION_ARMS, nearestOnTruss, trussSegments, type P2 } from './truss';
+import { removePiece } from './assembly';
 
 /**
  * Scene-element editing shared by the 2D plan, the 3D view and the scene panel: creation at a free spot,
@@ -15,7 +16,7 @@ export type PlaceSpec =
 export type Element = StageMarker | Truss | Performer | StageScreen | StageProp;
 
 const LIST = { marker: 'markers', truss: 'trusses', performer: 'performers', screen: 'screens', prop: 'props' } as const;
-const MAX = { marker: 64, truss: 64, performer: 64, screen: 16, prop: 256 } as const;
+const MAX = { marker: 64, truss: 512, performer: 64, screen: 16, prop: 256 } as const;
 const SCHEMA = { marker: stageMarkerSchema, truss: trussSchema, performer: performerSchema, screen: screenSchema, prop: propSchema } as const;
 export const SCENE_LABEL: Record<SceneKind, string> = { marker: 'Point', truss: 'Structure', performer: 'Artiste', screen: 'Écran', prop: 'Décor' };
 
@@ -67,6 +68,8 @@ export const withElement = (vis: Vis, kind: SceneKind, el: Element): Partial<Vis
 
 /** Visualizer patch removing an element; performers standing on a removed point stay where it was. */
 export function withoutElement(vis: Vis, ref: SceneRef): Partial<Vis> {
+  // A removed assembly piece also frees the connectors of its neighbours.
+  if (ref.kind === 'truss') return { trusses: removePiece(vis.trusses, ref.id) };
   const patch: Partial<Vis> = { [LIST[ref.kind]]: items(vis, ref.kind).filter((x) => x.id !== ref.id) };
   if (ref.kind === 'marker') {
     const m = vis.markers.find((x) => x.id === ref.id);
@@ -79,7 +82,11 @@ export function withoutElement(vis: Vis, ref: SceneRef): Partial<Vis> {
 export function cloneElement(vis: Vis, kind: SceneKind, src: Element, id: () => string): Element {
   const p = freeSpot(vis, kind, { x: src.x + 1, y: src.y });
   const copy = { ...structuredClone(src), id: id(), name: `${src.name} (copie)`.slice(0, 80), ...p };
-  return kind === 'performer' ? ({ ...copy, markerId: null } as Performer) : copy;
+  if (kind === 'performer') return { ...copy, markerId: null } as Performer;
+  // Copied assembly piece: its pose moves with the copy, and it starts unlinked.
+  const pose = (copy as Truss).pose;
+  if (kind === 'truss' && pose) return { ...copy, pose: { ...pose, pos: { ...pose.pos, x: pose.pos.x + p.x - src.x, y: pose.pos.y + p.y - src.y } }, links: [] } as Truss;
+  return copy;
 }
 
 /* ---------- Clipboard (plain text, so it works between projects and windows) ---------- */
