@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Crosshair, ExternalLink, Move, PanelLeftOpen, PanelRightOpen, Theater, X } from 'lucide-react';
 import { useStore, type StageMode } from '../store';
 import { useT } from '../i18n';
-import { PageHead, useResolved } from '../components/ui';
+import { useResolved } from '../components/ui';
 import { Stage3D } from './Stage3D';
 import { useSceneShortcuts } from '../sceneActions';
 import { ScenePanel, SceneHistory } from './visualizer/ScenePanel';
@@ -55,42 +55,53 @@ function StagePage() {
   const [group, setGroup] = useState<string | null>(null);
   const placing = useStore((s) => s.placing);
   useSceneShortcuts();
+  const modeLabel = tr(MODES.find((m) => m.id === mode)!.key);
+  const tools = (
+    <>
+      <div className="seg" role="group" aria-label={tr('stagePage.modeAria')} data-testid="stage-mode">
+        {MODES.map((m) => <button key={m.id} className={mode === m.id ? 'on' : ''} aria-pressed={mode === m.id} onClick={() => setMode(m.id)} data-testid={`stage-mode-${m.id}`}>{tr(m.key)}</button>)}
+      </div>
+      {mode !== '3d' && <button className={`btn sm ${edit ? 'on' : ''}`} aria-pressed={edit} onClick={() => setEdit(!edit)} title={tr('stagePage.positionHint')}><Move size={13} />{tr('stagePage.position')}</button>}
+      <span className="view-sep" />
+      <SceneHistory />
+      <select className="select" style={{ width: 150 }} value={group ?? ''} onChange={(e) => setGroup(e.target.value || null)} aria-label={tr('stagePage.groupFilter')}>
+        <option value="">{tr('stagePage.allGroups')}</option>
+        {project.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+      </select>
+    </>
+  );
+  const detach = <button className="btn sm" data-testid="stage3d-detach" onClick={openDetachedStage} title={tr('stagePage.detachHint')}><ExternalLink size={13} />{tr('stagePage.detach')}</button>;
+  const plan = (head: ReactNode) => (
+    <section className="view-card">
+      <header className="view-head"><h2>{tr('stage.plan2d')}</h2><div className="view-tools">{head}</div></header>
+      <div className="view-body"><StageCanvas values={preview?.values} editable={edit} groupFilter={group} /></div>
+    </section>
+  );
+  const view3d = (head: ReactNode) => (
+    <section className="view-card">
+      <header className="view-head"><h2>{tr('stage.view3d')}</h2><div className="view-tools">{head}</div></header>
+      <div className="view-body"><Stage3D values={preview?.values} groupFilter={group} inspector={!panels.inspect} /></div>
+    </section>
+  );
   return (
     <div className="page stage-page">
-      <PageHead title={tr('stagePage.title')} subtitle={tr('stagePage.sub')}>
-        <div className="seg" role="group" aria-label={tr('stagePage.modeAria')} data-testid="stage-mode">
-          {MODES.map((m) => <button key={m.id} className={mode === m.id ? 'on' : ''} aria-pressed={mode === m.id} onClick={() => setMode(m.id)} data-testid={`stage-mode-${m.id}`}>{tr(m.key)}</button>)}
-        </div>
-        {mode !== '3d' && <button className={`btn ${edit ? 'on' : ''}`} aria-pressed={edit} onClick={() => setEdit(!edit)} title={tr('stagePage.positionHint')}><Move size={14} />{tr('stagePage.position')}</button>}
-        <SceneHistory />
-        <select className="select" style={{ width: 160 }} value={group ?? ''} onChange={(e) => setGroup(e.target.value || null)} aria-label={tr('stagePage.groupFilter')}>
-          <option value="">{tr('stagePage.allGroups')}</option>
-          {project.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-        {mode !== '2d' && <button className="btn" data-testid="stage3d-detach" onClick={openDetachedStage} title={tr('stagePage.detachHint')}><ExternalLink size={14} />{tr('stagePage.detach')}</button>}
-      </PageHead>
-      {preview && (
-        <div className="panel row" style={{ padding: '8px 12px', marginBottom: 10, borderColor: 'rgba(139,92,246,.6)' }}>
-          <span className="badge violet">{tr('stagePage.preview')}</span>
-          <span className="grow">{tr('stagePage.notSent', { label: preview.title ?? tr('stagePage.previewAi') })}</span>
-          <button className="btn sm" onClick={() => setPreview(null)}><X size={12} />{tr('stagePage.backLive')}</button>
-        </div>
-      )}
       <div className="stage-layout">
-        {panels.build ? <ScenePanel vis={project.visualizer} /> : (
+        {panels.build ? <ScenePanel vis={project.visualizer} modeLabel={modeLabel} /> : (
           <nav className="scene-rail" aria-label={tr('build.expand')}>
             <button className="btn ghost sm icon" title={tr('build.expand')} aria-label={tr('build.expand')} onClick={() => setPanels({ build: true })} data-testid="stage-settings-toggle"><PanelLeftOpen size={15} /></button>
           </nav>
         )}
         <div className="stage-view">
-          {mode === '2d' && <StageCanvas values={preview?.values} editable={edit} groupFilter={group} />}
-          {mode === '3d' && <Stage3D values={preview?.values} groupFilter={group} inspector={!panels.inspect} />}
-          {mode === 'split' && (
-            <div className="stage-split">
-              <div className="stage-pane"><StageCanvas values={preview?.values} editable={edit} groupFilter={group} /></div>
-              <div className="stage-pane"><Stage3D values={preview?.values} groupFilter={group} inspector={!panels.inspect} /></div>
+          {preview && (
+            <div className="stage-preview row">
+              <span className="badge violet">{tr('stagePage.preview')}</span>
+              <span className="grow">{tr('stagePage.notSent', { label: preview.title ?? tr('stagePage.previewAi') })}</span>
+              <button className="btn sm" onClick={() => setPreview(null)}><X size={12} />{tr('stagePage.backLive')}</button>
             </div>
           )}
+          {mode === '2d' && plan(tools)}
+          {mode === '3d' && view3d(<>{tools}<span className="view-sep" />{detach}</>)}
+          {mode === 'split' && <>{plan(tools)}{view3d(detach)}</>}
           {placing && (
             <div className="stage-empty stage-placing" data-testid="placing">
               <Crosshair size={16} />

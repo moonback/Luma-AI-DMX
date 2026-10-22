@@ -363,48 +363,56 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
       <div className="stage3d-vignette" aria-hidden />
       {bare && <button className="chip stage3d-unbare" onClick={() => setBare(false)} title={t('stage3d.presentExit')} aria-label={t('stage3d.presentExit')} data-testid="present-exit"><Presentation size={12} /></button>}
       {!bare && <div className="stage3d-toolbar">
-        <div className="chips" role="group" aria-label={t('stage3d.cameras')}>
-          <Camera size={14} className="dim" />
-          {VIEWS.map((v) => (
-            <button key={v.id} className={`chip ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid={`cam-${v.id}`} onClick={() => pickView(v.id)}>{v.label}</button>
-          ))}
-          {vis.views.map((v) => (
-            <span key={v.id} className={`chip ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid="cam-saved">
-              <button className="chip-link" onClick={() => pickView(v.id)}>{v.name}</button>
-              <button className="chip-link" onClick={() => deleteView(v.id)} title={t('stage3d.viewDelete', { name: v.name })} aria-label={t('stage3d.viewDeleteAria', { name: v.name })}><X size={10} /></button>
-            </span>
-          ))}
-          {vis.views.length < 20 && <button className="chip" onClick={saveView} title={t('stage3d.viewSaveTitle')} aria-label={t('stage3d.viewSaveAria')} data-testid="cam-save"><Plus size={12} /></button>}
+        {/* Caméras */}
+        <div className="stage3d-group stage3d-cam-group" role="group" aria-label={t('stage3d.cameras')}>
+          <span className="stage3d-cam-icon" title={t('stage3d.cameras')}><Camera size={13} /></span>
+          <div className="stage3d-seg">
+            {VIEWS.map((v) => (
+              <button key={v.id} className={`chip stage3d-btn ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid={`cam-${v.id}`} onClick={() => pickView(v.id)}>{v.label}</button>
+            ))}
+            {vis.views.map((v) => (
+              <span key={v.id} className={`chip stage3d-btn stage3d-saved-cam ${prefs.view === v.id && !follow ? 'on' : ''}`} data-testid="cam-saved">
+                <button className="chip-link" onClick={() => pickView(v.id)}>{v.name}</button>
+                <button className="chip-link chip-del" onClick={() => deleteView(v.id)} title={t('stage3d.viewDelete', { name: v.name })} aria-label={t('stage3d.viewDeleteAria', { name: v.name })}><X size={10} /></button>
+              </span>
+            ))}
+          </div>
+          {vis.views.length < 20 && <button className="chip stage3d-btn stage3d-add-cam" onClick={saveView} title={t('stage3d.viewSaveTitle')} aria-label={t('stage3d.viewSaveAria')} data-testid="cam-save"><Plus size={12} /></button>}
         </div>
+
         <div className="grow" />
-        <div className="chips" role="group">
-          <button className="chip" onClick={frameSelection} title={t('stage3d.frameSel')} aria-label={t('stage3d.frameSel')} data-testid="frame-sel"><Focus size={12} /></button>
-          <button className={`chip ${spin ? 'on' : ''}`} onClick={() => setSpin(!spin)} title={t('stage3d.spinTitle')} aria-pressed={spin} data-testid="spin"><Orbit size={12} /> <span className="lbl">{t('stage3d.spin')}</span></button>
-          <button className={`chip ${solo ? 'on' : ''}`} onClick={() => setSolo(!solo)} title={t('stage3d.soloTitle')} aria-pressed={solo} data-testid="solo"><ScanEye size={12} /> <span className="lbl">{t('stage3d.solo')}</span></button>
-          <button className={`chip ${prefs.room > 0 ? 'on' : ''}`} onClick={() => setPrefs({ room: prefs.room > 0 ? 0 : 0.7 })} title={t('stage3d.lightTitle')} aria-pressed={prefs.room > 0} data-testid="room-light"><SunMedium size={12} /> <span className="lbl">{t('stage3d.light')}</span></button>
+
+        {/* Outils de vue */}
+        <div className="stage3d-group stage3d-tools-group" role="group">
+          <button className="chip stage3d-btn" onClick={frameSelection} title={t('stage3d.frameSel')} aria-label={t('stage3d.frameSel')} data-testid="frame-sel"><Focus size={13} /> <span className="lbl">Cadrer</span></button>
+          <button className={`chip stage3d-btn ${spin ? 'on' : ''}`} onClick={() => setSpin(!spin)} title={t('stage3d.spinTitle')} aria-pressed={spin} data-testid="spin"><Orbit size={13} /> <span className="lbl">{t('stage3d.spin')}</span></button>
+          <button className={`chip stage3d-btn ${solo ? 'on' : ''}`} onClick={() => setSolo(!solo)} title={t('stage3d.soloTitle')} aria-pressed={solo} data-testid="solo"><ScanEye size={13} /> <span className="lbl">{t('stage3d.solo')}</span></button>
+          <button className={`chip stage3d-btn ${prefs.room > 0 ? 'on' : ''}`} onClick={() => setPrefs({ room: prefs.room > 0 ? 0 : 0.7 })} title={t('stage3d.lightTitle')} aria-pressed={prefs.room > 0} data-testid="room-light"><SunMedium size={13} /> <span className="lbl">{t('stage3d.light')}</span></button>
         </div>
-        <span className="stage3d-sep" />
-        <button className={`chip ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title={t('stage3d.editTitle')} data-testid="edit3d"><Move3d size={12} /> <span className="lbl">{t('stage3d.edit')}</span></button>
-        {edit && (
-          <>
-            <div className="chips" role="group" aria-label={t('stage3d.toolGroup')}>
-              <button className={`chip ${tool === 'translate' ? 'on' : ''}`} onClick={() => setTool('translate')} title={t('stage3d.editTitle')} aria-label={t('stage3d.move')} data-testid="tool-move"><Move3d size={12} /></button>
-              <button className={`chip ${tool === 'rotate' ? 'on' : ''}`} onClick={() => setTool('rotate')} title={t('stage3d.editTitle')} aria-label={t('stage3d.rotate')} data-testid="tool-rotate"><Rotate3d size={12} /></button>
-            </div>
-            <label className="row small" title={t('stage3d.gridTitle')}>{t('stage3d.gridLabel')}
-              <select className="select" style={{ width: 82, height: 26 }} value={prefs.grid} onChange={(e) => setPrefs({ grid: Number(e.target.value) })} data-testid="grid">
-                {GRIDS.map((g) => <option key={g} value={g}>{g ? `${String(g).replace('.', ',')} m` : t('stage3d.gridFree')}</option>)}
-              </select>
-            </label>
-          </>
-        )}
-        <span className="stage3d-sep" />
-        <button className={`chip ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)} aria-expanded={menu} title={t('stage3d.renderTitle')} data-testid="render-menu"><SlidersHorizontal size={12} /> <span className="lbl">{t('stage3d.renderBtn')}</span></button>
-        <button className="chip" onClick={() => api.current?.capture()} title={t('stage3d.captureTitle')} aria-label={t('stage3d.captureAria')} data-testid="capture"><ImageDown size={12} /></button>
-        <button className={`chip ${recording ? 'on' : ''}`} onClick={toggleRecord} title={recording ? t('stage3d.recordStopTitle') : t('stage3d.recordStartTitle')} aria-label={recording ? t('stage3d.recordStopAria') : t('stage3d.recordStartAria')} data-testid="record">{recording ? <CircleStop size={12} /> : <Video size={12} />}</button>
-        <button className="chip" onClick={fullscreen} title={t('stage3d.fullscreenTitle')} aria-label={t('stage3d.fullscreenAria')}><Expand size={12} /></button>
-        <button className="chip" onClick={() => setBare(true)} title={t('stage3d.present')} aria-label={t('stage3d.present')} data-testid="present"><Presentation size={12} /></button>
-        {menu && (
+
+        {/* Édition 3D */}
+        <div className={`stage3d-group stage3d-edit-group ${edit ? 'stage3d-edit-active' : ''}`} role="group">
+          <button className={`chip stage3d-btn ${edit ? 'on' : ''}`} onClick={() => setEdit(!edit)} title={t('stage3d.editTitle')} data-testid="edit3d"><Move3d size={13} /> <span className="lbl">{t('stage3d.edit')}</span></button>
+          {edit && (
+            <>
+              <div className="stage3d-subgroup" role="group" aria-label={t('stage3d.toolGroup')}>
+                <button className={`chip stage3d-btn icon-only ${tool === 'translate' ? 'on' : ''}`} onClick={() => setTool('translate')} title={t('stage3d.editTitle')} aria-label={t('stage3d.move')} data-testid="tool-move"><Move3d size={12} /></button>
+                <button className={`chip stage3d-btn icon-only ${tool === 'rotate' ? 'on' : ''}`} onClick={() => setTool('rotate')} title={t('stage3d.editTitle')} aria-label={t('stage3d.rotate')} data-testid="tool-rotate"><Rotate3d size={12} /></button>
+              </div>
+              <label className="stage3d-grid-label" title={t('stage3d.gridTitle')}>
+                <span className="lbl dim">{t('stage3d.gridLabel')}</span>
+                <select className="select stage3d-grid-select" value={prefs.grid} onChange={(e) => setPrefs({ grid: Number(e.target.value) })} data-testid="grid">
+                  {GRIDS.map((g) => <option key={g} value={g}>{g ? `${String(g).replace('.', ',')} m` : t('stage3d.gridFree')}</option>)}
+                </select>
+              </label>
+            </>
+          )}
+        </div>
+
+        {/* Rendu */}
+        <div className="stage3d-group stage3d-render-anchor">
+          <button className={`chip stage3d-btn ${menu ? 'on' : ''}`} onClick={() => setMenu(!menu)} aria-expanded={menu} title={t('stage3d.renderTitle')} data-testid="render-menu"><SlidersHorizontal size={13} /> <span className="lbl">{t('stage3d.renderBtn')}</span></button>
+          {menu && (
           <div className="stage3d-pop" role="dialog" aria-label={t('stage3d.renderDialog')} data-testid="render-pop">
             <div className="stage3d-presets" role="group" aria-label={t('stage3d.presetsTitle')}>
               {QUALITY_PRESETS.map((preset) => (
@@ -450,7 +458,24 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
             </label>
           </div>
         )}
-      </div>}
+      </div>
+
+      {/* Groupe 5 : Utilitaires Média & Plein écran */}
+      <div className="stage3d-group stage3d-actions-group" role="group">
+        <button className="chip stage3d-btn icon-only" onClick={() => api.current?.capture()} title={t('stage3d.captureTitle')} aria-label={t('stage3d.captureAria')} data-testid="capture">
+          <ImageDown size={14} />
+        </button>
+        <button className={`chip stage3d-btn icon-only ${recording ? 'on recording' : ''}`} onClick={toggleRecord} title={recording ? t('stage3d.recordStopTitle') : t('stage3d.recordStartTitle')} aria-label={recording ? t('stage3d.recordStopAria') : t('stage3d.recordStartAria')} data-testid="record">
+          {recording ? <CircleStop size={14} style={{ color: '#ef4444' }} /> : <Video size={14} />}
+        </button>
+        <button className="chip stage3d-btn icon-only" onClick={fullscreen} title={t('stage3d.fullscreenTitle')} aria-label={t('stage3d.fullscreenAria')}>
+          <Expand size={14} />
+        </button>
+        <button className="chip stage3d-btn icon-only" onClick={() => setBare(true)} title={t('stage3d.present')} aria-label={t('stage3d.present')} data-testid="present">
+          <Presentation size={14} />
+        </button>
+      </div>
+    </div>}
       {hover && (
         <div className="stage3d-tip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <b>{hover.f.name}</b>

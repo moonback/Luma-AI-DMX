@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Copy, EllipsisVertical, Focus, MapPin, PanelRightClose, Trash2 } from 'lucide-react';
+import { ChevronUp, Copy, EllipsisVertical, Focus, MapPin, MousePointer2, PanelRightClose, Trash2 } from 'lucide-react';
 import { confirmAction, useStore } from '../../store';
 import { act } from '../../api';
-import { useT, type MessageKey } from '../../i18n';
+import { t, useT, type MessageKey } from '../../i18n';
 import { NumberInput, useResolved, useThrottled } from '../../components/ui';
 import { buildVisualModel } from '../../../core/visualizer/model';
 import { channelCount, type ResolvedFixture } from '../../../core/fixtures/profiles';
 import { PROP_KIND_LABEL, TRUSS_SHAPE_LABEL } from '../../../core/visualizer/library';
-import { findElement, type SceneKind, type SceneRef } from '../../../core/visualizer/sceneEdit';
+import { SCENE_LABEL, findElement, type SceneKind, type SceneRef } from '../../../core/visualizer/sceneEdit';
 import { duplicateSceneElement, removeSceneElement } from '../../sceneActions';
 import { type Vis, ElementCard, FixtureCard } from './sceneCards';
 import { FixtureGlyph, LibraryGlyph } from './ScenePanel';
@@ -22,24 +22,34 @@ const MAX_FIXTURE_CARDS = 12;
 
 export function SelectionPanel({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
   const tr = useT();
+  const has = useStore((s) => !!s.sceneSel || s.selection.length > 0);
+  const [propsOpen, setPropsOpen] = useState(true);
   return (
-    <aside className="scene-panel select-panel" aria-label={tr('select.title')}>
-      <div className="scene-panel-head">
-        <h2 className="panel-title grow">{tr('select.title')}</h2>
-        <button className="btn ghost sm icon" onClick={() => useStore.getState().setStagePanels({ inspect: false })} title={tr('select.collapse')} aria-label={tr('select.collapse')} data-testid="inspect-collapse"><PanelRightClose size={14} /></button>
-      </div>
-      <div className="scene-panel-body">
-        <section className="inspector" aria-label={tr('select.properties')} data-testid="stage-selection">
-          <h3 className="inspector-title">{tr('select.properties')}</h3>
-          <Inspector vis={vis} mode={mode} />
-        </section>
-        <section className="tree-section" aria-label={tr('select.hierarchy')}>
-          <h3 className="inspector-title tree-title">{tr('select.hierarchy')}</h3>
-          <Hierarchy vis={vis} />
-        </section>
-      </div>
+    <aside className="stage-side select-side" aria-label={tr('select.title')}>
+      <section className="stage-card tree-card" aria-label={tr('select.hierarchy')}>
+        <div className="stage-card-head">
+          <MousePointer2 size={15} className="stage-accent" /><h2 className="grow">{tr('select.title')}</h2>
+          <button className="btn ghost sm icon" disabled={!has} onClick={() => void deleteSelection(vis)} title={tr('select.deleteSelected')} aria-label={tr('select.deleteSelected')} data-testid="selection-delete"><Trash2 size={14} /></button>
+          <button className="btn ghost sm icon" onClick={() => useStore.getState().setStagePanels({ inspect: false })} title={tr('select.collapse')} aria-label={tr('select.collapse')} data-testid="inspect-collapse"><PanelRightClose size={14} /></button>
+        </div>
+        <div className="stage-card-body"><Hierarchy vis={vis} /></div>
+      </section>
+      <section className="stage-card props-card" aria-label={tr('select.properties')} data-testid="stage-selection">
+        <button className="stage-card-head" aria-expanded={propsOpen} onClick={() => setPropsOpen(!propsOpen)}>
+          <h2 className="grow">{tr('select.properties')}</h2><ChevronUp size={15} className={propsOpen ? '' : 'flip'} />
+        </button>
+        {propsOpen && <div className="stage-card-body inspector"><Inspector vis={vis} mode={mode} /></div>}
+      </section>
     </aside>
   );
+}
+
+/** Deletes the selected stage element (undoable) or, after confirmation, the selected fixtures from the patch. */
+async function deleteSelection(vis: Vis): Promise<void> {
+  const { sceneSel, selection } = useStore.getState();
+  if (sceneSel && findElement(vis, sceneSel)) { removeSceneElement(sceneSel); return; }
+  if (!selection.length) return;
+  if (await confirmAction({ title: t('select.removeFixturesTitle'), message: t('select.removeFixturesMessage', { n: selection.length }), confirmLabel: t('select.removeFixtureConfirm') })) void act({ type: 'fixture.remove', ids: selection });
 }
 
 /** Rows of the scene model, grouped by category; a click selects (Ctrl / Maj adds fixtures), ⋮ opens the actions. */
@@ -142,29 +152,54 @@ function Inspector({ vis, mode }: { vis: Vis; mode: '2d' | '3d' | 'split' }) {
   const patch = useStore((s) => s.project!.project.patch);
   const { fixtures, byId } = useResolved();
   const model = useMemo(() => buildVisualModel(fixtures.filter((f) => selection.includes(f.fixture.id)), values), [fixtures, selection, values]);
-  if (sceneSel && findElement(vis, sceneSel)) {
+  const [tab, setTab] = useState<'general' | 'dmx'>('general');
+  const del = <button className="btn stage-delete" onClick={() => void deleteSelection(vis)} data-testid="inspector-delete"><Trash2 size={14} />{tr('select.deleteElement')}</button>;
+  const el = sceneSel && findElement(vis, sceneSel);
+  if (sceneSel && el) {
     return (
-      <div className="col" style={{ gap: 8 }} data-testid="selection-element">
+      <div className="col" style={{ gap: 10 }} data-testid="selection-element">
+        <InspectorHead icon={<LibraryGlyph item={{ kind: sceneSel.kind, preset: el as unknown as Record<string, unknown> }} size={30} />} name={el.name} sub={SCENE_LABEL[sceneSel.kind]} />
         <ElementCard sel={sceneSel} vis={vis} />
-        <div className="row" style={{ gap: 6 }}>
-          <button className="btn sm" onClick={() => duplicateSceneElement(sceneSel)} title={tr('select.duplicate')}><Copy size={12} />{tr('select.duplicate')}</button>
-          <span className="grow" />
-          <button className="btn sm danger" onClick={() => removeSceneElement(sceneSel)} title={tr('select.delete')} data-testid="inspector-delete"><Trash2 size={12} />{tr('select.delete')}</button>
-        </div>
-        <p className="scene-hint">{tr('select.frameHint')}</p>
+        <button className="btn sm" onClick={() => duplicateSceneElement(sceneSel)} title={tr('select.duplicate')}><Copy size={12} />{tr('select.duplicate')}</button>
+        {del}
       </div>
     );
   }
   if (!model.length) return <p className="scene-hint" data-testid="selection-empty"><MapPin size={12} /> {tr('select.empty')}</p>;
   const one = model.length === 1 ? byId.get(model[0]!.id) : undefined;
   const extra = model.length - MAX_FIXTURE_CARDS;
+  const live = <LiveControls ids={model.map((f) => f.id)} color={model[0]!.color} intensity={values[model[0]!.id]?.dimmer ?? model[0]!.intensity} resolved={model.map((f) => byId.get(f.id)).filter((x): x is ResolvedFixture => !!x)} />;
+  if (one) {
+    return (
+      <div className="col" style={{ gap: 10 }}>
+        <InspectorHead icon={<FixtureGlyph type={one.profile.type} size={30} />} name={one.fixture.name} sub={`${t('build.cat.point')} · ${t(`build.type.${one.profile.type}` as MessageKey)}`} />
+        <div className="inspector-tabs" role="tablist" aria-label={tr('select.tabs')}>
+          <button role="tab" aria-selected={tab === 'general'} className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')} data-testid="tab-general">{tr('select.tabGeneral')}</button>
+          <button role="tab" aria-selected={tab === 'dmx'} className={tab === 'dmx' ? 'on' : ''} onClick={() => setTab('dmx')} data-testid="tab-dmx">{tr('select.tabDmx')}</button>
+        </div>
+        {tab === 'general'
+          ? <FixtureCard f={model[0]!} fixture={patch.find((x) => x.id === one.fixture.id)} trusses={vis.trusses} beamView={mode !== '2d'} />
+          : <><FixtureDmx f={one} />{live}</>}
+        {del}
+      </div>
+    );
+  }
   return (
     <div className="col" style={{ gap: 8 }}>
       {model.slice(0, MAX_FIXTURE_CARDS).map((f) => <FixtureCard key={f.id} f={f} fixture={patch.find((x) => x.id === f.id)} trusses={vis.trusses} beamView={mode !== '2d'} />)}
       {extra > 0 && <p className="scene-hint">{tr('select.more', { n: extra })}</p>}
-      {one && <FixtureDmx f={one} />}
-      <LiveControls ids={model.map((f) => f.id)} color={model[0]!.color} intensity={values[model[0]!.id]?.dimmer ?? model[0]!.intensity} resolved={model.map((f) => byId.get(f.id)).filter((x): x is ResolvedFixture => !!x)} />
-      <p className="scene-hint">{tr('select.frameHint')}</p>
+      {live}
+      {del}
+    </div>
+  );
+}
+
+/** Thumbnail, name and category of the inspected object. */
+function InspectorHead({ icon, name, sub }: { icon: ReactNode; name: string; sub: string }) {
+  return (
+    <div className="inspector-head">
+      <span className="inspector-thumb">{icon}</span>
+      <span className="tree-text"><b title={name}>{name}</b><span>{sub}</span></span>
     </div>
   );
 }

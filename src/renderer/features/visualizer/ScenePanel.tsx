@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, ArrowLeft, Boxes, Camera, ChevronRight, Crosshair, LayoutTemplate, Lightbulb, MapPin, Monitor, PanelLeftClose, Redo2, Theater, Undo2, UserRound, Wand2 } from 'lucide-react';
+import { Armchair, ArrowLeft, Boxes, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, PanelLeftClose, Redo2, Shapes, Theater, Undo2, UserRound, Wand2 } from 'lucide-react';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
 import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
@@ -99,67 +99,82 @@ function StageSettings({ vis }: { vis: Vis }) {
   );
 }
 
-/** Left panel of the Stage page: Construire categories → catalogue of the chosen category. */
-export function ScenePanel({ vis }: { vis: Vis }) {
+/** Left column of the Stage page: title card, the Construire categories (always listed) and the catalogue of the active one. */
+export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) {
   const tr = useT();
-  const [cat, setCat] = useState<BuildCat | null>(null);
+  const [cat, setCat] = useState<BuildCat | null>('point');
+  const [catsOpen, setCatsOpen] = useState(true);
   const current = CATS.find((c) => c.id === cat);
   return (
-    <aside className="scene-panel build-panel" aria-label={tr('build.title')}>
-      <div className="scene-panel-head">
-        <h2 className="panel-title grow">{tr('build.title')}</h2>
-        <button className="btn ghost sm icon" onClick={() => useStore.getState().setHelp('stage')} title={tr('stagePanel.wizardHint')} aria-label={tr('stagePanel.wizard')} data-testid="stage-wizard-open"><Wand2 size={14} /></button>
-        <button className="btn ghost sm icon" onClick={() => useStore.getState().setStagePanels({ build: false })} title={tr('build.collapse')} aria-label={tr('build.collapse')} data-testid="build-collapse"><PanelLeftClose size={14} /></button>
+    <aside className="stage-side build-side" aria-label={tr('build.title')}>
+      <div className="stage-card stage-title-card">
+        <div className="row" style={{ gap: 10 }}>
+          <Layers size={22} className="stage-accent" />
+          <h1 className="grow">{tr('stagePage.title')}</h1>
+          <span className="stage-mode-badge">{modeLabel}</span>
+        </div>
+        <div className="row" style={{ gap: 4 }}>
+          <span className="grow small muted">{tr('build.title')} · {tr('build.sub')}</span>
+          <button className="btn ghost sm icon" onClick={() => useStore.getState().setHelp('stage')} title={tr('stagePanel.wizardHint')} aria-label={tr('stagePanel.wizard')} data-testid="stage-wizard-open"><Wand2 size={14} /></button>
+          <button className="btn ghost sm icon" onClick={() => useStore.getState().setStagePanels({ build: false })} title={tr('build.collapse')} aria-label={tr('build.collapse')} data-testid="build-collapse"><PanelLeftClose size={14} /></button>
+        </div>
       </div>
-      <div className="scene-panel-body" data-testid="stage-settings">
-        {current ? (
-          <Catalogue key={current.id} cat={current} vis={vis} onBack={() => setCat(null)} />
-        ) : (
-          <>
-            <p className="build-sub">{tr('build.sub')}</p>
+      <div className="stage-card build-card" data-testid="stage-settings">
+        <button className="stage-card-head" aria-expanded={catsOpen} onClick={() => setCatsOpen(!catsOpen)}>
+          <Shapes size={15} className="stage-accent" /><h2 className="grow">{tr('build.title')}</h2><ChevronUp size={15} className={catsOpen ? '' : 'flip'} />
+        </button>
+        <div className="stage-card-body">
+          {catsOpen && (
             <nav className="build-cats" aria-label={tr('build.categories')}>
               {CATS.map((c) => (
-                <button key={c.id} className="build-cat" onClick={() => setCat(c.id)} data-testid={`build-cat-${c.id}`}>
+                <button key={c.id} className={`build-cat ${cat === c.id ? 'on' : ''}`} aria-pressed={cat === c.id} onClick={() => setCat(c.id)} data-testid={`build-cat-${c.id}`}>
                   <span className="build-cat-icon">{c.icon}</span>
                   <span className="build-cat-text"><b>{tr(`build.cat.${c.id}` as MessageKey)}</b><span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span></span>
-                  <ChevronRight size={14} className="dim" />
                 </button>
               ))}
             </nav>
-            <StageSettings vis={vis} />
-            <Section icon={<LayoutTemplate size={13} />} title={tr('build.template')} open={!hasSceneContent(vis)}>
-              <TemplatePicker vis={vis} />
-              <label className="btn sm" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
-                <Camera size={12} />{t('photo.button')}
-                <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
-                }} />
-              </label>
-            </Section>
-          </>
-        )}
+          )}
+          {current ? <Catalogue key={current.id} cat={current} vis={vis} /> : (
+            <>
+              <StageSettings vis={vis} />
+              <Section icon={<LayoutTemplate size={13} />} title={tr('build.template')} open={!hasSceneContent(vis)}>
+                <TemplatePicker vis={vis} />
+                <label className="btn sm" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
+                  <Camera size={12} />{t('photo.button')}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
+                  }} />
+                </label>
+              </Section>
+            </>
+          )}
+        </div>
       </div>
+      {current && (
+        <button className="stage-card stage-back" onClick={() => setCat(null)} data-testid="build-back"><ArrowLeft size={15} />{tr('build.back')}</button>
+      )}
     </aside>
   );
 }
 
-/** Catalogue of one category: back, search, (type filter), tiles, then what of that kind is already on stage. */
-function Catalogue({ cat, vis, onBack }: { cat: (typeof CATS)[number]; vis: Vis; onBack: () => void }) {
+/** Catalogue of the active category: search, (type filter), tiles, then what of that kind is already on stage. */
+function Catalogue({ cat, vis }: { cat: (typeof CATS)[number]; vis: Vis }) {
   const tr = useT();
   const [query, setQuery] = useState('');
   const title = tr(`build.cat.${cat.id}` as MessageKey);
   return (
-    <div className="build-catalogue" data-testid={`catalogue-${cat.id}`}>
-      <div className="build-cat-head">
-        <button className="btn ghost sm" onClick={onBack} data-testid="build-back"><ArrowLeft size={13} />{tr('build.back')}</button>
-        <span className="build-cat-title">{cat.icon}{title}</span>
+    <section className="build-catalogue" data-testid={`catalogue-${cat.id}`} aria-label={tr('build.active')}>
+      <h3 className="build-active-title">{tr('build.active')}</h3>
+      <div className="build-active-head">
+        <span className="build-active-icon">{cat.icon}</span>
+        <span className="build-cat-text"><b>{title}</b><span>{tr('build.activeSub', { cat: title.toLowerCase() })}</span></span>
       </div>
       <input className="input" type="search" placeholder={tr('build.search', { cat: title })} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={tr('build.search', { cat: title })} data-testid="lib-search" />
       {cat.id === 'point' ? <FixtureCatalogue query={query} /> : <LibraryTiles items={LIBRARY.filter(cat.items)} query={query} />}
       {cat.id !== 'point' && <InScene cat={cat.id} vis={vis} />}
-    </div>
+    </section>
   );
 }
 
@@ -216,16 +231,17 @@ function FixtureCatalogue({ query }: { query: string }) {
           const mode = p.modes[0]!.name;
           const on = placing?.kind === 'fixture' && placing.profileId === p.id;
           const n = inPatch.get(p.id) ?? 0;
+          const hint = [tr('build.tileHint', { name: p.name }), p.manufacturer, p.modes.length > 1 ? tr('build.modes', { n: p.modes.length }) : ''].filter(Boolean).join('\n');
           return (
             <button key={p.id} className={`fixture-tile ${on ? 'on' : ''}`} draggable aria-pressed={on} data-testid={`fixture-${p.id}`}
-              title={tr('build.tileHint', { name: p.name })}
+              title={hint}
               onClick={() => useStore.getState().setPlacing(on ? null : { kind: 'fixture', label: p.name, profileId: p.id, mode })}
               onDragStart={(e) => { e.dataTransfer.setData(LIBRARY_MIME, `fixture:${p.id}:${mode}`); e.dataTransfer.effectAllowed = 'copy'; }}>
-              <span className="fixture-tile-glyph"><FixtureGlyph type={p.type} />{n > 0 && <span className="fixture-tile-count" title={tr('build.inPatch', { n })}>×{n}</span>}</span>
+              {n > 0 && <span className="fixture-tile-count" title={tr('build.inPatch', { n })}>×{n}</span>}
+              {p.fictional && <span className="fixture-tile-fictional" title={tr('build.fictionalHint')} aria-label={tr('build.fictional')} />}
+              <span className="fixture-tile-glyph"><FixtureGlyph type={p.type} size={42} /></span>
               <b>{p.name}</b>
-              <span className="small dim">{p.manufacturer}</span>
-              <span className="small muted">{tr(`build.type.${p.type}` as MessageKey)} · {tr('build.channels', { n: channelCount(p, mode) })}{p.modes.length > 1 ? ` · ${tr('build.modes', { n: p.modes.length })}` : ''}</span>
-              {p.fictional && <span className="badge warn" title={tr('build.fictionalHint')}>{tr('build.fictional')}</span>}
+              <span className="fixture-tile-sub">{tr(`build.type.${p.type}` as MessageKey)} · {tr('build.channels', { n: channelCount(p, mode) })}</span>
             </button>
           );
         })}
@@ -239,8 +255,9 @@ function FixtureCatalogue({ query }: { query: string }) {
 function InScene({ cat, vis }: { cat: Exclude<BuildCat, 'point'>; vis: Vis }) {
   const tr = useT();
   const count = { structure: vis.trusses.length, decor: vis.props.length, performer: vis.performers.length + vis.markers.length, screen: vis.screens.length }[cat];
+  const heading = [tr('build.inScene'), tr(`build.cat.${cat}` as MessageKey)].join(' · ');
   return (
-    <Section icon={<MapPin size={13} />} title={`${tr('build.inScene')} · ${tr(`build.cat.${cat}` as MessageKey)}`} count={count}>
+    <Section icon={<MapPin size={13} />} title={heading} count={count}>
       <div className="scene-quickadd">
         {cat === 'structure' && <AddBtn kind="truss" label="scene.addTruss" icon={<Boxes size={14} />} testId="truss-add" />}
         {cat === 'decor' && <AddBtn kind="prop" label="scene.addProp" icon={<Armchair size={14} />} testId="prop-add" />}
@@ -270,7 +287,7 @@ function EquipButton({ vis }: { vis: Vis }) {
   );
 }
 
-const SVG = { stroke: 'currentColor', strokeWidth: 2, fill: 'none', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+const SVG = { stroke: 'currentColor', strokeWidth: 1.8, fill: 'currentColor', fillOpacity: 0.14, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
 /** Small drawn front view of a fixture type (no bitmap assets ship with the profiles). */
 export function FixtureGlyph({ type, size = 34 }: { type: FixtureProfile['type']; size?: number }) {

@@ -50,13 +50,14 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     if (!el) return;
     const fit = () => {
       const r = el.getBoundingClientRect();
-      const key = `${W}|${D}|${front}|${Math.round(r.width)}`;
+      const key = `${W}|${D}|${front}|${Math.round(r.width)}|${Math.round(r.height)}`;
       setView((v) => {
-        // Refit when the stage outline or the view width changes (scene panel opened), keep the user's zoom/pan otherwise.
+        // Refit when the stage outline or the view size changes (panel folded, plan + 3D), keep the user’s zoom/pan otherwise.
         if (v.scale && fitKey.current === key) return v;
         fitKey.current = key;
         const scale = Math.min(r.width / (W + 4), r.height / (D + front + 4));
-        return { scale, ox: r.width / 2, oy: r.height - 20 - front * scale };
+        // Stage (and thrust) centred in the view.
+        return { scale, ox: r.width / 2, oy: r.height / 2 + ((D - front) * scale) / 2 };
       });
     };
     fit();

@@ -28,22 +28,32 @@ export interface StageDrawState {
 /** Draws the 2D top-down stage view: floor, set pieces, trusses, screens, performers, beams and fixtures. */
 export function drawStage(g: CanvasRenderingContext2D, r: { width: number; height: number }, s: StageDrawState): void {
   const { W, D, thrust, vis, view, compact, group, model, selection, sceneSel, toScreen, pos, at, markerPos, performerPos } = s;
-  g.clearRect(0, 0, r.width, r.height);
+  g.fillStyle = '#0a1120';
+  g.fillRect(0, 0, r.width, r.height);
+  // Metre grid over the whole view (every 5 m stronger), so distances read outside the stage too.
+  if (view.scale >= 4) {
+    const o = toScreen(0, 0);
+    const x0 = Math.floor(-o.x / view.scale), x1 = Math.ceil((r.width - o.x) / view.scale);
+    const y0 = Math.floor((o.y - r.height) / view.scale), y1 = Math.ceil(o.y / view.scale);
+    g.lineWidth = 1;
+    for (let x = x0; x <= x1; x++) { const p = toScreen(x, 0); g.strokeStyle = x % 5 ? 'rgba(52,120,246,0.06)' : 'rgba(52,120,246,0.14)'; g.beginPath(); g.moveTo(Math.round(p.x) + 0.5, 0); g.lineTo(Math.round(p.x) + 0.5, r.height); g.stroke(); }
+    for (let y = y0; y <= y1; y++) { const p = toScreen(0, y); g.strokeStyle = y % 5 ? 'rgba(52,120,246,0.06)' : 'rgba(52,120,246,0.14)'; g.beginPath(); g.moveTo(0, Math.round(p.y) + 0.5); g.lineTo(r.width, Math.round(p.y) + 0.5); g.stroke(); }
+  }
   // Stage
   const a = toScreen(-W / 2, D), b = toScreen(W / 2, 0);
-  g.fillStyle = '#0d1018';
+  g.fillStyle = '#0e1828';
   g.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
-  g.strokeStyle = '#283142';
+  g.strokeStyle = '#3a5277';
   g.lineWidth = 1;
   g.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
-  g.strokeStyle = 'rgba(40,49,66,0.45)';
+  g.strokeStyle = 'rgba(58,82,119,0.35)';
   for (let x = Math.ceil(-W / 2); x <= W / 2; x++) { const p = toScreen(x, 0), q = toScreen(x, D); g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke(); }
   for (let y = 1; y < D; y++) { const p = toScreen(-W / 2, y), q = toScreen(W / 2, y); g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke(); }
   if (thrust) {
     const ta = toScreen(-thrust.width / 2, 0), tb = toScreen(thrust.width / 2, -thrust.depth);
-    g.fillStyle = '#0d1018';
+    g.fillStyle = '#0e1828';
     g.fillRect(ta.x, ta.y, tb.x - ta.x, tb.y - ta.y);
-    g.strokeStyle = '#283142';
+    g.strokeStyle = '#3a5277';
     g.strokeRect(ta.x, ta.y, tb.x - ta.x, tb.y - ta.y);
   }
   g.fillStyle = '#66718a';

@@ -434,10 +434,141 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 
 /* 3D stage */
 .stage3d canvas { display: block; }
-.stage3d-toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: 12px; background: linear-gradient(180deg, rgba(24, 28, 40, 0.78), rgba(11, 13, 18, 0.7)); border: 1px solid rgba(255, 255, 255, 0.07); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px) saturate(1.2); z-index: 2; }
-.stage3d-toolbar .chip { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.07); display: inline-flex; align-items: center; gap: 5px; transition: background var(--dur), border-color var(--dur), color var(--dur); }
-.stage3d-toolbar .chip:hover { background: rgba(255, 255, 255, 0.07); }
-.stage3d-toolbar .chip.on { background: var(--violet-soft); border-color: var(--violet); box-shadow: 0 0 12px rgba(139, 92, 246, 0.35); }
+.stage3d-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: rgba(12, 16, 24, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px) saturate(1.2);
+  z-index: 2;
+  user-select: none;
+}
+.stage3d-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.stage3d-cam-group {
+  gap: 3px;
+  padding-left: 6px;
+}
+.stage3d-cam-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  margin-right: 2px;
+}
+.stage3d-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.stage3d-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  height: 25px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  white-space: nowrap;
+}
+.stage3d-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+.stage3d-btn.on {
+  background: var(--violet);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+}
+.stage3d-btn.icon-only {
+  width: 26px;
+  height: 25px;
+  padding: 0;
+  justify-content: center;
+}
+.stage3d-add-cam {
+  width: 22px;
+  height: 25px;
+  padding: 0;
+  justify-content: center;
+  color: var(--text-3);
+}
+.stage3d-add-cam:hover {
+  color: var(--text);
+}
+.stage3d-saved-cam {
+  padding-right: 2px;
+}
+.stage3d-saved-cam .chip-del {
+  margin-left: 3px;
+  opacity: 0.6;
+}
+.stage3d-saved-cam .chip-del:hover {
+  opacity: 1;
+  color: #f87171;
+}
+.stage3d-edit-group {
+  transition: all 180ms ease;
+}
+.stage3d-edit-active {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+.stage3d-subgroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding-left: 3px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+.stage3d-grid-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 0 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+.stage3d-grid-select {
+  height: 22px !important;
+  font-size: 11px !important;
+  padding: 0 4px !important;
+  width: 76px !important;
+  border-radius: 4px !important;
+}
+.stage3d-render-anchor {
+  position: relative;
+}
+.stage3d-btn.recording {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  animation: pulse 1.5s infinite;
+}
 .stage3d-fps { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; opacity: 0.85; min-width: 58px; text-align: center; }
 .stage3d-fps.ok { color: var(--ok); }
 .stage3d-fps.mid { color: var(--warn); }

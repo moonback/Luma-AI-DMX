@@ -67,9 +67,11 @@ describe('Construire', () => {
     for (const id of ['point', 'structure', 'decor', 'performer', 'screen']) {
       await click(`build-cat-${id}`);
       expect(screen.getByTestId(`catalogue-${id}`)).toBeTruthy();
-      expect(screen.queryByTestId('build-cat-point')).toBeNull();
+      expect(screen.getByTestId(`build-cat-${id}`).getAttribute('aria-pressed')).toBe('true');
+      expect(cats.filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
       await click('build-back');
-      expect(screen.getByTestId('build-cat-point')).toBeTruthy();
+      expect(screen.queryByTestId(`catalogue-${id}`)).toBeNull();
+      expect(screen.getByTestId('shape-rect')).toBeTruthy();
     }
   });
 
@@ -115,6 +117,7 @@ describe('Placement', () => {
     // Patch stays valid: no overlap with the existing fixtures.
     const lib = new ProfileLibrary([...(useStore.getState().project!.library ?? []), ...project().profiles]);
     expect(validatePatch(lib, project().patch).filter((i) => i.kind === 'overlap')).toEqual([]);
+    await click('tab-dmx');
     expect(await screen.findByTestId('fixture-dmx')).toBeTruthy();
   });
 
@@ -190,6 +193,7 @@ describe('Sélection et propriétés', () => {
     const [a, b] = project().patch;
     useStore.getState().setSelection([b!.id]);
     render(<Visualizer />);
+    await click('tab-dmx');
     const addr = within(await screen.findByTestId('fixture-address')).getByRole('textbox');
     fireEvent.change(addr, { target: { value: '400' } });
     await rtlAct(async () => { fireEvent.blur(addr); });
@@ -237,7 +241,9 @@ describe('Disposition', () => {
     await click('stage-inspect-toggle');
     expect(screen.getByTestId('hierarchy')).toBeTruthy();
     await click('stage-mode-split');
-    expect(document.querySelectorAll('.stage-pane')).toHaveLength(2);
+    expect(document.querySelectorAll('.view-card')).toHaveLength(2);
+    expect(screen.getByText('Plan 2D')).toBeTruthy();
+    expect(screen.getByText('Vue 3D')).toBeTruthy();
     expect(useStore.getState().stageMode).toBe('split');
     await click('stage-mode-2d');
     expect(screen.getByTestId('stage-canvas')).toBeTruthy();
