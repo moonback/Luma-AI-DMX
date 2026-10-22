@@ -399,21 +399,6 @@ function InScene({ cat, vis }: { cat: Exclude<BuildCat, 'point'>; vis: Vis }) {
   );
 }
 
-/** Hangs the hung fixtures (or the selection) evenly on the trusses; one undoable step. */
-function EquipButton({ vis }: { vis: Vis }) {
-  const { fixtures } = useResolved();
-  const selection = useStore((s) => s.selection);
-  if (!vis.trusses.length || !fixtures.length) return null;
-  return (
-    <div className="build-equip-bar">
-      <button className="btn sm primary build-equip-btn" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
-        title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
-        <Wand2 size={13} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
-      </button>
-    </div>
-  );
-}
-
 const SVG = { stroke: 'currentColor', strokeWidth: 1.8, fill: 'currentColor', fillOpacity: 0.14, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
 /** Small drawn front view of a fixture type (no bitmap assets ship with the profiles). */

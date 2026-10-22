@@ -163,7 +163,7 @@ export const useStore = create<State>((set, get) => ({
   placing: null,
   setSceneSel: (sceneSel) => set(sceneSel ? { sceneSel, selection: [], stagePanels: { ...get().stagePanels, inspect: true } } : { sceneSel }),
   setPlacing: (placing) => set({ placing }),
-  stagePanels: { build: true, inspect: true },
+  stagePanels: { build: true, inspect: false },
   setStagePanels: (p) => set({ stagePanels: { ...get().stagePanels, ...p } }),
   frame: null,
   frameOn: (at) => set({ frame: { ...at, seq: (get().frame?.seq ?? 0) + 1 } }),
