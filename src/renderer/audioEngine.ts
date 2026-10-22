@@ -154,7 +154,18 @@ class AudioEngine {
     const now = performance.now();
     if (f.onset || f.energyRise || now - this.lastSent > 40) {
       this.lastSent = now;
-      void act({ type: 'audio.features', source: this.source, features: { ...f, level: Math.min(1, f.level), energy: Math.min(1, f.energy), bpm: f.bpm && f.bpm >= 20 && f.bpm <= 300 ? f.bpm : null, levelDb: Number.isFinite(f.levelDb) ? f.levelDb : -120 } });
+      void act({
+        type: 'audio.features',
+        source: this.source,
+        features: {
+          ...f,
+          level: Number.isFinite(f.level) ? Math.max(0, Math.min(1, f.level)) : 0,
+          energy: Number.isFinite(f.energy) ? Math.max(0, Math.min(1, f.energy)) : 0,
+          bpm: f.bpm && Number.isFinite(f.bpm) && f.bpm >= 20 && f.bpm <= 300 ? f.bpm : null,
+          bpmConfidence: Number.isFinite(f.bpmConfidence) ? Math.max(0, Math.min(1, f.bpmConfidence)) : 0,
+          levelDb: Number.isFinite(f.levelDb) ? f.levelDb : -120,
+        },
+      });
     }
     // A timer, not requestAnimationFrame: rAF stops in a minimised or hidden window and the audio reactions with it.
     this.timer = setTimeout(this.loop, FRAME_MS);

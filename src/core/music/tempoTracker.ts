@@ -78,9 +78,10 @@ export class TempoTracker {
       if (this.nextBeat < t) this.nextBeat = t + period; // after a stall
     }
     const locked = this.lockedSince !== null && t - this.lockedSince >= 1;
+    const conf = Number.isFinite(this.confidence) ? Math.max(0, Math.min(1, this.confidence)) : 0;
     return {
-      bpm: this.x === null ? null : Math.round(this.x * 10) / 10,
-      confidence: this.confidence,
+      bpm: this.x === null || !Number.isFinite(this.x) ? null : Math.round(this.x * 10) / 10,
+      confidence: conf,
       beat,
       nextBeatAt: this.nextBeat,
       beatIndex: this.beatIndex,
@@ -196,16 +197,28 @@ export class TempoTracker {
 
 /** Peak-to-mean ratio of the comb at the chosen tempo, mapped to 0..1. */
 function combConfidence(env: Float32Array, bpm: number): number {
+  if (!Number.isFinite(bpm) || bpm <= 0 || env.length === 0) return 0;
   const lag = (60 * RATE) / bpm;
+  if (!Number.isFinite(lag) || lag <= 0) return 0;
   const ac = (l: number) => {
     let s = 0;
     const L = Math.round(l);
-    for (let i = L; i < env.length; i++) s += env[i]! * env[i - L]!;
-    return s / Math.max(1, env.length - L);
+    if (!Number.isFinite(L) || L < 0 || L >= env.length) return 0;
+    for (let i = L; i < env.length; i++) {
+      const v = env[i]! * env[i - L]!;
+      if (Number.isFinite(v)) s += v;
+    }
+    const den = env.length - L;
+    return den > 0 ? s / den : 0;
   };
   const peak = ac(lag);
   let base = 0;
-  for (const f of [0.37, 0.63, 1.37, 1.63]) base += ac(lag * f) / 4;
-  const e0 = ac(0.0001) || 1;
-  return Math.max(0, Math.min(1, ((peak - base) / e0) * 2));
+  for (const f of [0.37, 0.63, 1.37, 1.63]) {
+    const v = ac(lag * f);
+    if (Number.isFinite(v)) base += v / 4;
+  }
+  const e0 = ac(0.0001);
+  const den = Number.isFinite(e0) && e0 > 0 ? e0 : 1;
+  const conf = ((peak - base) / den) * 2;
+  return Number.isFinite(conf) ? Math.max(0, Math.min(1, conf)) : 0;
 }

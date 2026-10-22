@@ -121,9 +121,11 @@ export class AudioAnalyzer {
     } else if (ratio < 1.1) this.riseArmed = true;
 
     const recent = this.onsets.filter((x) => x > f.t - 4).length;
+    const bpmConf = Number.isFinite(tempo.confidence) ? Math.max(0, Math.min(1, tempo.confidence)) : 0;
+    const onsetStr = threshold > 0 && Number.isFinite(nov / threshold) ? nov / threshold : 0;
     return {
-      t: f.t, level, levelDb, energy: this.energy, onset, onsetStrength: threshold > 0 ? nov / threshold : 0,
-      bpm: tempo.bpm, bpmConfidence: tempo.confidence, energyRise,
+      t: f.t, level, levelDb, energy: this.energy, onset, onsetStrength: onsetStr,
+      bpm: tempo.bpm && Number.isFinite(tempo.bpm) ? tempo.bpm : null, bpmConfidence: bpmConf, energyRise,
       beat: tempo.beat, barPosition: tempo.barPosition, tempoLocked: tempo.locked,
       bass: Math.min(1, this.bassS), brightness: Math.min(1, this.brightS), onsetDensity: Math.min(1, recent / 4 / 8),
       prediction: this.predictor.at(f.t),
