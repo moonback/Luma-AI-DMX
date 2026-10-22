@@ -137,6 +137,8 @@ export const commandSchema = z.discriminatedUnion('type', [
       height: z.number().min(0).max(50),
       trussId: idSchema.nullable(),
       mount: fixtureMountSchema.optional(),
+      /** Mounting rotation in degrees (0 = facing audience). Applied only when present. */
+      rotation: z.number().min(-360).max(360).optional(),
     })).min(1).max(4096),
   }),
   // Groups / palettes

@@ -218,6 +218,8 @@ function EquipButton({ vis }: { vis: Vis }) {
   const sceneSel = useStore((s) => s.sceneSel);
   const selectedTruss = sceneSel?.kind === 'truss' ? vis.trusses.find((t) => t.id === sceneSel.id) : null;
   const [mode, setMode] = useState<EquipDistributionMode>('standard');
+  const [autoRotate, setAutoRotate] = useState(true);
+  const [margin, setMargin] = useState(0);
   // Build the visual model once; VisualFixture has trussId while ResolvedFixture does not.
   const visualFixtures = useMemo(() => buildVisualModel(fixtures, {}), [fixtures]);
   if (!vis.trusses.length || !fixtures.length) return null;
@@ -243,7 +245,7 @@ function EquipButton({ vis }: { vis: Vis }) {
         <button
           type="button"
           className="btn sm primary build-equip-btn"
-          onClick={() => equipRig(visualFixtures, targetTrussId, { mode })}
+          onClick={() => equipRig(visualFixtures, targetTrussId, { mode, autoRotate, margin })}
           data-testid="equip"
           title={
             selectedTruss
@@ -287,6 +289,30 @@ function EquipButton({ vis }: { vis: Vis }) {
           ))}
         </div>
       )}
+      <label className="build-equip-autorotate" title="Orienter automatiquement : face audience (downstage) / contre (upstage)">
+        <input
+          type="checkbox"
+          checked={autoRotate}
+          onChange={(e) => setAutoRotate(e.target.checked)}
+          data-testid="equip-autorotate"
+        />
+        <span>Auto-orientation face / contre</span>
+      </label>
+      <div className="build-equip-margin-row" title="Laisser une zone libre à chaque extrémité du pont avant de placer les projecteurs">
+        <span className="build-equip-margin-label">Marge bout de pont</span>
+        <input
+          type="range"
+          min={0}
+          max={1.5}
+          step={0.1}
+          value={margin}
+          onChange={(e) => setMargin(parseFloat(e.target.value))}
+          className="build-equip-margin-slider"
+          aria-label="Marge extrémité (mètres)"
+          data-testid="equip-margin"
+        />
+        <span className="build-equip-margin-val">{margin === 0 ? 'Aucune' : `${margin.toFixed(1)} m`}</span>
+      </div>
     </div>
   );
 }

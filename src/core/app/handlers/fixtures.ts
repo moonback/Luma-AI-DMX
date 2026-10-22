@@ -202,7 +202,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
           const f = d.patch.find((x) => x.id === p.id);
           if (!f) throw new UserError('Projecteur introuvable');
           if (p.trussId && !d.visualizer.trusses.some((t) => t.id === p.trussId)) throw new UserError('Structure introuvable');
-          Object.assign(f, { position: p.position, height: p.height, trussId: p.trussId }, p.mount ? { mount: p.mount } : {});
+          Object.assign(f, { position: p.position, height: p.height, trussId: p.trussId }, p.mount ? { mount: p.mount } : {}, p.rotation !== undefined ? { rotation: p.rotation } : {});
         }
       });
       return ok;

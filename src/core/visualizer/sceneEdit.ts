@@ -110,37 +110,51 @@ export type EquipDistributionMode = 'standard' | 'inverted' | 'balanced';
 
 export interface EquipOptions {
   mode?: EquipDistributionMode;
+  /** When true, auto-orient each fixture: downstage trusses face the audience (0°), upstage trusses face upstage (180°). */
+  autoRotate?: boolean;
+  /** Gap to leave free at each end of every straight truss segment (metres, default 0). */
+  margin?: number;
 }
 
 export interface EquipFixture { id: string; movable: boolean; type?: string }
-export interface Placement { id: string; position: P2; height: number; trussId: string }
+/** Placement produced by equipTrusses; `rotation` is set only when autoRotate is enabled. */
+export interface Placement { id: string; position: P2; height: number; trussId: string; rotation?: number }
 
-const segmentsOf = (t: Truss) => {
+const segmentsOf = (t: Truss, margin = 0) => {
   // A totem takes a 1 m share of the fixtures, all on its clamp point.
   if (t.shape === 'totem') { const c = nearestOnTruss(t, t.x, t.y); return [{ a: c, b: c, t, len: TOTEM_SHARE }]; }
-  return trussSegments(t).map(([a, b]) => ({ a, b, t, len: Math.hypot(b.x - a.x, b.y - a.y) }));
+  return trussSegments(t).map(([a, b]) => {
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (margin <= 0 || len <= 0) return { a, b, t, len };
+    // Trim by margin at each end; cap so the fixture never passes the midpoint.
+    const trim = Math.min(margin, len / 2 - 0.01);
+    const dx = (b.x - a.x) / len, dy = (b.y - a.y) / len;
+    const na = { x: r2(a.x + dx * trim), y: r2(a.y + dy * trim) };
+    const nb = { x: r2(b.x - dx * trim), y: r2(b.y - dy * trim) };
+    return { a: na, b: nb, t, len: Math.max(0.01, len - 2 * trim) };
+  });
 };
-const lengthOf = (t: Truss) => segmentsOf(t).reduce((s, x) => s + x.len, 0);
+const lengthOf = (t: Truss, margin = 0) => segmentsOf(t, margin).reduce((s, x) => s + x.len, 0);
 
 /**
  * `n` points on `trusses`: each truss gets a share proportional to its length (largest remainders), spread evenly
  * and centred on it, so every truss has a regular, symmetric pitch. Junction pieces only carry fixtures when they
  * are all there is (they are the joints of the straight trusses).
  */
-function spread(trusses: readonly Truss[], n: number): { p: P2; t: Truss }[] {
+function spread(trusses: readonly Truss[], n: number, margin: number): { p: P2; t: Truss }[] {
   const plain = trusses.filter((t) => !JUNCTION_ARMS[t.shape]);
   const on = (plain.length ? plain : [...trusses]).sort((a, b) => a.y - b.y || a.x - b.x);
-  const lens = on.map(lengthOf), total = lens.reduce((s, x) => s + x, 0);
+  const lens = on.map((t) => lengthOf(t, margin)), total = lens.reduce((s, x) => s + x, 0);
   const exact = lens.map((l) => (n * l) / total);
   const counts = exact.map(Math.floor);
   const byRemainder = exact.map((x, i) => ({ i, r: x - Math.floor(x) })).sort((a, b) => b.r - a.r || lens[b.i]! - lens[a.i]!);
   for (let k = 0; k < n - counts.reduce((s, x) => s + x, 0); k++) counts[byRemainder[k]!.i]!++;
-  return on.flatMap((t, i) => spreadOne(t, counts[i]!));
+  return on.flatMap((t, i) => spreadOne(t, counts[i]!, margin));
 }
 
 /** `n` points evenly spread along the outline of one truss. */
-function spreadOne(truss: Truss, n: number): { p: P2; t: Truss }[] {
-  const segs = segmentsOf(truss);
+function spreadOne(truss: Truss, n: number, margin: number): { p: P2; t: Truss }[] {
+  const segs = segmentsOf(truss, margin);
   const total = segs.reduce((s, x) => s + x.len, 0);
   const out: { p: P2; t: Truss }[] = [];
   for (let i = 0; i < n; i++) {
@@ -198,9 +212,14 @@ export function equipTrusses(
     // Single truss, missing family, or balanced: all fixtures share all trusses evenly
     groups = [{ fx: [...fixtures], on: byDepth }];
   }
+  const autoRotate = options?.autoRotate ?? false;
+  const margin = Math.max(0, options?.margin ?? 0);
+  // Median depth used to split front vs back for auto-rotation.
+  const sortedY = [...usable].sort((a, b) => a.y - b.y).map((t) => t.y);
+  const medianY = sortedY[Math.floor((sortedY.length - 1) / 2)]!;
   const onTotem = new Map<string, number>();
   return groups.flatMap(({ fx, on }) => {
-    const pts = spread(on, fx.length), all = mix(fx);
+    const pts = spread(on, fx.length, margin), all = mix(fx);
     // Each truss takes its share of the overall mix, itself mixed symmetrically along that truss.
     const order = pts.flatMap((x, i) => {
       if (i && pts[i - 1]!.t === x.t) return [];
@@ -212,7 +231,9 @@ export function equipTrusses(
     // Several fixtures on one totem are stacked downwards from the top, never below 0.5 m.
     const k = t.shape === 'totem' ? onTotem.get(t.id) ?? 0 : 0;
     if (t.shape === 'totem') onTotem.set(t.id, k + 1);
-    return { id: f.id, position: p, height: r2(Math.max(Math.min(0.5, hangHeight(t)), hangHeight(t) - k * TOTEM_STEP)), trussId: t.id };
+    // Auto-rotation: downstage trusses (y ≤ median) → face audience (0°), upstage (y > median) → face upstage (180°).
+    const rotation = autoRotate ? (t.y <= medianY ? 0 : 180) : undefined;
+    return { id: f.id, position: p, height: r2(Math.max(Math.min(0.5, hangHeight(t)), hangHeight(t) - k * TOTEM_STEP)), trussId: t.id, ...(rotation !== undefined ? { rotation } : {}) };
   });
 }
 

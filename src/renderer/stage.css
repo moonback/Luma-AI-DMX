@@ -57,6 +57,13 @@ button.stage-card-head:hover h2 { color: #fff; }
 .build-equip-mode-btn:hover { color: var(--text); background: var(--panel-2); }
 .build-equip-mode-btn.on { background: var(--violet); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 .build-equip-mode-btn:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
+.build-equip-autorotate { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 1px 0; }
+.build-equip-autorotate span { font-size: 10.5px; color: var(--text-2); user-select: none; }
+.build-equip-autorotate input[type='checkbox'] { accent-color: var(--violet); width: 12px; height: 12px; cursor: pointer; flex: none; }
+.build-equip-margin-row { display: flex; align-items: center; gap: 6px; }
+.build-equip-margin-label { font-size: 10.5px; color: var(--text-2); white-space: nowrap; flex: none; }
+.build-equip-margin-slider { flex: 1; accent-color: var(--violet); height: 2px; cursor: pointer; min-width: 0; }
+.build-equip-margin-val { font-size: 10px; color: var(--text-3); font-family: var(--mono); white-space: nowrap; min-width: 38px; text-align: right; flex: none; }
 
 /* Stage dimensions quick access */
 .build-stage-bar { flex: none; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
