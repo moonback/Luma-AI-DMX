@@ -36,6 +36,27 @@ class MusicPlayer {
     return this.buffers.has(hash);
   }
 
+  /** Returns normalized amplitude peaks (0..1) for waveform rendering. */
+  getWaveform(hash: string, numBars = 200): number[] | null {
+    const buffer = this.buffers.get(hash);
+    if (!buffer) return null;
+    const data = buffer.getChannelData(0);
+    const blockSize = Math.floor(data.length / numBars);
+    if (blockSize <= 0) return null;
+    const bars: number[] = new Array(numBars);
+    const step = Math.max(1, Math.floor(blockSize / 20));
+    for (let i = 0; i < numBars; i++) {
+      const start = i * blockSize;
+      let max = 0;
+      for (let j = 0; j < blockSize; j += step) {
+        const val = Math.abs(data[start + j] || 0);
+        if (val > max) max = val;
+      }
+      bars[i] = Math.min(1, Math.round(max * 1000) / 1000);
+    }
+    return bars;
+  }
+
   /** Hash, decode and (unless `known`) analyse a file. Analysis runs in slices so the UI stays responsive. */
   async load(file: File, opts: { bpmRange: { min: number; max: number }; known: (hash: string) => boolean; onProgress: (p: number, step: string) => void }): Promise<{ hash: string; name: string; analysis: SongAnalysis | null }> {
     opts.onProgress(0, 'Lecture du fichier');
@@ -142,7 +163,7 @@ async function decode(data: ArrayBuffer): Promise<AudioBuffer> {
  * Falls back to the main-thread import if the Worker constructor fails (e.g. strict
  * file:// CSP in some Electron configurations).
  */
-async function analyzeInWorker(
+export async function analyzeInWorker(
   mono: Float32Array,
   sampleRate: number,
   bpmMin: number,

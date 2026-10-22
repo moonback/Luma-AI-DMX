@@ -360,6 +360,12 @@ export const songSectionSchema = z.object({
   density: z.number().min(0).max(50),
   /** Share of low-frequency energy. */
   bassShare: unitSchema,
+  /** Confidence in section classification and boundary precision (0..1). */
+  confidence: unitSchema.optional(),
+  /** Whether vocals are present in this section. */
+  hasVocals: z.boolean().optional(),
+  /** Vocal confidence score (0..1). */
+  vocalConfidence: unitSchema.optional(),
 });
 export type SongSection = z.infer<typeof songSectionSchema>;
 export const tempoChangeSchema = z.object({
@@ -375,14 +381,23 @@ export const songAnalysisSchema = z.object({
   duration: seconds,
   bpm: z.number().min(20).max(300),
   tempoStable: z.boolean(),
+  /** Confidence in BPM estimation (0..1). */
+  bpmConfidence: unitSchema.optional(),
   /** Time signature numerator: 3 (waltz/6/8) or 4 (common time). Defaults to 4 for legacy analyses. */
   meter: z.union([z.literal(3), z.literal(4)]).default(4),
+  /** Confidence in meter estimation (0..1). */
+  meterConfidence: unitSchema.optional(),
   beats: z.array(seconds).max(40000),
   downbeats: z.array(seconds).max(10000),
   sections: z.array(songSectionSchema).max(300),
   key: z.object({ tonic: z.number().int().min(0).max(11), mode: z.enum(['major', 'minor']), confidence: unitSchema }),
   /** `vocal`: stretch where a voice is detected (presence in 300 Hz–3 kHz + harmonic stability). */
-  events: z.array(z.object({ t: seconds, kind: z.enum(['impact', 'riser', 'silence', 'vocal']), duration: z.number().min(0).max(600) })).max(2000),
+  events: z.array(z.object({
+    t: seconds,
+    kind: z.enum(['impact', 'riser', 'silence', 'vocal']),
+    duration: z.number().min(0).max(600),
+    confidence: unitSchema.optional(),
+  })).max(2000),
   /** Detected tempo changes (t in seconds, from/to in BPM). */
   tempoChanges: z.array(tempoChangeSchema).max(100).optional().default([]),
 });

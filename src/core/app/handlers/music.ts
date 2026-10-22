@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { showSectionPlanSchema, type Mood, type Project, type MusicTrack, type ShowPlan, type ShowSectionPlan } from '../../model/schemas';
-import { adjustSection, compileShow, planLocally, rigInfo, withMood, type RigInfo } from '../../music/songToShow';
+import { adjustSection, compileShow, evaluateArtisticQuality, planLocally, rigInfo, validateShowIntegrity, withMood, type RigInfo } from '../../music/songToShow';
 import { KEY_NAMES, SECTION_NAMES } from '../../music/analyze';
 import { suggestIntents } from '../../music/suggest';
 import { DEFAULT_OPENROUTER_MODEL, planSectionWithOpenRouter, planShowWithOpenRouter, suggestIntentsWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
@@ -226,6 +226,11 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
   if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué');
   app.emit('progress', { op: 'music', step: 'compile' });
   const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
+  const integrity = validateShowIntegrity(c, cur.analysis, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
+  for (const err of integrity.errors) app.logger.error('Musique', `[Intégrité] ${err}`);
+  for (const warn of integrity.warnings) app.logger.warn('Musique', `[Intégrité] ${warn}`);
+  const quality = evaluateArtisticQuality(plan, cur.analysis);
+  app.logger.info('Musique', `[Qualité artistique] Score: ${quality.score}/100 (contraste: ${quality.metrics.contrast}%, variété: ${quality.metrics.variety}%, narration: ${quality.metrics.narrative}%, voix: ${quality.metrics.vocalClarity}%)`);
   if (app.engine.snapshot().timeline.timelineId === cur.created.timelineId) app.engine.timelineStop();
   app.mutate((d) => {
     const track = d.music.tracks.find((x) => x.id === t.id)!;
@@ -238,7 +243,7 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
     track.plan = plan;
     track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id, cueListIds: [c.cueList.id] };
   });
-  const all = [...notices, ...c.notices];
+  const all = [...notices, ...c.notices, ...integrity.errors, ...integrity.warnings, ...quality.notices];
   app.logger.info('Musique', `Show généré pour « ${t.name} » (${plan.provider === 'openrouter' ? `OpenRouter · ${plan.model}` : 'règles locales'}) : ${c.scenes.length} scènes, ${c.effects.length} effets, timeline « ${c.timeline.name} »`);
   for (const n of c.notices) app.logger.warn('Musique', n);
   return { timelineId: c.timeline.id, notices: all, provider: plan.provider };

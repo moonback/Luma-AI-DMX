@@ -1,4 +1,4 @@
-﻿/** French screen catalogue (Dashboard, console, Programmer, stage, music strip), merged into fr.ts to keep each file short. */
+/** French screen catalogue (Dashboard, console, Programmer, stage, music strip), merged into fr.ts to keep each file short. */
 export const frScreens = {
   'dash.src.title': 'Origine de la donnée',
   'dash.src.persisted': 'persisté',
@@ -230,6 +230,26 @@ export const frScreens = {
   'music.regenSection': 'Régénérer cette section (avec la consigne si elle est remplie)',
   'music.unlock': 'Déverrouiller',
   'music.lock': 'Verrouiller (conservée lors des régénérations)',
+  'music.studio.title': 'Studio Song-to-Show',
+  'music.studio.waveform': 'Forme d’onde & Énergie',
+  'music.studio.sections': 'Sections musicales',
+  'music.studio.events': 'Événements & Accents',
+  'music.studio.layers': 'Couches lumière & Cues',
+  'music.studio.compareAB': 'Comparateur A/B',
+  'music.studio.planA': 'Variante A (actuelle)',
+  'music.studio.planB': 'Variante B (précédente)',
+  'music.studio.applyA': 'Conserver A',
+  'music.studio.applyB': 'Rétablir B',
+  'music.studio.qualityTitle': 'Audit de qualité artistique',
+  'music.studio.qualityScore': 'Score global',
+  'music.studio.contrast': 'Contraste dynamique',
+  'music.studio.variety': 'Variété scénique',
+  'music.studio.narrative': 'Arc narratif',
+  'music.studio.vocalClarity': 'Clarté vocale',
+  'music.studio.noPrevious': 'Aucun show précédent à comparer',
+  'music.studio.diffs': '{n} section(s) modifiée(s)',
+  'music.studio.zoomIn': 'Zoom avant',
+  'music.studio.zoomOut': 'Zoom arrière',
 
   'prog.palettes': 'Palettes',
   'prog.palColor': 'Couleur',

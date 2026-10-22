@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, Clock, Layers, Lock, LockOpen, Music2, Pause, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
+import { Activity, ArrowLeftRight, Clock, Layers, Lock, LockOpen, Music2, Pause, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -8,8 +8,11 @@ import { musicPlayer } from '../musicPlayer';
 import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
 import { suggestIntents } from '../../core/music/suggest';
 import { SECTION_LABELS, type Mood, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
-import { BEAM_NAMES, EFFECT_NAMES, EVENT_STYLE, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
+import { BEAM_NAMES, EFFECT_NAMES, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
 import { SectionEditor } from './music/SectionEditor';
+import { SongStudioTimeline } from './music/SongStudioTimeline';
+import { ArtisticQualityBadge } from './music/ArtisticQualityBadge';
+import { VariantCompareModal } from './music/VariantCompareModal';
 import type { Progress } from '../../shared/commands';
 import { usePlayback } from './music/MiniPlayer';
 
@@ -41,39 +44,6 @@ const INTENT_PRESETS = [
   ['minimal', 'sobre, sans mouvement, pas de strobe'],
 ] as const;
 
-function SectionStrip({ track, selected, onSelect, pos }: { track: MusicTrack; selected: number; onSelect: (i: number) => void; pos: number | null }) {
-  const t = useT();
-  const a = track.analysis;
-  const now = pos === null ? -1 : a.sections.findIndex((s) => pos >= s.start && pos < s.end);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * a.duration);
-  return (
-    <div className="sec-timeline">
-      <div className="sec-track">
-        <div className="sec-strip" data-testid="section-strip">
-          {a.sections.map((s, i) => (
-            <button key={i} className={`sec-btn ${i === selected ? 'sel' : ''} ${i === now ? 'now' : ''}`} aria-pressed={i === selected} onClick={() => onSelect(i)}
-              title={t('music.strip.title', { label: SECTION_NAMES[s.label], from: fmt(s.start), to: fmt(s.end), energy: Math.round(s.energy * 100) })}
-              style={{ flex: `${s.end - s.start} 0 0`, background: LABEL_COLOR[s.label] }}>
-              <span className="sec-name">{SECTION_NAMES[s.label]}</span>
-              <span className="sec-time" aria-hidden>{fmt(s.start)}{track.plan?.sections[i]?.locked && <Lock size={9} aria-label={t('music.strip.locked')} />}</span>
-              <span className="sec-energy" style={{ width: `${s.energy * 100}%` }} aria-hidden />
-            </button>
-          ))}
-        </div>
-        {a.events.map((e, i) => e.kind !== 'silence' && (
-          <span key={i} className={`sec-event ${e.kind}`} title={t(`music.event.${e.kind}`)} style={{ left: `${(e.t / a.duration) * 100}%`, width: e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : 3, background: EVENT_STYLE[e.kind][1] }} />
-        ))}
-        {pos !== null && <span className="sec-playhead" style={{ left: `${Math.min(100, (pos / a.duration) * 100)}%` }} />}
-      </div>
-      <div className="sec-ruler" aria-hidden>{ticks.map((x) => <span key={x} style={{ left: `${(x / a.duration) * 100}%` }}>{fmt(x)}</span>)}</div>
-      <div className="sec-legend small dim">
-        <span>{t('music.event.legend')}</span>
-        {(Object.keys(EVENT_STYLE) as (keyof typeof EVENT_STYLE)[]).map((k) => <span key={k} className="row" style={{ gap: 4 }}><i style={{ background: EVENT_STYLE[k][1] }} />{t(`music.event.${k}`)}</span>)}
-        {now >= 0 && <span className="badge cyan">{t('music.strip.now')} : {SECTION_NAMES[a.sections[now]!.label]}</span>}
-      </div>
-    </div>
-  );
-}
 
 /** Real steps reported by the main process (`progress` events) and where each one sits on the bar. */
 const GEN_STEPS: Record<Progress['step'], { key: MessageKey; p: number }> = {
@@ -129,6 +99,7 @@ export function MusicPage() {
   const [notices, setNotices] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
   const [editing, setEditing] = useState(-1); // index of the section open in the editor
+  const [comparingAB, setComparingAB] = useState(false);
   const t = useT();
   const [instr, setInstr] = useState<Record<number, string>>({});
   const file = useRef<HTMLInputElement>(null);
@@ -296,8 +267,15 @@ export function MusicPage() {
               <button className="btn ghost sm" onClick={() => { if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop(); void act({ type: 'music.removeTrack', id: track.id }); }}>{t('music.remove')}</button>
             </div>
 
-            {/* Timeline plus large */}
-            <SectionStrip track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} pos={playing?.trackId === track.id ? pos : null} />
+            {/* Studio Song-to-Show multi-piste */}
+            <SongStudioTimeline
+              track={track}
+              selected={selected}
+              onSelect={(i) => { setSelected(i); setEditing(i); }}
+              onOpenEditor={setEditing}
+              pos={playing?.trackId === track.id ? pos : null}
+              playing={playing?.trackId === track.id}
+            />
 
             {(playing?.trackId ?? musicPlayer.paused?.trackId) === track.id && (
               <div className="music-seek-row">
@@ -366,9 +344,15 @@ export function MusicPage() {
                   <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>
                   <button className="btn" disabled={busy || !track.plan} onClick={() => void generate(true)} title={t('music.variantHint')}><Shuffle size={14} />{t('music.variant')}</button>
                   <button className="btn" disabled={busy || !track.previousPlan} onClick={() => void restore()} title={t('music.restoreHint')} data-testid="music-restore"><Undo2 size={14} />{t('music.restore')}</button>
+                  {track.plan && track.previousPlan && (
+                    <button className="btn" onClick={() => setComparingAB(true)} title={t('music.studio.compareAB')} data-testid="music-compare-ab">
+                      <ArrowLeftRight size={14} />{t('music.studio.compareAB')}
+                    </button>
+                  )}
                   {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>{t('music.openTimeline')}</button>}
                 </div>
                 {track.plan && <div className="row small" style={{ gap: 6 }} data-testid="music-plan-summary"><Sparkles size={13} style={{ color: '#22d3ee' }} /><span>{track.plan.summary}</span></div>}
+                {track.plan && <ArtisticQualityBadge plan={track.plan} analysis={track.analysis} />}
               </div>
               {notices.map((n, i) => <div key={i} className="small" style={{ color: '#fcd34d' }}>{n}</div>)}
             </div>
@@ -449,6 +433,16 @@ export function MusicPage() {
       )}
       {track && track.analysis.sections[editing] && (
         <SectionEditor key={`${track.id}:${editing}`} track={track} index={editing} onClose={() => setEditing(-1)} onNotices={setNotices} />
+      )}
+      {comparingAB && track && (
+        <VariantCompareModal
+          track={track}
+          onClose={() => setComparingAB(false)}
+          onRestore={async () => {
+            await restore();
+            setComparingAB(false);
+          }}
+        />
       )}
     </div>
   );
