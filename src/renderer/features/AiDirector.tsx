@@ -1,187 +1,150 @@
-import { useEffect, useState } from 'react';
-import { Bot, Check, Eye, RotateCcw, Send, Square, Undo2, Wand2, X } from 'lucide-react';
-import { t } from '../i18n';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { RotateCcw, Send, Square, Undo2, Wand2, X } from 'lucide-react';
+import { t, useT } from '../i18n';
 import { useStore } from '../store';
-import { act } from '../api';
-import { PageHead, Panel, useResolved } from '../components/ui';
+import { act, call } from '../api';
+import { PageHead } from '../components/ui';
 import { VoiceButton } from '../components/VoiceButton';
-import type { AiExecutionReport, AiProposal } from '../../core/ai/actions';
 import type { CommandResults } from '../../shared/commands';
 import { StageCanvas } from './visualizer/StageCanvas';
+import { useConversation } from './ai/conversation';
+import { ExchangeView, type OutputMode } from './ai/ExchangeView';
 
+/* Prompts understood by the local interpreter (also a quick tour of what the assistant does). */
 const EXAMPLES = [
-  'Crée une ambiance lounge violette et bleue.',
-  'Fais monter progressivement l’intensité sur huit secondes.',
-  'Crée un chase sur les quatre lyres.',
-  'Prépare un drop énergique pour le refrain.',
-  'Génère un show de deux minutes pour de la musique électronique.',
-  'Rends l’ambiance plus chaude et moins agressive.',
-  'Fais des mouvements synchronisés au BPM.',
-  'Crée trois variantes de cette scène.',
+  'Mets tout en violet.',
   'Tout en violet sauf les lyres.',
+  'Mets les pars en rouge et les lyres en bleu.',
+  'Baisse l’intensité de 20 % sans changer les couleurs.',
+  'Fais monter progressivement l’intensité pendant huit secondes.',
+  'Crée un chase sur les quatre lyres.',
+  'Synchronise les mouvements avec le BPM actuel.',
+  'Crée une ambiance lounge violette et bleue.',
+  'Prépare un drop énergique pour le refrain.',
   'Mets le gobo 2 et le prisme sur les lyres.',
   'Ralentis le chase.',
 ];
 
-interface Exchange {
-  prompt: string;
-  proposal: AiProposal;
-  excluded: Set<number>;
-  report?: AiExecutionReport;
-}
-
-function ActionCard({ ex, i, onToggle, onEdit }: { ex: Exchange; i: number; onToggle: () => void; onEdit: (raw: unknown) => void }) {
-  const v = ex.proposal.actions[i]!;
-  const { byId } = useResolved();
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(JSON.stringify(v.action ?? v.raw, null, 2));
-  const excluded = ex.excluded.has(i);
+function StatusBar() {
+  const tr = useT();
+  const rt = useStore((s) => s.runtime);
+  if (!rt) return null;
+  const remote = rt.ai.provider === 'openrouter' && rt.ai.hasKey;
+  const real = rt.outputs.filter((o) => o.real && o.enabled && o.armed).length;
+  const aiFx = rt.engine.effects.filter((e) => e.owner === 'ai').length;
+  const layerOn = rt.engine.aiActive || aiFx > 0;
   return (
-    <div className={`action-card ${v.status} ${excluded ? 'excluded' : ''}`}>
-      <div className="row">
-        <input type="checkbox" checked={!excluded && v.status !== 'rejected'} disabled={v.status === 'rejected' || !!ex.report} onChange={onToggle} title="Inclure / exclure cette action" />
-        <b className="grow">{v.summary}</b>
-        <span className={`badge ${v.status === 'ok' ? 'ok' : v.status === 'warning' ? 'warn' : 'err'}`}>{v.status === 'ok' ? 'valide' : v.status === 'warning' ? 'avertissement' : 'refusée'}</span>
-        {!ex.report && <button className="btn ghost sm" onClick={() => setEditing(!editing)}>Modifier</button>}
-      </div>
-      {v.fixtureIds.length > 0 && <div className="small muted" style={{ marginTop: 4 }}>Cibles : {v.fixtureIds.slice(0, 10).map((id) => byId.get(id)?.fixture.name ?? id).join(', ')}{v.fixtureIds.length > 10 ? ` (+${v.fixtureIds.length - 10})` : ''}</div>}
-      {v.messages.map((m, k) => <div key={k} className="small" style={{ color: v.status === 'rejected' ? '#fca5a5' : '#f59e0b' }}>• {m}</div>)}
-      {editing && (
-        <div className="col" style={{ marginTop: 6 }}>
-          <textarea className="textarea" rows={8} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
-          <div className="row">
-            <button className="btn sm primary" onClick={() => { try { onEdit(JSON.parse(text)); setEditing(false); } catch { useStore.getState().toast({ kind: 'error', title: 'JSON invalide' }); } }}>Revalider</button>
-            <span className="small dim">L’action modifiée est revalidée par le moteur avant toute exécution.</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProposalView({ ex, onChange }: { ex: Exchange; onChange: (e: Exchange) => void }) {
-  const preview = useStore((s) => s.preview);
-  const setPreview = useStore((s) => s.setPreview);
-  const p = ex.proposal;
-  const runnable = p.actions.filter((a, i) => a.status !== 'rejected' && !ex.excluded.has(i));
-  const showingPreview = preview?.label === p.id;
-  const revise = async (actions: unknown[]) => {
-    const np = await act({ type: 'ai.revise', proposalId: p.id, actions });
-    if (np) onChange({ ...ex, proposal: np, excluded: new Set() });
-  };
-  const apply = async () => {
-    let target = p;
-    if (ex.excluded.size) {
-      const np = await act({ type: 'ai.revise', proposalId: p.id, actions: p.actions.filter((_, i) => !ex.excluded.has(i)).map((a) => a.action ?? a.raw) });
-      if (!np) return;
-      target = np;
-    }
-    const report = await act({ type: 'ai.apply', proposalId: target.id });
-    if (report) {
-      setPreview(null);
-      onChange({ ...ex, proposal: target, report });
-      useStore.getState().toast({ kind: report.skipped.length ? 'warn' : 'success', title: `${report.executed.length} action(s) exécutée(s)`, detail: report.skipped.length ? `${report.skipped.length} ignorée(s)` : undefined });
-    }
-  };
-  return (
-    <div className="bubble col" data-testid="proposal">
-      <div className="row">
-        <Bot size={16} />
-        {p.provider === 'local' ? <span className="badge cyan" title="Règles et modèles déterministes — aucun modèle de langage n’est utilisé">Mode local déterministe</span> : <span className="badge violet">OpenRouter · {p.model}</span>}
-        <span className="grow" />
-        <span className="small dim">{new Date(p.createdAt).toLocaleTimeString()}</span>
-      </div>
-      <div><b>Compréhension :</b> {p.understanding}</div>
-      {p.question && <div style={{ color: '#22d3ee' }} data-testid="ai-question"><b>{t('ai.question')}</b> {p.question}</div>}
-      {p.notices.map((n, i) => <div key={i} className="small" style={{ color: '#f59e0b' }}>⚠ {n}</div>)}
-      {p.actions.length > 0 && (
-        <>
-          <div className="col" style={{ gap: 6 }}>
-            {p.actions.map((_, i) => (
-              <ActionCard key={`${p.id}-${i}`} ex={ex} i={i}
-                onToggle={() => { const s = new Set(ex.excluded); if (s.has(i)) s.delete(i); else s.add(i); onChange({ ...ex, excluded: s }); }}
-                onEdit={(raw) => void revise(p.actions.map((a, k) => (k === i ? raw : a.action ?? a.raw)))} />
-            ))}
-          </div>
-          {!ex.report ? (
-            <div className="row">
-              <button className="btn" disabled={!Object.keys(p.preview).length} onClick={() => setPreview(showingPreview ? null : { label: p.id, values: p.preview })} title="Affiche l’état cible dans le visualiseur, sans rien envoyer aux sorties"><Eye size={14} />{showingPreview ? 'Masquer l’aperçu' : 'Prévisualiser'}</button>
-              <button className="btn primary" data-testid="ai-apply" disabled={!runnable.length} onClick={() => void apply()}><Check size={14} />Appliquer {runnable.length} action(s)</button>
-              <span className="small dim">Rien n’est exécuté avant votre confirmation.</span>
-            </div>
-          ) : (
-            <div className="col small" data-testid="ai-report">
-              <b>Rapport d’exécution</b>
-              {ex.report.executed.map((e) => <div key={e.index} style={{ color: '#34d399' }}>✓ {e.summary} — {e.detail}</div>)}
-              {ex.report.skipped.map((e) => <div key={e.index} style={{ color: '#fca5a5' }}>✗ {e.summary} — {e.reason}</div>)}
-              {ex.report.verification.checked > 0 && (
-                <div className="muted">
-                  Vérification de l’état calculé : {ex.report.verification.matched}/{ex.report.verification.checked} valeurs contrôlées par l’IA
-                  {ex.report.verification.overriddenByManual ? ` · ${ex.report.verification.overriddenByManual} masquée(s) par le contrôle manuel (prioritaire)` : ''}
-                  {ex.report.verification.mismatches.length ? ` · ${ex.report.verification.mismatches.slice(0, 3).join(' ; ')}` : ''}
-                  . La transmission effective est visible dans DMX Output.
-                </div>
-              )}
-              {(ex.report.created.scenes.length > 0 || ex.report.created.cueLists.length > 0) && <div className="muted">Créé : {[...ex.report.created.scenes.map((s) => `scène « ${s} »`), ...ex.report.created.cueLists.map((s) => `liste « ${s} »`)].join(', ')}</div>}
-            </div>
-          )}
-        </>
-      )}
-      {showingPreview && <div style={{ height: 260 }}><StageCanvas values={p.preview} compact /></div>}
+    <div className="ai-status" role="status">
+      <span className="ai-stat" title={remote ? tr('ai.provider.remoteHint') : tr('ai.provider.localHint')}>
+        <span className={`led ${rt.ai.lastError ? 'warn' : 'ok'}`} />
+        <span className="k">{tr('ai.status.provider')}</span>
+        {remote ? tr('ai.provider.remote', { model: rt.ai.model }) : rt.ai.provider === 'openrouter' ? tr('ai.provider.noKey') : tr('ai.provider.local')}
+      </span>
+      {rt.ai.lastError && <span className="ai-stat warn small" title={rt.ai.lastError}>{tr('ai.provider.error', { error: rt.ai.lastError.slice(0, 80) })}</span>}
+      <span className="ai-stat">
+        <span className={`led ${!rt.engine.running ? 'err' : rt.engine.blackout ? 'warn' : 'ok'}`} />
+        <span className="k">{tr('ai.status.engine')}</span>
+        {!rt.engine.running ? tr('ai.engine.stopped') : rt.engine.blackout ? tr('ai.engine.blackout') : tr('ai.engine.running')}
+        {rt.engine.master < 1 && ` · ${tr('ai.engine.master', { pct: Math.round(rt.engine.master * 100) })}`}
+      </span>
+      <span className="ai-stat" title={!rt.transmitting ? undefined : real ? tr('ai.output.realHint') : tr('ai.output.simulationHint')}>
+        <span className={`led ${!rt.transmitting ? 'warn' : real ? 'ok' : ''}`} />
+        <span className="k">{tr('ai.status.output')}</span>
+        {!rt.transmitting ? tr('ai.output.stopped') : real ? tr('ai.output.real', { n: real }) : tr('ai.output.simulation')}
+      </span>
+      <span className="ai-stat">
+        <span className={`led ${layerOn ? 'ok' : ''}`} />
+        <span className="k">{tr('ai.status.layer')}</span>
+        {layerOn ? tr('ai.layer.active', { n: aiFx }) : tr('ai.layer.idle')}
+      </span>
     </div>
   );
 }
 
 export function AiDirector() {
+  const tr = useT();
   const rt = useStore((s) => s.runtime);
+  const preview = useStore((s) => s.preview);
+  const { exchanges, add, patch, clear } = useConversation();
   const [prompt, setPrompt] = useState('');
-  const [history, setHistory] = useState<Exchange[]>([]);
-  const busy = rt?.ai.busy ?? false;
-  const send = async (text = prompt) => {
-    if (!text.trim() || busy) return;
-    setPrompt('');
-    // While the conversation shown is not cleared, the remote model sees the previous exchanges.
-    const proposal = await act({ type: 'ai.propose', prompt: text.trim(), continueThread: history.length > 0 });
-    if (proposal) setHistory((h) => [...h, { prompt: text.trim(), proposal, excluded: new Set(), report: proposal.autoApplied }]);
-    if (proposal?.autoApplied) useStore.getState().toast({ kind: proposal.autoApplied.skipped.length ? 'warn' : 'success', title: t('ai.autoApplied', { n: proposal.autoApplied.executed.length }) });
-  };
+  const [autoApply, setAutoApply] = useState(false);
   const [usage, setUsage] = useState<CommandResults['ai.usage'] | null>(null);
-  useEffect(() => { void act({ type: 'ai.usage' }).then((u) => setUsage(u ?? null)); }, [history.length]);
+  const input = useRef<HTMLInputElement>(null);
+  const log = useRef<HTMLDivElement>(null);
+  const busy = rt?.ai.busy ?? false;
+  const real = rt?.outputs.filter((o) => o.real && o.enabled && o.armed).length ?? 0;
+  const stopped = !!rt && !rt.transmitting;
+  // Stable props: the runtime arrives at 10 Hz and must not re-render every exchange of the conversation.
+  const output = useMemo<OutputMode>(() => (stopped ? { kind: 'stopped' } : real ? { kind: 'real', count: real } : { kind: 'simulation' }), [stopped, real]);
+  const previewing = preview && exchanges.some((x) => x.proposal?.id === preview.label) ? preview : null;
+  const last = exchanges.at(-1);
+
+  useEffect(() => { void act({ type: 'settings.get' }).then((s) => setAutoApply(!!s?.assistant.autoApply)); }, []);
+  useEffect(() => { void act({ type: 'ai.usage' }).then((u) => setUsage(u ?? null)); }, [exchanges.length]);
+  // Newest exchange in view (instant scroll: no motion to opt out of).
+  useEffect(() => { log.current?.scrollTo?.({ top: log.current.scrollHeight }); }, [exchanges.length, last?.proposal, last?.report]);
+
+  const send = async (text = prompt) => {
+    const q = text.trim();
+    if (!q || busy) return;
+    setPrompt('');
+    // While the conversation shown is not cleared, the assistant sees the previous exchanges.
+    const continueThread = exchanges.length > 0;
+    const id = add(q);
+    try {
+      const proposal = await call({ type: 'ai.propose', prompt: q, continueThread });
+      patch(id, { proposal, report: proposal.autoApplied });
+      if (proposal.autoApplied) useStore.getState().toast({ kind: proposal.autoApplied.skipped.length ? 'warn' : 'success', title: t('ai.autoApplied', { n: proposal.autoApplied.executed.length }) });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      patch(id, /annulée|cancel/i.test(msg) ? { cancelled: true, error: msg } : { error: msg });
+    }
+  };
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const retry = useCallback((q: string) => void sendRef.current(q), []);
+  const reformulate = useCallback((q: string) => { setPrompt(q); input.current?.focus(); }, []);
+  const reset = () => { clear(); useStore.getState().setPreview(null); void act({ type: 'ai.resetThread' }); };
+
   return (
-    <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
-      <PageHead title="AI Lighting Director" subtitle={rt?.ai.provider === 'openrouter' && rt.ai.hasKey ? `Fournisseur : OpenRouter (${rt.ai.model}) — repli local si indisponible` : 'Mode local déterministe : règles et modèles intégrés, sans modèle de langage (configurable dans Paramètres › IA)'}>
+    <div className="page ai-page">
+      <PageHead title={tr('ai.title')} subtitle={tr('ai.subtitle')}>
         <VoiceButton />
-        <button className="btn" onClick={() => void act({ type: 'ai.release' })} disabled={!rt?.engine.aiActive && !rt?.engine.effects.some((e) => e.owner === 'ai')} title="Retire la couche IA et arrête les effets lancés par l’IA"><RotateCcw size={14} />Relâcher l’IA</button>
-        {usage && usage.month.calls > 0 && <span className="small dim" data-testid="ai-usage">{t('ai.usageLine', { calls: usage.month.calls, tokens: usage.month.promptTokens + usage.month.completionTokens, cost: usage.month.cost.toFixed(2), budget: usage.budget === null ? '—' : `${usage.budget} $` })}</span>}
-        <button className="btn" data-testid="ai-undo" onClick={() => void act({ type: 'ai.undoApply' })} title={t('ai.undoHint')}><Undo2 size={14} />{t('ai.undo')}</button>
+        {usage && usage.month.calls > 0 && <span className="small dim" data-testid="ai-usage">{tr('ai.usageLine', { calls: usage.month.calls, tokens: usage.month.promptTokens + usage.month.completionTokens, cost: usage.month.cost.toFixed(2), budget: usage.budget === null ? '—' : `${usage.budget} $` })}</span>}
+        <button className="btn" onClick={() => void act({ type: 'ai.release' })} disabled={!rt?.engine.aiActive && !rt?.engine.effects.some((e) => e.owner === 'ai')} title={tr('ai.releaseHint')}><RotateCcw size={14} />{tr('ai.release')}</button>
+        <button className="btn" data-testid="ai-undo" onClick={() => void act({ type: 'ai.undoApply' })} title={tr('ai.undoHint')}><Undo2 size={14} />{tr('ai.undo')}</button>
       </PageHead>
-      <div className="split" style={{ flex: 1, minHeight: 0 }}>
-        <div className="col" style={{ minHeight: 0 }}>
-          <div className="chat" style={{ flex: 1, overflow: 'auto', paddingRight: 4 }}>
-            {history.length === 0 && (
-              <Panel title="Exemples de demandes">
-                <div className="chips">{EXAMPLES.map((e) => <button key={e} className="chip" onClick={() => void send(e)}><Wand2 size={11} /> {e}</button>)}</div>
-                <p className="small muted" style={{ marginBottom: 0 }}>L’assistant produit uniquement des actions structurées (intensité, couleur, position, effets, scènes, cues, séquences). Elles sont validées contre le patch et les capacités des profils, prévisualisées, puis exécutées par le moteur après votre confirmation. Le contrôle manuel reste prioritaire.</p>
-              </Panel>
-            )}
-            {history.map((ex, i) => (
-              <div key={ex.proposal.id + i} className="col">
-                <div className="bubble user">{ex.prompt}</div>
-                <ProposalView ex={ex} onChange={(n) => setHistory((h) => h.map((x, k) => (k === i ? n : x)))} />
+      <StatusBar />
+      <div className="ai-layout">
+        <section className="ai-chat panel" aria-label={tr('ai.conversation')}>
+          <div className="ai-log" ref={log} role="log" aria-live="polite">
+            {exchanges.length === 0 && (
+              <div className="ai-empty">
+                <h3>{tr('ai.examples')}</h3>
+                <div className="chips">{EXAMPLES.map((e) => <button key={e} className="chip" onClick={() => void send(e)} disabled={busy}><Wand2 size={11} /> {e}</button>)}</div>
+                <p className="small muted">{tr('ai.examplesHint')}</p>
               </div>
-            ))}
+            )}
+            {exchanges.map((ex) => <ExchangeView key={ex.id} ex={ex} output={output} onRetry={retry} onReformulate={reformulate} />)}
           </div>
-          <div className="row" style={{ marginTop: 10 }}>
-            <input className="input" style={{ height: 40 }} data-testid="ai-prompt" placeholder="Décrivez l’ambiance ou l’action souhaitée…" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void send()} disabled={busy} />
-            <button className="btn primary lg" data-testid="ai-send" onClick={() => void send()} disabled={busy || !prompt.trim()}><Send size={15} />{busy ? 'Analyse…' : 'Envoyer'}</button>
-            {busy && <button className="btn lg" data-testid="ai-cancel" onClick={() => void act({ type: 'ai.cancel' })}><Square size={14} />{t('ai.cancel')}</button>}
-            {history.length > 0 && <button className="btn ghost lg icon" title="Effacer la conversation" onClick={() => { setHistory([]); void act({ type: 'ai.resetThread' }); }}><X size={15} /></button>}
+          <form className="ai-composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+            <div className="row">
+              <input ref={input} className="input" data-testid="ai-prompt" placeholder={tr('ai.placeholder')} aria-label={tr('ai.placeholder')} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={busy} maxLength={2000} />
+              <button type="submit" className="btn primary lg" data-testid="ai-send" disabled={busy || !prompt.trim()}><Send size={15} />{busy ? tr('ai.analysing') : tr('ai.send')}</button>
+              {busy && <button type="button" className="btn lg" data-testid="ai-cancel" onClick={() => void act({ type: 'ai.cancel' })}><Square size={14} />{tr('ai.cancel')}</button>}
+              {exchanges.length > 0 && <button type="button" className="btn ghost lg icon" title={tr('ai.clear')} aria-label={tr('ai.clear')} onClick={reset} disabled={busy}><X size={15} /></button>}
+            </div>
+            <div className="small dim">{autoApply ? tr('ai.composerHintAuto') : tr('ai.composerHint')}{exchanges.length > 0 && ` · ${tr('ai.contextHint')}`}</div>
+          </form>
+        </section>
+        <aside className="ai-stage panel">
+          <div className="row ai-stage-head">
+            <b>{previewing ? tr('ai.stagePreview') : tr('ai.stage')}</b>
+            <span className={`badge ${previewing ? 'violet' : 'cyan'}`}>{previewing ? tr('ai.stagePreviewBadge') : tr('ai.stageLiveBadge')}</span>
           </div>
-        </div>
-        <Panel title="Scène en direct">
-          <div style={{ height: 300 }}><StageCanvas compact /></div>
-          <p className="small dim" style={{ marginBottom: 0 }}>Représentation approximative de l’état calculé (non photométrique).</p>
-        </Panel>
+          <div className="ai-stage-canvas"><StageCanvas compact {...(previewing ? { values: previewing.values } : {})} /></div>
+          <p className="small dim">{previewing ? tr('ai.stagePreviewHint') : tr('ai.stageLiveHint')}</p>
+        </aside>
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ import { makeEngine } from '../helpers';
 interface Case {
   category: 'reference' | 'adversarial';
   prompt: string;
-  expect: { recognized?: boolean; types?: string[]; forbidEffects?: string[]; forbidTypes?: string[] };
+  expect: { recognized?: boolean; question?: boolean; types?: string[]; forbidEffects?: string[]; forbidTypes?: string[] };
 }
 
 // Measured on 175 cases (18/10/2026): recognition 0.993, intent 0.992, validity 1, 0 safety violations.
@@ -24,6 +24,8 @@ const cases = (JSON.parse(readFileSync(path.join(__dirname, 'cases.json'), 'utf8
 
 describe('banc d’évaluation IA (mode local)', () => {
   const { engine, project } = makeEngine();
+  // A lit rig (80 %), as during a show: relative requests (« baisse de 20 % ») have something to act on.
+  engine.setAiValues(Object.fromEntries(project.patch.map((f) => [f.id, { dimmer: 0.8 }])), 0);
   engine.tick(25);
   const index = new ProjectIndex(project);
   const ctx = { index, allowStrobe: false, maxStrobeHz: 10 };
@@ -48,7 +50,8 @@ describe('banc d’évaluation IA (mode local)', () => {
     ];
     return {
       ...c, ms, recognized, types, effects, safety,
-      recognitionOk: c.expect.recognized === undefined ? null : recognized === c.expect.recognized,
+      // A clarification is the right answer when the target is unknown or ambiguous: it must come without any action.
+      recognitionOk: c.expect.question ? !!p.question && !kept.length : c.expect.recognized === undefined ? null : recognized === c.expect.recognized,
       intentOk: c.expect.types ? types.some((t) => c.expect.types!.includes(t)) : null,
       valid: p.actions.length ? kept.length / p.actions.length : null,
     };

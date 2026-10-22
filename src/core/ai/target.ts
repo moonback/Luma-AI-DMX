@@ -40,5 +40,7 @@ export function resolveAiTarget(index: ProjectIndex, t: AiTarget): { ids: string
   }
   let ids = pool.map((r) => r.fixture.id);
   if (t.limit) ids = ids.slice(0, t.limit);
+  // « les quatre lyres » on a rig of two: say so instead of silently acting on fewer.
+  if (t.limit && ids.length && ids.length < t.limit) problems.push(`${t.limit} projecteur(s) demandé(s), ${ids.length} disponible(s) dans le patch`);
   return { ids, problems };
 }

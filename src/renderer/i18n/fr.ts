@@ -1,5 +1,6 @@
 import { frScreens } from './fr.screens';
 import { frStage } from './fr.stage';
+import { frAi } from './fr.ai';
 
 /**
  * French catalogue: the reference language. Every key here must exist in the other catalogues (en.ts is typed against
@@ -581,6 +582,7 @@ export const fr = {
 
   ...frScreens,
   ...frStage,
+  ...frAi,
 } as const;
 
 export type MessageKey = keyof typeof fr;

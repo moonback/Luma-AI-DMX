@@ -48,7 +48,11 @@ describe('interpréteur local déterministe', () => {
     const adj = interpretLocally('Rends l’ambiance plus chaude et moins agressive.', ictx).actions.map((a) => a.type);
     expect(adj).toContain('setColor');
     expect(adj).toContain('setIntensity');
-    expect(adj).toContain('stopEffect');
+    // Only running AI effects are stopped: a stop with nothing to stop would be refused by validation.
+    expect(adj).not.toContain('stopEffect');
+    const running = interpretLocally('Rends l’ambiance plus chaude et moins agressive.', { ...ictx, runningEffects: ['chase'] }).actions;
+    expect(running).toContainEqual({ type: 'stopEffect', effectType: 'chase' });
+    expect(running).not.toContainEqual({ type: 'stopEffect', effectType: 'strobe' });
   });
 
   it('n’invente rien quand la demande n’est pas reconnue', () => {

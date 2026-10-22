@@ -3,6 +3,8 @@ import type { ProjectIndex } from '../engine/resolve';
 import { aiTargetSchema, type AiAction, type AiProposal } from './actions';
 import { previewValues } from './director';
 import { EXCLUDE_RE, findTarget, namesOf, normalize, stripNegations, type InterpreterContext } from './local/interpreter';
+import { familiesIn, spatialPick } from './local/clauses';
+import { actionFamilies, FAMILY_LABELS, type ParamFamily } from './plan';
 import { resolveAiTarget } from './target';
 
 /*
@@ -17,15 +19,26 @@ export interface PromptConstraints {
   colors: Set<string>;
   /** « ne touche pas aux couleurs ». */
   noColor: boolean;
-  /** Fixtures the request protects (« sauf les faces », « garde les contres »). */
+  /** Fixtures the request protects (« sauf les faces », « garde les contres », « sauf celle du centre »). */
   protectedNames: string[];
+  /** Parameter families the request protects (« sans changer l’intensité »). */
+  keep: ParamFamily[];
+  /** The exclusion does not single out fixtures (« sauf celle du centre » among four): nothing may be applied before it is clarified. */
+  question?: string;
 }
 
 export function promptConstraints(prompt: string, ctx: InterpreterContext): PromptConstraints {
   const neg = stripNegations(normalize(prompt.trim()));
-  const clause = EXCLUDE_RE.exec(neg.text)?.[2];
-  const ex = clause ? findTarget(clause, ctx) : null;
-  return { effects: neg.effects, colors: neg.colors, noColor: !!clause && /\b(couleurs?|colou?rs?)\b/.test(clause), protectedNames: ex && !ex.target.all ? namesOf(ex.target, ctx) : [] };
+  const m = EXCLUDE_RE.exec(neg.text);
+  const clause = m?.[2];
+  const c: PromptConstraints = { effects: neg.effects, colors: neg.colors, noColor: !!clause && /\b(couleurs?|colou?rs?)\b/.test(clause), protectedNames: [], keep: [] };
+  if (!m || !clause) return c;
+  const ex = findTarget(clause, ctx);
+  if (!ex.target.all) return { ...c, protectedNames: namesOf(ex.target, ctx) };
+  const pool = namesOf(findTarget(neg.text.slice(0, m.index), ctx).target, ctx);
+  const spatial = spatialPick(clause, ctx.fixtures.filter((f) => pool.includes(f.name)));
+  if (spatial) return 'names' in spatial ? { ...c, protectedNames: spatial.names } : { ...c, question: spatial.question };
+  return { ...c, keep: familiesIn(clause) };
 }
 
 const COLOR_EFFECTS = ['rainbow', 'colorCycle', 'brightnessColor'];
@@ -63,7 +76,12 @@ export function enforceConstraints(p: AiProposal, c: PromptConstraints, index: P
     if (v.status === 'rejected' || !v.action) continue;
     const fx = effectsOf(v.action), colors = colorsOf(v.action);
     const touched = v.fixtureIds.filter((id) => protectedIds.has(id)).map((id) => index.fixtures.get(id)?.fixture.name ?? id);
+    const fam = actionFamilies(v.action);
+    const kept = c.keep.filter((f) => f !== 'color' && (fam === null || fam.includes(f)));
     const why = [
+      ...(c.question ? ['exclusion ambiguë, à préciser avant toute application'] : []),
+      ...(kept.length ? [`la demande interdit de changer : ${kept.map((f) => FAMILY_LABELS[f]).join(', ')}`] : []),
+      ...(c.keep.includes('color') && fam === null ? ['la demande interdit de changer les couleurs'] : []),
       ...fx.filter((e) => c.effects.has(e)).map((e) => `effet ${e} exclu par la demande`),
       ...colors.filter((h) => [...c.colors].some((n) => sameColor(h, n))).map((h) => `couleur ${h} exclue par la demande`),
       ...(c.noColor && (colors.length || fx.some((e) => COLOR_EFFECTS.includes(e))) ? ['la demande interdit de changer les couleurs'] : []),
@@ -74,6 +92,7 @@ export function enforceConstraints(p: AiProposal, c: PromptConstraints, index: P
     v.messages.push(`Contrainte non respectée : ${[...new Set(why)].join(' ; ')}`);
     rejected++;
   }
+  if (c.question && !p.question) p.question = c.question;
   if (rejected) p.preview = previewValues(index, p.actions);
   return rejected;
 }
