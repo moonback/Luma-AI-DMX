@@ -123,6 +123,7 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
         <button className="stage-card-head" aria-expanded={catsOpen} onClick={() => setCatsOpen(!catsOpen)}>
           <Shapes size={15} className="stage-accent" /><h2 className="grow">{tr('build.title')}</h2><ChevronUp size={15} className={catsOpen ? '' : 'flip'} />
         </button>
+        <EquipButton vis={vis} />
         <div className="stage-card-body">
           {catsOpen && (
             <nav className="build-cats" aria-label={tr('build.categories')}>
@@ -264,7 +265,6 @@ function InScene({ cat, vis }: { cat: Exclude<BuildCat, 'point'>; vis: Vis }) {
         {cat === 'performer' && <><AddBtn kind="performer" label="scene.addPerformer" icon={<UserRound size={14} />} testId="performer-add" /><AddBtn kind="marker" label="scene.addMarker" icon={<MapPin size={14} />} testId="marker-add" /></>}
         {cat === 'screen' && <AddBtn kind="screen" label="scene.addScreen" icon={<Monitor size={14} />} testId="screen-add" />}
       </div>
-      {cat === 'structure' && <EquipButton vis={vis} />}
       {cat === 'structure' && vis.trusses.map((t) => <TrussCard key={t.id} t={t} vis={vis} />)}
       {cat === 'decor' && vis.props.map((p) => <PropCard key={p.id} p={p} vis={vis} />)}
       {cat === 'performer' && vis.performers.map((pf) => <PerformerCard key={pf.id} pf={pf} vis={vis} />)}
@@ -280,10 +280,12 @@ function EquipButton({ vis }: { vis: Vis }) {
   const selection = useStore((s) => s.selection);
   if (!vis.trusses.length || !fixtures.length) return null;
   return (
-    <button className="btn sm primary" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
-      title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
-      <Wand2 size={12} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
-    </button>
+    <div className="build-equip-bar">
+      <button className="btn sm primary build-equip-btn" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
+        title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
+        <Wand2 size={13} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
+      </button>
+    </div>
   );
 }
 
