@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, ArrowLeft, Boxes, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, PanelLeftClose, Redo2, Shapes, Theater, Undo2, UserRound, Wand2 } from 'lucide-react';
+import { Armchair, ArrowLeft, Boxes, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, Music2, PanelLeftClose, Presentation, Radio, Redo2, Shapes, Sparkles, Theater, Undo2, UserRound, Wand2 } from 'lucide-react';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
 import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
@@ -11,7 +11,7 @@ import { JUNCTION_ARMS } from '../../../core/visualizer/truss';
 import { LIBRARY, type LibraryItem } from '../../../core/visualizer/library';
 import { SCENE_LABEL, canAdd, type SceneKind } from '../../../core/visualizer/sceneEdit';
 import { LIBRARY_MIME, addSceneElement, equipRig } from '../../sceneActions';
-import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate } from '../../../core/visualizer/templates';
+import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate, type SceneTemplateId } from '../../../core/visualizer/templates';
 import { channelCount } from '../../../core/fixtures/profiles';
 import { FIXTURE_TYPES, type FixtureProfile, type FixtureType, type Truss } from '../../../core/model/schemas';
 import { shrinkImage, type Vis, Section, Num, MarkerCard, PropCard, TrussCard, PerformerCard, ScreenCard } from './sceneCards';
@@ -32,6 +32,20 @@ const CATS: { id: BuildCat; icon: ReactNode; items: (x: LibraryItem) => boolean 
 const SHAPES: { id: Vis['shape']; label: string }[] = [
   { id: 'rect', label: 'Rectangle' }, { id: 'thrust', label: 'Avancée' }, { id: 'arena', label: 'Arène (360°)' },
 ];
+
+/** Métadonnées visuelles pour chaque modèle de scène. */
+const TEMPLATE_META: Record<SceneTemplateId, { icon: ReactNode; dims: string }> = {
+  concert: { icon: <Music2 size={15} className="tpl-accent" />, dims: '12 × 8 m' },
+  theatre: { icon: <Theater size={15} className="tpl-accent" />, dims: '10 × 8 m' },
+  club: { icon: <Radio size={15} className="tpl-accent" />, dims: '8 × 5 m' },
+  conference: { icon: <Presentation size={15} className="tpl-accent" />, dims: '8 × 5 m' },
+  arena: { icon: <Shapes size={15} className="tpl-accent" />, dims: '10 × 10 m' },
+  catwalk: { icon: <Sparkles size={15} className="tpl-accent" />, dims: '10 × 5 m' },
+  festival: { icon: <Music2 size={15} className="tpl-accent" />, dims: '16 × 10 m' },
+  acoustic: { icon: <Theater size={15} className="tpl-accent" />, dims: '6 × 4 m' },
+  tv: { icon: <Monitor size={15} className="tpl-accent" />, dims: '10 × 7 m' },
+  gala: { icon: <Sparkles size={15} className="tpl-accent" />, dims: '8 × 5 m' },
+};
 
 /** Lower-case, accent-free text for the catalogue search ("Écran" matches "ecran"). */
 export const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -64,46 +78,31 @@ function TemplatePicker({ vis }: { vis: Vis }) {
   };
   return (
     <div className="scene-templates">
-      {SCENE_TEMPLATES.map((t) => (
-        <button key={t.id} className="scene-template" onClick={() => void apply(t)} data-testid={`template-${t.id}`}>
-          <b>{t.label}</b><span className="small dim">{t.hint}</span>
-        </button>
-      ))}
+      {SCENE_TEMPLATES.map((t) => {
+        const meta = TEMPLATE_META[t.id];
+        return (
+          <button key={t.id} className="scene-template" onClick={() => void apply(t)} data-testid={`template-${t.id}`} title={`${t.label} (${meta?.dims ?? ''}) : ${t.hint}`}>
+            <div className="scene-template-head">
+              {meta?.icon}
+              <b className="grow">{t.label}</b>
+              {meta?.dims && <span className="scene-template-dims">{meta.dims}</span>}
+            </div>
+            <span className="small dim scene-template-hint">{t.hint}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-/** Stage shape and size. */
-function StageSettings({ vis }: { vis: Vis }) {
-  const tr = useT();
-  const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
-  return (
-    <Section icon={<Theater size={13} />} title={tr('build.stage')}>
-      <div className="chips" role="group" aria-label={tr('build.stage')}>
-        {SHAPES.map((sh) => <button key={sh.id} className={`chip ${vis.shape === sh.id ? 'on' : ''}`} data-testid={`shape-${sh.id}`} onClick={() => update({ shape: sh.id })}>{sh.label}</button>)}
-      </div>
-      <div className="scene-card-grid">
-        <Num label="Largeur" title="Largeur du plateau, jardin ↔ cour (m)" value={vis.stageWidth} min={2} max={200} step={1} onChange={(v) => update({ stageWidth: v })} />
-        <Num label="Profondeur" title="Profondeur du plateau (m)" value={vis.stageDepth} min={2} max={200} step={1} onChange={(v) => update({ stageDepth: v })} />
-        {vis.shape !== 'arena' && (
-          <label className="row small scene-check"><input type="checkbox" checked={vis.cyclo} onChange={(e) => update({ cyclo: e.target.checked })} data-testid="cyclo" />Cyclorama</label>
-        )}
-        {vis.shape === 'thrust' && (
-          <>
-            <Num label="Avancée L" title="Largeur de l’avancée (m)" value={vis.thrust.width} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, width: v } })} />
-            <Num label="Avancée P" title="Profondeur de l’avancée (m)" value={vis.thrust.depth} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, depth: v } })} />
-          </>
-        )}
-      </div>
-    </Section>
-  );
-}
 
 /** Left column of the Stage page: title card, the Construire categories (always listed) and the catalogue of the active one. */
 export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) {
   const tr = useT();
   const [cat, setCat] = useState<BuildCat | null>('point');
   const [catsOpen, setCatsOpen] = useState(true);
+  const [stageOpen, setStageOpen] = useState(false);
+  const [stageTab, setStageTab] = useState<'dimensions' | 'templates'>('dimensions');
   const current = CATS.find((c) => c.id === cat);
   return (
     <aside className="stage-side build-side" aria-label={tr('build.title')}>
@@ -124,49 +123,147 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
           <Shapes size={15} className="stage-accent" /><h2 className="grow">{tr('build.title')}</h2><ChevronUp size={15} className={catsOpen ? '' : 'flip'} />
         </button>
         <EquipButton vis={vis} />
-        <div className="stage-card-body">
-          {catsOpen && (
-            <nav className="build-cats" aria-label={tr('build.categories')}>
-              {CATS.map((c) => (
-                <button key={c.id} className={`build-cat ${cat === c.id ? 'on' : ''}`} aria-pressed={cat === c.id} onClick={() => setCat(c.id)} data-testid={`build-cat-${c.id}`}>
-                  <span className="build-cat-icon">{c.icon}</span>
-                  <span className="build-cat-text"><b>{tr(`build.cat.${c.id}` as MessageKey)}</b><span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span></span>
-                </button>
-              ))}
-            </nav>
-          )}
-          {current ? <Catalogue key={current.id} cat={current} vis={vis} /> : (
-            <>
-              <StageSettings vis={vis} />
-              <Section icon={<LayoutTemplate size={13} />} title={tr('build.template')} open={!hasSceneContent(vis)}>
+        <StageDimensionsBar vis={vis} open={stageOpen} onToggle={() => setStageOpen(!stageOpen)} />
+        {stageOpen && (
+          <div className="build-stage-expanded" data-testid="stage-dimensions-expanded">
+            <div className="build-stage-tabs" role="tablist">
+              <button
+                type="button"
+                className={`build-stage-tab ${stageTab === 'dimensions' ? 'on' : ''}`}
+                onClick={() => setStageTab('dimensions')}
+                role="tab"
+                aria-selected={stageTab === 'dimensions'}
+              >
+                <Shapes size={13} />
+                <span>Dimensions & Forme</span>
+              </button>
+              <button
+                type="button"
+                className={`build-stage-tab ${stageTab === 'templates' ? 'on' : ''}`}
+                onClick={() => setStageTab('templates')}
+                role="tab"
+                aria-selected={stageTab === 'templates'}
+              >
+                <LayoutTemplate size={13} />
+                <span>Modèles prêts à l'emploi ({SCENE_TEMPLATES.length})</span>
+              </button>
+            </div>
+            {stageTab === 'dimensions' ? (
+              <StageSettingsFields vis={vis} />
+            ) : (
+              <div className="build-stage-templates-wrap">
                 <TemplatePicker vis={vis} />
-                <label className="btn sm" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
-                  <Camera size={12} />{t('photo.button')}
+                <label className="btn sm build-photo-btn" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
+                  <Camera size={13} />
+                  <span>{t('photo.button')}</span>
                   <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
                     const file = e.target.files?.[0];
                     e.target.value = '';
                     if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
                   }} />
                 </label>
-              </Section>
-            </>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="stage-card-body">
+          {catsOpen && (
+            <nav className="build-cats" aria-label={tr('build.categories')}>
+              {CATS.map((c) => (
+                <button key={c.id} className={`build-cat ${cat === c.id ? 'on' : ''}`} aria-pressed={cat === c.id} onClick={() => setCat(cat === c.id ? null : c.id)} data-testid={`build-cat-${c.id}`}>
+                  <span className="build-cat-icon">{c.icon}</span>
+                  <span className="build-cat-text"><b>{tr(`build.cat.${c.id}` as MessageKey)}</b><span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span></span>
+                </button>
+              ))}
+            </nav>
+          )}
+          {current ? (
+            <Catalogue key={current.id} cat={current} vis={vis} onBack={() => { setCat(null); setStageOpen(true); setStageTab('dimensions'); }} />
+          ) : (
+            <div className="scene-hint" style={{ padding: '14px 12px', textAlign: 'center' }}>
+              Choisissez une catégorie ci-dessus pour ajouter des projecteurs, structures ou décors à la scène.
+            </div>
           )}
         </div>
       </div>
-      {current && (
-        <button className="stage-card stage-back" onClick={() => setCat(null)} data-testid="build-back"><ArrowLeft size={15} />{tr('build.back')}</button>
-      )}
     </aside>
   );
 }
 
+/** Champs de réglage de la forme et de la taille du plateau. */
+function StageSettingsFields({ vis }: { vis: Vis }) {
+  const tr = useT();
+  const update = (v: Partial<Vis>) => void act({ type: 'project.update', visualizer: v });
+  return (
+    <>
+      <div className="chips" role="group" aria-label={tr('build.stage')}>
+        {SHAPES.map((sh) => (
+          <button
+            key={sh.id}
+            className={`chip ${vis.shape === sh.id ? 'on' : ''}`}
+            data-testid={`shape-${sh.id}`}
+            onClick={() => update({ shape: sh.id })}
+          >
+            {sh.label}
+          </button>
+        ))}
+      </div>
+      <div className="scene-card-grid">
+        <Num label="Largeur" title="Largeur du plateau, jardin ↔ cour (m)" value={vis.stageWidth} min={2} max={200} step={1} onChange={(v) => update({ stageWidth: v })} />
+        <Num label="Profondeur" title="Profondeur du plateau (m)" value={vis.stageDepth} min={2} max={200} step={1} onChange={(v) => update({ stageDepth: v })} />
+        {vis.shape !== 'arena' && (
+          <label className="row small scene-check">
+            <input type="checkbox" checked={vis.cyclo} onChange={(e) => update({ cyclo: e.target.checked })} data-testid="cyclo" />
+            Cyclorama
+          </label>
+        )}
+        {vis.shape === 'thrust' && (
+          <>
+            <Num label="Avancée L" title="Largeur de l’avancée (m)" value={vis.thrust.width} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, width: v } })} />
+            <Num label="Avancée P" title="Profondeur de l’avancée (m)" value={vis.thrust.depth} min={1} max={50} step={0.5} onChange={(v) => update({ thrust: { ...vis.thrust, depth: v } })} />
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Barre d'accès rapide et d'affichage des dimensions du plateau. */
+function StageDimensionsBar({ vis, open, onToggle }: { vis: Vis; open: boolean; onToggle: () => void }) {
+  const shapeLabel = { rect: 'Rectangle', thrust: 'Avancée', arena: 'Arène' }[vis.shape] ?? 'Rectangle';
+  return (
+    <div className={`build-stage-bar ${open ? 'on' : ''}`}>
+      <button
+        type="button"
+        className="build-stage-btn"
+        onClick={onToggle}
+        title={open ? "Replier les réglages du plateau" : "Ouvrir les dimensions et réglages du plateau juste en dessous"}
+        data-testid="stage-dimensions-btn"
+        aria-expanded={open}
+      >
+        <span className="build-stage-icon"><Theater size={16} /></span>
+        <span className="build-stage-text">
+          <b>Plateau & Scène</b>
+          <span className="build-stage-dims">{vis.stageWidth} × {vis.stageDepth} m · {shapeLabel}</span>
+        </span>
+        <span className="build-stage-tag">{open ? 'Fermer' : 'Régler taille'}</span>
+        <ChevronUp size={15} className={`build-stage-chevron ${open ? '' : 'flip'}`} />
+      </button>
+    </div>
+  );
+}
+
 /** Catalogue of the active category: search, (type filter), tiles, then what of that kind is already on stage. */
-function Catalogue({ cat, vis }: { cat: (typeof CATS)[number]; vis: Vis }) {
+function Catalogue({ cat, vis, onBack }: { cat: (typeof CATS)[number]; vis: Vis; onBack: () => void }) {
   const tr = useT();
   const [query, setQuery] = useState('');
   const title = tr(`build.cat.${cat.id}` as MessageKey);
   return (
     <section className="build-catalogue" data-testid={`catalogue-${cat.id}`} aria-label={tr('build.active')}>
+      <button className="build-back-top" type="button" onClick={onBack} data-testid="build-back" title="Revenir aux réglages du plateau et dimensions">
+        <ArrowLeft size={13} />
+        <span>Plateau & Scène ({vis.stageWidth} × {vis.stageDepth} m)</span>
+      </button>
       <h3 className="build-active-title">{tr('build.active')}</h3>
       <div className="build-active-head">
         <span className="build-active-icon">{cat.icon}</span>

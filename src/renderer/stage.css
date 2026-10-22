@@ -51,6 +51,50 @@ button.stage-card-head:hover h2 { color: #fff; }
 .build-equip-bar { flex: none; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
 .build-equip-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 550; height: 32px; font-size: 12.5px; }
 
+/* Stage dimensions quick access */
+.build-stage-bar { flex: none; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
+.build-stage-bar.on { background: linear-gradient(90deg, rgba(52, 120, 246, 0.16), rgba(52, 120, 246, 0.04)); border-bottom-color: rgba(52, 120, 246, 0.4); }
+.build-stage-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; text-align: left; transition: all var(--dur); font: inherit; }
+.build-stage-btn:hover { border-color: var(--violet); background: var(--panel-3); }
+.build-stage-bar.on .build-stage-btn { border-color: var(--violet); background: var(--panel-3); box-shadow: 0 0 0 1px rgba(52, 120, 246, 0.35); }
+.build-stage-icon { display: grid; place-items: center; width: 26px; height: 26px; color: #a78bfa; flex: none; }
+.build-stage-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.build-stage-text b { font-size: 12.5px; font-weight: 600; }
+.build-stage-dims { font-size: 11px; color: var(--text-2); font-family: var(--mono); }
+.build-stage-tag { font-size: 10.5px; padding: 3px 7px; border-radius: 4px; background: var(--panel-2); color: var(--text-2); border: 1px solid var(--border); font-weight: 500; white-space: nowrap; }
+.build-stage-bar.on .build-stage-tag { background: var(--violet); color: #fff; border-color: var(--violet); }
+.build-stage-chevron { color: var(--text-2); transition: transform var(--dur); flex: none; }
+.build-stage-chevron.flip { transform: rotate(180deg); }
+
+/* Stage expanded panel directly below the bar */
+.build-stage-expanded { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; background: var(--panel-2); border-bottom: 1px solid var(--border); box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25); max-height: 480px; overflow-y: auto; }
+.build-stage-tabs { display: flex; gap: 4px; padding: 3px; background: var(--panel); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.build-stage-tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 28px; border-radius: 4px; border: none; background: none; color: var(--text-2); font-size: 11.5px; font-weight: 550; cursor: pointer; transition: all var(--dur); }
+.build-stage-tab:hover { color: var(--text); background: var(--panel-2); }
+.build-stage-tab.on { background: var(--violet); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
+
+.build-stage-expanded .chips { display: flex; gap: 4px; }
+.build-stage-expanded .chip { flex: 1; height: 26px; padding: 0 6px; font-size: 11px; justify-content: center; background: var(--panel); }
+.build-stage-expanded .chip.on { background: var(--violet); color: #fff; border-color: var(--violet); }
+.build-stage-expanded .scene-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; }
+.build-stage-expanded .scene-check { margin-top: 2px; }
+
+/* Templates in expanded stage */
+.build-stage-templates-wrap { display: flex; flex-direction: column; gap: 8px; }
+.build-stage-templates-wrap .scene-templates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.scene-template { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; text-align: left; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; transition: all var(--dur); }
+.scene-template:hover { border-color: var(--violet); background: var(--panel-3); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
+.scene-template-head { display: flex; align-items: center; gap: 6px; width: 100%; }
+.scene-template-head b { font-size: 12px; font-weight: 600; }
+.scene-template-dims { font-family: var(--mono); font-size: 9.5px; color: var(--text-2); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border); flex: none; }
+.scene-template-hint { font-size: 10.5px; color: var(--text-2); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tpl-accent { color: #a78bfa; flex: none; }
+.build-photo-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 32px; font-weight: 550; cursor: pointer; margin-top: 2px; }
+
+/* Top back button inside active catalogue */
+.build-back-top { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border-radius: var(--radius-sm); border: 1px dashed var(--border-strong); background: var(--panel-2); color: var(--text-2); font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--dur); margin-bottom: 4px; }
+.build-back-top:hover { color: var(--text); border-color: var(--violet); background: var(--panel-3); }
+
 /* Categories */
 .build-cats { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; }
 .build-cat { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 12px 8px 14px; text-align: left; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; transition: border-color var(--dur), background var(--dur); }
