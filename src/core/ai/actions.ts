@@ -176,6 +176,14 @@ export interface AiProposal {
   question?: string;
   /** Report of the automatic application (Paramètres › Assistant › appliquer sans confirmation). */
   autoApplied?: AiExecutionReport;
+  /** Values were computed from the current look (« baisse de 20 % »): applying is refused once that look has changed. */
+  relative?: boolean;
+  /** Levels (fixture id → 0..1) a relative proposal was computed from, without fixtures under a running effect (set when stored). */
+  liveLevels?: Record<string, number>;
+  /** Command offered for confirmation outside the plan (« annule la dernière modification »). */
+  offer?: 'undo';
+  /** Measured durations (ms): understanding (local rules or provider call) and application-side validation. */
+  timings?: { understandMs: number; validateMs: number };
 }
 
 export interface AiExecutionReport {
@@ -184,4 +192,6 @@ export interface AiExecutionReport {
   skipped: { index: number; summary: string; reason: string }[];
   verification: { checked: number; matched: number; overriddenByManual: number; mismatches: string[] };
   created: { scenes: string[]; cueLists: string[]; effects: string[] };
+  /** Measured execution time (ms), commit included. */
+  executeMs?: number;
 }

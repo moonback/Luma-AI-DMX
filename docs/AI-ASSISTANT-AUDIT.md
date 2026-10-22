@@ -131,6 +131,51 @@ préchauffage JIT, pas d'un gain de code. La latence fournisseur n'a pas pu êtr
   jamais quand le modèle pose une question ; « Défaire » reste disponible ; l'assistant vocal est prévenu par son prompt.
 - Tests : `tests/unit/ai-guards.test.ts` (11), `tests/components/assistantPanel.test.tsx` complété.
 
+## 7 ter. Lot 3 — refonte de l'AI Lighting Director (22/10/2026)
+
+Chemin vérifié : `AiDirector.tsx` → `ai.propose` (`handlers/ai.ts` : OpenRouter ou `proposeLocally`, repli local) →
+`buildProposal` / `validateActions` (patch, capacités) → `enforceConstraints` + garde-fou photosensible → stockage avec
+empreinte du kit → `ai.apply` (une seule fois, brouillon unique, effets après commit) → vérification de l'état calculé.
+
+Défauts reproduits puis corrigés [Fait] :
+
+- Demande composée fusionnée : « les pars en rouge et les lyres en bleu » donnait une seule action rouge/bleu
+  répartie sur un mélange de cibles. Chaque clause qui nomme sa cible et fait quelque chose est désormais lue à part
+  (`local/clauses.ts`, `compound` dans l'interpréteur).
+- Exclusion ignorée en silence : « sauf celle du centre » ciblait les quatre lyres. Résolution par position sur scène
+  (centre / gauche / droite) ; nombre pair ou positions égales → question ; exclusion illisible → question, jamais
+  ignorée. Même règle appliquée aux plans OpenRouter (`guards.ts`).
+- Paramètres protégés : « sans changer / sans modifier / en gardant les couleurs, l'intensité, la position… » sont
+  appliqués par le code (familles de `core/ai/plan.ts`), en local comme pour le modèle distant.
+- Fondu IA depuis le noir : un attribut nouveau dans la couche IA partait de 0 (« monte en 8 s » depuis 30 % plongeait
+  au noir). Il part maintenant de la valeur sortie par les autres couches (`Engine.setAiValues`).
+- Effets fantômes : ralentir / arrêter un effet IA qui ne tourne pas était validé puis échouait à l'exécution. Refusé
+  à la validation, effets visés nommés ; « moins agressif » n'arrête que les effets qui tournent.
+- Proposition relative périmée : « baisse de 20 % » appliquée après un changement de niveaux aurait appliqué des
+  valeurs calculées sur un autre état. Refusée si un niveau visé a bougé de plus de 5 % (projecteurs sous effet exclus).
+- « Défaire » cassé par la conversation : mémoriser une nouvelle demande incrémentait la révision du projet et rendait
+  impossible l'annulation de la dernière application. Corrigé ; « Annule la dernière modification » propose le
+  bouton « Défaire » (commande réelle `ai.undoApply`).
+- `limit` silencieux : « les quatre lyres » sur un kit de deux est signalé en avertissement.
+- Corrections : « Plutôt en vert » reprend les projecteurs de la proposition précédente du fil (appliquée ou non).
+- Interface : conversation perdue au changement d'espace de travail (état local) → store dédié ; double clic sur
+  Appliquer envoyait deux `ai.apply` → garde par ref ; réponse tardive après effacement ignorée.
+
+Interface : barre d'état (fournisseur, moteur, sorties réelles armées ou simulation, couche IA), échanges avec états
+dérivés uniquement des données réelles (analyse, question, attente, exécution, appliqué, partiel, échec, annulé),
+résumé « Cibles / Modifie / Conserve », boutons Prévisualiser / Appliquer / Abandonner / Reformuler / Réessayer
+(Réessayer relance l'analyse, jamais une application), rapport distinguant état calculé vérifié et envoi au matériel
+(non confirmé), visualiseur marqué « état calculé » ou « simulation ». Textes dans `i18n/fr.ai.ts` / `en.ai.ts`.
+
+Performance [Mesure] : mode local p95 1,4 ms (banc de 187 cas) ; temps de compréhension, validation et exécution
+mesurés par proposition (`timings`, `executeMs`) et journalisés. Le runtime arrive à 10 Hz : les échanges sont
+mémoïsés avec des props stables.
+
+Tests : `tests/eval/ai.intent.eval.test.ts` (15, précision cibles / exclusions / valeurs / fondus),
+`tests/unit/ai-director-flow.test.ts` (11), `tests/components/aiDirector.test.tsx` (9). Banc local : reconnaissance
+0,994, intention 0,993, validité 1, 0 violation (inchangé ; le kit du banc est désormais allumé à 80 %, et le cas
+« garde les faces blanches » sans groupe « Faces » attend une question au lieu d'une action qui ignorait l'exclusion).
+
 ## 8. Problèmes restants et limites
 
 - **P2** — Une cible nommée par un mot inconnu du projet (« les contre-jours » quand le groupe s'appelle « Contres »)
@@ -143,3 +188,12 @@ préchauffage JIT, pas d'un gain de code. La latence fournisseur n'a pas pu êtr
   couche IA, y compris l'état antérieur.
 - **P3** — La vérification du rapport couvre les attributs de la couche IA, pas l'état des effets ni des cues créés.
 - **P3** — « Crée une séquence de trois tableaux » reste non reconnu (échec préexistant du banc).
+- **P2** — « Ralentis l'effet précédent » ajuste tous les effets IA en cours (nommés dans le plan), pas le seul dernier
+  lancé : le moteur n'expose pas l'ordre de démarrage des effets au validateur.
+- **P2** — Les PAR RGB sans canal dimmer rapportent un niveau virtuel de 1 même éteints : « baisse de 20 % » les
+  ramène à 0,8 de ce niveau virtuel (comportement préexistant de `displayColor`).
+- **P3** — L'aperçu du visualiseur montre les seules valeurs de la couche IA, pas la fusion avec les autres couches.
+- **P3** — Le découpage des demandes composées repose sur « et / , / puis » ; un nom de groupe contenant « et » n'est
+  découpé que si chaque morceau a sa propre cible et une action.
+- Non vérifié : comportement du modèle OpenRouter réel sur les nouvelles phrases (aucun appel payant lancé) ; rendu
+  visuel à d'autres tailles de fenêtre que celle de l'e2e.

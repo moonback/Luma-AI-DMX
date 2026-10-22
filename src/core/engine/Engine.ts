@@ -87,8 +87,15 @@ class FadingLayer {
   private fadeMs = 0;
   order = 0;
 
-  setTarget(patch: FixtureValues, fadeMs: number, order: number): void {
+  /** `start`: where attributes new to the layer fade from (else dimmer 0, others snap). */
+  setTarget(patch: FixtureValues, fadeMs: number, order: number, start: FixtureValues = {}): void {
     this.from = structuredClone(this.values);
+    for (const [fid, attrs] of Object.entries(patch)) {
+      for (const a of Object.keys(attrs)) {
+        const s = start[fid]?.[a];
+        if (s !== undefined && this.from[fid]?.[a] === undefined) (this.from[fid] ??= {})[a] = s;
+      }
+    }
     const to = structuredClone(this.to);
     for (const [fid, attrs] of Object.entries(patch)) to[fid] = { ...(to[fid] ?? {}), ...attrs };
     this.to = to;
@@ -305,7 +312,9 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
   /* ---------------- AI layer / external layers ---------------- */
 
   setAiValues(values: FixtureValues, fadeSeconds: number): void {
-    this.ai.setTarget(values, Math.max(0, fadeSeconds) * 1000, this.nextOrder());
+    // A progressive change starts from what the other layers output now, not from black (« monte en 8 s » from 30 %).
+    const start = fadeSeconds > 0 ? mergeSources(this.collect().layers, [], this.programmer).values : {};
+    this.ai.setTarget(values, Math.max(0, fadeSeconds) * 1000, this.nextOrder(), start);
   }
   releaseAi(): void { this.ai.clear(); }
 

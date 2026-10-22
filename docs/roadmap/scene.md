@@ -50,6 +50,7 @@ Légende effort : **S** ≤ 1 semaine · **M** 2–3 semaines · **L** 4 semaine
 - Un projecteur peut être **accroché** à une truss (`fixture.trussId`) : il suit ses déplacements, aimantation au placement.
 - Orientation de montage complète (`mountTilt`, accroche suspendue / posée / murale) au lieu de la règle « hauteur < 1 m ».
 - ~~Les truss implicites actuelles restent le comportement par défaut pour les anciens projets.~~ Abandonné : elles apparaissaient à chaque ajout de projecteur ; seules les structures posées par l'utilisateur sont dessinées.
+- Suite : assemblage 3D par connecteurs, catalogue, poids et nomenclature → [truss-builder.md](truss-builder.md).
 
 #### 4. Édition directe dans la 3D · M
 > **Livré (17/10/2026)** : mode « Éditer » avec gizmo pour déplacer, monter et pivoter projecteurs et truss (les projecteurs accrochés suivent pendant le glisser) ; grille libre / 0,25 / 0,5 / 1 m et rotations par 15° ; cotes affichées pendant le déplacement ; annuler / rétablir de la scène (boutons, Ctrl+Z, Ctrl+Y), indépendant des autres modifications. Reste : les décors, qui attendent la fonctionnalité 1.

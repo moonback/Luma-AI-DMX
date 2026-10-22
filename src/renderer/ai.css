@@ -1,0 +1,65 @@
+/* AI Lighting Director: status strip, conversation with its composer pinned at the bottom, live / preview stage. */
+.ai-page { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
+.ai-page .page-head { margin-bottom: 10px; }
+
+.ai-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 6px 12px; margin-bottom: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.ai-stat { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.ai-stat .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-3); }
+.ai-stat.warn { color: var(--warn); max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ai-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 12px; }
+.ai-chat { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.ai-log { flex: 1; min-height: 0; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+.ai-composer { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--panel); border-radius: 0 0 var(--radius) var(--radius); }
+.ai-composer .input { flex: 1; height: 40px; }
+
+.ai-empty h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.ai-empty p { margin: 10px 0 0; }
+
+.ai-exchange { display: flex; flex-direction: column; gap: 6px; animation: fade-in var(--dur) ease-out; }
+.ai-answer { gap: 8px; border-left: 3px solid var(--border-strong); }
+.ai-answer-head { flex-wrap: wrap; }
+.ai-exchange.state-awaiting .ai-answer { border-left-color: var(--violet); }
+.ai-exchange.state-analysing .ai-answer, .ai-exchange.state-applying .ai-answer, .ai-exchange.state-question .ai-answer { border-left-color: var(--cyan); }
+.ai-exchange.state-success .ai-answer { border-left-color: var(--ok); }
+.ai-exchange.state-partial .ai-answer, .ai-exchange.state-nothing .ai-answer { border-left-color: var(--warn); }
+.ai-exchange.state-failed .ai-answer, .ai-exchange.state-error .ai-answer { border-left-color: var(--err); }
+.ai-exchange.state-cancelled { opacity: 0.7; }
+
+.ai-label { font-weight: 600; color: var(--text-2); margin-right: 4px; }
+.ai-question { color: var(--cyan); }
+.ai-pending { font-style: italic; }
+.ai-summary { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; padding: 6px 9px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.ai-summary dt { align-self: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); }
+.ai-summary dd { margin: 0; }
+.ai-plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ai-targets { margin-top: 4px; }
+.ai-edit { margin-top: 6px; }
+.ai-messages { margin: 4px 0 0; padding-left: 16px; }
+.ai-messages.warn { color: var(--warn); }
+.ai-messages.err { color: #fca5a5; }
+.ai-error { color: #fca5a5; background: var(--err-soft); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: var(--radius-sm); padding: 6px 9px; }
+.ai-report { display: flex; flex-direction: column; gap: 4px; padding: 8px 9px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.ai-result { list-style: none; margin: 0; padding: 0; }
+.ai-result .ok { color: var(--ok); }
+.ai-result .err { color: #fca5a5; }
+.ai-actions { flex-wrap: wrap; }
+.ai-actions:empty { display: none; }
+
+.ai-spin { animation: ai-spin 1s linear infinite; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-spin, .ai-exchange { animation: none; } }
+.reduced-motion .ai-spin, .reduced-motion .ai-exchange { animation: none; }
+
+.ai-stage { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 10px 12px; }
+.ai-stage-head { justify-content: space-between; }
+/* Definite height: StageCanvas fills 100 % of it and sizes its bitmap from it (an auto height would grow without end). */
+.ai-stage-canvas { height: clamp(240px, 42vh, 520px); flex: none; }
+.ai-stage p { margin: 0; }
+
+/* Narrow windows: the stage goes under the conversation and the page scrolls. */
+@media (max-width: 1100px) {
+  .ai-page { overflow: auto; }
+  .ai-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(440px, 1fr) auto; }
+  .ai-stage-canvas { height: 240px; }
+}

@@ -29,6 +29,8 @@ export interface ValidationContext {
   index: ProjectIndex;
   allowStrobe: boolean;
   maxStrobeHz: number;
+  /** AI effects running now: when given, stopping or re-timing an effect that is not running is refused before execution. */
+  aiEffects?: { name: string; type: string }[];
 }
 
 function capable(index: ProjectIndex, ids: string[], test: (rf: ResolvedFixture) => boolean): { ok: string[]; skipped: string[] } {
@@ -137,6 +139,7 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
     const messages: string[] = [];
     let ids: string[] = [];
     let rejected = false;
+    let extra = '';
     switch (a.type) {
       case 'setIntensity': {
         const r = resolveAiTarget(ctx.index, a.target);
@@ -189,6 +192,14 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
       case 'createCue':
         if (!sceneExists(a.sceneName)) { messages.push(`Scène « ${a.sceneName} » introuvable`); rejected = true; }
         break;
+      case 'stopEffect':
+      case 'adjustEffect': {
+        if (!ctx.aiEffects) break;
+        const hit = ctx.aiEffects.filter((e) => (a.type === 'stopEffect' && a.all) || effectMatches(e, a));
+        if (hit.length) extra = ` : ${[...new Set(hit.map((e) => e.name))].join(', ')}`;
+        else { messages.push(ctx.aiEffects.length ? `Aucun effet IA en cours ne correspond (en cours : ${ctx.aiEffects.map((e) => e.name).join(', ')})` : 'Aucun effet IA en cours'); rejected = true; }
+        break;
+      }
       case 'createSequence':
         for (const cue of a.cues) {
           ids.push(...checkLook(cue.look, ctx, messages));
@@ -204,7 +215,7 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
       messages.push('Aucun projecteur ciblé ne prend en charge cette action');
       rejected = true;
     }
-    return { index, status: rejected ? 'rejected' : messages.length ? 'warning' : 'ok', action: a, raw, summary: describe(a), messages, fixtureIds: ids };
+    return { index, status: rejected ? 'rejected' : messages.length ? 'warning' : 'ok', action: a, raw, summary: describe(a) + extra, messages, fixtureIds: ids };
   });
 }
 
@@ -295,11 +306,12 @@ export function interpreterContext(index: ProjectIndex, engine: Engine, allowStr
     current[id] = { color: rgbToHex(d.color), level: d.intensity };
   }
   return {
-    fixtures: [...index.fixtures.values()].map((rf) => ({ id: rf.fixture.id, name: rf.fixture.name, type: rf.profile.type, attributes: rf.attributes, modules: rf.profile.modules.map((m) => m.name) })),
+    fixtures: [...index.fixtures.values()].map((rf) => ({ id: rf.fixture.id, name: rf.fixture.name, type: rf.profile.type, attributes: rf.attributes, modules: rf.profile.modules.map((m) => m.name), x: rf.fixture.position.x })),
     groups: [...index.groups.values()].map((g) => ({ name: g.name, members: g.fixtureIds.map((id) => index.fixtures.get(id)?.fixture.name).filter((n): n is string => !!n) })),
     scenes: [...index.scenes.values()].map((s) => s.name),
     current,
     allowStrobe,
+    runningEffects: engine.snapshot().effects.filter((e) => e.owner === 'ai').flatMap((e) => index.effects.get(e.effectId)?.type ?? []),
   };
 }
 
@@ -336,9 +348,16 @@ export function buildProposal(args: {
   };
 }
 
-export function proposeLocally(prompt: string, ctx: ValidationContext, engine: Engine, lastTargets?: string[]): AiProposal {
-  const r = interpretLocally(prompt, { ...interpreterContext(ctx.index, engine, ctx.allowStrobe), lastTargets });
-  return buildProposal({ prompt, provider: 'local', model: null, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx });
+export function proposeLocally(prompt: string, ctx: ValidationContext, engine: Engine, lastTargets?: string[], lastProposalTargets?: string[]): AiProposal {
+  const t0 = performance.now();
+  const r = interpretLocally(prompt, { ...interpreterContext(ctx.index, engine, ctx.allowStrobe), lastTargets, lastProposalTargets });
+  const understandMs = performance.now() - t0;
+  const p = buildProposal({ prompt, provider: 'local', model: null, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx });
+  p.timings = { understandMs, validateMs: performance.now() - t0 - understandMs };
+  if (r.question) p.question = r.question;
+  if (r.relative) p.relative = true;
+  if (r.offer) p.offer = r.offer;
+  return p;
 }
 
 /* ------------------------------------------------------------------ */
@@ -397,7 +416,7 @@ export function guardProposalFlashes(proposal: AiProposal, index: ProjectIndex, 
   return rejected;
 }
 
-function effectMatches(def: Effect, a: { effectType?: string; effectName?: string }): boolean {
+function effectMatches(def: { type: string; name: string }, a: { effectType?: string; effectName?: string }): boolean {
   if (a.effectType) return def.type === a.effectType;
   if (a.effectName) return normalize(def.name) === normalize(a.effectName);
   return true;

@@ -1,5 +1,7 @@
 import type { AiExecutionReport, AiProposal } from '../../ai/actions';
 import { buildProposal, executeProposal, guardProposalFlashes, interpreterContext, liveState, proposeLocally } from '../../ai/director';
+import { normalize } from '../../ai/local/interpreter';
+import { UNDO_WORDS } from '../../ai/local/clauses';
 import { enforceConstraints, expandRelativeIntensity, promptConstraints } from '../../ai/guards';
 import { pruneTransientEffects } from '../../ai/transient';
 import { ProjectIndex } from '../../engine/resolve';
@@ -7,10 +9,10 @@ import type { Project } from '../../model/schemas';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
 import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
 import { profileFromPhotoWithOpenRouter } from '../../ai/profileFromPhoto';
-import { GEMINI_KEY, OPENROUTER_KEY, UserError, VOICE_MODEL } from '../shared';
+import { GEMINI_KEY, OPENROUTER_KEY, UserError } from '../shared';
+import { voiceToken } from './aiVoice';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { voicePrompt } from '../../ai/prompts';
 import { AiUsageLedger, type AiUsage } from '../../ai/usage';
 import type { AppService, CommandIn } from '../AppService';
 
@@ -28,6 +30,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       const prev = app.proposals.get(cmd.proposalId);
       if (!prev) throw new UserError('Proposition expirée');
       const p = buildProposal({ prompt: prev.prompt, provider: prev.provider, model: prev.model, understanding: `${prev.understanding} (modifiée par l’utilisateur)`, notices: [], rawActions: cmd.actions, ctx: validationCtx(app) });
+      if (prev.relative) p.relative = true;
       guardConstraints(app, p);
       guardFlashes(app, p);
       storeProposal(app, p);
@@ -70,75 +73,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       app.opts.secrets.set(GEMINI_KEY, cmd.key);
       app.logger.info('IA', cmd.key ? 'Clé Gemini (assistant vocal) enregistrée' : 'Clé Gemini (assistant vocal) supprimée');
       return ok;
-    case 'ai.voiceToken': {
-      const apiKey = app.opts.secrets.get(GEMINI_KEY);
-      if (!apiKey) throw new UserError('Clé Gemini manquante : saisissez-la dans Paramètres › IA');
-      const { GoogleGenAI, Modality, Behavior, Type } = await import('@google/genai');
-      const now = Date.now();
-      // systemInstruction and tools MUST be locked inside liveConnectConstraints so that the
-      // constrained WebSocket endpoint enforces them server-side. A constrained token ignores
-      // any config sent by the client — if these fields are omitted here, the model will never
-      // use the declared tools (it just speaks freely without calling them).
-      // The tools must match src/renderer/voice/tools.ts (TOOLS); the instructions come from Paramètres › Assistant (src/core/ai/prompts.ts).
-      const token = await new GoogleGenAI({ apiKey }).authTokens.create({
-        config: {
-          uses: 1,
-          expireTime: new Date(now + 30 * 60_000).toISOString(),
-          newSessionExpireTime: new Date(now + 60_000).toISOString(),
-          liveConnectConstraints: {
-            model: VOICE_MODEL,
-            config: {
-              responseModalities: [Modality.AUDIO],
-              systemInstruction: voicePrompt(app.settings.assistant.name, app.settings.assistant.voicePrompt, app.settings.assistant.autoApply),
-              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: app.settings.assistant.voice } } },
-              tools: [{
-                functionDeclarations: [
-                  {
-                    name: 'propose_lighting',
-                    behavior: Behavior.NON_BLOCKING,
-                    description: `Prépare une proposition d'actions d'éclairage à partir de la demande de l'opérateur. N'applique RIEN. Retourne un résumé lisible (compréhension, actions, avertissements).`,
-                    parameters: {
-                      type: Type.OBJECT,
-                      properties: {
-                        request: { type: Type.STRING, description: `La demande de l'opérateur, telle qu'il l'a dite, mot pour mot. Ex: "mets les lyres en rouge", "ambiance disco", "baisse l'intensité à 50%".` },
-                      },
-                      required: ['request'],
-                    },
-                  },
-                  {
-                    name: 'apply_proposal',
-                    description: `Applique la dernière proposition générée par propose_lighting. À n'appeler QU'après accord explicite de l'opérateur (« oui », « vas-y », « ok », « go »). Retourne la liste des actions exécutées et celles ignorées.`,
-                  },
-                  {
-                    name: 'undo_last',
-                    description: `Annule la dernière application IA et restaure l'état précédent. À appeler si l'opérateur dit « annule », « reviens en arrière », « défais ça ». Attention : ne fonctionne que si rien n'a changé manuellement depuis.`,
-                  },
-                  {
-                    name: 'get_status',
-                    description: `Retourne l'état courant du moteur DMX : blackout, BPM (valeur et source), couche IA active, effets IA en cours, cue lists actives et leur état. À utiliser pour répondre à des questions sur l'état du spectacle.`,
-                  },
-                  {
-                    name: 'control_engine',
-                    description: `Effectue une action directe et immédiate sur le moteur DMX, sans passer par une proposition. Actions disponibles : blackout on/off, set_bpm, cue_go, cue_back, cue_pause, cue_resume, release_ai (libère uniquement la couche IA), release_all (libère TOUT — demande confirmation avant).`,
-                    parameters: {
-                      type: Type.OBJECT,
-                      properties: {
-                        action: { type: Type.STRING, description: `Action à effectuer. Valeurs : "blackout_on" | "blackout_off" | "set_bpm" | "cue_go" | "cue_back" | "cue_pause" | "cue_resume" | "release_ai" | "release_all".` },
-                        bpm: { type: Type.NUMBER, description: 'Nouveau BPM (20-300). Requis uniquement pour action="set_bpm".' },
-                        cue_list_name: { type: Type.STRING, description: `Nom de la cue list cible. Requis pour cue_go, cue_back, cue_pause, cue_resume. Si omis et qu'une seule cue list est active, elle est utilisée automatiquement.` },
-                      },
-                      required: ['action'],
-                    },
-                  },
-                ],
-              }],
-            },
-          },
-        },
-      });
-      if (!token.name) throw new UserError('Jeton Gemini non délivré');
-      return { token: token.name, model: VOICE_MODEL };
-    }
+    case 'ai.voiceToken': return voiceToken(app);
   }
 }
 
@@ -148,9 +83,14 @@ function applyProposal(app: AppService, id: string): AiExecutionReport {
   if (!p) throw new UserError('Proposition expirée ou inconnue');
   // What was previewed must be what is applied: refuse when the rig the actions were resolved against has changed.
   if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.');
+  // « Baisse de 20 % » was computed from the levels at proposal time: applying it on another look would be a different change.
+  const now = p.liveLevels ? liveLevels(app, Object.keys(p.liveLevels)) : {};
+  const drift = Object.entries(p.liveLevels ?? {}).filter(([fid, l]) => now[fid] !== undefined && Math.abs(now[fid] - l) > 0.05).map(([fid]) => app.index.fixtures.get(fid)?.fixture.name ?? fid);
+  if (drift.length) throw new UserError(`Proposition périmée : l’intensité de ${drift.slice(0, 5).join(', ')}${drift.length > 5 ? '…' : ''} a changé depuis l’aperçu, et cette proposition est relative à l’état courant. Relancez la demande.`);
   if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)');
   app.lastAiApply = Date.now();
   app.proposals.delete(id); // a proposal is applied at most once
+  const t0 = performance.now();
   // All or nothing: every creation goes to one draft, validated and committed once; effects start after the commit.
   const before = app.project;
   let draft: Project | null = null;
@@ -186,7 +126,8 @@ function applyProposal(app: AppService, id: string): AiExecutionReport {
   app.lastAiUndo = { proposalId: p.id, project: before, revision: app.revision };
   const thread = threads.get(app); // only executed actions are remembered, never skipped or refused ones
   if (thread) thread.last = { basis: rigBasis(app), fixtures: [...new Set(report.executed.flatMap((x) => p.actions[x.index]?.fixtureIds ?? []))].flatMap((id) => app.index.fixtures.get(id)?.fixture.name ?? []) };
-  app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s)`);
+  report.executeMs = performance.now() - t0;
+  app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s), ${report.verification.matched}/${report.verification.checked} valeur(s) vérifiée(s) (${Math.round(report.executeMs)} ms)`);
   for (const s of report.skipped) app.logger.warn('IA', `Ignorée — ${s.summary} : ${s.reason}`);
   return report;
 }
@@ -202,7 +143,14 @@ export function openRouterModels(app: AppService): Promise<OpenRouterModel[]> {
 }
 
 export function validationCtx(app: AppService) {
-  return { index: app.index, allowStrobe: app.settings.ai.allowStrobe, maxStrobeHz: app.settings.engine.maxStrobeHz };
+  return { index: app.index, allowStrobe: app.settings.ai.allowStrobe, maxStrobeHz: app.settings.engine.maxStrobeHz, aiEffects: liveState(app.index, app.engine).aiEffects };
+}
+
+/** Current levels of `ids`, leaving out fixtures a running effect moves (their level changes every frame and is no basis). */
+function liveLevels(app: AppService, ids: string[]): Record<string, number> {
+  const moved = new Set(app.engine.snapshot().effects.flatMap((e) => { const d = app.index.effects.get(e.effectId); return d ? app.index.resolveTargets(d.targets).map((rf) => rf.fixture.id) : []; }));
+  const cur = interpreterContext(app.index, app.engine, false).current;
+  return Object.fromEntries(ids.filter((id) => !moved.has(id) && cur[id]).map((id) => [id, cur[id]!.level]));
 }
 
 /** What the request forbids (« sans strobe », « sauf les faces ») is enforced by code on every proposal, local or remote. */
@@ -242,10 +190,12 @@ export async function guardBudget(app: AppService): Promise<void> {
 
 /** Last exchanges of the conversation with the remote model, for follow-up requests (« plutôt l’inverse »). */
 const THREAD_TURNS = 3;
-const threads = new WeakMap<AppService, { projectId: string; turns: { prompt: string; answer: string }[]; last?: { basis: string; fixtures: string[] } }>();
+const threads = new WeakMap<AppService, { projectId: string; turns: { prompt: string; answer: string }[]; last?: { basis: string; fixtures: string[] }; proposed?: { basis: string; fixtures: string[] } }>();
 
 /** Fixtures the last applied proposal of the thread really acted on (« baisse leur intensité »), while the rig is unchanged. */
 const lastTargets = (app: AppService): string[] | undefined => { const last = threads.get(app)?.last; return last?.basis === rigBasis(app) ? last.fixtures : undefined; };
+/** Fixtures the previous proposal of the thread targeted, applied or not, for corrections (« plutôt en vert »). */
+const proposedTargets = (app: AppService): string[] | undefined => { const p = threads.get(app)?.proposed; return p?.basis === rigBasis(app) ? p.fixtures : undefined; };
 
 function threadHistory(app: AppService): { role: 'user' | 'assistant'; content: string }[] {
   const t = threads.get(app);
@@ -259,6 +209,8 @@ function rememberTurn(app: AppService, prompt: string, p: AiProposal): void {
   // What the model said and what validation kept, so a follow-up can build on it without re-sending the rig twice.
   const answer = JSON.stringify({ understanding: p.understanding, actions: p.actions.map((a) => `${a.status} — ${a.summary}`) }).slice(0, 1500);
   t.turns = [...t.turns, { prompt, answer }].slice(-THREAD_TURNS);
+  const ids = new Set(p.actions.filter((a) => a.status !== 'rejected').flatMap((a) => a.fixtureIds));
+  if (ids.size) t.proposed = { basis: rigBasis(app), fixtures: [...ids].flatMap((id) => app.index.fixtures.get(id)?.fixture.name ?? []) };
 }
 
 /** Removes the stopped live AI effects nobody kept (see `pruneTransientEffects`). */
@@ -269,6 +221,7 @@ export function pruneAiEffects(app: AppService): void {
 
 export function storeProposal(app: AppService, p: AiProposal): void {
   p.basis = rigBasis(app);
+  if (p.relative) p.liveLevels = liveLevels(app, [...new Set(p.actions.flatMap((a) => (a.action?.type === 'setIntensity' || a.action?.type === 'setColor' ? a.fixtureIds : [])))]);
   app.proposals.set(p.id, p);
   while (app.proposals.size > 20) app.proposals.delete(app.proposals.keys().next().value!);
 }
@@ -286,10 +239,14 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
         await guardBudget(app);
         const model = ai.model || DEFAULT_OPENROUTER_MODEL;
         const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
+        const t0 = performance.now();
         const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app), history: continueThread ? threadHistory(app) : [], instructions: app.settings.assistant.directorPrompt });
+        const t1 = performance.now();
         // Validated against the project as it is now: it may have changed during the request.
         proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: expandRelativeIntensity(r.actions, app.index, liveState(app.index, app.engine).current), ctx: validationCtx(app) });
         if (r.question) proposal.question = r.question;
+        if (r.actions.some((a) => (a as { type?: unknown } | null)?.type === 'adjustIntensity')) proposal.relative = true;
+        proposal.timings = { understandMs: t1 - t0, validateMs: performance.now() - t1 };
         app.aiLastError = null;
       } catch (err) {
         if (abort.signal.aborted) throw new UserError('Demande IA annulée');
@@ -297,25 +254,30 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
         app.aiLastError = msg;
         app.logger.error('IA', `Fournisseur OpenRouter indisponible : ${msg}`);
         if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
-        proposal = proposeLocally(prompt, validationCtx(app), app.engine, continueThread ? lastTargets(app) : undefined);
+        proposal = proposeLocally(prompt, validationCtx(app), app.engine, ...(continueThread ? [lastTargets(app), proposedTargets(app)] : []));
         proposal.notices.unshift(`Fournisseur OpenRouter indisponible (${msg}) : proposition générée par le mode local déterministe.`);
       }
     } else {
-      proposal = proposeLocally(prompt, validationCtx(app), app.engine, continueThread ? lastTargets(app) : undefined);
+      proposal = proposeLocally(prompt, validationCtx(app), app.engine, ...(continueThread ? [lastTargets(app), proposedTargets(app)] : []));
       if (ai.provider === 'openrouter') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
     }
     guardConstraints(app, proposal);
     guardFlashes(app, proposal);
+    if (!proposal.offer && UNDO_WORDS.test(normalize(prompt))) proposal.offer = 'undo';
     storeProposal(app, proposal);
+    app.logger.info('IA', `Proposition ${proposal.provider} : ${proposal.actions.filter((a) => a.status !== 'rejected').length}/${proposal.actions.length} action(s) valide(s)${proposal.question ? ', question posée' : ''} — compréhension ${Math.round(proposal.timings?.understandMs ?? 0)} ms, validation ${Math.round(proposal.timings?.validateMs ?? 0)} ms`);
     if (!continueThread) threads.delete(app);
     rememberTurn(app, prompt, proposal);
     // Remembering the prompt is not an edit of the show: a clean project stays clean (saved with the next save).
     const clean = !app.dirty;
+    // Nor does it make the last AI application impossible to undo (« annule la dernière modification »).
+    const undoable = app.lastAiUndo?.revision === app.revision;
     app.mutate((d) => { d.ai.recentPrompts = [prompt.slice(0, 500), ...d.ai.recentPrompts.filter((x) => x !== prompt)].slice(0, 20); }, { history: false });
     if (clean) {
       app.savedRevision = app.revision;
       app.emitProject();
     }
+    if (undoable) app.lastAiUndo!.revision = app.revision;
     // Paramètres › Assistant › « Appliquer sans confirmation »: same checks as the button, never on a question.
     if (app.settings.assistant.autoApply && !proposal.question && proposal.actions.some((a) => a.status !== 'rejected')) {
       try {
