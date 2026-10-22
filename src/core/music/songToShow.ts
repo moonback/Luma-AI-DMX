@@ -296,7 +296,15 @@ export function compileShow(
   const notices: string[] = [];
   const beat = 60 / analysis.bpm;
   const short = trackName.slice(0, 40);
-  const ev = (e: Omit<TimelineEvent, 'id' | 'cueIndex' | 'lane'> & { lane?: number }): TimelineEvent => ({ id: randomUUID(), cueIndex: 0, lane: 0, ...e });
+  /** Schema hard-cap for timeline event fade/fadeOut (TimelineEventSchema: max(60)). */
+  const MAX_FADE = 60;
+  const clampFade = (v: number) => Math.min(MAX_FADE, Math.max(0, v));
+  const ev = (e: Omit<TimelineEvent, 'id' | 'cueIndex' | 'lane'> & { lane?: number }): TimelineEvent => ({
+    id: randomUUID(), cueIndex: 0, lane: 0,
+    ...e,
+    fade: clampFade(e.fade),
+    ...(e.fadeOut !== undefined ? { fadeOut: clampFade(e.fadeOut) } : {}),
+  });
   const intent = parseIntent(plan.intent);
   const rigFixtures = [...index.fixtures.values()].filter((rf) => !isFog(rf));
 
@@ -311,7 +319,7 @@ export function compileShow(
     const p = plan.sections[i], prev = plan.sections[i - 1];
     if (!prev || !p) return 0;
     if (breathBefore(analysis.sections, i)) return 0; // hard cut after the blackout
-    return p.energy > prev.energy ? beat : Math.min(4 * beat * 2, sec.end - sec.start); // rise: 1 beat, fall: 2 bars
+    return p.energy > prev.energy ? beat : Math.min(60, 4 * beat * 2, sec.end - sec.start); // rise: 1 beat, fall: 2 bars (capped at schema max)
   });
 
   // Breath before a drop: one beat of black so the hit lands on a dark stage (only after a section long enough).
