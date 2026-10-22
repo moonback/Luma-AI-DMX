@@ -4,6 +4,7 @@ import type { VisualFixture } from '../../../core/visualizer/model';
 import { floorAt, performerLight, performerSpot } from '../../../core/visualizer/lighting';
 import { textures } from './textures';
 import { labelSprite } from './rig';
+import { humanGeometry } from './human';
 import { screenVideo } from '../../screenMedia';
 
 /**
@@ -20,11 +21,9 @@ const DEG = Math.PI / 180;
 export interface PerformerRig { id: string; group: THREE.Group; skin: THREE.MeshStandardMaterial; gear: THREE.MeshStandardMaterial }
 
 function person(g: THREE.Group, mat: THREE.Material, seated: boolean, z = 0): void {
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, seated ? 0.42 : 0.9, 4, 12), mat);
-  body.position.set(0, seated ? 0.82 : 0.93, z);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), mat);
-  head.position.set(0, seated ? 1.18 : 1.62, z);
-  g.add(body, head);
+  const body = new THREE.Mesh(humanGeometry(seated), mat);
+  body.position.z = z;
+  g.add(body);
 }
 
 function box(g: THREE.Group, mat: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number): THREE.Mesh {

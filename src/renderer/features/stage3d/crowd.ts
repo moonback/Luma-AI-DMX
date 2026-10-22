@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { StageGeometry } from '../../../core/visualizer/beam';
+import { humanGeometry } from './human';
 
 /**
  * Audience: one InstancedMesh of low-poly silhouettes on the house floor (one draw call), hopping on the beat with
@@ -51,12 +51,7 @@ export interface Crowd { mesh: THREE.InstancedMesh; spots: CrowdSpot[]; energy: 
 
 export function buildCrowd(stage: StageGeometry): Crowd {
   const spots = crowdSpots(stage);
-  const body = new THREE.CapsuleGeometry(0.2, 0.85, 2, 8).translate(0, 0.85, 0);
-  const head = new THREE.SphereGeometry(0.11, 8, 6).translate(0, 1.55, 0);
-  const geo = mergeGeometries([body, head])!;
-  body.dispose();
-  head.dispose();
-  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), Math.max(1, spots.length));
+  const mesh = new THREE.InstancedMesh(humanGeometry(false, 6), new THREE.MeshStandardMaterial({ roughness: 0.9 }), Math.max(1, spots.length));
   mesh.count = spots.length;
   mesh.receiveShadow = true;
   mesh.frustumCulled = false; // instances move: the base geometry's bounds do not cover them

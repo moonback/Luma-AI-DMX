@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-/** Procedural canvas textures (no image assets): soft light pool and a few generic gobo patterns. */
+/** Procedural canvas textures (no image assets): soft light pool, a few generic gobo patterns and the deck planks. */
 
 function canvasTexture(size: number, draw: (g: CanvasRenderingContext2D, s: number) => void): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -67,10 +67,32 @@ const GOBOS: ((g: CanvasRenderingContext2D, s: number) => void)[] = [
   },
 ];
 
-let cache: { pool: THREE.Texture; gobos: THREE.Texture[] } | null = null;
+/** Painted stage planks: 6 boards of 20 cm across the tile (1.2 m), staggered end joints, faint grain. */
+export const DECK_TILE_M = 1.2;
+function planks(g: CanvasRenderingContext2D, s: number): void {
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const w = s / 6;
+  for (let i = 0; i < 6; i++) {
+    const v = 200 + Math.round(rnd() * 40);
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    g.fillRect(i * w, 0, w, s);
+    g.strokeStyle = 'rgba(0,0,0,0.08)';
+    g.lineWidth = 1;
+    for (let k = 0; k < 5; k++) { const x = i * w + rnd() * w; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + (rnd() - 0.5) * 6, s); g.stroke(); }
+    g.fillStyle = 'rgba(0,0,0,0.55)';
+    g.fillRect(i * w, 0, 2, s); // seam between boards
+    g.fillRect(i * w, rnd() * s, w, 2); // end joint
+  }
+}
 
-export function textures(): { pool: THREE.Texture; gobo: (index: number) => THREE.Texture } {
+let cache: { pool: THREE.Texture; gobos: THREE.Texture[]; deck: THREE.Texture } | null = null;
+
+export function textures(): { pool: THREE.Texture; gobo: (index: number) => THREE.Texture; deck: THREE.Texture } {
   if (!cache) {
+    const deck = canvasTexture(512, planks);
+    deck.wrapS = deck.wrapT = THREE.RepeatWrapping;
+    deck.anisotropy = 4;
     const pool = canvasTexture(256, softDisc);
     const gobos = GOBOS.map((draw) =>
       canvasTexture(256, (g, s) => {
@@ -82,14 +104,15 @@ export function textures(): { pool: THREE.Texture; gobo: (index: number) => THRE
         draw(g, s);
       }),
     );
-    cache = { pool, gobos };
+    cache = { pool, gobos, deck };
   }
   const c = cache;
-  return { pool: c.pool, gobo: (i) => c.gobos[(i - 1) % c.gobos.length] ?? c.pool };
+  return { pool: c.pool, gobo: (i) => c.gobos[(i - 1) % c.gobos.length] ?? c.pool, deck: c.deck };
 }
 
 export function disposeTextures(): void {
   cache?.pool.dispose();
+  cache?.deck.dispose();
   cache?.gobos.forEach((t) => t.dispose());
   cache = null;
 }
