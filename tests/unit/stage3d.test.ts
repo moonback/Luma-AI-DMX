@@ -54,6 +54,7 @@ describe('Stage 3D — Préférences & Préréglages de qualité', () => {
       floor: 'lacquer',
       exposure: 1.2,
       room: 0.5,
+      crowd: false,
     };
     savePrefs(custom);
     const loaded = loadPrefs();

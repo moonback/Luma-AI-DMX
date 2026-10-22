@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { VisualFixture } from '../../../core/visualizer/model';
 import { beamDirection, type StageGeometry } from '../../../core/visualizer/beam';
 
@@ -82,14 +83,15 @@ export class RealLights {
 /* ------------------------------------------------------------------ */
 
 export type AmbienceId = 'black' | 'work' | 'outdoor' | 'club' | 'theatre';
-interface Ambience { label: string; bg: number; fog: [number, number]; sky: number; ground: number; hemi: number; key: number; keyColor: number }
+/** `env`: strength of the room reflections (environment map) on metal and gloss; kept low in the dark rooms. */
+interface Ambience { label: string; bg: number; fog: [number, number]; sky: number; ground: number; hemi: number; key: number; keyColor: number; env: number }
 
 export const AMBIENCES: Record<AmbienceId, Ambience> = {
-  black: { label: 'Salle noire', bg: 0x05060a, fog: [30, 70], sky: 0x8899bb, ground: 0x0b0d14, hemi: 0.5, key: 0.35, keyColor: 0xb8c4ff },
-  work: { label: 'Lumière de service', bg: 0x1b1e26, fog: [45, 140], sky: 0xffffff, ground: 0x4a4a4a, hemi: 2.4, key: 1.4, keyColor: 0xfff4e0 },
-  outdoor: { label: 'Plein air nuit', bg: 0x0a1528, fog: [25, 95], sky: 0x4a6a9a, ground: 0x0b0d14, hemi: 0.7, key: 0.5, keyColor: 0x9db4ff },
-  club: { label: 'Club', bg: 0x0c0612, fog: [12, 45], sky: 0x6a4a8a, ground: 0x08040c, hemi: 0.35, key: 0.12, keyColor: 0xc4a0ff },
-  theatre: { label: 'Théâtre', bg: 0x110b07, fog: [30, 80], sky: 0xffc89a, ground: 0x100a06, hemi: 0.45, key: 0.25, keyColor: 0xffd2a8 },
+  black: { label: 'Salle noire', bg: 0x05060a, fog: [30, 70], sky: 0x8899bb, ground: 0x0b0d14, hemi: 0.5, key: 0.35, keyColor: 0xb8c4ff, env: 0.12 },
+  work: { label: 'Lumière de service', bg: 0x1b1e26, fog: [45, 140], sky: 0xffffff, ground: 0x4a4a4a, hemi: 2.4, key: 1.4, keyColor: 0xfff4e0, env: 0.8 },
+  outdoor: { label: 'Plein air nuit', bg: 0x0a1528, fog: [25, 95], sky: 0x4a6a9a, ground: 0x0b0d14, hemi: 0.7, key: 0.5, keyColor: 0x9db4ff, env: 0.15 },
+  club: { label: 'Club', bg: 0x0c0612, fog: [12, 45], sky: 0x6a4a8a, ground: 0x08040c, hemi: 0.35, key: 0.12, keyColor: 0xc4a0ff, env: 0.08 },
+  theatre: { label: 'Théâtre', bg: 0x110b07, fog: [30, 80], sky: 0xffc89a, ground: 0x100a06, hemi: 0.45, key: 0.25, keyColor: 0xffd2a8, env: 0.15 },
 };
 
 /** Applies an ambience; `room` (0–1) blends it toward the work light, so the set reads clearly without overexposing the beams. */
@@ -108,6 +110,17 @@ export function applyAmbience(id: AmbienceId, scene: THREE.Scene, hemi: THREE.He
   hemi.intensity = a.hemi + (w.hemi - a.hemi) * r;
   key.color.copy(mix(a.keyColor, w.keyColor));
   key.intensity = a.key + (w.key - a.key) * r;
+  scene.environmentIntensity = a.env + (w.env - a.env) * r;
+}
+
+/** Prefiltered room environment: reflections for metal (trusses, fixtures) and gloss; `applyAmbience` sets their strength. */
+export function roomReflections(renderer: THREE.WebGLRenderer): THREE.Texture {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment();
+  const tex = pmrem.fromScene(room, 0.04).texture;
+  room.dispose();
+  pmrem.dispose();
+  return tex;
 }
 
 export type FloorId = 'matte' | 'lacquer' | 'wet';

@@ -527,6 +527,8 @@ export const frScreens = {
   'stage3d.poolsTitle': 'Taches de lumière et gobos au sol et sur le cyclorama',
   'stage3d.smokeBtn': 'Fumée',
   'stage3d.smokeTitle': 'Fumée lourde au sol',
+  'stage3d.crowdBtn': 'Public',
+  'stage3d.crowdTitle': 'Foule dans la salle, qui saute au rythme de la musique',
   'stage3d.labelsBtn': 'Noms',
   'stage3d.labelsTitle': 'Noms des projecteurs',
   'stage3d.shadowsBtn': 'Ombres',

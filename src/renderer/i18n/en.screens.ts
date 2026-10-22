@@ -529,6 +529,8 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'stage3d.poolsTitle': 'Light pools and gobos on floor and cyclorama',
   'stage3d.smokeBtn': 'Smoke',
   'stage3d.smokeTitle': 'Ground-hugging smoke',
+  'stage3d.crowdBtn': 'Audience',
+  'stage3d.crowdTitle': 'Crowd in the house, hopping to the music',
   'stage3d.labelsBtn': 'Labels',
   'stage3d.labelsTitle': 'Fixture name labels',
   'stage3d.shadowsBtn': 'Shadows',
