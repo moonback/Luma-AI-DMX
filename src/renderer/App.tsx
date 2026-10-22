@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
-  Activity, AudioLines, Bell, Bot, Cable, ChartGantt, ChevronDown, ClipboardList, Crosshair, FilePlus, FolderOpen, LayoutDashboard, Lightbulb, ListOrdered, Mic, MicOff, OctagonX, Palette,
-  Music2, PanelLeftClose, PanelLeftOpen, Save, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Moon, Play, Redo2, Undo2, Zap,
+  Activity, AudioLines, Bot, Cable, ChartGantt, Crosshair, LayoutDashboard, Lightbulb, ListOrdered, Palette,
+  Music2, PanelLeftClose, PanelLeftOpen, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Terminal, Theater, X, Zap,
 } from 'lucide-react';
-import { BRAND } from '../shared/brand';
-import logo from '../../public/logo.png';
 import { PAGES, useStore, confirmAction, type PageId } from './store';
 import { act, call } from './api';
-import { ConfirmHost, NoticeHost, Modal, Field } from './components/ui';
+import { ConfirmHost, NoticeHost } from './components/ui';
 import { allowedWhileTyping, bindingsFrom, comboFromEvent } from './shortcuts';
 import { resolveShortcuts, type ShortcutAction } from '../core/settings/settings';
 import { Dashboard } from './features/Dashboard';
 import { Fixtures } from './features/Fixtures';
-import { DETACHED_CONSOLE_HASH, LiveConsole, openDetachedConsole } from './features/LiveConsole';
+import { DETACHED_CONSOLE_HASH, LiveConsole } from './features/LiveConsole';
 import { PanTiltConsole } from './features/PanTiltConsole';
 import { Programmer } from './features/Programmer';
 import { Cues } from './features/Cues';
@@ -20,19 +18,28 @@ import { Effects } from './features/Effects';
 import { QuickActionsPage } from './features/QuickActions';
 import { TimelinePage } from './features/Timeline';
 import { AiDirector } from './features/AiDirector';
-import { DETACHED_STAGE_HASH, openDetachedStage, Visualizer } from './features/Visualizer';
+import { DETACHED_STAGE_HASH, Visualizer } from './features/Visualizer';
 import { AudioPage } from './features/Audio';
 import { MusicPage } from './features/Music';
 import { OutputPage } from './features/Output';
 import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
-import { HelpButton, OnboardingHost } from './features/Onboarding';
+import { OnboardingHost } from './features/Onboarding';
 import { StartScreen } from './features/StartScreen';
-import { LicenseBadge } from './features/LicenseBadge';
 import { MiniPlayer } from './features/music/MiniPlayer';
 import { markWhatsNewSeen, whatsNewPending, WhatsNewHost } from './features/WhatsNew';
 import { t, useT, type MessageKey } from './i18n';
-import { startVoice, type VoiceState } from './voice/session';
+import { TopBar } from './components/TopBar';
+import {
+  newProjectFlow,
+  detachStageIfWanted,
+  openProject,
+  historyStep,
+  releaseAllFlow,
+  setDetachOnOpen,
+} from './projectActions';
+
+export { newProjectFlow, detachStageIfWanted, openProject, historyStep, releaseAllFlow };
 
 const ICONS: Record<PageId, ComponentType<{ size?: number }>> = {
   dashboard: LayoutDashboard, fixtures: Lightbulb, console: SlidersHorizontal, pantilt: Crosshair, programmer: Palette, cues: ListOrdered, effects: Sparkles, quick: Zap,
@@ -42,324 +49,6 @@ const VIEWS: Record<PageId, ComponentType> = {
   dashboard: Dashboard, fixtures: Fixtures, console: LiveConsole, pantilt: PanTiltConsole, programmer: Programmer, cues: Cues, effects: Effects, quick: QuickActionsPage,
   timeline: TimelinePage, ai: AiDirector, visualizer: Visualizer, audio: AudioPage, music: MusicPage, output: OutputPage, settings: SettingsPage,
 };
-
-export function newProjectFlow(): void {
-  useStore.setState({ newProjectOpen: true });
-}
-
-async function guardUnsaved(): Promise<boolean> {
-  if (!useStore.getState().project?.dirty) return true;
-  return confirmAction({ title: t('project.unsavedTitle'), message: t('project.unsavedMessage'), confirmLabel: t('project.unsavedConfirm') });
-}
-
-/** Set at startup from the settings; cleared once the detached windows have been opened. */
-let detachStageOnOpen = false;
-let detachConsoleOnOpen = false;
-
-/** Opens the detached 3D / console windows once, when the settings ask for it and a project is opened, created or kept. */
-export function detachStageIfWanted(): void {
-  if (detachStageOnOpen) openDetachedStage();
-  if (detachConsoleOnOpen) openDetachedConsole();
-  detachStageOnOpen = detachConsoleOnOpen = false;
-}
-
-/** Opens a project file (dialog when no path); true when a project was opened. */
-export async function openProject(path?: string): Promise<boolean> {
-  if (!(await guardUnsaved())) return false;
-  const opened = !!(await act({ type: 'project.open', ...(path ? { path } : {}) }))?.opened;
-  if (opened) detachStageIfWanted();
-  return opened;
-}
-
-/** Undo / redo of the whole project, with the step's label in a toast. */
-export async function historyStep(direction: 'undo' | 'redo'): Promise<void> {
-  const r = await act({ type: direction === 'undo' ? 'project.undo' : 'project.redo' });
-  if (r) useStore.getState().toast(r.label ? { kind: 'info', title: t(direction === 'undo' ? 'history.undone' : 'history.redone', { label: r.label }) } : { kind: 'info', title: t('history.nothing') });
-}
-
-/** Releases programmer, AI layer, effects, playbacks and timeline after a confirmation (blackout and STOP are separate). */
-export async function releaseAllFlow(): Promise<void> {
-  if (await confirmAction({ title: t('top.releaseAllConfirmTitle'), message: t('top.releaseAllConfirm'), confirmLabel: t('top.releaseAll') })) await act({ type: 'engine.releaseAll' });
-}
-
-function NewProjectDialog({ onClose }: { onClose: () => void }) {
-  const tr = useT();
-  const [name, setName] = useState(() => t('project.defaultName'));
-  const create = async () => {
-    if (!(await guardUnsaved())) return;
-    if (!(await act({ type: 'project.new', name: name.trim() || t('project.defaultName') }))) return;
-    detachStageIfWanted();
-    onClose();
-  };
-  return (
-    <Modal title={tr('project.new')} onClose={onClose} footer={<><button className="btn" onClick={onClose}>{tr('common.cancel')}</button><button className="btn primary" onClick={() => void create()}>{tr('common.create')}</button></>}>
-      <Field label={tr('project.name')}><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} /></Field>
-    </Modal>
-  );
-}
-
-/** Dropdown menu for project actions (New / Open / Save / Undo / Redo). */
-function ProjectMenu({ onNew }: { onNew: () => void }) {
-  const tr = useT();
-  const project = useStore((s) => s.project);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  const dirty = project?.dirty ?? false;
-
-  return (
-    <div className="proj-menu-wrap" ref={ref}>
-      <button
-        className="proj-menu-btn btn ghost"
-        onClick={() => setOpen((v) => !v)}
-        title={project?.project.meta.name ?? '…'}
-      >
-        <span className="proj-menu-name">
-          <b>{project?.project.meta.name ?? '…'}{dirty ? ' •' : ''}</b>
-        </span>
-        <ChevronDown size={13} className={`proj-menu-chevron ${open ? 'open' : ''}`} />
-      </button>
-      {open && (
-        <div className="proj-menu-dropdown">
-          <button className="proj-menu-item" onClick={() => { setOpen(false); onNew(); }}>
-            <FilePlus size={14} />{tr('project.newShortcut')}
-          </button>
-          <button className="proj-menu-item" onClick={() => { setOpen(false); void openProject(); }}>
-            <FolderOpen size={14} />{tr('project.openShortcut')}
-          </button>
-          <div className="proj-menu-sep" />
-          <button className="proj-menu-item" data-testid="save" onClick={() => { setOpen(false); void act({ type: 'project.save' }); }}>
-            <Save size={14} />{tr('project.saveShortcut')}
-          </button>
-          <div className="proj-menu-sep" />
-          <button
-            className="proj-menu-item"
-            data-testid="undo"
-            disabled={!project?.history?.undo}
-            onClick={() => { setOpen(false); void historyStep('undo'); }}
-          >
-            <Undo2 size={14} />{project?.history?.undoLabel ? tr('history.undoTitle', { label: project.history.undoLabel }) : tr('history.nothing')}
-          </button>
-          <button
-            className="proj-menu-item"
-            data-testid="redo"
-            disabled={!project?.history?.redo}
-            onClick={() => { setOpen(false); void historyStep('redo'); }}
-          >
-            <Redo2 size={14} />{project?.history?.redoLabel ? tr('history.redoTitle', { label: project.history.redoLabel }) : tr('history.nothing')}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Compact status pills — LED dot + short label, full detail in title tooltip. */
-function StatusPills() {
-  const tr = useT();
-  const rt = useStore((s) => s.runtime);
-  const taps = useRef<number[]>([]);
-  const outputs = rt?.outputs ?? [];
-  const errors = outputs.filter((o) => o.state === 'error').length;
-  const ready = outputs.filter((o) => o.state === 'ready').length;
-  const transmitting = rt?.transmitting ?? true;
-
-  const tap = () => {
-    const now = performance.now();
-    taps.current = [...taps.current.filter((t) => now - t < 3000), now];
-    if (taps.current.length >= 3) {
-      const iv = taps.current.slice(1).map((t, i) => t - taps.current[i]!);
-      const bpm = Math.round(60000 / (iv.reduce((a, b) => a + b, 0) / iv.length));
-      if (bpm >= 20 && bpm <= 300) void act({ type: 'engine.bpm', bpm });
-    }
-  };
-
-  return (
-    <div className="status-pills">
-      {/* Output */}
-      <div
-        className="status-pill"
-        title={outputs.map((o) => `${o.name} : ${o.state}`).join('\n') || tr('top.output')}
-      >
-        <span className={`led ${errors ? 'err' : !transmitting ? 'warn' : ready ? 'ok' : ''}`} />
-        <span className="status-pill-label">
-          {errors ? `${errors} err` : !transmitting ? 'stopped' : `${ready} out`}
-        </span>
-      </div>
-      {/* Engine */}
-      <div
-        className="status-pill"
-        title={tr('top.engineTitle', { tick: rt?.engine.metrics.avgTickMs ?? 0, jitter: rt?.engine.metrics.jitterMs ?? 0 })}
-      >
-        <span className={`led ${rt?.engine.running ? 'ok' : 'err'}`} />
-        <span className="status-pill-label">{rt ? `${rt.engine.metrics.measuredHz} Hz` : '–'}</span>
-      </div>
-      {/* BPM tap */}
-      <button
-        className="status-pill status-pill-btn"
-        onClick={tap}
-        title={tr('top.tapTitle')}
-      >
-        <span className="led ok" style={{ background: 'var(--cyan)' }} />
-        <span className="status-pill-label">{rt ? `${rt.engine.bpm.toFixed(0)} bpm` : '–'}</span>
-      </button>
-      {/* AI */}
-      <div className="status-pill" title={rt?.ai.lastError ?? tr('top.ai')}>
-        <span className={`led ${rt?.ai.busy ? 'violet' : rt?.ai.lastError ? 'warn' : 'ok'}`} />
-        <span className="status-pill-label">AI</span>
-      </div>
-    </div>
-  );
-}
-
-/* ── Voice assistant button ───────────────────────────────────────────────── */
-const VOICE_STATE_CLASSES: Record<VoiceState, string> = {
-  connecting: 'accent',
-  listening: 'accent solid',
-  speaking:  'accent solid',
-  working:   'accent solid',
-};
-
-const VOICE_STATE_ICONS: Record<VoiceState, typeof Mic> = {
-  connecting: Mic,
-  listening:  Mic,
-  speaking:   Mic,
-  working:    Mic,
-};
-
-function VoiceButton() {
-  const tr = useT();
-  const rt = useStore((s) => s.runtime);
-  const hasVoiceKey = rt?.ai.hasVoiceKey ?? false;
-  const [state, setState] = useState<VoiceState | null>(null);
-  const stopRef = useRef<(() => void) | null>(null);
-
-  const toggle = async () => {
-    // If already active → stop
-    if (stopRef.current) {
-      stopRef.current();
-      stopRef.current = null;
-      setState(null);
-      return;
-    }
-    try {
-      const session = await startVoice(
-        (s) => setState(s),
-        () => { stopRef.current = null; setState(null); },
-      );
-      if (session) stopRef.current = session.stop;
-    } catch (err) {
-      console.error('[Voice] Failed to start:', err);
-      useStore.getState().toast({ kind: 'error', title: tr('voice.micError') });
-      setState(null);
-    }
-  };
-
-  if (!hasVoiceKey) return null;
-
-  const active = state !== null;
-  const Icon = active ? VOICE_STATE_ICONS[state] : Mic;
-  const btnClass = active ? `btn ${VOICE_STATE_CLASSES[state]} icon` : 'btn ghost icon';
-
-  const label = active
-    ? (state === 'connecting' ? tr('voice.connecting') : state === 'speaking' ? tr('voice.speaking') : state === 'working' ? tr('voice.working') : tr('voice.listening'))
-    : tr('voice.start');
-
-  return (
-    <button
-      className={`${btnClass} voice-btn`}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      onClick={() => void toggle()}
-      style={active && state === 'listening' ? { animation: 'voice-pulse 1.4s ease-in-out infinite' } : undefined}
-    >
-      {active ? <Icon size={16} /> : <Mic size={16} />}
-      {active && <span className="voice-btn-label">{label}</span>}
-    </button>
-  );
-}
-
-function TopBar() {
-  const tr = useT();
-  const project = useStore((s) => s.project);
-  const rt = useStore((s) => s.runtime);
-  const toggleDiag = useStore((s) => s.toggleDiag);
-  const [showNew, setShowNew] = useState(false);
-  const newOpen = useStore((s) => s.newProjectOpen);
-  useEffect(() => {
-    if (newOpen) {
-      setShowNew(true);
-      useStore.setState({ newProjectOpen: false });
-    }
-  }, [newOpen]);
-  const live = rt?.liveMode ?? false;
-  const transmitting = rt?.transmitting ?? true;
-  const alerts = rt?.alerts.length ?? 0;
-  const installPlanButton = useStore((s) => s.installPlanButton);
-
-  return (
-    <header className="topbar">
-      {/* ── Left zone: logo + project dropdown ── */}
-      <div className="top-left">
-        <div className="brand"><img className="brand-logo" src={logo} alt={BRAND.productName} /></div>
-        <ProjectMenu onNew={() => setShowNew(true)} />
-        {installPlanButton && (
-          <button className="btn ghost icon" data-testid="install-plan" title={tr('top.installPlanTitle')} onClick={() => void act({ type: 'patch.exportPlan' })}>
-            <ClipboardList size={15} />
-          </button>
-        )}
-      </div>
-
-      {/* ── Centre: mode badge + compact status pills ── */}
-      <div className="top-stats">
-        <span className={`mode-badge ${live ? 'live' : ''}`} data-testid="mode" title={live ? tr('top.liveTitle') : tr('top.simulationTitle')}>
-          {live ? 'LIVE' : 'SIM'}
-        </span>
-        <StatusPills />
-      </div>
-
-      {/* ── Right zone: alerts + critical actions ── */}
-      <div className="top-right">
-        <VoiceButton />
-        <LicenseBadge />
-        <HelpButton />
-        <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
-          <Bell size={16} />
-          {alerts > 0 && <span className="badge err" style={{ position: 'absolute', top: -4, right: -8, height: 16, padding: '0 4px' }}>{alerts}</span>}
-        </button>
-        <button className="btn ghost icon" data-testid="release-all" title={tr('top.releaseAllTitle')} onClick={() => void releaseAllFlow()}>
-          <Undo2 size={15} />
-        </button>
-        <button
-          className={`btn icon ${rt?.engine.blackout ? 'danger solid' : 'ghost'}`}
-          data-testid="blackout"
-          title={tr('top.blackoutTitle')}
-          onClick={() => void act({ type: 'engine.blackout', on: !rt?.engine.blackout })}
-        >
-          <Moon size={15} />
-        </button>
-        {transmitting ? (
-          <button className="btn danger solid" data-testid="stop-output" title={tr('top.stopTitle')} onClick={() => void act({ type: 'output.transmit', on: false })}>
-            <OctagonX size={16} />STOP
-          </button>
-        ) : (
-          <button className="btn accent" title={tr('top.resumeTitle')} onClick={() => void act({ type: 'output.transmit', on: true })}>
-            <Play size={15} />{tr('top.resume')}
-          </button>
-        )}
-      </div>
-      {showNew && <NewProjectDialog onClose={() => setShowNew(false)} />}
-    </header>
-  );
-}
 
 const NAV_GROUPS: { key: MessageKey; ids: PageId[] }[] = [
   { key: 'nav.group.live', ids: ['dashboard', 'console', 'pantilt', 'programmer', 'cues', 'quick'] },
@@ -610,8 +299,7 @@ export async function bootstrap(): Promise<void> {
   const main = location.hash !== DETACHED_STAGE_HASH && location.hash !== DETACHED_CONSOLE_HASH;
   if (main) void externalControl.configure(settings.control);
   if (main) void offerRecovery();
-  detachStageOnOpen = settings.general.detachStage3dOnStart && main;
-  detachConsoleOnOpen = settings.general.detachConsoleOnStart && main;
+  setDetachOnOpen(settings.general.detachStage3dOnStart && main, settings.general.detachConsoleOnStart && main);
   // Lu au démarrage seulement : le réglage s'applique au prochain redémarrage, pas à la session en cours.
   if (main && settings.general.simpleConsoleOnStart) useStore.setState({ simpleLocked: true, page: 'pantilt' });
   useStore.setState({ project, logs, cueListId: project.project.cueLists[0]?.id ?? null });

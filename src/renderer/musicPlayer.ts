@@ -142,7 +142,7 @@ async function decode(data: ArrayBuffer): Promise<AudioBuffer> {
  * Falls back to the main-thread import if the Worker constructor fails (e.g. strict
  * file:// CSP in some Electron configurations).
  */
-async function analyzeInWorker(
+export async function analyzeInWorker(
   mono: Float32Array,
   sampleRate: number,
   bpmMin: number,

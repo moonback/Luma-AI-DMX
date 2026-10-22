@@ -108,7 +108,8 @@ export function estimateTempo(onset: Float32Array, fr: number, bpmMin = 70, bpmM
   }
   // Parabolic refinement around the comb maximum.
   const a0 = at(best - 0.1), a2 = at(best + 0.1), den = a0 - 2 * bestScore + a2;
-  return den < 0 ? best + (0.1 * (a0 - a2)) / (2 * den) : best;
+  const refined = den < 0 ? best + (0.1 * (a0 - a2)) / (2 * den) : best;
+  return Number.isFinite(refined) && refined > 0 ? refined : (bpmMin + bpmMax) / 2;
 }
 
 /** Dynamic-programming beat tracker; returns frame indices. */
@@ -156,6 +157,7 @@ function avgVec(vs: Float32Array[], from: number, to: number, dim: number): Floa
  * The meter whose best-phase score is highest wins.
  */
 function detectMeter(f: Frames, beats: number[]): { phase: number; meter: 3 | 4 } {
+  if (beats.length < 2) return { phase: 0, meter: 4 };
   let bestScore = -Infinity, bestPhase = 0, bestMeter: 3 | 4 = 4;
   for (const meter of [3, 4] as const) {
     const scores = new Array<number>(meter).fill(0);
@@ -287,6 +289,7 @@ function boundaries(bars: Bar[], S: number[][], phraseLen = 4): number[] {
 
 function label(sections: Omit<SongSection, 'label'>[], vectors: Float32Array[]): SectionLabel[] {
   const n = sections.length;
+  if (n <= 1) return new Array(n).fill('verse');
   const labels: SectionLabel[] = new Array(n).fill('verse');
   const counts = new Map<number, number>();
   for (const s of sections) counts.set(s.cluster, (counts.get(s.cluster) ?? 0) + 1);
@@ -369,7 +372,7 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
   const idx = beats.map((_, i) => i);
   const mi = mean(idx), mt = mean(beats);
   const slope = beats.reduce((s, t, i) => s + (i - mi) * (t - mt), 0) / (idx.reduce((s, i) => s + (i - mi) ** 2, 0) || 1);
-  const bpm = slope > 0 ? 60 / slope : tempo0;
+  const bpm = Number.isFinite(slope) && slope > 0 ? 60 / slope : tempo0;
   
   // Detect tempo changes: sliding window approach for variable tempo tracks
   const tempoChanges: Array<{ t: number; from: number; to: number }> = [];
@@ -422,6 +425,21 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
 
   // Bars (a leading partial bar is merged into the first one).
   const bars = barFeatures(f, downFrames.length ? [0, ...downFrames.filter((x) => x > 0)] : [0], f.onset.length);
+  if (bars.length === 0) {
+    bars.push({
+      start: 0,
+      end: Math.max(0.1, duration),
+      startFrame: 0,
+      endFrame: Math.max(1, f.onset.length),
+      chroma: new Float32Array(12),
+      bands: new Float32Array(N_BANDS),
+      rms: mean(f.rms) || 0,
+      centroid: mean(f.centroid) || 0,
+      bass: mean(f.bass) || 0,
+      high: mean(f.high) || 0,
+      onsets: 0,
+    });
+  }
   const S = similarity(bars);
   const cuts = [0, ...boundaries(bars, S, meter), bars.length];
   o.onProgress?.(0.9);
@@ -506,7 +524,7 @@ export async function analyzeAudio(samples: Float32Array, sampleRate: number, o:
   return {
     version: 1,
     duration,
-    bpm: Math.round(bpm * 100) / 100,
+    bpm: Math.round((Number.isFinite(bpm) && bpm > 0 ? bpm : 120) * 100) / 100,
     tempoStable: tempoStable && tempoChanges.length === 0,
     meter,
     beats: beats.map((t) => Math.round(t * 1000) / 1000),

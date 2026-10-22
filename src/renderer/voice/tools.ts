@@ -65,7 +65,7 @@ qui est irréversible, demande toujours confirmation avant).
    DÉCLARATIONS D'OUTILS
 ────────────────────────────────────────────────────────────────────────────── */
 const strParam = (description: string) => ({ type: Type.STRING, description });
-const boolParam = (description: string) => ({ type: Type.BOOLEAN, description });
+const _boolParam = (description: string) => ({ type: Type.BOOLEAN, description });
 const numParam = (description: string) => ({ type: Type.NUMBER, description });
 
 export const TOOLS = [{
