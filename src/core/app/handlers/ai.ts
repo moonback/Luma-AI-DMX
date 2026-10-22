@@ -1,5 +1,6 @@
-import type { AiProposal } from '../../ai/actions';
-import { buildProposal, executeProposal, guardProposalFlashes, liveState, proposeLocally } from '../../ai/director';
+import type { AiExecutionReport, AiProposal } from '../../ai/actions';
+import { buildProposal, executeProposal, guardProposalFlashes, interpreterContext, liveState, proposeLocally } from '../../ai/director';
+import { enforceConstraints, expandRelativeIntensity, promptConstraints } from '../../ai/guards';
 import { pruneTransientEffects } from '../../ai/transient';
 import { ProjectIndex } from '../../engine/resolve';
 import type { Project } from '../../model/schemas';
@@ -9,6 +10,7 @@ import { profileFromPhotoWithOpenRouter } from '../../ai/profileFromPhoto';
 import { GEMINI_KEY, OPENROUTER_KEY, UserError, VOICE_MODEL } from '../shared';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { voicePrompt } from '../../ai/prompts';
 import { AiUsageLedger, type AiUsage } from '../../ai/usage';
 import type { AppService, CommandIn } from '../AppService';
 
@@ -26,55 +28,12 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       const prev = app.proposals.get(cmd.proposalId);
       if (!prev) throw new UserError('Proposition expirée');
       const p = buildProposal({ prompt: prev.prompt, provider: prev.provider, model: prev.model, understanding: `${prev.understanding} (modifiée par l’utilisateur)`, notices: [], rawActions: cmd.actions, ctx: validationCtx(app) });
+      guardConstraints(app, p);
       guardFlashes(app, p);
       storeProposal(app, p);
       return p;
     }
-    case 'ai.apply': {
-      const p = app.proposals.get(cmd.proposalId);
-      if (!p) throw new UserError('Proposition expirée ou inconnue');
-      // What was previewed must be what is applied: refuse when the rig the actions were resolved against has changed.
-      if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.');
-      if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)');
-      app.lastAiApply = Date.now();
-      app.proposals.delete(cmd.proposalId); // a proposal is applied at most once
-      // All or nothing: every creation goes to one draft, validated and committed once; effects start after the commit.
-      const before = app.project;
-      let draft: Project | null = null;
-      let index = app.index;
-      const deferred: (() => void)[] = [];
-      const report = executeProposal(p, {
-        index: () => index,
-        mutate: (fn) => {
-          draft ??= structuredClone(app.project);
-          fn(draft);
-          index = new ProjectIndex(draft, app.userProfiles);
-        },
-        defer: (fn) => deferred.push(fn),
-        engine: e,
-        maxStrobeHz: app.settings.engine.maxStrobeHz,
-      });
-      if (draft) {
-        const next: Project = draft;
-        try {
-          app.mutate((d) => { Object.assign(d, next); });
-        } catch (err) {
-          e.releaseAi();
-          throw err;
-        }
-      }
-      for (const start of deferred) {
-        try {
-          start();
-        } catch (err) {
-          app.logger.warn('IA', (err as Error).message);
-        }
-      }
-      app.lastAiUndo = { proposalId: p.id, project: before, revision: app.revision };
-      app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s)`);
-      for (const s of report.skipped) app.logger.warn('IA', `Ignorée — ${s.summary} : ${s.reason}`);
-      return report;
-    }
+    case 'ai.apply': return applyProposal(app, cmd.proposalId);
     case 'ai.release':
       e.releaseAi();
       for (const fx of e.snapshot().effects) if (fx.owner === 'ai') e.stopEffect(fx.instanceId);
@@ -120,7 +79,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       // constrained WebSocket endpoint enforces them server-side. A constrained token ignores
       // any config sent by the client — if these fields are omitted here, the model will never
       // use the declared tools (it just speaks freely without calling them).
-      // Keep this in sync with src/renderer/voice/tools.ts (SYSTEM_PROMPT and TOOLS).
+      // The tools must match src/renderer/voice/tools.ts (TOOLS); the instructions come from Paramètres › Assistant (src/core/ai/prompts.ts).
       const token = await new GoogleGenAI({ apiKey }).authTokens.create({
         config: {
           uses: 1,
@@ -130,54 +89,8 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
             model: VOICE_MODEL,
             config: {
               responseModalities: [Modality.AUDIO],
-              systemInstruction: `\
-Tu es l'assistant vocal intégré d'une console d'éclairage DMX professionnelle. \
-Tu t'adresses à un opérateur ou un éclairagiste. Réponds toujours en français, \
-avec des phrases courtes et naturelles (1-3 phrases max). Sois direct et précis.
-
-## Tes outils — utilise-les TOUJOURS, n'invente rien
-
-1. **propose_lighting(request)** — Chaque fois que l'opérateur demande un effet, \
-une couleur, une intensité, une ambiance, une scène, un effet ou tout changement \
-d'éclairage : appelle cet outil avec la demande mot pour mot. N'attends PAS d'avoir \
-parlé, cet outil est non-bloquant et tu peux parler pendant qu'il travaille.
-
-2. **apply_proposal()** — Applique la dernière proposition. N'appelle cet outil \
-QU'APRÈS un accord explicite de l'opérateur : « oui », « vas-y », « applique », \
-« ok », « go ». Si l'opérateur hésite, change d'avis ou pose une question, \
-n'applique rien.
-
-3. **undo_last()** — Annule la dernière application IA. À appeler si l'opérateur \
-dit « annule », « reviens en arrière », « défais ça ».
-
-4. **get_status()** — Retourne l'état courant du moteur : blackout, BPM, effets actifs, \
-cue lists en cours. Appelle-le quand l'opérateur pose une question d'état : \
-« c'est quoi le BPM ? », « qu'est-ce qui tourne ? », « est-ce que le blackout est actif ? ».
-
-5. **control_engine(action, …)** — Actions moteur directes et immédiates : \
-blackout on/off, changer le BPM, lancer un GO sur une cue list, libérer la couche IA. \
-Ces actions s'appliquent IMMÉDIATEMENT sans demander de confirmation (sauf releaseAll \
-qui est irréversible, demande toujours confirmation avant).
-
-## Flux standard pour l'éclairage
-
-1. Opérateur demande un changement → appelle propose_lighting (sans attendre de parler)
-2. Lis le résumé de la proposition : ce que tu vas faire + nombre d'actions + avertissements
-3. Demande « Je l'applique ? »
-4. Si accord explicite → appelle apply_proposal et confirme
-5. Si refus / hésitation → ne fais rien, propose des alternatives si utile
-
-## Règles importantes
-
-- Ne génère JAMAIS de valeurs DMX, d'adresses ou de canaux toi-même.
-- Si la couche IA est déjà active (aiActive: true dans le statut), mentionne-le \
-  brièvement avant de proposer un changement.
-- Si un blackout est actif, signale-le proactivement.
-- Pour « éteins tout » / « black » / « libère » : utilise control_engine avec releaseAi \
-  (pas propose_lighting).
-- Pour les questions sur l'état : utilise get_status avant de répondre.
-- Tu peux enchaîner les tours : si l'opérateur dit « plus chaud » après une application, \
-  appelle propose_lighting avec « plus chaud » (le fil de conversation est mémorisé).`,
+              systemInstruction: voicePrompt(app.settings.assistant.name, app.settings.assistant.voicePrompt, app.settings.assistant.autoApply),
+              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: app.settings.assistant.voice } } },
               tools: [{
                 functionDeclarations: [
                   {
@@ -229,6 +142,55 @@ qui est irréversible, demande toujours confirmation avant).
   }
 }
 
+/** Executes a stored proposal once (button « Appliquer », voice « vas-y » or automatic application). */
+function applyProposal(app: AppService, id: string): AiExecutionReport {
+  const p = app.proposals.get(id);
+  if (!p) throw new UserError('Proposition expirée ou inconnue');
+  // What was previewed must be what is applied: refuse when the rig the actions were resolved against has changed.
+  if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.');
+  if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)');
+  app.lastAiApply = Date.now();
+  app.proposals.delete(id); // a proposal is applied at most once
+  // All or nothing: every creation goes to one draft, validated and committed once; effects start after the commit.
+  const before = app.project;
+  let draft: Project | null = null;
+  let index = app.index;
+  const deferred: (() => void)[] = [];
+  const report = executeProposal(p, {
+    index: () => index,
+    mutate: (fn) => {
+      draft ??= structuredClone(app.project);
+      fn(draft);
+      index = new ProjectIndex(draft, app.userProfiles);
+    },
+    defer: (fn) => deferred.push(fn),
+    engine: app.engine,
+    maxStrobeHz: app.settings.engine.maxStrobeHz,
+  });
+  if (draft) {
+    const next: Project = draft;
+    try {
+      app.mutate((d) => { Object.assign(d, next); });
+    } catch (err) {
+      app.engine.releaseAi();
+      throw err;
+    }
+  }
+  for (const start of deferred) {
+    try {
+      start();
+    } catch (err) {
+      app.logger.warn('IA', (err as Error).message);
+    }
+  }
+  app.lastAiUndo = { proposalId: p.id, project: before, revision: app.revision };
+  const thread = threads.get(app); // only executed actions are remembered, never skipped or refused ones
+  if (thread) thread.last = { basis: rigBasis(app), fixtures: [...new Set(report.executed.flatMap((x) => p.actions[x.index]?.fixtureIds ?? []))].flatMap((id) => app.index.fixtures.get(id)?.fixture.name ?? []) };
+  app.logger.info('IA', `Proposition appliquée : ${report.executed.length} action(s) exécutée(s), ${report.skipped.length} ignorée(s)`);
+  for (const s of report.skipped) app.logger.warn('IA', `Ignorée — ${s.summary} : ${s.reason}`);
+  return report;
+}
+
 /** OpenRouter catalogue, cached 10 min (public endpoint, no key needed). */
 export function openRouterModels(app: AppService): Promise<OpenRouterModel[]> {
   if (!app.modelCache || Date.now() - app.modelCache.at > 600_000) {
@@ -241,6 +203,12 @@ export function openRouterModels(app: AppService): Promise<OpenRouterModel[]> {
 
 export function validationCtx(app: AppService) {
   return { index: app.index, allowStrobe: app.settings.ai.allowStrobe, maxStrobeHz: app.settings.engine.maxStrobeHz };
+}
+
+/** What the request forbids (« sans strobe », « sauf les faces ») is enforced by code on every proposal, local or remote. */
+function guardConstraints(app: AppService, p: AiProposal): void {
+  const n = enforceConstraints(p, promptConstraints(p.prompt, interpreterContext(app.index, app.engine, app.settings.ai.allowStrobe)), app.index);
+  if (n) p.notices.push(`${n} action(s) refusée(s) : elles ne respectaient pas une contrainte de la demande.`);
 }
 
 export function guardFlashes(app: AppService, p: AiProposal): void {
@@ -274,7 +242,10 @@ export async function guardBudget(app: AppService): Promise<void> {
 
 /** Last exchanges of the conversation with the remote model, for follow-up requests (« plutôt l’inverse »). */
 const THREAD_TURNS = 3;
-const threads = new WeakMap<AppService, { projectId: string; turns: { prompt: string; answer: string }[] }>();
+const threads = new WeakMap<AppService, { projectId: string; turns: { prompt: string; answer: string }[]; last?: { basis: string; fixtures: string[] } }>();
+
+/** Fixtures the last applied proposal of the thread really acted on (« baisse leur intensité »), while the rig is unchanged. */
+const lastTargets = (app: AppService): string[] | undefined => { const last = threads.get(app)?.last; return last?.basis === rigBasis(app) ? last.fixtures : undefined; };
 
 function threadHistory(app: AppService): { role: 'user' | 'assistant'; content: string }[] {
   const t = threads.get(app);
@@ -315,9 +286,10 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
         await guardBudget(app);
         const model = ai.model || DEFAULT_OPENROUTER_MODEL;
         const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
-        const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app), history: continueThread ? threadHistory(app) : [] });
+        const r = await proposeWithOpenRouter(prompt, describeRig(app.index, ai.allowStrobe, app.engine.bpm, liveState(app.index, app.engine)), { apiKey: key, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app), history: continueThread ? threadHistory(app) : [], instructions: app.settings.assistant.directorPrompt });
         // Validated against the project as it is now: it may have changed during the request.
-        proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: r.actions, ctx: validationCtx(app) });
+        proposal = buildProposal({ prompt, provider: 'openrouter', model: r.model, understanding: r.understanding, notices: r.notices, rawActions: expandRelativeIntensity(r.actions, app.index, liveState(app.index, app.engine).current), ctx: validationCtx(app) });
+        if (r.question) proposal.question = r.question;
         app.aiLastError = null;
       } catch (err) {
         if (abort.signal.aborted) throw new UserError('Demande IA annulée');
@@ -325,13 +297,14 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
         app.aiLastError = msg;
         app.logger.error('IA', `Fournisseur OpenRouter indisponible : ${msg}`);
         if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
-        proposal = proposeLocally(prompt, validationCtx(app), app.engine);
+        proposal = proposeLocally(prompt, validationCtx(app), app.engine, continueThread ? lastTargets(app) : undefined);
         proposal.notices.unshift(`Fournisseur OpenRouter indisponible (${msg}) : proposition générée par le mode local déterministe.`);
       }
     } else {
-      proposal = proposeLocally(prompt, validationCtx(app), app.engine);
+      proposal = proposeLocally(prompt, validationCtx(app), app.engine, continueThread ? lastTargets(app) : undefined);
       if (ai.provider === 'openrouter') proposal.notices.unshift('Aucune clé API configurée : mode local déterministe utilisé.');
     }
+    guardConstraints(app, proposal);
     guardFlashes(app, proposal);
     storeProposal(app, proposal);
     if (!continueThread) threads.delete(app);
@@ -342,6 +315,14 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
     if (clean) {
       app.savedRevision = app.revision;
       app.emitProject();
+    }
+    // Paramètres › Assistant › « Appliquer sans confirmation »: same checks as the button, never on a question.
+    if (app.settings.assistant.autoApply && !proposal.question && proposal.actions.some((a) => a.status !== 'rejected')) {
+      try {
+        proposal.autoApplied = applyProposal(app, proposal.id);
+      } catch (err) {
+        proposal.notices.push(`Application automatique impossible : ${(err as Error).message}`);
+      }
     }
     return proposal;
   } finally {
@@ -387,5 +368,6 @@ async function withVision<T>(app: AppService, run: (opts: OpenRouterOptions) => 
     throw err instanceof UserError ? err : new UserError(`Analyse de photo impossible : ${msg}`);
   } finally {
     app.aiBusy = false;
+    app.aiAbort = null;
   }
 }

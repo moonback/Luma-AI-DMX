@@ -139,6 +139,7 @@ export const fr = {
   'stage3d.solo': 'Isoler',
   'stage3d.soloTitle': 'Atténuer les projecteurs hors sélection (I)',
   'stage3d.frameSel': 'Cadrer la sélection, ou toute la scène sans sélection (F)',
+  'stage3d.frame': 'Cadrer',
   'stage3d.present': 'Mode présentation : masquer l’interface (H)',
   'stage3d.presentExit': 'Quitter la présentation (H)',
   'stage3d.exposure': 'Exposition',

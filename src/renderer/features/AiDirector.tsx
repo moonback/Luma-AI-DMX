@@ -92,6 +92,7 @@ function ProposalView({ ex, onChange }: { ex: Exchange; onChange: (e: Exchange) 
         <span className="small dim">{new Date(p.createdAt).toLocaleTimeString()}</span>
       </div>
       <div><b>Compréhension :</b> {p.understanding}</div>
+      {p.question && <div style={{ color: '#22d3ee' }} data-testid="ai-question"><b>{t('ai.question')}</b> {p.question}</div>}
       {p.notices.map((n, i) => <div key={i} className="small" style={{ color: '#f59e0b' }}>⚠ {n}</div>)}
       {p.actions.length > 0 && (
         <>
@@ -141,7 +142,8 @@ export function AiDirector() {
     setPrompt('');
     // While the conversation shown is not cleared, the remote model sees the previous exchanges.
     const proposal = await act({ type: 'ai.propose', prompt: text.trim(), continueThread: history.length > 0 });
-    if (proposal) setHistory((h) => [...h, { prompt: text.trim(), proposal, excluded: new Set() }]);
+    if (proposal) setHistory((h) => [...h, { prompt: text.trim(), proposal, excluded: new Set(), report: proposal.autoApplied }]);
+    if (proposal?.autoApplied) useStore.getState().toast({ kind: proposal.autoApplied.skipped.length ? 'warn' : 'success', title: t('ai.autoApplied', { n: proposal.autoApplied.executed.length }) });
   };
   const [usage, setUsage] = useState<CommandResults['ai.usage'] | null>(null);
   useEffect(() => { void act({ type: 'ai.usage' }).then((u) => setUsage(u ?? null)); }, [history.length]);

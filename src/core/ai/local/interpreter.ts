@@ -16,6 +16,8 @@ export interface InterpreterContext {
   /** Current computed look per fixture (display colour + intensity). */
   current: Record<string, { color: string; level: number }>;
   allowStrobe: boolean;
+  /** Fixture names the last applied proposal of the conversation acted on, for « leur » / « les mêmes ». */
+  lastTargets?: string[];
 }
 
 export interface InterpretResult {
@@ -97,8 +99,14 @@ function findPercent(text: string): number | null {
 
 const MOVING: FixtureType[] = ['moving-head-spot', 'moving-head-wash'];
 
-function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; label: string } {
-  const groupNames = ctx.groups.filter((g) => g.name.length > 1 && new RegExp(`\\b${escapeRe(normalize(g.name))}\\b`).test(text)).map((g) => g.name);
+/** « Faces » also matches « la face » and vice versa; short names (« Pars ») stay exact so the word « par » is not a group. */
+function groupRe(name: string): RegExp {
+  const n = normalize(name).trim(), stem = n.replace(/s$/, '');
+  return new RegExp(`\\b${escapeRe(stem.length >= 4 ? stem : n)}${stem.length >= 4 ? 's?' : ''}\\b`);
+}
+
+export function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; label: string } {
+  const groupNames = ctx.groups.filter((g) => g.name.length > 1 && groupRe(g.name).test(text)).map((g) => g.name);
   const fixtureNames = ctx.fixtures.filter((f) => new RegExp(`\\b${escapeRe(normalize(f.name))}\\b`).test(text)).map((f) => f.name);
   const limitMatch = new RegExp(`\\b${NUM}\\s+(premieres?\\s+)?(lyres?|moving|spots?|wash|pars?|projecteurs?|strobes?|stroboscopes?)\\b`).exec(text);
   const limit = limitMatch?.[1] ? toNumber(limitMatch[1]) : undefined;
@@ -106,7 +114,9 @@ function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; 
   if (has(text, /\b(lyres?|moving ?heads?|tetes? mobiles?|asservis?)\b/)) types.push(...MOVING);
   if (has(text, /\bspots?\b/) && !types.length) types.push('moving-head-spot');
   if (has(text, /\bwash\b/) && !types.includes('moving-head-wash')) types.push('moving-head-wash');
-  if (has(text, /\bpars?\b|\bpar ?leds?\b/)) types.push('par');
+  // « par » alone is mostly the preposition (« divise par deux »): only plural, article + « par » or an exclusion clause
+  // starting with it (« sans toucher aux | PAR ») names the fixture.
+  if (has(text, /\bpars\b|\bpar ?leds?\b|\b(les|des|aux|du|le|chaque) par\b|^\s*par\b/)) types.push('par');
   if (has(text, /\b(stroboscopes?|les strobes|des strobes)\b/)) types.push('strobe');
   // A head of multi-head fixtures: generic words first, then the module names of the rig.
   const module = has(text, /\b(anneaux?|rings?)\b/) ? 'anneau' : has(text, /\btetes? principales?\b/) ? 'tête principale'
@@ -131,7 +141,7 @@ function typeLabel(types: FixtureType[]): string {
 }
 
 /** Fixture names a target designates in the interpreter's view of the rig (groups need their members). */
-function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
+export function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
   const explicit = new Set([...(t.fixtureNames ?? []), ...ctx.groups.filter((g) => t.groupNames?.includes(g.name)).flatMap((g) => g.members ?? [])]);
   let pool = ctx.fixtures.filter((f) => !explicit.size || explicit.has(f.name));
   if (t.fixtureTypes?.length) pool = pool.filter((f) => t.fixtureTypes!.includes(f.type));
@@ -140,7 +150,35 @@ function namesOf(t: AiTarget, ctx: InterpreterContext): string[] {
 }
 
 /** « … sauf les lyres » / « sans toucher aux PAR » : splits off the exclusion clause so it never becomes the target. */
-const EXCLUDE_RE = /\b(sauf|excepte|hormis|a part|sans toucher(?: aux?| a la| a l| les?)?|except|but not)\b(.*)$/;
+export const EXCLUDE_RE = /\b(sauf|excepte|hormis|a part|sans toucher(?: aux?| a la| a l| les?)?|sans modifier|ne touche pas(?: aux?| a la| a l| les?)?|mais garde\w*|garde (?:les?|la|l)|(?<!\bne? \w+ )pas (?:les?|la|l|aux?)|except|but not)\b(.*)$/;
+
+/** « sans strobe », « pas de rouge », « sans utiliser de chase » : the negated effect or colour, stripped from the text. */
+const NEGATED_RE = /\b(?:sans|pas de|pas d|pas du|aucune?|jamais de|without|no)\s+(?:(?:utiliser|mettre|faire)\s+)?(?:(?:de|d|du|le|la|les)\s+)?(?:(?:effets?|effect)\s+(?:de\s+)?)?([a-z-]+)/g;
+
+export function stripNegations(text: string): { text: string; effects: Set<string>; colors: Set<string>; labels: string[] } {
+  const effects = new Set<string>(), colors = new Set<string>(), labels: string[] = [];
+  const out = text.replace(NEGATED_RE, (m, word: string) => {
+    const fx = EFFECT_WORDS.find(([re]) => re.test(word));
+    const color = COLORS.find((c) => c.forms.includes(word));
+    if (!fx && !color) return m;
+    fx?.[1].forEach((t) => effects.add(t));
+    if (!fx) colors.add(color!.hex);
+    labels.push(fx ? fx[2] : color!.label);
+    return ' ';
+  });
+  return { text: out, effects, colors, labels };
+}
+
+/** Per-fixture « baisse de 20 % »: each targeted fixture keeps its own level, scaled by `factor`. */
+function relativeLevels(ctx: InterpreterContext, names: string[], factor: number, fade: number): AiAction[] {
+  const byLevel = new Map<number, string[]>();
+  for (const f of ctx.fixtures) {
+    if (!names.includes(f.name)) continue;
+    const level = Math.round(Math.min(1, Math.max(0, (ctx.current[f.id]?.level ?? 0) * factor)) * 100) / 100;
+    byLevel.set(level, [...(byLevel.get(level) ?? []), f.name]);
+  }
+  return [...byLevel].map(([level, fixtureNames]) => ({ type: 'setIntensity' as const, target: { fixtureNames }, level, fade }));
+}
 
 export const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -233,7 +271,25 @@ function averageLevel(ctx: InterpreterContext): number {
 /* ------------------------------------------------------------------ */
 
 export function interpretLocally(prompt: string, ctx: InterpreterContext): InterpretResult {
-  const full = normalize(prompt.trim());
+  const neg = stripNegations(normalize(prompt.trim()));
+  const r = interpret(neg.text, ctx);
+  if (!neg.labels.length) return r;
+  // Templates (drop, show) carry their own effects: a negated effect is removed from them too.
+  const actions = r.actions.flatMap((a): AiAction[] => {
+    if (a.type === 'startEffect') return neg.effects.has(a.effect.effectType) ? [] : [a];
+    if (a.type === 'createSequence') return [{ ...a, cues: a.cues.map((c) => ({ ...c, effects: c.effects.filter((e) => !neg.effects.has(e.effectType)) })) }];
+    return [a];
+  });
+  return { ...r, actions, notices: [...r.notices, `Contrainte respectée : pas de ${neg.labels.join(', ')}.`] };
+}
+
+function interpret(full: string, ctx: InterpreterContext): InterpretResult {
+  if (has(full, /\b(ne (change|modifie|touche|fais) (rien|a rien)|don t change anything|do nothing)\b/)) {
+    return { understanding: 'Aucune modification demandée : rien ne sera changé.', actions: [], notices: [], recognized: true };
+  }
+  if (has(full, /\b(annule\w*|undo)\b.*\b(derniere?|precedente?|last)\b/)) {
+    return { understanding: 'Annuler la dernière application IA.', actions: [], notices: ['Le mode local ne crée pas d’action d’annulation : utilisez le bouton « Annuler » de l’Assistant IA, qui restaure le projet d’avant la dernière application.'], recognized: true };
+  }
   const exclusion = EXCLUDE_RE.exec(full);
   // Everything below reads `text`; the excluded fixtures are removed from the target afterwards.
   const text = exclusion ? full.slice(0, exclusion.index) : full;
@@ -253,6 +309,12 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
       target = { fixtureNames: kept, ...(target.module ? { module: target.module } : {}) };
       targetLabel = `${targetLabel} sauf ${ex.label}`;
     }
+  }
+  // « leur », « les mêmes » : the fixtures of the last applied proposal, never a guess.
+  if (target.all && has(text, /\b(leurs?|les memes|(ceux|celles)[ -](ci|la)|them|their|those)\b/)) {
+    if (!ctx.lastTargets?.length) return { understanding: 'Cible ambiguë.', actions, notices: ['Précisez les projecteurs visés : « leur » ne renvoie à aucune action appliquée dans cette conversation.'], recognized: false };
+    target = { fixtureNames: ctx.lastTargets };
+    targetLabel = 'les projecteurs de la demande précédente';
   }
   const bpmSync = has(text, /\b(bpm|tempo|synchro\w*|au rythme|sur le rythme|beat)\b/);
   const fade = duration ?? (has(text, /\b(progressiv\w*|doucement|lentement)\b/) ? 5 : 2);
@@ -377,8 +439,9 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
     else actions.push({ type: 'stopEffect', all: true });
     return { understanding: `Arrêter ${fxLabel}.`, actions, notices, recognized: true };
   }
-  const slower = has(text, /\b(ralenti\w*|plus lent\w*|moins vite|moins rapides?|slower|slow down)\b/);
-  const faster = has(text, /\b(accelere\w*|plus vite|plus rapides?|speed up|faster)\b/);
+  const speedWord = has(text, /\b(vitesse|speed)\b/);
+  const slower = has(text, /\b(ralenti\w*|plus lent\w*|moins vite|moins rapides?|slower|slow down)\b/) || (speedWord && has(text, /\b(divise\w*|moitie|deux fois moins)\b/));
+  const faster = has(text, /\b(accelere\w*|plus vite|plus rapides?|speed up|faster)\b/) || (speedWord && has(text, /\b(double\w*|deux fois plus|multiplie\w*)\b/));
   if (slower || faster) {
     const speedFactor = (has(text, /\bun peu\b/) ? 1.5 : 2) ** (slower ? -1 : 1);
     const rounded = Math.round(speedFactor * 100) / 100;
@@ -439,16 +502,22 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
   const lightingWord = has(text, /\b(ambiance|atmosphere|mood|look|scene|lumiere|eclairage|light\w*)\b/);
   const mood = MOODS.find((m) => m.re.test(text) && (m.standalone || lightingWord));
   let lookColors = colors.map((c) => c.hex);
-  let level: number | null = percentUsed ? null : percent;
+  // « baisse de 20 % » scales the current levels; « baisse à 20 % » sets an absolute level.
+  const lower = has(text, /\b(baisse\w*|diminue\w*|redui\w*|divise\w*|moitie)\b/), raise = has(text, /\b(augmente\w*|monte\w*|remonte\w*)\b/);
+  const relPct = /\bde\s+(\d{1,3})\s*(%|pour ?cent|percent)/.exec(text);
+  const relFactor = !percentUsed && relPct?.[1] && (lower || raise) ? 1 + (raise && !lower ? 1 : -1) * Math.min(100, parseInt(relPct[1], 10)) / 100
+    : lower && percent === null ? (has(text, /\bun peu\b/) ? 0.8 : 0.5) : null;
+  let level: number | null = percentUsed || relFactor !== null ? null : percent;
   const template = mood?.name ?? null;
   if (!lookColors.length && mood) lookColors = mood.colors;
   if (!lookColors.length && has(text, /\b(chaud|chaude|warm)\b/)) lookColors = ['#FF9A3C'];
   if (!lookColors.length && has(text, /\b(froid|froide|cold)\b/)) lookColors = ['#9FD8FF'];
-  if (level === null && has(text, /\b(plein feu|full|max\w*|a fond)\b/)) level = 1;
-  if (level === null && has(text, /\b(monte\w*|augmente\w*|fade ?in|allume\w*)\b/)) level = 1;
-  if (level === null && has(text, /\b(minimum|minimale?|au minimum)\b/)) level = 0.1;
-  if (level === null && has(text, /\b(baisse\w*|diminue\w*|divise\w*|moitie)\b/)) level = Math.round(averageLevel(ctx) * 50) / 100;
-  if (level === null && mood) level = mood.level;
+  if (relFactor === null) {
+    if (level === null && has(text, /\b(plein feu|full|max\w*|a fond)\b/)) level = 1;
+    if (level === null && has(text, /\b(monte\w*|augmente\w*|fade ?in|allume\w*)\b/)) level = 1;
+    if (level === null && has(text, /\b(minimum|minimale?|au minimum)\b/)) level = 0.1;
+    if (level === null && mood) level = mood.level;
+  }
 
   const hasLook = lookColors.length > 0 || level !== null;
   if (hasLook && (wantsCreate || template || has(text, /\b(ambiance|atmosphere|mood)\b/)) && has(text, /\b(scene|ambiance|look|atmosphere|etat|mood)\b/)) {
@@ -466,6 +535,10 @@ export function interpretLocally(prompt: string, ctx: InterpreterContext): Inter
     if (level !== null) {
       actions.unshift({ type: 'setIntensity', target, level, fade });
       said.unshift(`intensité ${Math.round(level * 100)} % sur ${targetLabel} en ${fade} s`);
+    }
+    if (relFactor !== null) {
+      actions.unshift(...relativeLevels(ctx, namesOf(target, ctx), relFactor, fade));
+      said.unshift(`intensité actuelle ×${Math.round(relFactor * 100) / 100} sur ${targetLabel} en ${fade} s`);
     }
   }
 

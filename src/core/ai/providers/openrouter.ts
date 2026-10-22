@@ -9,6 +9,7 @@ import type { ProjectIndex } from '../../engine/resolve';
 import { baseAttribute } from '../../fixtures/attributes';
 import { coarseChannel, modeCells } from '../../fixtures/profiles';
 import { BRAND } from '../../../shared/brand';
+import { DEFAULT_DIRECTOR_PROMPT } from '../prompts';
 import type { AiUsage } from '../usage';
 
 export const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
@@ -26,6 +27,7 @@ const target = z.object({
   tags: z.array(z.string()).optional(),
   limit: z.number().optional(),
   module: z.string().optional(),
+  exclude: z.object({ groupNames: z.array(z.string()).optional(), fixtureNames: z.array(z.string()).optional() }).optional(),
 });
 const look = z.object({ target, level: z.number().optional(), color: z.string().optional(), colors: z.array(z.string()).optional(), pan: z.number().optional(), tilt: z.number().optional() });
 const effect = z.object({
@@ -35,7 +37,7 @@ const effect = z.object({
   shape: z.enum(['circle', 'figure8', 'pan', 'tilt']).optional(),
 });
 const llmAction = z.object({
-  type: z.enum(['setIntensity', 'setColor', 'setPosition', 'setBeam', 'startEffect', 'stopEffect', 'adjustEffect', 'createScene', 'applyScene', 'createCue', 'createSequence', 'setBpm', 'releaseAi']),
+  type: z.enum(['setIntensity', 'adjustIntensity', 'setColor', 'setPosition', 'setBeam', 'startEffect', 'stopEffect', 'adjustEffect', 'createScene', 'applyScene', 'createCue', 'createSequence', 'setBpm', 'releaseAi']),
   target: target.optional(),
   level: z.number().optional(),
   color: z.string().optional(),
@@ -63,31 +65,15 @@ const llmAction = z.object({
   frost: z.number().optional(),
   iris: z.number().optional(),
   speedFactor: z.number().optional(),
+  /** adjustIntensity: multiplies the current level of each targeted fixture (0.8 = « baisse de 20 % »). */
+  factor: z.number().optional(),
 });
-export const llmPlanSchema = z.object({ understanding: z.string(), actions: z.array(llmAction) });
+export const llmPlanSchema = z.object({ understanding: z.string(), question: z.string().optional(), actions: z.array(llmAction) });
 const PLAN_JSON_SCHEMA = z.toJSONSchema(llmPlanSchema);
 
-const SYSTEM_PROMPT = `You are the lighting director assistant inside a DMX lighting console.
-You translate the operator's request into a short list of structured actions. You never output DMX values, code or commands outside the schema.
-
-Rules:
-- Answer with ONE JSON object only (no prose, no code fence) matching this JSON Schema:
-${JSON.stringify(PLAN_JSON_SCHEMA)}
-- Values are normalized 0..1 (level, pan, tilt, amplitude, offset, phaseSpread). Colours are "#RRGGBB". Fades/holds are seconds. speed is cycles per second.
-- Target fixtures only by the exact group names, fixture names or fixture types listed in the rig description. {"all": true} targets the whole rig.
-- Fixtures may carry "tags" (e.g. backlight, face, audience): target them with { "tags": ["backlight"] }.
-- Each fixture gives its stage "position" (x: left/right in metres, y: depth), "height" and "side" (left, right or center). Use them for spatial requests (left to right chases, "vise le chanteur"). Moving heads give "pan_degrees", "tilt_degrees" and "beam_angle": size pan/tilt sweeps to what the fixture can do. "cells" = addressable pixels of a bar; "colorWheelSlots" = the exact colours of its wheel.
-- Multi-head fixtures list their "modules" (e.g. main head + LED ring). Add "module": "<module name>" to a target to change only that head's colour/intensity.
-- Only use capabilities the fixtures have (see attributes). Movement effects (panTilt, randomMove, fan) need pan/tilt. Colour effects (including brightnessColor) need colour attributes.
-- fan spreads moving heads symmetrically from the centre and folds them back. bassFollow (dimmer follows the bass, amplitude = depth) and brightnessColor (colour from colors[0] when the music is dark to colors[1] when it is bright) only react while live audio or a track is analysed: say so in "understanding".
-- Never touch reset, lamp or other special/control functions; they are not available to you.
-- Strobe effects are only allowed when the rig description says strobeAllowed: true.
-- setBeam changes beam attributes of fixtures that have them: gobo = slot number on the gobo wheel (0 = open, see "gobos" for the slot count), prism true/false, zoom 0 (narrow) .. 1 (wide), focus/frost/iris 0..1.
-- The rig description gives the current look ("now": colour and level of lit fixtures) and "runningAiEffects": use them for relative requests (warmer, dimmer, slower...). adjustEffect re-times running AI effects (speedFactor > 1 faster, < 1 slower; filter with effectType or effectName); stopEffect stops them.
-- To recall an existing scene use applyScene with its exact name from "scenes"; do not recreate it.
-- Use setIntensity/setColor/setPosition for immediate changes, createScene (apply true to show it) for a reusable look, createSequence for timed or multi-step shows (hold = seconds before auto-advancing, omit for manual GO), startEffect for dynamic effects.
-- "understanding" is one or two sentences in French describing what you will do and any limitation (e.g. you cannot hear the music).
-- Keep proposals small and focused; at most 20 actions. Omit optional fields you do not need.`;
+/** Output format, always appended after the (editable) instructions: without it the answer cannot be parsed. */
+const FORMAT_RULE = `Answer with ONE JSON object only (no prose, no code fence) matching this JSON Schema:
+${JSON.stringify(PLAN_JSON_SCHEMA)}`;
 
 /** What is on stage right now: display colour/level per fixture id, and the AI effects running. */
 export interface LiveState {
@@ -287,6 +273,8 @@ export interface OpenRouterOptions {
 
 export interface ProviderResult {
   understanding: string;
+  /** Clarifying question when the request is ambiguous. */
+  question?: string;
   actions: unknown[];
   model: string;
   notices: string[];
@@ -365,8 +353,9 @@ export async function completeJson(system: string, user: string | unknown[], sch
   return { json: clean(extractJson(choice.message.content)), model, notices };
 }
 
-export async function proposeWithOpenRouter(prompt: string, rig: string, opts: OpenRouterOptions): Promise<ProviderResult> {
-  const system = `${SYSTEM_PROMPT}\n\nRig description:\n${rig}`;
+/** `instructions`: the operator's custom director prompt (Paramètres › Assistant), the built-in one by default. */
+export async function proposeWithOpenRouter(prompt: string, rig: string, opts: OpenRouterOptions & { instructions?: string | null }): Promise<ProviderResult> {
+  const system = `${opts.instructions ?? DEFAULT_DIRECTOR_PROMPT}\n\n${FORMAT_RULE}\n\nRig description:\n${rig}`;
   let r = await completeJson(system, prompt, 'lighting_plan', PLAN_JSON_SCHEMA, opts);
   let plan = llmPlanSchema.safeParse(r.json);
   if (!plan.success && opts.repair !== false) {
@@ -378,7 +367,7 @@ export async function proposeWithOpenRouter(prompt: string, rig: string, opts: O
     if (plan.success) r.notices.push('Réponse corrigée par une seconde requête (format non conforme la première fois).');
   }
   if (!plan.success) throw new OpenRouterError(`Réponse IA non conforme au schéma : ${plan.error.issues[0]?.path.join('.')} ${plan.error.issues[0]?.message}`, null);
-  return { understanding: plan.data.understanding, actions: plan.data.actions, model: r.model, notices: r.notices };
+  return { understanding: plan.data.understanding, ...(plan.data.question?.trim() ? { question: plan.data.question.trim() } : {}), actions: plan.data.actions, model: r.model, notices: r.notices };
 }
 
 /* ------------------------------------------------------------------ */

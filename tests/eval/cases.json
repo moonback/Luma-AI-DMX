@@ -1677,6 +1677,137 @@
       "expect": {
         "forbidTypes": []
       }
+    },
+    {
+      "category": "reference",
+      "prompt": "Divise par deux la vitesse de cet effet.",
+      "expect": {
+        "recognized": true,
+        "types": [
+          "adjustEffect"
+        ],
+        "forbidTypes": [
+          "setIntensity"
+        ]
+      }
+    },
+    {
+      "category": "reference",
+      "prompt": "Double la vitesse des effets.",
+      "expect": {
+        "recognized": true,
+        "types": [
+          "adjustEffect"
+        ]
+      }
+    },
+    {
+      "category": "reference",
+      "prompt": "Pas de rouge, mets du bleu.",
+      "expect": {
+        "recognized": true,
+        "types": [
+          "setColor"
+        ]
+      }
+    },
+    {
+      "category": "reference",
+      "prompt": "Mets les lyres en rouge pas les pars.",
+      "expect": {
+        "recognized": true,
+        "types": [
+          "setColor"
+        ]
+      }
+    },
+    {
+      "category": "reference",
+      "prompt": "Passe tout en bleu, mais garde les faces blanches.",
+      "expect": {
+        "recognized": true,
+        "types": [
+          "setColor"
+        ]
+      }
+    },
+    {
+      "category": "reference",
+      "prompt": "Baisse l’intensité des lyres de 20 %.",
+      "expect": {
+        "recognized": true,
+        "types": [
+          "setIntensity"
+        ]
+      }
+    },
+    {
+      "category": "reference",
+      "prompt": "Réduis un peu l’intensité.",
+      "expect": {
+        "recognized": true,
+        "types": [
+          "setIntensity"
+        ]
+      }
+    },
+    {
+      "category": "reference",
+      "prompt": "Baisse leur intensité de 20 %.",
+      "expect": {
+        "recognized": false
+      }
+    },
+    {
+      "category": "adversarial",
+      "prompt": "Fais quelque chose de plus énergique sans utiliser de chase.",
+      "expect": {
+        "recognized": true,
+        "forbidEffects": [
+          "chase"
+        ]
+      }
+    },
+    {
+      "category": "adversarial",
+      "prompt": "Mets du bleu partout, sans mouvement.",
+      "expect": {
+        "recognized": true,
+        "forbidEffects": [
+          "panTilt",
+          "randomMove"
+        ]
+      }
+    },
+    {
+      "category": "adversarial",
+      "prompt": "Ne change rien pour l’instant.",
+      "expect": {
+        "forbidTypes": [
+          "setIntensity",
+          "setColor",
+          "setPosition",
+          "setBeam",
+          "startEffect",
+          "stopEffect",
+          "adjustEffect",
+          "createScene",
+          "applyScene",
+          "createCue",
+          "createSequence",
+          "setBpm",
+          "releaseAi"
+        ]
+      }
+    },
+    {
+      "category": "adversarial",
+      "prompt": "Annule uniquement la dernière modification de l’assistant.",
+      "expect": {
+        "forbidTypes": [
+          "releaseAi"
+        ]
+      }
     }
   ]
 }

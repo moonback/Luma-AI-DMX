@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { outputConfigSchema } from '../protocols/config';
+import { ASSISTANT_VOICES } from '../ai/prompts';
 
 /** Rebindable keyboard actions. Bindings use the form "Ctrl+Shift+S", "Space", "Shift+Escape", "F5"… */
 export const SHORTCUT_ACTIONS = [
@@ -46,6 +47,9 @@ export function shortcutConflicts(bindings: Record<string, string>): string[][] 
   for (const [id, combo] of Object.entries(bindings)) if (combo) by.set(combo, [...(by.get(combo) ?? []), id]);
   return [...by.values()].filter((ids) => ids.length > 1);
 }
+
+/** Custom instruction text; a blank text means « use the built-in default » (null). */
+const customText = z.preprocess((v) => (typeof v === 'string' && !v.trim() ? null : v), z.string().max(20_000).nullable());
 
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
@@ -107,6 +111,17 @@ export const settingsSchema = z.object({
       monthlyBudget: z.number().min(0).max(10_000).nullable().default(null),
     })
     .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, autoSuggestIntents: false, fallbackToLocal: true, monthlyBudget: null }),
+  /** The assistant's identity: name and Gemini voice of the voice assistant, custom instructions (null = built-in default). */
+  assistant: z
+    .object({
+      name: z.string().trim().min(1).max(40).default('Luma'),
+      voice: z.enum(ASSISTANT_VOICES).default('Puck'),
+      directorPrompt: customText.default(null),
+      voicePrompt: customText.default(null),
+      /** Proposals are applied as soon as they are validated, without the « Appliquer » confirmation. Off by default. */
+      autoApply: z.boolean().default(false),
+    })
+    .default({ name: 'Luma', voice: 'Puck', directorPrompt: null, voicePrompt: null, autoApply: false }),
   audio: z.object({ deviceId: z.string().max(300).nullable().default(null) }).default({ deviceId: null }),
   /** External control: MIDI mappings (renderer, Web MIDI), OSC over UDP (main) and timecode chase of the timeline. */
   control: z

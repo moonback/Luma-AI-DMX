@@ -137,6 +137,7 @@ export const en: Record<MessageKey, string> = {
   'stage3d.solo': 'Solo',
   'stage3d.soloTitle': 'Dim the fixtures outside the selection (I)',
   'stage3d.frameSel': 'Frame the selection, or the whole stage without a selection (F)',
+  'stage3d.frame': 'Frame',
   'stage3d.present': 'Presentation mode: hide the interface (H)',
   'stage3d.presentExit': 'Leave presentation (H)',
   'stage3d.exposure': 'Exposure',

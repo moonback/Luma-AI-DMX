@@ -384,7 +384,7 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
 
         {/* Outils de vue */}
         <div className="stage3d-group stage3d-tools-group" role="group">
-          <button className="chip stage3d-btn" onClick={frameSelection} title={t('stage3d.frameSel')} aria-label={t('stage3d.frameSel')} data-testid="frame-sel"><Focus size={13} /> <span className="lbl">Cadrer</span></button>
+          <button className="chip stage3d-btn" onClick={frameSelection} title={t('stage3d.frameSel')} aria-label={t('stage3d.frameSel')} data-testid="frame-sel"><Focus size={13} /> <span className="lbl">{t('stage3d.frame')}</span></button>
           <button className={`chip stage3d-btn ${spin ? 'on' : ''}`} onClick={() => setSpin(!spin)} title={t('stage3d.spinTitle')} aria-pressed={spin} data-testid="spin"><Orbit size={13} /> <span className="lbl">{t('stage3d.spin')}</span></button>
           <button className={`chip stage3d-btn ${solo ? 'on' : ''}`} onClick={() => setSolo(!solo)} title={t('stage3d.soloTitle')} aria-pressed={solo} data-testid="solo"><ScanEye size={13} /> <span className="lbl">{t('stage3d.solo')}</span></button>
           <button className={`chip stage3d-btn ${prefs.room > 0 ? 'on' : ''}`} onClick={() => setPrefs({ room: prefs.room > 0 ? 0 : 0.7 })} title={t('stage3d.lightTitle')} aria-pressed={prefs.room > 0} data-testid="room-light"><SunMedium size={13} /> <span className="lbl">{t('stage3d.light')}</span></button>
