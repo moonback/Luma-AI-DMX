@@ -19,6 +19,7 @@ import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeRe
 import { screenMediaVersion } from '../../screenMedia';
 import { addSceneElement } from '../../sceneActions';
 import type { SceneRef } from '../../../core/visualizer/sceneEdit';
+import type { MessageKey } from '../../i18n';
 
 /*
  * Imperative three.js side of the 3D stage view: renderer, cameras, rig and environment objects, gizmo and pointer
@@ -37,7 +38,7 @@ const DEFAULT_PREFS: Prefs = { haze: 0.55, glow: true, pools: true, labels: fals
 
 /** Quality presets: a coherent set of rendering options selectable in one click. */
 export type QualityPresetId = 'edit' | 'balanced' | 'quality' | 'present';
-export const QUALITY_PRESETS: { id: QualityPresetId; labelKey: string; hintKey: string; patch: Partial<Prefs> }[] = [
+export const QUALITY_PRESETS: { id: QualityPresetId; labelKey: MessageKey; hintKey: MessageKey; patch: Partial<Prefs> }[] = [
   { id: 'edit',     labelKey: 'stage3d.preset.edit',     hintKey: 'stage3d.preset.editHint',     patch: { glow: false, pools: false, smoke: false, real: false, haze: 0.3,  exposure: 1,   ambience: 'work',    floor: 'matte'  } },
   { id: 'balanced', labelKey: 'stage3d.preset.balanced', hintKey: 'stage3d.preset.balancedHint', patch: { glow: true,  pools: true,  smoke: false, real: false, haze: 0.55, exposure: 1,   ambience: 'black',   floor: 'matte'  } },
   { id: 'quality',  labelKey: 'stage3d.preset.quality',  hintKey: 'stage3d.preset.qualityHint',  patch: { glow: true,  pools: true,  smoke: false, real: true,  haze: 0.65, exposure: 1,   ambience: 'black',   floor: 'lacquer'} },

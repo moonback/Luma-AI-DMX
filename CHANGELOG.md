@@ -8,6 +8,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 - Stage 3D : 4 préréglages de qualité de rendu en un clic (Édition, Équilibré, Qualité, Présentation).
 - Stage 3D : barre d'état enrichie (mode Orbite/Édition, compteur de projecteurs, grille active, indicateur de framerate déplacé depuis la barre d'outils).
 - Stage 3D : inspecteur contextuel escamotable affichant les propriétés géométriques et photométriques des projecteurs ou éléments de scène sélectionnés (position, hauteur, rotation/pan/tilt, couleur, intensité).
+- Stage 3D : internationalisation complète de l'interface 3D (barre d'outils, dialogues de rendu, réglages, menus et aide) en français et anglais.
 - Stage 3D : suite de tests unitaires dédiés `tests/unit/stage3d.test.ts` (persistance des préférences, préréglages de rendu, libération des géométries partagées, géométrie du plateau).
 
 ### Modifié

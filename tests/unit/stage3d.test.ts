@@ -117,8 +117,8 @@ describe('Stage 3D — Géométrie du plateau (stageGeometry)', () => {
     stageWidth: 10,
     stageDepth: 8,
     cyclo: true,
-    shape: 'proscenium',
-    thrust: 3,
+    shape: 'rect',
+    thrust: { width: 3, depth: 4 },
     trusses: [],
     props: [],
     markers: [],
@@ -149,7 +149,7 @@ describe('Stage 3D — Géométrie du plateau (stageGeometry)', () => {
 
   it('gère les formes avancées de scène (thrust et arena)', () => {
     const thrustGeom = stageGeometry({ ...baseVis, shape: 'thrust' }, []);
-    expect(thrustGeom.thrust).toBe(3);
+    expect(thrustGeom.thrust).toEqual({ width: 3, depth: 4 });
     expect(thrustGeom.arena).toBe(false);
 
     const arenaGeom = stageGeometry({ ...baseVis, shape: 'arena' }, []);
