@@ -99,7 +99,7 @@ function TemplatePicker({ vis }: { vis: Vis }) {
 /** Left column of the Stage page: title card, the Construire categories (always listed) and the catalogue of the active one. */
 export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) {
   const tr = useT();
-  const [cat, setCat] = useState<BuildCat | null>('point');
+  const [cat, setCat] = useState<BuildCat | null>(null);
   const [catsOpen, setCatsOpen] = useState(true);
   const [stageOpen, setStageOpen] = useState(false);
   const [stageTab, setStageTab] = useState<'dimensions' | 'templates'>('dimensions');
@@ -114,7 +114,6 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
         </div>
         <div className="row" style={{ gap: 4 }}>
           <span className="grow small muted">{tr('build.title')} · {tr('build.sub')}</span>
-          <button className="btn ghost sm icon" onClick={() => useStore.getState().setHelp('stage')} title={tr('stagePanel.wizardHint')} aria-label={tr('stagePanel.wizard')} data-testid="stage-wizard-open"><Wand2 size={14} /></button>
           <button className="btn ghost sm icon" onClick={() => useStore.getState().setStagePanels({ build: false })} title={tr('build.collapse')} aria-label={tr('build.collapse')} data-testid="build-collapse"><PanelLeftClose size={14} /></button>
         </div>
       </div>
@@ -124,69 +123,99 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
         </button>
         <EquipButton vis={vis} />
         <StageDimensionsBar vis={vis} open={stageOpen} onToggle={() => setStageOpen(!stageOpen)} />
-        {stageOpen && (
-          <div className="build-stage-expanded" data-testid="stage-dimensions-expanded">
-            <div className="build-stage-tabs" role="tablist">
-              <button
-                type="button"
-                className={`build-stage-tab ${stageTab === 'dimensions' ? 'on' : ''}`}
-                onClick={() => setStageTab('dimensions')}
-                role="tab"
-                aria-selected={stageTab === 'dimensions'}
-              >
-                <Shapes size={13} />
-                <span>Dimensions & Forme</span>
-              </button>
-              <button
-                type="button"
-                className={`build-stage-tab ${stageTab === 'templates' ? 'on' : ''}`}
-                onClick={() => setStageTab('templates')}
-                role="tab"
-                aria-selected={stageTab === 'templates'}
-              >
-                <LayoutTemplate size={13} />
-                <span>Modèles prêts à l'emploi ({SCENE_TEMPLATES.length})</span>
-              </button>
-            </div>
-            {stageTab === 'dimensions' ? (
-              <StageSettingsFields vis={vis} />
-            ) : (
-              <div className="build-stage-templates-wrap">
-                <TemplatePicker vis={vis} />
-                <label className="btn sm build-photo-btn" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
-                  <Camera size={13} />
-                  <span>{t('photo.button')}</span>
-                  <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = '';
-                    if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
-                  }} />
-                </label>
-              </div>
-            )}
+        <div
+          className="build-stage-expanded"
+          data-testid="stage-dimensions-expanded"
+          style={stageOpen ? undefined : { display: 'none' }}
+        >
+          <div className="build-stage-tabs" role="tablist">
+            <button
+              type="button"
+              className={`build-stage-tab ${stageTab === 'dimensions' ? 'on' : ''}`}
+              onClick={() => setStageTab('dimensions')}
+              role="tab"
+              aria-selected={stageTab === 'dimensions'}
+            >
+              <Shapes size={13} />
+              <span>Dimensions & Forme</span>
+            </button>
+            <button
+              type="button"
+              className={`build-stage-tab ${stageTab === 'templates' ? 'on' : ''}`}
+              onClick={() => setStageTab('templates')}
+              role="tab"
+              aria-selected={stageTab === 'templates'}
+            >
+              <LayoutTemplate size={13} />
+              <span>Modèles prêts à l'emploi ({SCENE_TEMPLATES.length})</span>
+            </button>
           </div>
-        )}
+          <div style={stageTab === 'dimensions' ? undefined : { display: 'none' }}>
+            <StageSettingsFields vis={vis} />
+          </div>
+          <div style={stageTab === 'templates' ? undefined : { display: 'none' }} className="build-stage-templates-wrap">
+            <TemplatePicker vis={vis} />
+            <label className="btn sm build-photo-btn" title={t('photo.buttonTitle')} data-testid="scene-from-photo">
+              <Camera size={13} />
+              <span>{t('photo.button')}</span>
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
+              }} />
+            </label>
+          </div>
+        </div>
         <div className="stage-card-body">
           {catsOpen && (
-            <nav className="build-cats" aria-label={tr('build.categories')}>
+            <nav
+              className="build-cats"
+              aria-label={tr('build.categories')}
+              style={current ? { display: 'none' } : undefined}
+            >
               {CATS.map((c) => (
-                <button key={c.id} className={`build-cat ${cat === c.id ? 'on' : ''}`} aria-pressed={cat === c.id} onClick={() => setCat(cat === c.id ? null : c.id)} data-testid={`build-cat-${c.id}`}>
+                <button
+                  key={c.id}
+                  className={`build-cat ${cat === c.id ? 'on' : ''}`}
+                  aria-pressed={cat === c.id}
+                  onClick={() => setCat(c.id)}
+                  data-testid={`build-cat-${c.id}`}
+                >
                   <span className="build-cat-icon">{c.icon}</span>
-                  <span className="build-cat-text"><b>{tr(`build.cat.${c.id}` as MessageKey)}</b><span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span></span>
+                  <span className="build-cat-text">
+                    <b>{tr(`build.cat.${c.id}` as MessageKey)}</b>
+                    <span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span>
+                  </span>
                 </button>
               ))}
             </nav>
           )}
-          {current ? (
-            <Catalogue key={current.id} cat={current} vis={vis} onBack={() => { setCat(null); setStageOpen(true); setStageTab('dimensions'); }} />
-          ) : (
-            <div className="scene-hint" style={{ padding: '14px 12px', textAlign: 'center' }}>
-              Choisissez une catégorie ci-dessus pour ajouter des projecteurs, structures ou décors à la scène.
-            </div>
+          {current && (
+            <Catalogue
+              key={current.id}
+              cat={current}
+              vis={vis}
+              onBack={() => setCat(null)}
+            />
           )}
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Hangs the hung fixtures (or the selection) evenly on the trusses; one undoable step. */
+function EquipButton({ vis }: { vis: Vis }) {
+  const { fixtures } = useResolved();
+  const selection = useStore((s) => s.selection);
+  if (!vis.trusses.length || !fixtures.length) return null;
+  return (
+    <div className="build-equip-bar">
+      <button className="btn sm primary build-equip-btn" onClick={() => equipRig(buildVisualModel(fixtures, {}))} data-testid="equip"
+        title="Répartir les projecteurs sur les structures : lyres en contre, projecteurs fixes en face (Ctrl+Z pour annuler)">
+        <Wand2 size={13} />{selection.length ? `Équiper avec la sélection (${selection.length})` : 'Équiper les structures'}
+      </button>
+    </div>
   );
 }
 
@@ -260,11 +289,10 @@ function Catalogue({ cat, vis, onBack }: { cat: (typeof CATS)[number]; vis: Vis;
   const title = tr(`build.cat.${cat.id}` as MessageKey);
   return (
     <section className="build-catalogue" data-testid={`catalogue-${cat.id}`} aria-label={tr('build.active')}>
-      <button className="build-back-top" type="button" onClick={onBack} data-testid="build-back" title="Revenir aux réglages du plateau et dimensions">
-        <ArrowLeft size={13} />
-        <span>Plateau & Scène ({vis.stageWidth} × {vis.stageDepth} m)</span>
+      <button className="stage-back-btn" type="button" onClick={onBack} data-testid="build-back" title="Revenir au choix des catégories">
+        <ArrowLeft size={16} />
+        <span>Retour aux catégories</span>
       </button>
-      <h3 className="build-active-title">{tr('build.active')}</h3>
       <div className="build-active-head">
         <span className="build-active-icon">{cat.icon}</span>
         <span className="build-cat-text"><b>{title}</b><span>{tr('build.activeSub', { cat: title.toLowerCase() })}</span></span>
