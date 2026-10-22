@@ -4,6 +4,8 @@ import { act } from './api';
 import { openDetachedStage } from './features/Visualizer';
 import { openDetachedConsole } from './features/LiveConsole';
 
+export { openDetachedStage, openDetachedConsole };
+
 export function newProjectFlow(): void {
   useStore.setState({ newProjectOpen: true });
 }

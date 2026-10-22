@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Bell, ChevronDown, ClipboardList, FilePlus, FolderOpen, Mic,
+  Bell, Box, ChevronDown, ClipboardList, FilePlus, FolderOpen, Mic,
   Moon, OctagonX, Play, Redo2, Save, Undo2,
 } from 'lucide-react';
 import { BRAND } from '../../shared/brand';
@@ -18,6 +18,7 @@ import {
   historyStep,
   releaseAllFlow,
   detachStageIfWanted,
+  openDetachedStage,
 } from '../projectActions';
 
 export function NewProjectDialog({ onClose }: { onClose: () => void }) {
@@ -267,6 +268,14 @@ export function TopBar() {
       <div className="top-right">
         <VoiceButton />
         <LicenseBadge />
+        <button
+          className="btn ghost icon"
+          data-testid="top-detach-stage3d"
+          title={tr('stagePage.detachHint')}
+          onClick={openDetachedStage}
+        >
+          <Box size={16} />
+        </button>
         <HelpButton />
         <button className="btn ghost icon" title={tr('top.alerts', { n: alerts })} onClick={toggleDiag} style={{ position: 'relative' }}>
           <Bell size={16} />
