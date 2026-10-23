@@ -60,11 +60,12 @@ const project = () => svc.getProject();
 const click = async (id: string) => rtlAct(async () => { fireEvent.click(screen.getByTestId(id)); });
 
 describe('Construire', () => {
-  it('présente exactement les cinq catégories, chacune ouvre son catalogue et revient à la liste', async () => {
+  it('présente exactement les huit catégories, chacune ouvre son catalogue et revient à la liste', async () => {
     render(<Visualizer />);
     const cats = within(screen.getByRole('navigation', { name: 'Catégories' })).getAllByRole('button');
-    expect(cats.map((b) => b.dataset.testid)).toEqual(['build-cat-point', 'build-cat-structure', 'build-cat-decor', 'build-cat-performer', 'build-cat-screen']);
-    for (const id of ['point', 'structure', 'decor', 'performer', 'screen']) {
+    const ids = ['point', 'structure', 'sound', 'backline', 'decor', 'performer', 'screen', 'accessory'];
+    expect(cats.map((b) => b.dataset.testid)).toEqual(ids.map((id) => `build-cat-${id}`));
+    for (const id of ids) {
       await click(`build-cat-${id}`);
       expect(screen.getByTestId(`catalogue-${id}`)).toBeTruthy();
       expect(screen.getByTestId(`build-cat-${id}`).getAttribute('aria-pressed')).toBe('true');
@@ -251,7 +252,7 @@ describe('Disposition', () => {
 
   it('Échap annule le placement sans rien créer', async () => {
     render(<Visualizer />);
-    await click('build-cat-decor');
+    await click('build-cat-sound');
     await click('lib-speaker');
     expect(useStore.getState().placing).not.toBeNull();
     await rtlAct(async () => { fireEvent.keyDown(document.body, { key: 'Escape' }); });

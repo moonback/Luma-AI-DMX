@@ -27,6 +27,12 @@ JSON UTF-8, indenté. Il est validé à l'ouverture par `projectSchema` ([src/co
 - Les profils intégrés sont référencés par leur `id`. Les profils importés sont **embarqués** dans `profiles`, ce qui garde le projet autonome.
 - **Aucune clé API ni aucun secret** n'est stocké dans un projet (vérifié par un test).
 
+## Scène (`visualizer`) : équipements
+- `props[]` : décors et équipements (`kind` parmi les types du catalogue `src/core/visualizer/equipment.ts`), centre `x`, `y` en mètres, encombrement `width` × `depth` × `height`, `elevation`, `rotation`, `color`.
+  Champs optionnels ajoutés sans changer de version (les anciens projets restent valides) : `params` (réglages propres au type, bornés et filtrés à l'enregistrement), `hidden`, `locked`, `model` (modèle GLB importé, en data URL, 4 Mo au plus).
+- `trusses[].section` : `square` (défaut) ou `triangle`. `screens[].cabinet` : côté d'un module de mur LED en mètres (0 = surface unie).
+- Un fichier qui utilise ces nouveaux types ou champs ne s'ouvre pas dans une version antérieure du logiciel (validation stricte des types).
+
 ## Versions et migrations
 | Version | Contenu |
 |---|---|

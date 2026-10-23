@@ -1,5 +1,6 @@
 import { performerSchema, propSchema, screenSchema, stageMarkerSchema, trussSchema, type Performer, type Project, type StageMarker, type StageProp, type StageScreen, type Truss } from '../model/schemas';
-import { hangHeight, JUNCTION_ARMS, nearestOnTruss, trussSegments, type P2 } from './truss';
+import { hangHeight, JUNCTION_ARMS, nearestOnTruss, SNAP_DISTANCE, trussSegments, type P2 } from './truss';
+import { EQUIPMENT, sanitizeParams } from './equipment';
 
 /**
  * Scene-element editing shared by the 2D plan, the 3D view and the scene panel: creation at a free spot,
@@ -11,7 +12,8 @@ export interface SceneRef { kind: SceneKind; id: string }
 /** What a click (or drop) on the stage will create: a scene element (kind + optional library preset) or a fixture of a profile. */
 export type PlaceSpec =
   | { kind: SceneKind; label: string; preset?: Record<string, unknown> }
-  | { kind: 'fixture'; label: string; profileId: string; mode: string };
+  | { kind: 'fixture'; label: string; profileId: string; mode: string }
+  | { kind: 'assembly'; label: string; assembly: string };
 export type Element = StageMarker | Truss | Performer | StageScreen | StageProp;
 
 const LIST = { marker: 'markers', truss: 'trusses', performer: 'performers', screen: 'screens', prop: 'props' } as const;
@@ -58,8 +60,11 @@ export function newElement(vis: Vis, kind: SceneKind, id: () => string, at?: P2,
       case 'prop': return { id: id(), name, kind: 'riser', ...p, width: 2, depth: 1, height: 0.4, elevation: 0, rotation: 0, color: '#2a2f3a' };
     }
   })();
+  const merged: Record<string, unknown> = { ...el, ...over };
+  // Set-piece settings are checked against the catalogue of their kind (unknown keys dropped, values clamped).
+  if (kind === 'prop') { const params = sanitizeParams(merged.kind as StageProp['kind'], merged.params as Record<string, unknown>); if (Object.keys(params).length) merged.params = params; else delete merged.params; }
   // The schema keeps a malformed preset out of the project.
-  return SCHEMA[kind].parse({ ...el, ...over }) as Element;
+  return SCHEMA[kind].parse(merged) as Element;
 }
 
 /** Visualizer patch that appends `el` to its list. */
@@ -240,3 +245,49 @@ export function equipTrusses(
 /** Visualizer patch that changes fields of one element (moves, resizes). */
 export const withPatched = (vis: Vis, ref: SceneRef, patch: Partial<Element>): Partial<Vis> =>
   ({ [LIST[ref.kind]]: items(vis, ref.kind).map((x) => (x.id === ref.id ? { ...x, ...patch } : x)) });
+
+/* ---------- Set pieces: snapping under trusses, mirror, alignment ---------- */
+
+/** Gap between the truss axis and the top of a piece hung under it (half the truss section). */
+const UNDER_TRUSS = 0.18;
+
+/**
+ * Flown equipment (line array, hoist) dropped near a truss: centred under the closest truss point, its top just under
+ * the truss (a hoist sits on it). Null when the kind does not hang or no truss is within the snapping distance.
+ * A visual placement aid only: it says nothing about loads or rigging safety.
+ */
+export function snapPropToTruss(p: StageProp, trusses: readonly Truss[], max = SNAP_DISTANCE): { x: number; y: number; elevation: number; truss: Truss } | null {
+  if (!EQUIPMENT[p.kind]?.hangable) return null;
+  let best: { x: number; y: number; dist: number; truss: Truss } | null = null;
+  for (const t of trusses) {
+    if (t.shape === 'totem') continue;
+    const n = nearestOnTruss(t, p.x, p.y);
+    if (n.dist <= max && (!best || n.dist < best.dist)) best = { x: n.x, y: n.y, dist: n.dist, truss: t };
+  }
+  if (!best) return null;
+  const top = p.kind === 'hoist' ? best.truss.height + UNDER_TRUSS : best.truss.height - UNDER_TRUSS - p.height;
+  return { x: r2(best.x), y: r2(best.y), elevation: r2(Math.max(0, Math.min(20, top))), truss: best.truss };
+}
+
+/** Mirror copy across the stage centre line (jardin ↔ cour): x and rotation flipped, new id and mirrored name. */
+export function mirrorProp(p: StageProp, id: () => string): StageProp {
+  const swap = (n: string) => (/jardin/i.test(n) ? n.replace(/jardin/i, 'cour') : /cour/i.test(n) ? n.replace(/cour/i, 'jardin') : `${n} (miroir)`);
+  return propSchema.parse({ ...structuredClone(p), id: id(), name: swap(p.name).slice(0, 80), x: r2(-p.x), rotation: r2(-p.rotation) });
+}
+
+export type AlignMode = 'center' | 'front' | 'back' | 'left' | 'right' | 'floor';
+
+/** Placement patch aligning a set piece on the stage: centre line, stage lip, back, sides, or down on the floor. */
+export function alignProp(p: StageProp, vis: Pick<Vis, 'stageWidth' | 'stageDepth'>, mode: AlignMode): Partial<StageProp> {
+  // Half extents of the rotated footprint along x and y.
+  const a = (p.rotation * Math.PI) / 180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+  const hx = (p.width * c + p.depth * s) / 2, hy = (p.width * s + p.depth * c) / 2;
+  switch (mode) {
+    case 'center': return { x: 0 };
+    case 'front': return { y: r2(hy) };
+    case 'back': return { y: r2(vis.stageDepth - hy) };
+    case 'left': return { x: r2(-vis.stageWidth / 2 + hx) };
+    case 'right': return { x: r2(vis.stageWidth / 2 - hx) };
+    default: return { elevation: 0 };
+  }
+}

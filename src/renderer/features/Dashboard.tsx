@@ -1,7 +1,7 @@
 import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useT } from '../i18n';
-import { buildSceneFromText } from '../sceneActions';
+import { describeScene } from '../sceneActions';
 import { TEXT_SCENE_EXAMPLES } from '../../core/visualizer/sceneFromText';
 import { useStore } from '../store';
 import { newProjectFlow } from '../App';
@@ -29,7 +29,7 @@ function SceneFromText() {
   const [busy, setBusy] = useState(false);
   const build = async () => {
     setBusy(true);
-    try { if (await buildSceneFromText(text)) setText(''); } finally { setBusy(false); }
+    try { if (await describeScene(text)) setText(''); } finally { setBusy(false); }
   };
   return (
     <Panel title={tr('textScene.title')}>

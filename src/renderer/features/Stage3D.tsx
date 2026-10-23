@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Camera, CircleStop, Cloud, Users, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Orbit, Plus, Presentation, Rotate3d, ScanEye, SlidersHorizontal, Sparkles, SunMedium, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
+import { Camera, CircleStop, FlipHorizontal2, Lock, Cloud, Users, Lightbulb, Link2, Moon, Crosshair, Copy, Expand, Eye, Focus, ImageDown, Move3d, Orbit, Plus, Presentation, Rotate3d, ScanEye, SlidersHorizontal, Sparkles, SunMedium, Tag, Sun, Trash2, TriangleAlert, Video, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { act, newId } from '../api';
 import { useResolved } from '../components/ui';
@@ -11,13 +11,16 @@ import { audienceGlare } from '../../core/visualizer/beam';
 import { stageGeometry } from './stage3d/environment';
 import { AMBIENCES, FLOORS, LIGHT_BUDGET, type AmbienceId, type FloorId } from './stage3d/quality';
 import { DARK_LEVEL, performerLight } from '../../core/visualizer/lighting';
-import { acceptLibraryDrag, dropLibraryItem, duplicateSceneElement, hangFixture, removeSceneElement } from '../sceneActions';
+import { acceptLibraryDrag, dropLibraryItem, duplicateSceneElement, hangFixture, mirrorSceneElement, removeSceneElement } from '../sceneActions';
+import { PROP_KIND_LABEL } from '../../core/visualizer/library';
+import { withPatched } from '../../core/visualizer/sceneEdit';
 import { findElement, SCENE_LABEL, type SceneRef } from '../../core/visualizer/sceneEdit';
 import { GRIDS, QUALITY_PRESETS, VIEWS, loadPrefs, mountStage3D, savePrefs, type CtxTarget, type Prefs, type StageApi } from './stage3d/scene';
 
 /** Edit-mode right-click menu on a fixture, a truss or a set piece. */
 function ContextMenu({ ctx, model, vis, patch, onClose }: { ctx: { x: number; y: number; target: CtxTarget }; model: readonly VisualFixture[]; vis: Project['visualizer']; patch: readonly Fixture[]; onClose: () => void }) {
   const [hanging, setHanging] = useState(false);
+  const tr = useT();
   const t = ctx.target;
   const f = t.kind === 'fixture' ? model.find((x) => x.id === t.id) : undefined;
   const fixture = t.kind === 'fixture' ? patch.find((x) => x.id === t.id) : undefined;
@@ -50,6 +53,8 @@ function ContextMenu({ ctx, model, vis, patch, onClose }: { ctx: { x: number; y:
           )}
         </>
       )}
+      {prop && <button role="menuitem" className="btn ghost sm" onClick={run(() => mirrorSceneElement(t as SceneRef))} data-testid="ctx-mirror"><FlipHorizontal2 size={12} />{tr('equip.mirror')}</button>}
+      {prop && <button role="menuitem" className={`btn ghost sm ${prop.locked ? 'on' : ''}`} onClick={run(() => void act({ type: 'project.update', visualizer: withPatched(vis, t as SceneRef, { locked: !prop.locked }) }))} data-testid="ctx-lock"><Lock size={12} />{tr(prop.locked ? 'equip.unlock' : 'equip.lock')}</button>}
       <button role="menuitem" className="btn ghost sm" onClick={run(() => useStore.getState().frameOn(at))} data-testid="ctx-frame"><Focus size={12} />Centrer la vue</button>
       {f && <button role="menuitem" className="btn ghost sm" onClick={run(() => useStore.getState().setBeamView(f.id))} data-testid="ctx-beam"><Crosshair size={12} />Vue projecteur</button>}
     </div>
@@ -156,7 +161,7 @@ function Inspector3D({
           <div className="stage3d-inspector-grid">
             <div className="stage3d-inspector-cell">
               <span className="dim">{t('stage3d.inspectorCat')}</span>
-              <span>{SCENE_LABEL[sceneSel.kind]}</span>
+              <span>{sceneSel.kind === 'prop' && 'kind' in elem ? PROP_KIND_LABEL[(elem as { kind: keyof typeof PROP_KIND_LABEL }).kind] : SCENE_LABEL[sceneSel.kind]}</span>
             </div>
             <div className="stage3d-inspector-cell">
               <span className="dim">{t('stage3d.inspectorX')}</span>

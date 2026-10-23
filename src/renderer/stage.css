@@ -238,3 +238,27 @@ button.stage-card-head:hover h2 { color: #fff; }
 .stage-delete:hover:not(:disabled) { border-color: rgba(239, 68, 68, 0.6); background: var(--err-soft); color: #fca5a5; }
 /* The inspector head already names the fixture: hide the card's own title row. */
 .inspector [data-testid='stage3d-info'] > .row.between:first-child { display: none; }
+
+/* Equipment library: tiles with thumbnail, favourite and quick add; global search; scene assistant; piece properties. */
+.equip-tile { position: relative; padding: 0; }
+.equip-tile-main { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: inherit; padding: 8px 4px 6px; background: none; border: 0; color: inherit; font: inherit; text-align: center; cursor: grab; }
+.equip-tile-main:active { cursor: grabbing; }
+.equip-tile-main:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; border-radius: var(--radius-sm); }
+.equip-tile-fav, .equip-tile-add { position: absolute; top: 3px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity var(--dur), color var(--dur), background var(--dur); }
+.equip-tile-fav { left: 3px; }
+.equip-tile-add { right: 3px; }
+.equip-tile:hover .equip-tile-fav, .equip-tile:hover .equip-tile-add, .equip-tile-fav:focus-visible, .equip-tile-add:focus-visible, .equip-tile-fav.on { opacity: 1; }
+.equip-tile-fav.on { color: var(--warn); }
+.equip-tile-fav.on svg { fill: currentColor; }
+.equip-tile-fav:hover, .equip-tile-add:hover { background: var(--panel-3); color: var(--text); }
+.lib-thumb { width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45)); }
+.lib-glyph-icon { display: grid; place-items: center; color: var(--text-2); }
+.lib-glyph-icon svg { width: 70%; height: 70%; }
+.equip-home { display: flex; flex-direction: column; gap: 8px; }
+.equip-subhead { display: flex; align-items: center; gap: 5px; margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-3); }
+.scene-assistant { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-2); }
+.scene-assistant textarea { resize: vertical; min-height: 46px; padding: 6px 8px; font-size: 12px; }
+.equip-params-head { margin-top: 4px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; color: var(--text-3); }
+.equip-model { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.equip-model.warn > span { color: var(--warn); }
+.equip-rigging { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 5px; margin: 2px 0 0; color: var(--text-3); }

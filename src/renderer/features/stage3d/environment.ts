@@ -5,6 +5,8 @@ import type { Project, StageMarker, StageProp, Truss } from '../../../core/model
 import { JUNCTION_ARMS, trussSupports } from '../../../core/visualizer/truss';
 import { labelSprite } from './rig';
 import { DECK_TILE_M, textures } from './textures';
+import { buildEquipment } from './equipment';
+import { numParam, boolParam } from '../../../core/visualizer/equipment';
 
 /**
  * Stage set: deck, back wall (cyclorama catching the light), wings, audience floor, and box trusses built from
@@ -23,11 +25,15 @@ export function stageGeometry(vis: Project['visualizer'], fixtures: readonly Vis
   };
 }
 
-function boxTruss(length: number, mat: THREE.Material, lattice: THREE.Material): THREE.Group {
+/** Truss chords (y, z) of a triangular section: apex up, flat side down (29 cm sides). */
+const TRIANGLE: [number, number][] = [[0.145, 0], [-0.105, 0.145], [-0.105, -0.145]];
+
+function boxTruss(length: number, mat: THREE.Material, lattice: THREE.Material, section: Truss['section'] = 'square'): THREE.Group {
   const g = new THREE.Group();
   const w = 0.29;
   const chord = new THREE.CylinderGeometry(0.024, 0.024, length, 8);
   chord.rotateZ(Math.PI / 2);
+  if (section === 'triangle') return triTruss(g, length, chord, mat, lattice);
   for (const [y, z] of [[w / 2, w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [-w / 2, -w / 2]] as const) {
     const m = new THREE.Mesh(chord, mat);
     m.position.set(0, y, z);
@@ -42,6 +48,29 @@ function boxTruss(length: number, mat: THREE.Material, lattice: THREE.Material):
     const h = w / 2;
     if (i % 2) { zag([h, h], [-h, h]); zag([h, -h], [-h, -h]); zag([h, h], [h, -h]); zag([-h, h], [-h, -h]); }
     else { zag([-h, h], [h, h]); zag([-h, -h], [h, -h]); zag([h, -h], [h, h]); zag([-h, -h], [-h, h]); }
+  }
+  const lines = new THREE.BufferGeometry();
+  lines.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  g.add(new THREE.LineSegments(lines, lattice));
+  return g;
+}
+
+/** Three chords and a zig-zag lattice on the three faces. */
+function triTruss(g: THREE.Group, length: number, chord: THREE.BufferGeometry, mat: THREE.Material, lattice: THREE.Material): THREE.Group {
+  for (const [y, z] of TRIANGLE) {
+    const m = new THREE.Mesh(chord, mat);
+    m.position.set(0, y, z);
+    g.add(m);
+  }
+  const pts: number[] = [];
+  const steps = Math.max(2, Math.round(length / 0.5));
+  for (let i = 0; i < steps; i++) {
+    const x0 = -length / 2 + (i * length) / steps, x1 = -length / 2 + ((i + 1) * length) / steps;
+    for (let f = 0; f < 3; f++) {
+      const a = TRIANGLE[f]!, b = TRIANGLE[(f + 1) % 3]!;
+      const [p, q] = i % 2 ? [a, b] : [b, a];
+      pts.push(x0, p[0], p[1], x1, q[0], q[1]);
+    }
   }
   const lines = new THREE.BufferGeometry();
   lines.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
@@ -68,23 +97,23 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
     g.add(new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.31, 0.31), mat));
     for (const deg of arms) {
       const a = THREE.MathUtils.degToRad(deg);
-      add(boxTruss(t.length, mat, lattice), Math.cos(a) * r, -Math.sin(a) * r, a);
+      add(boxTruss(t.length, mat, lattice, t.section), Math.cos(a) * r, -Math.sin(a) * r, a);
     }
   } else if (t.shape === 'totem') {
     // Vertical tower from the floor to the truss height, with a base plate and a top plate.
-    const tower = boxTruss(t.height, mat, lattice);
+    const tower = boxTruss(t.height, mat, lattice, t.section);
     tower.rotation.z = Math.PI / 2;
     tower.position.set(0, -t.height / 2, 0);
     g.add(tower);
     const base = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 0.6), mat);
     base.position.y = 0.01 - t.height;
     g.add(base, new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.34), mat));
-  } else if (t.shape === 'line') add(boxTruss(t.length, mat, lattice), 0, 0, 0);
+  } else if (t.shape === 'line') add(boxTruss(t.length, mat, lattice, t.section), 0, 0, 0);
   else if (t.shape === 'square') {
-    add(boxTruss(t.length, mat, lattice), 0, r, 0);
-    add(boxTruss(t.length, mat, lattice), 0, -r, 0);
-    add(boxTruss(t.length, mat, lattice), r, 0, Math.PI / 2);
-    add(boxTruss(t.length, mat, lattice), -r, 0, Math.PI / 2);
+    add(boxTruss(t.length, mat, lattice, t.section), 0, r, 0);
+    add(boxTruss(t.length, mat, lattice, t.section), 0, -r, 0);
+    add(boxTruss(t.length, mat, lattice, t.section), r, 0, Math.PI / 2);
+    add(boxTruss(t.length, mat, lattice, t.section), -r, 0, Math.PI / 2);
   } else {
     const n = 16;
     const chord = 2 * r * Math.sin(Math.PI / n);
@@ -92,7 +121,7 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
       const a = ((i + 0.5) * 2 * Math.PI) / n;
       const mid = r * Math.cos(Math.PI / n);
       // Local x of the segment along the tangent of the circle.
-      add(boxTruss(chord + 0.05, mat, lattice), mid * Math.cos(a), mid * Math.sin(a), -(a + Math.PI / 2));
+      add(boxTruss(chord + 0.05, mat, lattice, t.section), mid * Math.cos(a), mid * Math.sin(a), -(a + Math.PI / 2));
     }
   }
   // Supports in the truss frame (trussSupports gives stage coordinates: undo the placement).
@@ -130,6 +159,13 @@ function buildProp(p: StageProp, selected: boolean): THREE.Group {
   g.name = propObjectName(p.id);
   g.position.set(p.x, p.elevation, -p.y);
   g.rotation.y = THREE.MathUtils.degToRad(p.rotation);
+  // Equipment kinds (and imported GLB models) have their own detailed models.
+  const model = buildEquipment(p, selected);
+  if (model) {
+    g.add(model);
+    g.traverse((o) => { o.userData.propId = p.id; });
+    return g;
+  }
   const mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.8, metalness: 0.1, emissive: selected ? 0x3b1f8a : 0x000000 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x24272e, roughness: 0.9, emissive: selected ? 0x3b1f8a : 0x000000 });
   const { width: w, depth: d, height: h } = p;
@@ -177,7 +213,8 @@ function buildProp(p: StageProp, selected: boolean): THREE.Group {
       // Folded cloth: a vertical sheet waved along its width.
       const geo = new THREE.PlaneGeometry(w, h, Math.max(8, Math.round(w * 8)), 1);
       const pos = geo.attributes.position!;
-      for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * 9) * Math.min(0.08, d));
+      const folds = numParam(p, 'folds', 9);
+      for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * folds) * Math.min(0.08, d));
       geo.computeVertexNormals();
       const cloth = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: p.color, roughness: 1, side: THREE.DoubleSide, emissive: selected ? 0x3b1f8a : 0x000000 }));
       cloth.position.y = h / 2;
@@ -193,6 +230,8 @@ function buildProp(p: StageProp, selected: boolean): THREE.Group {
     default: {
       // Riser and box: a solid block; a riser gets a light edge so its outline reads in the dark.
       const b = box(w, h, d, 0, h / 2, 0);
+      // Skirt: black cloth around the sides, just under the deck top.
+      if (p.kind === 'riser' && boolParam(p, 'skirt')) box(w + 0.01, Math.max(0.01, h - 0.02), d + 0.01, 0, Math.max(0.01, h - 0.02) / 2, 0, new THREE.MeshStandardMaterial({ color: 0x050507, roughness: 1, emissive: selected ? 0x3b1f8a : 0x000000 }));
       if (p.kind === 'riser') b.add(new THREE.LineSegments(new THREE.EdgesGeometry(b.geometry), new THREE.LineBasicMaterial({ color: selected ? 0xa78bfa : 0x4b5570 })));
     }
   }
@@ -292,7 +331,7 @@ export function buildEnvironment(
   }
 
   for (const t of trusses) env.add(buildTruss(t, t.id === selected));
-  for (const p of props) env.add(buildProp(p, p.id === selected));
+  for (const p of props) if (!p.hidden) env.add(buildProp(p, p.id === selected));
 
   return env;
 }
@@ -359,11 +398,11 @@ export function setLowFog(g: THREE.Group, time: number, density: number): void {
 export function disposeGroup(g: THREE.Object3D): void {
   g.traverse((o) => {
     const m = o as THREE.Mesh;
-    m.geometry?.dispose();
+    // Shared unit geometries and imported models stay cached for the next build.
+    if (!m.geometry?.userData.shared) m.geometry?.dispose();
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
     // Sprite labels own their canvas texture.
     if (o instanceof THREE.Sprite) o.material.map?.dispose();
-    if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-    else mat?.dispose();
+    for (const x of Array.isArray(mat) ? mat : mat ? [mat] : []) if (!x.userData.shared) x.dispose();
   });
 }

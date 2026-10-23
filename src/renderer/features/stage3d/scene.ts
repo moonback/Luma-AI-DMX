@@ -19,6 +19,10 @@ import { LIGHT_BUDGET, RealLights, applyAmbience, buildFloorReflector, disposeRe
 import { buildCrowd, disposeCrowd, updateCrowd, type Crowd } from './crowd';
 import { screenMediaVersion } from '../../screenMedia';
 import { placeAt } from '../../sceneActions';
+import { VIEWS, download, stamp, viewPose, type ViewId } from './views';
+import { disposeShared } from './equipment/kit';
+import { modelVersion } from './equipment/models';
+import { snapPropToTruss } from '../../../core/visualizer/sceneEdit';
 import type { SceneRef } from '../../../core/visualizer/sceneEdit';
 import type { MessageKey } from '../../i18n';
 
@@ -28,10 +32,7 @@ import type { MessageKey } from '../../i18n';
  * and the `ui` callbacks.
  */
 
-export type ViewId = 'foh' | 'front' | 'top' | 'left' | 'right';
-export const VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'foh', label: 'Régie' }, { id: 'front', label: 'Face' }, { id: 'top', label: 'Dessus' }, { id: 'left', label: 'Jardin' }, { id: 'right', label: 'Cour' },
-];
+export { VIEWS, type ViewId } from './views';
 
 /** `view`: a built-in camera id or the id of a view saved in the project. */
 export interface Prefs { haze: number; glow: boolean; pools: boolean; labels: boolean; smoke: boolean; view: string; grid: number; real: boolean; ambience: AmbienceId; floor: FloorId; exposure: number; room: number; crowd: boolean }
@@ -76,30 +77,12 @@ export function savePrefs(p: Prefs): void {
   }
 }
 
-function viewPose(id: ViewId, st: StageGeometry): { pos: THREE.Vector3; target: THREE.Vector3 } {
-  const { width: W, wallHeight: H } = st;
-  // Frame the whole playing area: deck plus thrust.
-  const front = st.thrust?.depth ?? 0;
-  const D = st.depth + front;
-  const span = Math.max(W, D);
-  const target = new THREE.Vector3(0, Math.min(2, H / 3), front - D / 2);
-  switch (id) {
-    case 'front': return { pos: new THREE.Vector3(0, 1.7, front + span * 0.9), target };
-    case 'top': return { pos: new THREE.Vector3(0, span * 1.6, target.z + 0.01), target: new THREE.Vector3(0, 0, target.z) };
-    case 'left': return { pos: new THREE.Vector3(-span * 1.1, H * 0.6, target.z), target };
-    case 'right': return { pos: new THREE.Vector3(span * 1.1, H * 0.6, target.z), target };
-    default: return { pos: new THREE.Vector3(0, H * 0.75, front + span * 1.25), target };
-  }
+/** Change key of the set pieces, memoised per list (an imported model counts by its size, not its megabytes of text). */
+let lastProps: readonly StageProp[] | null = null, lastPropsKey = '';
+function propsKey(props: readonly StageProp[]): string {
+  if (props !== lastProps) { lastProps = props; lastPropsKey = JSON.stringify(props, (k, v: unknown) => (k === 'model' && typeof v === 'string' ? v.length : v)); }
+  return lastPropsKey;
 }
-
-
-function download(url: string, name: string): void {
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-}
-const stamp = () => new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
 
 export type CtxTarget = SceneRef | { kind: 'fixture'; id: string };
 
@@ -213,13 +196,16 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     const snap = latest.current.tool === 'translate' ? snapTrussEnds(after, trusses) : null;
     return snap ? { before, after: { ...after, x: snap.x, y: snap.y, height: snap.height }, joint: snap.to } : { before, after };
   };
-  const editedProp = (): { before: StageProp; after: StageProp } | null => {
+  const editedProp = (): { before: StageProp; after: StageProp; hang?: string } | null => {
     const id = attached.startsWith('prop:') ? attached.split(':')[1]! : null;
     const before = id ? latest.current.vis.props.find((x) => x.id === id) : undefined;
     const obj = tc.object;
     if (!before || !obj) return null;
     const p = placementOf(obj);
-    return { before, after: { ...before, x: p.x, y: p.y, elevation: r2(clamp(p.height, 0, 20)), rotation: p.rotation } };
+    const after = { ...before, x: p.x, y: p.y, elevation: r2(clamp(p.height, 0, 20)), rotation: p.rotation };
+    // Flown equipment moved close to a truss hangs under it.
+    const hang = latest.current.tool === 'translate' ? snapPropToTruss(after, latest.current.vis.trusses) : null;
+    return { before, after: hang ? { ...after, x: hang.x, y: hang.y, elevation: hang.elevation } : after, hang: hang?.truss.name };
   };
   const onChange = () => {
     const obj = tc.object;
@@ -232,7 +218,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       setDims(describe(p, snap ? ` · accroche : ${snap.truss.name}` : ''));
     } else if (attached.startsWith('prop:')) {
       const pr = editedProp();
-      if (pr) setDims(describe({ ...p, height: pr.after.elevation }, ' (élévation)'));
+      if (pr) setDims(describe({ ...p, height: pr.after.elevation }, pr.hang ? ` · accroche : ${pr.hang}` : ' (élévation)'));
     } else {
       const tr = editedTruss();
       if (!tr) return;
@@ -437,7 +423,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     const now = performance.now();
     const { model: m, selection: sel, groupFilter: gf, prefs: p, stage: st, vis: cfg, follow: fid, edit: editing, tool: tl, selSet: selS, spin, solo } = latest.current;
     // Environment follows the stage layout, stage points, trusses, set pieces and the selection (fixtures never add a truss).
-    const k = `${JSON.stringify(st)}|${JSON.stringify(cfg.markers)}|${JSON.stringify(cfg.trusses)}|${JSON.stringify(cfg.props)}|${selS?.id ?? ''}`;
+    const k = `${JSON.stringify(st)}|${JSON.stringify(cfg.markers)}|${JSON.stringify(cfg.trusses)}|${propsKey(cfg.props)}|${selS?.id ?? ''}|${modelVersion()}`;
     if (k !== envKey) {
       if (env) { scene.remove(env); disposeGroup(env); }
       if (fog) { scene.remove(fog); disposeGroup(fog); }
@@ -506,7 +492,8 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       if (k2 >= 1) anim = null;
     }
     // Gizmo target: the selected truss, else the single selected fixture (edit mode only).
-    const target = !editing || fid ? '' : selS ? `${selS.kind}:${selS.id}:${env?.uuid}` : sel.length === 1 && m.some((f) => f.id === sel[0]) ? `fixture:${sel[0]}` : '';
+    const locked = selS?.kind === 'prop' && cfg.props.find((x) => x.id === selS.id)?.locked;
+    const target = !editing || fid || locked ? '' : selS ? `${selS.kind}:${selS.id}:${env?.uuid}` : sel.length === 1 && m.some((f) => f.id === sel[0]) ? `fixture:${sel[0]}` : '';
     if (target !== attached && !dragging) {
       attached = target;
       const obj = selS && !target.startsWith('fixture:') && target ? env?.getObjectByName(selS.kind === 'truss' ? trussObjectName(selS.id) : propObjectName(selS.id)) : target ? proxy : undefined;
@@ -591,6 +578,7 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
     real.dispose();
     disposeTextures();
     disposeGeometries();
+    disposeShared();
     composer.dispose();
     renderer.dispose();
     renderer.domElement.remove();

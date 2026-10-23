@@ -6,13 +6,15 @@ import { confirmAction, useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
 import { hangHeight, nearestOnTruss, snapToTrusses, snapTrussEnds, type P2 } from '../core/visualizer/truss';
-import { MAX_UNIVERSES, type Fixture, type Project, type Truss } from '../core/model/schemas';
+import { MAX_UNIVERSES, type Fixture, type Project, type StageProp, type Truss } from '../core/model/schemas';
+import { assembly as assemblyOf, buildAssembly, withAssembly, type AssemblyId } from '../core/visualizer/assemblies';
 import { ProfileLibrary, channelCount } from '../core/fixtures/profiles';
 import { findFreeAddress } from '../core/fixtures/patch';
 import { sceneFromText } from '../core/visualizer/sceneFromText';
+import { isAdditionRequest, planSceneAdditions } from '../core/visualizer/sceneAdditions';
 import { libraryItem } from '../core/visualizer/library';
 import {
-  SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, newElement, parseElement, serializeElement, withElement, withoutElement,
+  SCENE_LABEL, canAdd, cloneElement, equipTrusses, findElement, mirrorProp, newElement, parseElement, serializeElement, snapPropToTruss, withElement, withoutElement,
   type EquipFixture, type EquipOptions, type PlaceSpec, type SceneKind, type SceneRef,
 } from '../core/visualizer/sceneEdit';
 
@@ -36,13 +38,45 @@ export function addSceneElement(kind: SceneKind, at?: P2, preset?: Record<string
   // A truss piece placed next to another one joins it end to end, at its height.
   const snap = kind === 'truss' ? snapTrussEnds(el as Truss, v.trusses) : null;
   if (snap) Object.assign(el, { x: snap.x, y: snap.y, height: snap.height });
+  // Flown equipment (line array, hoist) placed near a truss hangs under it.
+  const hang = kind === 'prop' && at ? snapPropToTruss(el as StageProp, v.trusses) : null;
+  if (hang) Object.assign(el, { x: hang.x, y: hang.y, elevation: hang.elevation });
   void act({ type: 'project.update', visualizer: withElement(v, kind, el) }).then((r) => r && st.setSceneSel({ kind, id: el.id }));
 }
 
 /** Creates what the placement spec describes at a stage point (click or drop on the 2D plan / 3D view). */
 export function placeAt(spec: PlaceSpec, at: P2): void {
   if (spec.kind === 'fixture') void addFixtureAt(spec.profileId, spec.mode, at);
+  else if (spec.kind === 'assembly') addAssembly(spec.assembly, at);
   else addSceneElement(spec.kind, at, spec.preset);
+}
+
+/** Adds a ready-made assembly (goalpost, roof, PA system…) centred on `at` (stage centre when absent); one undo step. */
+export function addAssembly(id: string, at?: P2): void {
+  const v = vis();
+  const st = useStore.getState();
+  st.setPlacing(null);
+  const a = assemblyOf(id);
+  if (!v || !a) return;
+  const parts = buildAssembly(a.id as AssemblyId, v, at ?? { x: 0, y: Math.round(v.stageDepth * 50) / 100 }, newId);
+  const patch = withAssembly(v, parts);
+  if (!patch) { toast(t('equip.limit'), undefined, 'error'); return; }
+  void act({ type: 'project.update', visualizer: patch }).then((r) => {
+    if (!r) return;
+    const first = parts.trusses[0] ?? parts.props[0];
+    if (first) st.setSceneSel({ kind: parts.trusses[0] ? 'truss' : 'prop', id: first.id });
+    toast(t('equip.assemblyAdded', { name: a.label }), t('equip.undoHint'));
+  });
+}
+
+/** Mirror copy of a set piece on the other side of the stage (jardin ↔ cour), selected. */
+export function mirrorSceneElement(ref: SceneRef): void {
+  const v = vis();
+  const src = v && ref.kind === 'prop' ? v.props.find((x) => x.id === ref.id) : undefined;
+  if (!v || !src) return;
+  if (!canAdd(v, 'prop')) { toast(t('equip.limit'), undefined, 'error'); return; }
+  const copy = mirrorProp(src, newId);
+  void act({ type: 'project.update', visualizer: withElement(v, 'prop', copy) }).then((r) => r && useStore.getState().setSceneSel({ kind: 'prop', id: copy.id }));
 }
 
 /**
@@ -201,11 +235,13 @@ export function acceptLibraryDrag(e: React.DragEvent): void {
 export function dropLibraryItem(e: React.DragEvent, at: P2 | null): void {
   const data = e.dataTransfer.getData(LIBRARY_MIME);
   const fx = /^fixture:([^:]+):(.+)$/u.exec(data);
-  const item = fx ? null : libraryItem(data);
-  if (!fx && !item) return;
+  const asm = /^assembly:(.+)$/u.exec(data);
+  const item = fx || asm ? null : libraryItem(data);
+  if (!fx && !asm && !item) return;
   e.preventDefault();
   if (!at) return;
   if (fx) void addFixtureAt(fx[1]!, fx[2]!, at);
+  else if (asm) addAssembly(asm[1]!, at);
   else addSceneElement(item!.kind, at, item!.preset);
 }
 
@@ -258,4 +294,54 @@ export async function buildSceneFromText(text: string): Promise<boolean> {
   useStore.getState().setStageMode('3d');
   useStore.getState().setPage('visualizer');
   return true;
+}
+
+/**
+ * Request in words → equipment ADDED to the current stage (line arrays, backline, screens, fixtures…): preview of what
+ * was understood, ambiguous or unavailable, then one undoable scene step (the fixtures are patched afterwards). The
+ * result counts what the main process really holds afterwards, never what was merely planned.
+ */
+export async function addEquipmentFromText(text: string): Promise<boolean> {
+  const ps = useStore.getState().project;
+  if (!ps) return false;
+  const lib = new ProfileLibrary([...(ps.library ?? []), ...ps.project.profiles]);
+  const plan = planSceneAdditions(text, ps.project.visualizer, newId, lib.all());
+  if (!plan.lines.length) { toast(t('assist.none'), plan.notices.join('\n') || t('assist.noneDetail'), 'error'); return false; }
+  const message = [...plan.lines.map((l) => `• ${l}`), ...(plan.notices.length ? ['', `${t('assist.notices')} :`, ...plan.notices.map((n) => `– ${n}`)] : [])].join('\n');
+  if (!(await confirmAction({ title: t('assist.confirmTitle'), message, confirmLabel: t('assist.confirm') }))) return false;
+  if (Object.keys(plan.patch).length && (await act({ type: 'project.update', visualizer: plan.patch })) === undefined) {
+    toast(t('assist.failed'), undefined, 'error');
+    return false;
+  }
+  const fixtureIds: string[] = [];
+  for (const rig of plan.fixtures) {
+    const patch = useStore.getState().project?.project.patch ?? [];
+    const chans = channelCount(lib.get(rig.profileId)!, rig.mode);
+    const universe = Array.from({ length: MAX_UNIVERSES }, (_, i) => i + 1).find((u) => findFreeAddress(lib, patch, u, chans * rig.count) !== undefined);
+    if (universe === undefined) { toast(t('build.fixtureNoRoom'), t('build.fixtureNoRoomDetail', { n: chans }), 'error'); continue; }
+    const r = await act({ type: 'fixture.add', profileId: rig.profileId, mode: rig.mode, universe, address: null, count: rig.count, namePrefix: rig.label, tags: [] });
+    if (r) fixtureIds.push(...r.ids);
+  }
+  const state = await act({ type: 'project.get' });
+  const v = state?.project.visualizer;
+  const trusses = v?.trusses ?? [];
+  if (fixtureIds.length && trusses.length) {
+    const model = new Map((state?.project.patch ?? []).map((f) => [f.id, f]));
+    const fx = fixtureIds.filter((id) => model.has(id)).map((id) => ({ id, movable: plan.fixtures.some((r) => r.movable && model.get(id)!.profileId === r.profileId) }));
+    const placements = equipTrusses(fx, trusses);
+    if (placements.length) await act({ type: 'fixture.place', placements });
+  }
+  const has = (ids: string[], list: readonly { id: string }[] = []) => ids.filter((id) => list.some((x) => x.id === id)).length;
+  const created = has(plan.created.props, v?.props) + has(plan.created.screens, v?.screens) + has(plan.created.trusses, v?.trusses) + fixtureIds.length;
+  if (!created) { toast(t('assist.failed'), undefined, 'error'); return false; }
+  toast(t('assist.done'), t('assist.doneDetail', { n: created }));
+  const first = plan.created.props[0] ?? plan.created.screens[0];
+  if (first) useStore.getState().setSceneSel({ kind: plan.created.props[0] ? 'prop' : 'screen', id: first });
+  return true;
+}
+
+/** Home-page description: an addition request ("Ajoute…") on a stage that already has content adds; else it builds. */
+export function describeScene(text: string): Promise<boolean> {
+  const v = useStore.getState().project?.project.visualizer;
+  return v && isAdditionRequest(text) && hasSceneContent(v) ? addEquipmentFromText(text) : buildSceneFromText(text);
 }

@@ -580,7 +580,7 @@ test('bibliothèque : totems, pièces de truss et décor, au clic ou glissés en
   await page.screenshot({ path: `${shots}/21-bibliotheque-2d.png` });
 
   await nav3d();
-  await openCategory('decor');
+  await openCategory('sound');
   const box3 = (await page.getByTestId('stage-3d').boundingBox())!;
   await page.getByTestId('lib-speaker').dragTo(page.getByTestId('stage-3d'), { targetPosition: { x: box3.width * 0.35, y: box3.height * 0.75 } });
   await expect.poll(async () => (await vis()).props.at(-1)?.kind).toBe('speaker');

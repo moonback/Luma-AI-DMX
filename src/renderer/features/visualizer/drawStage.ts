@@ -76,6 +76,7 @@ export function drawStage(g: CanvasRenderingContext2D, r: { width: number; heigh
   }
   // Set pieces: footprint in their colour (round for columns and mic stands), outline, name.
   for (const p0 of vis.props) {
+    if (p0.hidden) continue;
     const p = at(p0);
     g.fillStyle = `${p.color}cc`;
     g.strokeStyle = '#4b5570';
