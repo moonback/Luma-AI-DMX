@@ -1,6 +1,7 @@
 import type { DemoSpec } from './catalog';
 import { C } from './palette';
 import { stadiumConcert } from './catalogStadium';
+import { MORE_DEMOS_3 } from './catalogMore3';
 
 /** Last five demos of the second batch (see `catalogMore.ts`). */
 
@@ -255,4 +256,4 @@ const openAir: DemoSpec = {
 };
 
 
-export const MORE_DEMOS_2: DemoSpec[] = [karaoke, christmas, esport, contemporary, openAir, stadiumConcert];
+export const MORE_DEMOS_2: DemoSpec[] = [karaoke, christmas, esport, contemporary, openAir, stadiumConcert, ...MORE_DEMOS_3];

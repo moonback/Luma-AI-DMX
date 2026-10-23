@@ -68,8 +68,6 @@ function Sidebar() {
   const aiActive = rt?.engine.aiActive ?? false;
   return (
     <nav className="sidebar" aria-label={tr('nav.aria')}>
-      
-      <div className="sidebar-sep" />
       {NAV_GROUPS.map((group, gi) => (
         <div key={group.key} className="nav-group">
           {!collapsed && <span className="nav-group-label">{tr(group.key)}</span>}
@@ -85,6 +83,7 @@ function Sidebar() {
                 key={p.id}
                 className={`nav-item ${page === p.id ? 'active' : ''}`}
                 onClick={() => setPage(p.id)}
+                aria-current={page === p.id ? 'page' : undefined}
                 title={collapsed ? `${label}${k ? ` (${k})` : ''}` : undefined}
                 data-testid={`nav-${p.id}`}
               >

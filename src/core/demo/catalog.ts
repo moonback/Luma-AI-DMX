@@ -3,7 +3,7 @@ import { C } from './palette';
 import { MORE_DEMOS } from './catalogMore';
 
 /**
- * Twenty fictional demonstration projects, described as plain data (importable by the renderer for the gallery) and
+ * Fictional demonstration projects, described as plain data (importable by the renderer for the gallery) and
  * turned into real, validated projects by `buildDemo` (main process). Venues, artists and events are invented; every
  * fixture uses the built-in "Luma Demo" profiles, which describe no commercial model.
  */

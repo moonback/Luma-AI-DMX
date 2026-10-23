@@ -68,20 +68,11 @@
 @keyframes led-breathe { 50% { opacity: 0.55; } }
 
 /* Navigation */
-.nav-item { border-radius: 7px; transition: background var(--dur), color var(--dur), transform var(--dur) var(--ease-out); }
-.nav-item:hover { background: rgba(255, 255, 255, 0.05); transform: translateX(2px); color: var(--text); }
-.nav-item.active {
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0.25), rgba(34, 211, 238, 0.05));
-  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.3), 0 2px 12px -4px rgba(139, 92, 246, 0.3);
-}
-.nav-item.active::before { background: linear-gradient(180deg, var(--violet), var(--cyan)); box-shadow: 0 0 12px var(--violet); width: 3px; }
-.nav-item.active .nav-icon-wrap svg { color: var(--cyan); filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.7)); }
-.nav-item.active .nav-label { color: var(--text); }
-.collapsed .nav-item:hover { transform: none; }
-.nav-group-label { background: linear-gradient(90deg, var(--text-3), transparent); -webkit-background-clip: text; background-clip: text; }
-.sidebar-logo .brand-logo { filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.4)); }
-.sidebar-brand-name { background: linear-gradient(90deg, var(--text), #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: 0.5px; }
-.sidebar-sep { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07) 40%, rgba(255,255,255,0.07) 60%, transparent); }
+.nav-item:hover { background: rgba(255, 255, 255, 0.045); }
+.nav-item.active { background: rgba(139, 92, 246, 0.14); box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.22); }
+.nav-item.active .nav-icon-wrap { color: #a78bfa; }
+.sidebar-sep, .nav-group-divider { background: rgba(255, 255, 255, 0.06); }
+.nav-item .kbd { background: rgba(0, 0, 0, 0.25); border-color: rgba(255, 255, 255, 0.08); }
 
 /* Page entrance: header then blocks, staggered. Only a `from` frame, so no
    transform lingers afterwards (fixed modals inside pages stay positioned). */
