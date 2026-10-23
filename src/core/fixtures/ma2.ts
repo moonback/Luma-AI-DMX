@@ -45,7 +45,7 @@ const MA2_ATTR: Record<string, string> = {
   PRISMA1: 'prism', FROST: 'frost', FROST1: 'frost', ZOOM: 'zoom', FOCUS: 'focus', FOCUS1: 'focus', IRIS: 'iris', IRIS1: 'iris',
   CTO: 'cto', COLORTEMPERATURE: 'colorTemperature', COLORSUB_C: 'cyan', COLORSUB_M: 'magenta', COLORSUB_Y: 'yellow',
   POSITIONMODE: 'panTiltMode', POSITIONMSPEED: 'panTiltSpeed', EFFECTMACROS: 'macro', EFFECTMACRORATE: 'macroSpeed', EFFECTWHEEL: 'effectWheel',
-  ZOOMMODE: 'zoomMode', COLORMIXMACROFADETIME: 'colorMacroFade', COLORMIXMACRO: 'colorMacro', COLORMACRO1: 'colorMacro',
+  ZOOMMODE: 'zoomMode', COLORMIXMACROFADETIME: 'colorMacroFade', COLORMIXMACRO: 'colorMacro', COLORMACRO1: 'colorMacro', COLORMACROS: 'colorMacro', COLORMACRO1RATE: 'macroSpeed',
   FIXTUREGLOBALRESET: 'control', CONTROL: 'control', FAN: 'fan', FOG: 'fog', DIMMERCURVE: 'dimmerCurve', MACROS: 'macro',
   GOBO2: 'gobo2', GOBO2_POS: 'gobo2Rotation', GOBO2_ROT: 'gobo2Rotation', GOBO2POSROTATE: 'gobo2Rotation',
   PRISMA_POS: 'prismIndex', PRISMA1_POS: 'prismIndex', PRISMA_ROT: 'prismRotation', PRISMA1_ROT: 'prismRotation',
@@ -65,7 +65,8 @@ function lumaAttribute(ct: Node): string | null {
   const a = (str(ct, 'attribute') ?? '').toUpperCase();
   if (a.startsWith('COLORRGB')) {
     const fn = arr(ct, 'ChannelFunction')[0] ?? {};
-    const name = str(fn, 'attribute_user_name') ?? str(fn, 'subattribute_user_name') ?? '';
+    // GDTF converters name the slot in the attribute itself (ColorRGB_Red).
+    const name = str(fn, 'attribute_user_name') ?? str(fn, 'subattribute_user_name') ?? a.replace(/^COLORRGB_?/, '');
     return COLOR_BY_NAME.find(([re]) => re.test(name))?.[1] ?? COLOR_BY_INDEX[a] ?? null;
   }
   if (MA2_ATTR[a]) return MA2_ATTR[a]!;
@@ -76,8 +77,9 @@ function lumaAttribute(ct: Node): string | null {
   return str(ct, 'feature') === 'RESET' || str(ct, 'preset') === 'CONTROL' ? 'control' : null;
 }
 
-function fixtureType(cls: string, beam: string, instancesOfMain: number): FixtureType {
-  if (/headmover|moving/i.test(cls)) return /spot|beam|profile/i.test(beam) ? 'moving-head-spot' : 'moving-head-wash';
+function fixtureType(cls: string, beam: string, instancesOfMain: number, hasPanTilt: boolean): FixtureType {
+  // GDTF-converted files often say class="None": pan + tilt is enough to call it a moving head.
+  if (/headmover|moving/i.test(cls) || (hasPanTilt && !/strobe|dimmer|conventional|led|wash|par/i.test(cls))) return /spot|beam|profile/i.test(beam) ? 'moving-head-spot' : 'moving-head-wash';
   if (/strobe/i.test(cls)) return 'strobe';
   if (/dimmer|conventional/i.test(cls)) return 'dimmer';
   if (/led|wash|par/i.test(cls)) return instancesOfMain > 1 ? 'led-bar' : 'par';
@@ -271,10 +273,11 @@ export function convertMa2Fixture(xml: string): Ma2Conversion {
 
   const mainIndex = num(instances[0]!, 'module_index') ?? 0;
   const main = moduleOf(mainIndex) ?? modules[0]!;
-  const type = fixtureType(str(main, 'class') ?? '', str(main, 'beamtype') ?? '', moduleCells.get(mainIndex)?.length ?? 1);
+  const type = fixtureType(str(main, 'class') ?? '', `${str(main, 'beamtype') ?? ''} ${str(ft, 'name') ?? ''}`, moduleCells.get(mainIndex)?.length ?? 1, !!firstPan && !!firstTilt);
   const span = (fn: Node | undefined): [number, number] | undefined => {
     const a = fn ? num(fn, 'physfrom') : undefined, b = fn ? num(fn, 'physto') : undefined;
-    return a !== undefined && b !== undefined ? [a, b] : undefined;
+    // physfrom 0 → physto 1 is a normalised placeholder (GDTF converters), not an angle.
+    return a !== undefined && b !== undefined && Math.abs(b - a) > 1 ? [a, b] : undefined;
   };
   const pan = span(firstPan), tilt = span(firstTilt);
   const panRange = pan ? clamp(Math.abs(pan[1] - pan[0]), 0, 720) : type.startsWith('moving') ? 540 : 0;

@@ -87,6 +87,26 @@ describe('import grandMA2', () => {
     expect(r.profile!.type).toBe('par');
   });
 
+  it('ColorRGB_Red/Green/Blue et macros couleur (MHL1912 converti GDTF) reconnus sans avertissement', () => {
+    const xml = `<MA><FixtureType name="MHL1912" mode="15 Channels"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="None">
+      <ChannelType coarse="1" attribute="ColorRGB_Red"/><ChannelType coarse="2" attribute="ColorRGB_Green"/><ChannelType coarse="3" attribute="ColorRGB_Blue"/>
+      <ChannelType coarse="4" attribute="COLORRGB5"/><ChannelType coarse="5" attribute="COLORMACROS"/><ChannelType coarse="6" attribute="ColorMacro1Rate"/>
+      </Module></Modules></FixtureType></MA>`;
+    const r = convertMa2Fixture(xml);
+    expect(r.warnings).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['red', 'green', 'blue', 'white', 'colorMacro', 'macroSpeed']);
+  });
+
+  it('class="None" + pan/tilt normalisés 0→1 (convertisseur GDTF) → lyre avec amplitudes par défaut', () => {
+    const xml = `<MA><FixtureType name="MHL1912 Moving Head Wash" mode="M"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="None" beamtype="None">
+      <ChannelType coarse="1" attribute="PAN"><ChannelFunction physfrom="0" physto="1"/></ChannelType>
+      <ChannelType coarse="2" attribute="TILT"><ChannelFunction physfrom="0" physto="1"/></ChannelType>
+      </Module></Modules></FixtureType></MA>`;
+    const p = convertMa2Fixture(xml).profile!;
+    expect(p.type).toBe('moving-head-wash');
+    expect(p.physical).toMatchObject({ panRange: 540, tiltRange: 270 });
+  });
+
   it('courbe dimmer et macros (BTF100Z Fresnel) reconnus sans avertissement', () => {
     const xml = `<MA><FixtureType name="BTF100Z" mode="5 Channels"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="Conventional">
       <ChannelType coarse="1" attribute="DIM"/><ChannelType coarse="2" attribute="SHUTTER"/><ChannelType coarse="3" attribute="ZOOM"/>
