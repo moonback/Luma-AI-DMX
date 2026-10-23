@@ -110,7 +110,7 @@ export interface ScreenRig {
 }
 
 /** Changes of these fields rebuild the screen; the rest is updated per frame. */
-export const screenKey = (s: StageScreen) => `${s.source}|${s.source === 'image' ? (s.image ?? '').length : ''}|${s.source === 'video' ? screenVideo(s.id) ?? '' : ''}`;
+export const screenKey = (s: StageScreen) => `${s.cabinet ? `${s.cabinet}|${s.width}|${s.height}` : ''}|${s.source}|${s.source === 'image' ? (s.image ?? '').length : ''}|${s.source === 'video' ? screenVideo(s.id) ?? '' : ''}`;
 
 const sampler = (() => {
   let c: CanvasRenderingContext2D | null = null;
@@ -127,6 +127,17 @@ const sampler = (() => {
   };
 })();
 
+/** Modular LED wall: thin dark seams between the cabinets, just in front of the face (built at the screen size). */
+function cabinetSeams(s: StageScreen): THREE.LineSegments {
+  const pts: number[] = [];
+  const c = s.cabinet!, w = s.width, h = s.height, z = 0.053;
+  for (let x = -w / 2 + c; x < w / 2 - 1e-3; x += c) pts.push(x, -h / 2, z, x, h / 2, z);
+  for (let y = -h / 2 + c; y < h / 2 - 1e-3; y += c) pts.push(-w / 2, y, z, w / 2, y, z);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 }));
+}
+
 export function buildScreen(s: StageScreen): ScreenRig {
   const g = new THREE.Group();
   const face = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
@@ -138,6 +149,7 @@ export function buildScreen(s: StageScreen): ScreenRig {
   halo.renderOrder = 3;
   const light = new THREE.PointLight(0xffffff, 0, 8, 1.5);
   g.add(back, face, halo, light);
+  if (s.cabinet) g.add(cabinetSeams(s));
   const rig: ScreenRig = { key: screenKey(s), group: g, face, halo, light, avg: new THREE.Color(0, 0, 0), frame: 0 };
   if (s.source === 'image' && s.image) {
     const img = new Image();

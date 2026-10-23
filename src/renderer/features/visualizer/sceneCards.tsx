@@ -7,7 +7,10 @@ import type { VisualFixture } from '../../../core/visualizer/model';
 import type { Fixture, FixtureMount, Performer, Project, StageMarker, StageProp, StageScreen, Truss } from '../../../core/model/schemas';
 import { floorAt, performerSpot } from '../../../core/visualizer/lighting';
 import { setScreenVideo, screenVideo } from '../../screenMedia';
-import { PROP_KIND_LABEL, TRUSS_LENGTH_LABEL, TRUSS_SHAPE_LABEL } from '../../../core/visualizer/library';
+import { TRUSS_LENGTH_LABEL, TRUSS_SHAPE_LABEL } from '../../../core/visualizer/library';
+import { PropCard } from './PropCard';
+import { t as tl } from '../../i18n';
+export { PropCard };
 import { findElement, withPatched, type SceneRef } from '../../../core/visualizer/sceneEdit';
 import { hangFixture, removeSceneElement } from '../../sceneActions';
 
@@ -35,7 +38,7 @@ export function Num({ label, title, value, min, max, step = 0.25, onChange }: { 
 }
 
 /** Name field committed on blur; `key` resets it when the saved name changes (undo, template). */
-function NameInput({ value, label, onChange }: { value: string; label: string; onChange: (name: string) => void }) {
+export function NameInput({ value, label, onChange }: { value: string; label: string; onChange: (name: string) => void }) {
   return (
     <input key={value} className="input grow" defaultValue={value} maxLength={80} aria-label={label}
       onBlur={(e) => { const name = e.target.value.trim(); if (name && name !== value) onChange(name); else e.target.value = value; }} />
@@ -49,7 +52,7 @@ export type At = { x: number; y: number; height: number };
 const frameOnDoubleClick = (at: At) => (e: React.MouseEvent) => { if (!(e.target as HTMLElement).closest('input,select,button,label')) useStore.getState().frameOn(at); };
 
 /** Element card; clicking or focusing it selects the element (Ctrl+D, Suppr, Ctrl+C apply to it), double-click frames it in 3D. */
-function Card({ testId, sel, at, head, children }: { testId: string; sel: SceneRef; at: At; head: ReactNode; children?: ReactNode }) {
+export function Card({ testId, sel, at, head, children }: { testId: string; sel: SceneRef; at: At; head: ReactNode; children?: ReactNode }) {
   const selected = useStore((s) => s.sceneSel?.id === sel.id);
   const el = useRef<HTMLDivElement>(null);
   // Selected from the 2D / 3D view: bring the card into sight.
@@ -63,11 +66,9 @@ function Card({ testId, sel, at, head, children }: { testId: string; sel: SceneR
   );
 }
 
-const DeleteBtn = ({ name, title, sel }: { name: string; title?: string; sel: SceneRef }) => (
+export const DeleteBtn = ({ name, title, sel }: { name: string; title?: string; sel: SceneRef }) => (
   <button className="btn ghost sm icon" title={title ?? `Supprimer « ${name} » (Suppr)`} aria-label={`Supprimer ${name}`} onClick={() => removeSceneElement(sel)}><Trash2 size={12} /></button>
 );
-
-const PROP_KINDS = Object.entries(PROP_KIND_LABEL) as [StageProp['kind'], string][];
 
 const TRUSS_SHAPES = Object.entries(TRUSS_SHAPE_LABEL) as [Truss['shape'], string][];
 
@@ -99,7 +100,7 @@ export function shrinkImage(file: File, max = SCREEN_IMAGE_MAX_PX): Promise<stri
 }
 
 /** Changes fields of one stage element (any kind). */
-const patchEl = (vis: Vis, ref: SceneRef, patch: Record<string, unknown>) => void act({ type: 'project.update', visualizer: withPatched(vis, ref, patch) });
+export const patchEl = (vis: Vis, ref: SceneRef, patch: Record<string, unknown>) => void act({ type: 'project.update', visualizer: withPatched(vis, ref, patch) });
 
 export function MarkerCard({ m, vis }: { m: StageMarker; vis: Vis }) {
   const sel: SceneRef = { kind: 'marker', id: m.id };
@@ -113,31 +114,6 @@ export function MarkerCard({ m, vis }: { m: StageMarker; vis: Vis }) {
   );
 }
 
-export function PropCard({ p, vis }: { p: StageProp; vis: Vis }) {
-  const sel: SceneRef = { kind: 'prop', id: p.id };
-  const set = (patch: Partial<StageProp>) => patchEl(vis, sel, patch);
-  return (
-    <Card testId="prop-row" sel={sel} at={{ x: p.x, y: p.y, height: p.elevation + p.height / 2 }} head={<>
-      <NameInput value={p.name} label="Nom de l’élément" onChange={(name) => set({ name })} />
-      <select className="select" style={{ width: 110 }} value={p.kind} aria-label="Type" onChange={(e) => set({ kind: e.target.value as StageProp['kind'] })}>
-        {PROP_KINDS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-      </select>
-      <DeleteBtn name={p.name} sel={sel} />
-    </>}>
-      <Num label="X" title="Centre, jardin ↔ cour (m)" value={p.x} min={-100} max={100} onChange={(v) => set({ x: v })} />
-      <Num label="Y" title="Centre, profondeur (m)" value={p.y} min={-100} max={100} onChange={(v) => set({ y: v })} />
-      <Num label="Rotation" title="Rotation (°)" value={p.rotation} min={-360} max={360} step={15} onChange={(v) => set({ rotation: v })} />
-      <Num label="Largeur" title="Largeur (m)" value={p.width} min={0.05} max={40} step={0.1} onChange={(v) => set({ width: v })} />
-      <Num label="Profondeur" title="Profondeur (m)" value={p.depth} min={0.05} max={40} step={0.1} onChange={(v) => set({ depth: v })} />
-      <Num label="Hauteur" title="Hauteur (m)" value={p.height} min={0.05} max={20} step={0.1} onChange={(v) => set({ height: v })} />
-      <Num label="Élévation" title="Posé à cette hauteur (empilement sur un praticable…)" value={p.elevation} min={0} max={20} step={0.1} onChange={(v) => set({ elevation: v })} />
-      <label className="scene-num"><span>Couleur</span>
-        <input type="color" value={p.color} aria-label="Couleur" onChange={(e) => set({ color: e.target.value })} className="scene-color" />
-      </label>
-    </Card>
-  );
-}
-
 export function TrussCard({ t, vis }: { t: Truss; vis: Vis }) {
   const sel: SceneRef = { kind: 'truss', id: t.id };
   const set = (patch: Partial<Truss>) => patchEl(vis, sel, patch);
@@ -146,6 +122,9 @@ export function TrussCard({ t, vis }: { t: Truss; vis: Vis }) {
       <NameInput value={t.name} label="Nom de la structure" onChange={(name) => set({ name })} />
       <select className="select" style={{ width: 104 }} value={t.shape} aria-label="Forme" onChange={(e) => set({ shape: e.target.value as Truss['shape'] })}>
         {TRUSS_SHAPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
+      <select className="select" style={{ width: 92 }} value={t.section ?? 'square'} aria-label={tl('equip.section')} title={tl('equip.section')} onChange={(e) => set({ section: e.target.value as Truss['section'] })} data-testid="truss-section">
+        {(['square', 'triangle'] as const).map((id) => <option key={id} value={id}>{tl(`equip.section.${id}`)}</option>)}
       </select>
       <DeleteBtn name={t.name} title={`Supprimer « ${t.name} » (les projecteurs restent en place, décrochés)`} sel={sel} />
     </>}>
@@ -237,6 +216,7 @@ export function ScreenCard({ sc, vis }: { sc: StageScreen; vis: Vis }) {
       <Num label="Largeur" title="Largeur (m)" value={sc.width} min={0.2} max={60} onChange={(v) => set({ width: v })} />
       <Num label="Hauteur" title="Hauteur (m)" value={sc.height} min={0.2} max={30} onChange={(v) => set({ height: v })} />
       <Num label="Rotation" title="Rotation (0° = face au public)" value={sc.rotation} min={-360} max={360} step={15} onChange={(v) => set({ rotation: v })} />
+      <Num label={tl('equip.cabinet')} title={tl('equip.cabinetHint')} value={sc.cabinet ?? 0} min={0} max={2} step={0.25} onChange={(v) => set({ cabinet: v })} />
       <label className="scene-num span3" title="Lumière diffusée sur le plateau et la brume"><span>Halo {Math.round(sc.glow * 100)} %</span>
         <input type="range" min={0} max={100} value={Math.round(sc.glow * 100)} onChange={(e) => set({ glow: Number(e.target.value) / 100 })} />
       </label>

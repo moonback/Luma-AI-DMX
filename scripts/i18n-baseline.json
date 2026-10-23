@@ -22,9 +22,9 @@
   "src/renderer/features/pantilt/GroupsPanel.tsx": 9,
   "src/renderer/features/pantilt/SelectionModal.tsx": 16,
   "src/renderer/features/stage3d/quality.ts": 5,
-  "src/renderer/features/stage3d/scene.ts": 5,
-  "src/renderer/features/visualizer/ScenePanel.tsx": 23,
-  "src/renderer/features/visualizer/sceneCards.tsx": 88,
+  "src/renderer/features/stage3d/views.ts": 5,
+  "src/renderer/features/visualizer/ScenePanel.tsx": 20,
+  "src/renderer/features/visualizer/sceneCards.tsx": 72,
   "src/renderer/shortcuts.ts": 1,
   "src/renderer/store.ts": 15,
   "src/renderer/voice/tools.ts": 7

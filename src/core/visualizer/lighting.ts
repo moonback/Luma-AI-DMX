@@ -1,6 +1,7 @@
 import type { Performer, StageMarker, StageProp } from '../model/schemas';
 import type { VisualFixture } from './model';
 import { beamDirection, type Vec3 } from './beam';
+import { WALKABLE_KINDS } from './equipment';
 
 /**
  * Approximate light received at a point: sum of the beams whose cone contains it (soft edge), dimmed with distance.
@@ -49,14 +50,12 @@ export function performerSpot(p: Performer, markers: readonly StageMarker[]): { 
   return m ? { x: m.x, y: m.y } : { x: p.x, y: p.y };
 }
 
-/** Set pieces a performer can stand on. */
-const WALKABLE: ReadonlySet<StageProp['kind']> = new Set(['riser', 'stairs', 'box', 'table']);
 
 /** Height of the floor at stage point (x, y): top of the highest walkable piece under it, else 0. */
 export function floorAt(x: number, y: number, props: readonly StageProp[]): number {
   let top = 0;
   for (const p of props) {
-    if (!WALKABLE.has(p.kind)) continue;
+    if (!WALKABLE_KINDS.has(p.kind) || p.hidden) continue;
     // Into the piece frame (same rotation as the 3D group: world z = -y).
     const a = (p.rotation * Math.PI) / 180, dx = x - p.x, dz = p.y - y;
     const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);

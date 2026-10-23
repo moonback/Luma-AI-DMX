@@ -5,6 +5,12 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Ajouté
+- Construire : bibliothèque d'équipements scéniques en 8 catégories (Machine, Structure, Sonorisation, Instruments, Décor, Interprète, Écran, Accessoires) : line arrays (modules, angles par module, bumper, suspension), caissons, façades, retours, racks ; batterie, cymbales, guitares, basses, amplis, claviers, pianos ; machines à fumée, étincelles, CO2 ; panneaux de fond, arches, rideaux ; régie DJ, consoles, flight-cases, chaises, barrières, passe-câbles ; structures triangulaires, embases, moteurs de levage, toiture. Modèles 3D procéduraux détaillés aux dimensions métriques, avec niveaux de détail et géométries partagées en cache.
+- Construire : recherche instantanée dans toute la bibliothèque (mots-clés inclus), favoris et éléments récents, miniatures rendues depuis les modèles 3D, ajout rapide, glisser-déposer, assemblages prêts à poser (portique, toiture, grille de rigging, système de façade, batterie sur praticable).
+- Propriétés d'un équipement : réglages propres à son type, masquer / verrouiller, échelle, alignement (axe, nez de scène, lointain, jardin, cour, sol), copie symétrique, accrochage sous une structure, import d'un modèle GLB (repli sur la géométrie procédurale signalé s'il est illisible). Rappel affiché : un assemblage 3D n'est ni un calcul de charge ni une validation de sécurité.
+- Assistant de scène : « Ajoute deux line arrays de chaque côté, une batterie au centre arrière… » est traduit en ajouts positionnés sur la scène actuelle, avec aperçu avant application, ambiguïtés et matériel indisponible signalés, une seule étape annulable (Ctrl+Z). La description de l'accueil commençant par « Ajoute… » complète la scène au lieu de la remplacer.
+- Écrans : murs LED modulaires (côté de module, coutures visibles) ; structures : section carrée ou triangulaire.
+- Projets de démonstration : les 31 démos reçoivent un décor réaliste issu de la bibliothèque (line arrays suspendus, caissons, batteries, amplis, guitares, claviers, pianos, consoles de régie, barrières, machines à effets, arches, toiles, chaises et pupitres) et des murs LED ; les pièces génériques qui imitaient du matériel (boîte « piano », « mur d'amplis », rideau « écran géant »…) sont remplacées par le vrai équipement.
 - Stage 3D : 4 préréglages de qualité de rendu en un clic (Édition, Équilibré, Qualité, Présentation).
 - Stage 3D : barre d'état enrichie (mode Orbite/Édition, compteur de projecteurs, grille active, indicateur de framerate déplacé depuis la barre d'outils).
 - Stage 3D : inspecteur contextuel escamotable affichant les propriétés géométriques et photométriques des projecteurs ou éléments de scène sélectionnés (position, hauteur, rotation/pan/tilt, couleur, intensité).
@@ -17,6 +23,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 - E2E : délais Playwright doublés (test 120 s, attente 10 s) car l'application tourne sous rendu logiciel SwiftShader dans ces tests.
 
 ### Corrigé
+- Démos « Son et lumière sur la cathédrale » et « Match de basket » : décors hors des bornes du format (tours de 26 m, parquet de 2 cm) qui empêchaient leur ouverture ; démo stade : praticables et micros posés sous le plancher de la grande scène.
 - Stage 3D : libération mémoire systématique des géométries Three.js partagées (`disposeGeometries()`) au démontage de la vue 3D.
 - Stage 3D : correction de la contrainte CSS `right: 290px` sur `.stage3d-status` qui tronquait inutilement la barre d'état.
 - Accessibilité Stage 3D : ajout des `aria-label` manquants sur les boutons d'outils Déplacer et Pivoter.

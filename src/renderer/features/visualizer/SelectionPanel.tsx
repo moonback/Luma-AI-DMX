@@ -10,7 +10,8 @@ import { PROP_KIND_LABEL, TRUSS_SHAPE_LABEL } from '../../../core/visualizer/lib
 import { SCENE_LABEL, findElement, type SceneKind, type SceneRef } from '../../../core/visualizer/sceneEdit';
 import { duplicateSceneElement, removeSceneElement } from '../../sceneActions';
 import { type Vis, ElementCard, FixtureCard } from './sceneCards';
-import { FixtureGlyph, LibraryGlyph } from './ScenePanel';
+import { FixtureGlyph } from './ScenePanel';
+import { LibraryGlyph } from './libraryTiles';
 
 /* Right panel of the Stage page: every element of the scene model (hierarchy), then the inspector of the selection. */
 

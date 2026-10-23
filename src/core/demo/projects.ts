@@ -5,6 +5,7 @@ import { channelCount } from '../fixtures/profiles';
 import { colorCapability, colorCells, colorToAttributes } from '../fixtures/color';
 import { hexToRgb } from '../util/math';
 import { HANG_OFFSET } from '../visualizer/truss';
+import { sanitizeParams } from '../visualizer/equipment';
 import { DEMOS, type DemoSpec } from './catalog';
 
 /** Builds a complete, schema-validated project from a demo spec (deterministic ids: reproducible and testable). */
@@ -66,7 +67,12 @@ function build(spec: DemoSpec): Project {
   }
   p.show.universes = Math.max(1, ...next.keys());
   p.visualizer.trusses = trusses;
-  p.visualizer.props = spec.decor.map((d, i) => ({ elevation: 0, rotation: 0, color: '#15171C', ...d, id: pid(`decor-${i + 1}`) }));
+  // Set pieces: settings checked against the equipment catalogue, like the ones placed from the library.
+  p.visualizer.props = spec.decor.map(({ params, ...d }, i) => {
+    const clean = sanitizeParams(d.kind, params);
+    return { elevation: 0, rotation: 0, color: '#15171C', ...d, ...(Object.keys(clean).length ? { params: clean } : {}), id: pid(`decor-${i + 1}`) };
+  });
+  p.visualizer.screens = (spec.screens ?? []).map((sc, i) => ({ source: 'color' as const, glow: 0.45, rotation: 0, ...sc, id: pid(`screen-${i + 1}`) }));
 
   // Scenes: per-fixture colours from the real colour capabilities of each profile.
   const index = new ProjectIndex(p);

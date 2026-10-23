@@ -1,5 +1,6 @@
 import { frScreens } from './fr.screens';
 import { frStage } from './fr.stage';
+import { frEquip } from './fr.equip';
 import { frAi } from './fr.ai';
 
 /**
@@ -582,6 +583,7 @@ export const fr = {
 
   ...frScreens,
   ...frStage,
+  ...frEquip,
   ...frAi,
 } as const;
 

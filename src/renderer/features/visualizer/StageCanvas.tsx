@@ -6,7 +6,7 @@ import { useResolved } from '../../components/ui';
 import { buildVisualModel, type VisualFixture } from '../../../core/visualizer/model';
 import type { FixtureValues, Performer, StageMarker, Truss } from '../../../core/model/schemas';
 import { nearestOnTruss, snapToTrusses, snapTrussEnds } from '../../../core/visualizer/truss';
-import { findElement, withPatched, type SceneRef } from '../../../core/visualizer/sceneEdit';
+import { findElement, snapPropToTruss, withPatched, type SceneRef } from '../../../core/visualizer/sceneEdit';
 import { acceptLibraryDrag, dropLibraryItem, placeAt } from '../../sceneActions';
 
 
@@ -109,6 +109,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     if (sc) return { kind: 'screen', id: sc.id };
     // Set pieces last (large areas), the most recent on top.
     const pr = [...vis.props].reverse().find((p) => {
+      if (p.hidden) return false;
       if (p.kind === 'column' || p.kind === 'mic') return Math.hypot(p.x - x, p.y - y) <= Math.max(p.width / 2, tol);
       const a = (p.rotation * Math.PI) / 180, dx = x - p.x, dy = y - p.y;
       const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
@@ -133,7 +134,7 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
       drag.current = { kind: 'performer', id: pf.id, x: e.clientX, y: e.clientY, ox: at.x, oy: at.y, moved: false };
     } else if (mk && editable) {
       drag.current = { kind: 'marker', id: mk.id, x: e.clientX, y: e.clientY, ox: mk.x, oy: mk.y, moved: false };
-    } else if (ref && editable && (ref.kind === 'truss' || ref.kind === 'prop' || ref.kind === 'screen')) {
+    } else if (ref && editable && (ref.kind === 'truss' || ref.kind === 'prop' || ref.kind === 'screen') && !(ref.kind === 'prop' && vis.props.find((x) => x.id === ref.id)?.locked)) {
       const el = findElement(vis, ref)!;
       drag.current = { kind: 'element', ref, id: ref.id, x: e.clientX, y: e.clientY, ox: el.x, oy: el.y, moved: false };
     } else if (f && e.button === 0) {
@@ -176,7 +177,11 @@ export function StageCanvas({ values, compact, editable, groupFilter }: { values
     if (d?.kind === 'element' && d.ref && d.id && d.moved) {
       const p = local.current.get(d.id)!;
       const clampPos = (v: number) => Math.max(-100, Math.min(100, v));
-      const patch = { x: clampPos(p.x), y: clampPos(p.y), ...(p.height !== undefined ? { height: p.height } : {}) };
+      const patch: Record<string, number> = { x: clampPos(p.x), y: clampPos(p.y), ...(p.height !== undefined ? { height: p.height } : {}) };
+      // Flown equipment (line array, hoist) dropped near a truss hangs under it.
+      const pr = d.ref.kind === 'prop' ? vis.props.find((x) => x.id === d.id) : undefined;
+      const hang = pr ? snapPropToTruss({ ...pr, x: patch.x!, y: patch.y! }, vis.trusses) : null;
+      if (hang) Object.assign(patch, { x: hang.x, y: hang.y, elevation: hang.elevation });
       void act({ type: 'project.update', visualizer: withPatched(vis, d.ref, patch) }).finally(() => local.current.delete(d.id!));
     }
     if (d?.kind === 'marker' && d.id && d.moved) {

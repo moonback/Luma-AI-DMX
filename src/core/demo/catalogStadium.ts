@@ -1,4 +1,5 @@
 import type { DemoSpec } from './catalog';
+import { row, lineArray, sub, drums, amp, guitar, keyboard, co2, spark, desk, barriers, screen } from './decor';
 import { C } from './palette';
 
 // ---------------------------------------------------------------------------
@@ -136,11 +137,11 @@ export const stadiumConcert: DemoSpec = {
     // Scène principale
     { name: 'Scène principale', kind: 'riser', x: 0, y: 10, width: 20, depth: 12, height: 1.2 },
     // Plateau batterie surélevé
-    { name: 'Praticable batterie', kind: 'riser', x: 0, y: 13.5, width: 4, depth: 3, height: 1.8 },
+    { name: 'Praticable batterie', kind: 'riser', x: 0, y: 13.5, width: 4, depth: 3, height: 0.6, elevation: 1.2 },
     // Praticable claviers jardin
-    { name: 'Praticable claviers jardin', kind: 'riser', x: -7, y: 12, width: 3, depth: 2, height: 0.8 },
+    { name: 'Praticable claviers jardin', kind: 'riser', x: -7, y: 12, width: 3, depth: 2, height: 0.4, elevation: 1.2 },
     // Praticable guitares cour
-    { name: 'Praticable guitares cour', kind: 'riser', x: 7, y: 12, width: 3, depth: 2, height: 0.8 },
+    { name: 'Praticable guitares cour', kind: 'riser', x: 7, y: 12, width: 3, depth: 2, height: 0.4, elevation: 1.2 },
     // Micro chant centre
     { name: 'Micro chant', kind: 'mic', x: 0, y: 3, width: 0.3, depth: 0.3, height: 1.6 },
     // Micro guitare jardin
@@ -148,7 +149,7 @@ export const stadiumConcert: DemoSpec = {
     // Micro guitare cour
     { name: 'Micro guitare cour', kind: 'mic', x: 5.5, y: 4, width: 0.3, depth: 0.3, height: 1.6 },
     // Micro basse cour
-    { name: 'Micro basse cour', kind: 'mic', x: 8, y: 10, width: 0.3, depth: 0.3, height: 1.6 },
+    { name: 'Micro basse cour', kind: 'mic', x: 8, y: 10, width: 0.3, depth: 0.3, height: 1.6, elevation: 1.2 },
     // Retour chant
     { name: 'Retour chant', kind: 'monitor', x: 0, y: 1.8, width: 0.7, depth: 0.5, height: 0.4, rotation: 180 },
     // Retour guitare jardin
@@ -156,22 +157,39 @@ export const stadiumConcert: DemoSpec = {
     // Retour guitare cour
     { name: 'Retour guitare cour', kind: 'monitor', x: 4, y: 4, width: 0.6, depth: 0.45, height: 0.35, rotation: 160 },
     // Sub-basses jardin
-    { name: 'Sub-basses jardin', kind: 'speaker', x: -9.5, y: 0.6, width: 1.2, depth: 1.2, height: 1.4, color: '#111111' },
+    sub('Sub-basses jardin', -9.5, 0.6, 0, '2x18'),
+    sub('Sub-basses jardin haut', -9.5, 0.6, 0.6, '2x18'),
     // Sub-basses cour
-    { name: 'Sub-basses cour', kind: 'speaker', x: 9.5, y: 0.6, width: 1.2, depth: 1.2, height: 1.4, color: '#111111' },
+    sub('Sub-basses cour', 9.5, 0.6, 0, '2x18'),
+    sub('Sub-basses cour haut', 9.5, 0.6, 0.6, '2x18'),
     // Delay tower jardin
-    { name: 'Delay tower jardin', kind: 'speaker', x: -10, y: 5, width: 0.8, depth: 0.8, height: 2.4, color: '#1A1A1A' },
+    { name: 'Delay tower jardin', kind: 'speaker', x: -10, y: 5, width: 0.4, depth: 0.45, height: 2.4, color: '#1A1A1A', params: { style: 'column' } },
     // Delay tower cour
-    { name: 'Delay tower cour', kind: 'speaker', x: 10, y: 5, width: 0.8, depth: 0.8, height: 2.4, color: '#1A1A1A' },
+    { name: 'Delay tower cour', kind: 'speaker', x: 10, y: 5, width: 0.4, depth: 0.45, height: 2.4, color: '#1A1A1A', params: { style: 'column' } },
     // Mur d'amplis guitare jardin
-    { name: "Mur d'amplis jardin", kind: 'box', x: -9, y: 14, width: 2.5, depth: 1, height: 2.4, color: '#0A0A0A' },
+    ...row(3, -10, -8, (x, i) => amp(`Stack jardin ${i + 1}`, 'stack', x, 14.3, 1.2)),
     // Mur d'amplis guitare cour
-    { name: "Mur d'amplis cour", kind: 'box', x: 9, y: 14, width: 2.5, depth: 1, height: 2.4, color: '#0A0A0A' },
-    // Grand écran LED arrière
-    { name: 'Écran LED upstage', kind: 'box', x: 0, y: 15.8, width: 18, depth: 0.2, height: 8, color: '#050505' },
+    ...row(3, 8, 10, (x, i) => amp(`Stack cour ${i + 1}`, 'stack', x, 14.3, 1.2)),
     // Rideau de fond (wing)
     { name: 'Rideau jardin', kind: 'drape', x: -10.5, y: 8, width: 0.2, depth: 8, height: 9, color: '#1A1A1A', rotation: 90 },
     { name: 'Rideau cour', kind: 'drape', x: 10.5, y: 8, width: 0.2, depth: 8, height: 9, color: '#1A1A1A', rotation: 90 },
+    lineArray('Line array jardin', -11.8, 1, 8, 16, 1.5),
+    lineArray('Line array cour', 11.8, 1, 8, 16, 1.5),
+    drums('Batterie', 0, 13.6, 1.8, 1, '#111111', '7'),
+    keyboard('Claviers', -7, 12, 1.6, 2),
+    guitar('Guitare', 'electric', 6.5, 12, 1.6),
+    guitar('Guitare 2', 'acoustic', 7.5, 12, 1.6),
+    amp('Ampli basse', 'bass', 5.4, 13.8, 1.2),
+    ...barriers(10, -9, 9, -2.5),
+    ...row(4, -9, 9, (x, i) => co2(`CO2 ${i + 1}`, x, 4.4, 1.2)),
+    ...row(4, -6, 6, (x, i) => spark(`Étincelles ${i + 1}`, x, 4.8, 1.2)),
+    desk('Console façade', 'audio', -1, -14),
+    desk('Console lumière', 'light', 1, -14),
+  ],
+  screens: [
+    screen('Écran LED upstage', 0, 15.8, 18, 8, 1.6, '#050505'),
+    screen('IMAG jardin', -14, 2, 6, 3.4, 6, '#0EA5E9'),
+    screen('IMAG cour', 14, 2, 6, 3.4, 6, '#0EA5E9'),
   ],
 
   looks: [

@@ -104,7 +104,7 @@ export function beamHit(origin: Vec3, dir: Vec3, stage: StageGeometry): BeamHit 
     const p = { x: origin.x + dir.x * t, y: origin.y + dir.y * t, z: -stage.depth };
     if (t > 0.05 && p.y >= 0 && p.y <= stage.wallHeight && Math.abs(p.x) <= stage.width / 2 + 2) hits.push({ surface: 'wall', point: p, normal: { x: 0, y: 0, z: 1 }, distance: t });
   }
-  for (const p of stage.props ?? []) { const h = propHit(origin, dir, p); if (h) hits.push(h); }
+  for (const p of stage.props ?? []) { if (p.hidden) continue; const h = propHit(origin, dir, p); if (h) hits.push(h); }
   hits.sort((a, b) => a.distance - b.distance);
   return hits[0] ?? null;
 }
