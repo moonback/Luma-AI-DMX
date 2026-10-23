@@ -114,6 +114,10 @@ export const commandSchema = z.discriminatedUnion('type', [
       z.object({ kind: z.literal('file'), path: optPath, manufacturerName: z.string().trim().min(1).max(80).default('Open Fixture Library') }),
     ]),
   }),
+  /** MA Fixture Share library installed with grandMA2 onPC (keys are the library file name parts, looked up in its index). */
+  empty('ma2lib.manufacturers'),
+  z.object({ type: z.literal('ma2lib.fixtures'), manufacturer: z.string().min(1).max(200) }),
+  z.object({ type: z.literal('profile.importMa2Lib'), manufacturer: z.string().min(1).max(200), fixture: z.string().min(1).max(200) }),
   // Patch
   z.object({
     type: z.literal('fixture.add'),
@@ -399,6 +403,9 @@ export interface CommandResults {
   'ofl.manufacturers': { key: string; name: string }[];
   'ofl.fixtures': string[];
   'profile.importOfl': { imported: string | null; profileId: string | null; warnings: string[]; errors: string[] };
+  'ma2lib.manufacturers': { dir: string | null; manufacturers: string[] };
+  'ma2lib.fixtures': { key: string; modes: number }[];
+  'profile.importMa2Lib': { imported: string | null; profileId: string | null; warnings: string[]; errors: string[] };
   'fixture.add': { ids: string[] };
   'fixture.update': Void;
   'fixture.remove': Void;

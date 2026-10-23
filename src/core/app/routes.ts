@@ -20,7 +20,7 @@ export const UNCOUNTED = new Set<CommandType>(['audio.features', 'output.univers
 /** Exhaustive at compile time: a new command prefix without a handler does not build. */
 export const ROUTES: { [D in CommandDomain]: (app: AppService, cmd: CommandIn<D>) => unknown } = {
   project: handleProject, onboarding: handleProject,
-  profile: handleFixtures, ofl: handleFixtures, fixture: handleFixtures, patch: handleFixtures,
+  profile: handleFixtures, ofl: handleFixtures, ma2lib: handleFixtures, fixture: handleFixtures, patch: handleFixtures,
   group: handleProgramming, palette: handleProgramming, programmer: handleProgramming, scene: handleProgramming,
   cue: handleProgramming, cueList: handleProgramming, effect: handleProgramming, timeline: handleProgramming,
   music: handleMusic, locate: handleLocate,
