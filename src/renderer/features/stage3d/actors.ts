@@ -135,7 +135,7 @@ function cabinetSeams(s: StageScreen): THREE.LineSegments {
   for (let y = -h / 2 + c; y < h / 2 - 1e-3; y += c) pts.push(-w / 2, y, z, w / 2, y, z);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 }));
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 }));
 }
 
 export function buildScreen(s: StageScreen): ScreenRig {

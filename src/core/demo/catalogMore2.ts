@@ -1,4 +1,5 @@
 import type { DemoSpec } from './catalog';
+import { row, lineArray, groundArray, sub, paStand, monitor, mic, chair, stool, fog, co2, spark, djBooth, desk, barriers, backdrop, arch, screen } from './decor';
 import { C } from './palette';
 import { stadiumConcert } from './catalogStadium';
 import { MORE_DEMOS_3 } from './catalogMore3';
@@ -18,12 +19,16 @@ const karaoke: DemoSpec = {
   ],
   decor: [
     { name: 'Petite scène', kind: 'riser', x: 0, y: 2.5, width: 4, depth: 2.5, height: 0.3 },
-    { name: 'Écran des paroles', kind: 'box', x: 0, y: 0.3, width: 1.2, depth: 0.1, height: 0.8, elevation: 1, color: '#0F172A' },
     { name: 'Micro 1', kind: 'mic', x: -0.6, y: 2, width: 0.3, depth: 0.3, height: 1.6, elevation: 0.3 },
     { name: 'Micro 2', kind: 'mic', x: 0.6, y: 2, width: 0.3, depth: 0.3, height: 1.6, elevation: 0.3 },
     { name: 'Comptoir', kind: 'table', x: -2.5, y: 0.5, width: 1, depth: 0.6, height: 1.1, color: '#78350F' },
-    { name: 'Enceinte jardin', kind: 'speaker', x: -2.7, y: 3.5, width: 0.5, depth: 0.5, height: 0.9 },
-    { name: 'Enceinte cour', kind: 'speaker', x: 2.7, y: 3.5, width: 0.5, depth: 0.5, height: 0.9 },
+    paStand('Enceinte jardin', -2.7, 3.5),
+    paStand('Enceinte cour', 2.7, 3.5),
+    ...row(3, -3, -2, (x, i) => stool(`Tabouret ${i + 1}`, x, -0.1)),
+    monitor('Retour', 0, 1.4, 0.3),
+  ],
+  screens: [
+    screen('Écran des paroles', 0, 0.3, 1.2, 0.7, 1, '#0F172A', { rotation: 180, cabinet: 0 }),
   ],
   looks: [
     { name: 'Ambiance bar', parts: [{ rigs: ['PAR'], colors: [C.amber, C.pink], level: 0.5 }, { rigs: ['BAR'], colors: [C.violet], level: 0.4 }] },
@@ -68,6 +73,12 @@ const christmas: DemoSpec = {
     { name: 'Chalet 4', kind: 'box', x: 7, y: 10, width: 3, depth: 2, height: 2.5, color: '#78350F' },
     { name: 'Scène du maire', kind: 'riser', x: 0, y: 3, width: 4, depth: 2, height: 0.6 },
     { name: 'Façade de la mairie', kind: 'drape', x: 0, y: 15.9, width: 20, depth: 0.1, height: 12, color: '#D6D3D1' },
+    arch('Arche lumineuse', 0, 0.5, 4, 4, '#B91C1C'),
+    mic('Micro du maire', 0, 2.6, 0.6),
+    paStand('Enceinte jardin', -2.4, 2.2),
+    paStand('Enceinte cour', 2.4, 2.2),
+    ...barriers(2, -2.5, 2.5, 6.8, 'vauban'),
+    ...barriers(2, -2.5, 2.5, 11.2, 'vauban'),
   ],
   looks: [
     { name: 'Jour de marché', parts: [{ rigs: ['WASH'], colors: [C.warm], level: 0.5, tilt: 0.6 }, { rigs: ['ARCHE'], colors: [C.warm], level: 0.3 }] },
@@ -116,9 +127,19 @@ const esport: DemoSpec = {
     { name: 'Bureau équipe bleue', kind: 'table', x: -4.5, y: 3, width: 5, depth: 1, height: 0.8, color: '#1E3A8A' },
     { name: 'Bureau équipe rouge', kind: 'table', x: 4.5, y: 3, width: 5, depth: 1, height: 0.8, color: '#7F1D1D' },
     { name: 'Estrade commentateurs', kind: 'riser', x: 0, y: 6, width: 3, depth: 1.5, height: 0.5 },
-    { name: 'Écran géant', kind: 'drape', x: 0, y: 7.9, width: 14, depth: 0.1, height: 6, color: '#020617' },
-    { name: 'Enceinte jardin', kind: 'speaker', x: -7.5, y: 0.5, width: 0.8, depth: 0.8, height: 2 },
-    { name: 'Enceinte cour', kind: 'speaker', x: 7.5, y: 0.5, width: 0.8, depth: 0.8, height: 2 },
+    lineArray('Line array jardin', -8.8, 0.5, 5),
+    lineArray('Line array cour', 8.8, 0.5, 5),
+    ...row(5, -6.5, -2.5, (x, i) => chair(`Joueur bleu ${i + 1}`, x, 3.7, 0, '#1E3A8A')),
+    ...row(5, 2.5, 6.5, (x, i) => chair(`Joueur rouge ${i + 1}`, x, 3.7, 0, '#7F1D1D')),
+    ...row(2, -0.6, 0.6, (x, i) => mic(`Micro commentateur ${i + 1}`, x, 5.6, 0.5, true)),
+    co2('CO2 jardin', -7, 1),
+    co2('CO2 cour', 7, 1),
+    desk('Régie', 'light', 0, -9),
+  ],
+  screens: [
+    screen('Écran géant', 0, 7.9, 14, 6, 1.2, '#020617'),
+    screen('IMAG jardin', -10, 1, 4, 2.25, 4, '#1D4ED8'),
+    screen('IMAG cour', 10, 1, 4, 2.25, 4, '#B91C1C'),
   ],
   looks: [
     { name: 'Avant-match', parts: [{ rigs: ['WASH'], colors: [C.violet, C.cyan], level: 0.5 }, { rigs: ['BAR'], colors: [C.violet], level: 0.4 }] },
@@ -168,6 +189,10 @@ const contemporary: DemoSpec = {
     { name: 'Rocher', kind: 'box', x: -3, y: 6.5, width: 1.4, depth: 1, height: 0.6, color: '#57534E' },
     { name: 'Pendrillon jardin', kind: 'drape', x: -5.6, y: 3, width: 1, depth: 0.1, height: 8 },
     { name: 'Pendrillon cour', kind: 'drape', x: 5.6, y: 3, width: 1, depth: 0.1, height: 8 },
+    backdrop('Cyclorama', 'canvas', 0, 9.8, 11, 7, '#CBD5E1'),
+    fog('Fumée lourde jardin', -5, 8.5, 'low', 90),
+    fog('Fumée lourde cour', 5, 8.5, 'low', -90),
+    fog('Hazer', 0, 9.2, 'haze'),
   ],
   looks: [
     { name: 'Prologue', parts: [{ rigs: ['CYCLO'], colors: [C.navy], level: 0.3 }] },
@@ -218,10 +243,22 @@ const openAir: DemoSpec = {
   ],
   decor: [
     { name: 'Booth DJ', kind: 'riser', x: 0, y: 6, width: 4, depth: 2.5, height: 1.2 },
-    { name: 'Platines', kind: 'table', x: 0, y: 6, width: 2.6, depth: 0.8, height: 1, elevation: 1.2 },
-    { name: 'Stack jardin', kind: 'speaker', x: -7.4, y: 1, width: 1.2, depth: 1.2, height: 3 },
-    { name: 'Stack cour', kind: 'speaker', x: 7.4, y: 1, width: 1.2, depth: 1.2, height: 3 },
+    djBooth('Booth', 0, 6, 1.2, 2.6),
+    sub('Sub jardin bas', -7.4, 1),
+    sub('Sub jardin haut', -7.4, 1, 0.55),
+    groundArray('Line array jardin', -7.4, 1, 1.1, 6),
+    sub('Sub cour bas', 7.4, 1),
+    sub('Sub cour haut', 7.4, 1, 0.55),
+    groundArray('Line array cour', 7.4, 1, 1.1, 6),
     { name: 'Toile tendue', kind: 'drape', x: 0, y: 9.9, width: 16, depth: 0.1, height: 7, color: '#111827' },
+    ...row(4, -6, 6, (x, i) => co2(`CO2 ${i + 1}`, x, 0.3)),
+    spark('Étincelles jardin', -3, 4.6),
+    spark('Étincelles cour', 3, 4.6),
+    ...barriers(7, -6, 6, -2),
+    fog('Hazer', 0, 9.3, 'haze'),
+  ],
+  screens: [
+    screen('Mur LED', 0, 8.6, 8, 4.5, 1.5, '#F97316'),
   ],
   looks: [
     { name: 'Coucher de soleil', parts: [{ rigs: ['WASH'], colors: [C.orange, C.pink], level: 0.6 }, { rigs: ['PAR'], colors: [C.amber], level: 0.4 }] },

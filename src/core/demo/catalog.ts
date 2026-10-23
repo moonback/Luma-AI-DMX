@@ -1,4 +1,6 @@
-import type { EffectParams, EffectType, StageProp } from '../model/schemas';
+import type { EffectParams, EffectType } from '../model/schemas';
+import { row, barriers, lineArray, sub, monitor, drums, amp, guitar, keyboard, piano, mic, musicStand, chair, fog, co2, spark, djBooth, desk, flightCase, backdrop, arch, screen } from './decor';
+import type { DemoProp, DemoScreen } from './decor';
 import { C } from './palette';
 import { MORE_DEMOS } from './catalogMore';
 
@@ -23,8 +25,8 @@ export interface DemoRig {
   alongDepth?: boolean;
   color: string;
 }
-/** Set piece: a StageProp without id; elevation, rotation and colour are optional. */
-export type DemoProp = Omit<StageProp, 'id' | 'elevation' | 'rotation' | 'color'> & Partial<Pick<StageProp, 'elevation' | 'rotation' | 'color'>>;
+/** Set piece: a StageProp without id; elevation, rotation and colour are optional (helpers in `./decor`). */
+export type { DemoProp, DemoScreen };
 export interface DemoLookPart { rigs: string[]; colors: string[]; level: number; pan?: number; tilt?: number }
 export interface DemoLook { name: string; parts: DemoLookPart[] }
 export interface DemoEffect { name: string; type: EffectType; rigs: string[]; params: Partial<EffectParams>; blend?: 'override' | 'scale' }
@@ -42,6 +44,8 @@ export interface DemoSpec {
   /** Rigs mounted at 3 m or more hang on a generated truss. */
   rigs: DemoRig[];
   decor: DemoProp[];
+  /** LED walls and video screens (colour source). */
+  screens?: DemoScreen[];
   looks: DemoLook[];
   effects: DemoEffect[];
   cueLists: { name: string; loop?: boolean; cues: DemoCue[] }[];
@@ -63,10 +67,21 @@ const club: DemoSpec = {
   ],
   decor: [
     { name: 'Praticable DJ', kind: 'riser', x: 0, y: 2.5, width: 3, depth: 2, height: 0.4 },
-    { name: 'Cabine DJ', kind: 'table', x: 0, y: 2.3, width: 2.4, depth: 0.8, height: 1, elevation: 0.4 },
+    djBooth('Cabine DJ', 0, 2.3, 0.4, 2.4),
     { name: 'Enceinte jardin', kind: 'speaker', x: -4.4, y: 0.6, width: 0.8, depth: 0.8, height: 1.8 },
     { name: 'Enceinte cour', kind: 'speaker', x: 4.4, y: 0.6, width: 0.8, depth: 0.8, height: 1.8 },
     { name: 'Rideau de fond', kind: 'drape', x: 0, y: 5.9, width: 10, depth: 0.1, height: 5 },
+    sub('Sub jardin', -3.6, 0.4),
+    sub('Sub cour', 3.6, 0.4),
+    fog('Machine à fumée', -3.5, 5.3),
+    fog('Hazer', 3.5, 5.3, 'haze'),
+    co2('Jet CO2 jardin', -2.5, 0.3),
+    co2('Jet CO2 cour', 2.5, 0.3),
+    ...barriers(4, -3, 3, -1.2),
+    desk('Régie lumière', 'light', 0, -9),
+  ],
+  screens: [
+    screen('Mur LED DJ', 0, 5.6, 6, 3, 0.8, '#7C3AED'),
   ],
   looks: [
     { name: 'Warm-up', parts: [{ rigs: ['PAR'], colors: [C.violet, C.blue], level: 0.45 }, { rigs: ['BAR'], colors: [C.violet], level: 0.3 }] },
@@ -110,12 +125,28 @@ const pop: DemoSpec = {
   ],
   decor: [
     { name: 'Praticable batterie', kind: 'riser', x: 0, y: 5.5, width: 3, depth: 2.5, height: 0.6 },
-    { name: 'Enceinte jardin', kind: 'speaker', x: -5.5, y: 0.6, width: 0.6, depth: 0.6, height: 1.2 },
-    { name: 'Enceinte cour', kind: 'speaker', x: 5.5, y: 0.6, width: 0.6, depth: 0.6, height: 1.2 },
+    lineArray('Line array jardin', -6.8, 0.5, 4.5),
+    lineArray('Line array cour', 6.8, 0.5, 4.5),
     { name: 'Retour chant', kind: 'monitor', x: 0, y: 1.2, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
     { name: 'Micro chant', kind: 'mic', x: 0, y: 2.3, width: 0.3, depth: 0.3, height: 1.6 },
     { name: 'Micro guitare', kind: 'mic', x: -3.5, y: 3, width: 0.3, depth: 0.3, height: 1.6 },
     { name: 'Micro basse', kind: 'mic', x: 3.5, y: 3, width: 0.3, depth: 0.3, height: 1.6 },
+    drums('Batterie', 0, 5.6, 0.6),
+    amp('Stack guitare', 'stack', -3.6, 6.2),
+    amp('Ampli basse', 'bass', 3.6, 6.2),
+    guitar('Guitare électrique', 'electric', -4.3, 4.6),
+    guitar('Basse', 'bass', 4.3, 4.6),
+    keyboard('Clavier', -4.5, 3.2, 0, 2),
+    monitor('Retour guitare', -3.5, 2),
+    monitor('Retour basse', 3.5, 2),
+    sub('Sub jardin', -5.5, 0.2, 0, '2x18'),
+    sub('Sub cour', 5.5, 0.2, 0, '2x18'),
+    desk('Console façade', 'audio', -1, -10),
+    desk('Console lumière', 'light', 1, -10),
+    ...barriers(5, -4, 4, -1.5),
+  ],
+  screens: [
+    screen('Mur LED', 0, 7.7, 8, 4.5, 1.4, '#2563EB'),
   ],
   looks: [
     { name: 'Intro', parts: [{ rigs: ['SPOT'], colors: [C.blue], level: 0.5, tilt: 0.6 }, { rigs: ['BAR'], colors: [C.navy], level: 0.4 }] },
@@ -161,6 +192,10 @@ const theatre: DemoSpec = {
     { name: 'Pendrillon cour 2', kind: 'drape', x: 4.4, y: 6, width: 1.2, depth: 0.1, height: 7 },
     { name: 'Table du salon', kind: 'table', x: 1, y: 4, width: 1.4, depth: 0.8, height: 0.75, color: '#6B4226' },
     { name: 'Fauteuil', kind: 'box', x: -0.2, y: 4, width: 0.6, depth: 0.6, height: 0.9, color: '#7F1D1D' },
+    chair('Chaise du salon', 1.9, 4.5, -60, '#6B4226'),
+    chair('Chaise 2', 0.1, 4.6, 40, '#6B4226'),
+    backdrop('Porte du salon', 'frame', -2.5, 7.2, 1.2, 2.4, '#A16207'),
+    backdrop('Toile peinte', 'canvas', 0, 8.7, 8, 5, '#C4B5A0'),
   ],
   looks: [
     { name: 'Entrée public', parts: [{ rigs: ['CYCLO'], colors: [C.navy], level: 0.3 }] },
@@ -204,6 +239,11 @@ const wedding: DemoSpec = {
     { name: 'Table 4', kind: 'table', x: 6, y: 9, width: 1.6, depth: 1.6, height: 0.75, color: '#F5F0E6' },
     { name: 'Enceinte jardin', kind: 'speaker', x: -7.5, y: 11, width: 0.6, depth: 0.6, height: 1.2 },
     { name: 'Enceinte cour', kind: 'speaker', x: 7.5, y: 11, width: 0.6, depth: 0.6, height: 1.2 },
+    arch('Arche fleurie', 0, 10.8, 3.5, 3.5, '#F5F0E6'),
+    djBooth('Régie DJ', -4.5, 11, 0, 2),
+    mic('Micro des discours', 3.6, 2.2, 0, true),
+    fog('Fumée lourde (première danse)', 2.5, 7, 'low'),
+    ...row(6, -2.5, 2.5, (x, i) => chair(`Chaise d’honneur ${i + 1}`, x, 2.6, 0, '#F5F0E6')),
   ],
   looks: [
     { name: 'Cocktail', parts: [{ rigs: ['UP'], colors: [C.amber], level: 0.6 }, { rigs: ['BAR'], colors: [C.warm], level: 0.5 }] },
@@ -242,6 +282,13 @@ const conference: DemoSpec = {
     { name: 'Enceinte jardin', kind: 'speaker', x: -5.5, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
     { name: 'Enceinte cour', kind: 'speaker', x: 5.5, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
     { name: 'Rideau de fond', kind: 'drape', x: 0, y: 5.9, width: 12, depth: 0.1, height: 4, color: '#1A237E' },
+    ...row(3, -3, -1, (x, i) => chair(`Chaise intervenant ${i + 1}`, x, 3.1)),
+    mic('Micro pupitre', 3, 2.4, 0, true),
+    desk('Régie son', 'audio', -1, -8),
+    desk('Régie lumière', 'light', 1, -8),
+  ],
+  screens: [
+    screen('Écran de projection', 0, 5.7, 6, 3.4, 1.2, '#1D4ED8', { cabinet: 0 }),
   ],
   looks: [
     { name: 'Accueil', parts: [{ rigs: ['CONTRE'], colors: [C.teal], level: 0.6, tilt: 0.55 }, { rigs: ['BAR'], colors: [C.blue], level: 0.6 }] },
@@ -273,9 +320,12 @@ const jazz: DemoSpec = {
   ],
   decor: [
     { name: 'Praticable batterie', kind: 'riser', x: 1.5, y: 3, width: 2, depth: 1.6, height: 0.3 },
-    { name: 'Piano', kind: 'box', x: -1.8, y: 2.8, width: 1.5, depth: 1.4, height: 1, color: '#0B0B0B' },
+    piano('Piano à queue', -1.8, 2.4, 20),
     { name: 'Micro', kind: 'mic', x: 0, y: 1, width: 0.3, depth: 0.3, height: 1.6 },
     { name: 'Rideau de velours', kind: 'drape', x: 0, y: 3.95, width: 6, depth: 0.1, height: 3, color: '#3B0D0D' },
+    drums('Batterie jazz', 1.6, 3.1, 0.3, 0.8, '#1E3A8A', '4'),
+    musicStand('Pupitre soliste', 0.6, 1.4),
+    amp('Ampli basse', 'bass', 0.3, 3.4),
   ],
   looks: [
     { name: 'Ambre', parts: [{ rigs: ['PAR'], colors: [C.amber, C.orange], level: 0.6 }] },
@@ -308,12 +358,32 @@ const festival: DemoSpec = {
   decor: [
     { name: 'Praticable batterie', kind: 'riser', x: 0, y: 7, width: 4, depth: 3, height: 0.8 },
     { name: 'Praticable claviers', kind: 'riser', x: -5, y: 7, width: 3, depth: 2, height: 0.6 },
-    { name: 'Line array jardin', kind: 'speaker', x: -9.8, y: 1, width: 1.2, depth: 1.2, height: 4 },
-    { name: 'Line array cour', kind: 'speaker', x: 9.8, y: 1, width: 1.2, depth: 1.2, height: 4 },
+    lineArray('Line array jardin', -10.2, 0.8, 6, 12, 1.5),
+    lineArray('Line array cour', 10.2, 0.8, 6, 12, 1.5),
     { name: 'Retour jardin', kind: 'monitor', x: -4, y: 1.5, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
     { name: 'Retour centre', kind: 'monitor', x: 0, y: 1.5, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
     { name: 'Retour cour', kind: 'monitor', x: 4, y: 1.5, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
     { name: 'Escalier coulisses', kind: 'stairs', x: 8.5, y: 11, width: 1.2, depth: 2, height: 1 },
+    drums('Batterie', 0, 7.2, 0.8),
+    keyboard('Claviers', -5, 7, 0.6, 2),
+    amp('Stack guitare', 'stack', -2.8, 8.9),
+    amp('Ampli basse', 'bass', 2.8, 8.9),
+    guitar('Guitare', 'electric', -4.5, 4.5),
+    guitar('Basse', 'bass', 4.5, 4.5),
+    ...row(4, -7.5, 7.5, (x, i) => sub(`Sub ${i + 1}`, x, -0.6, 0, '2x18')),
+    ...barriers(7, -6, 6, -2.2),
+    co2('CO2 jardin', -8, 0.4),
+    co2('CO2 cour', 8, 0.4),
+    spark('Étincelles jardin', -6, 0.4),
+    spark('Étincelles cour', 6, 0.4),
+    desk('Console façade', 'audio', -1, -14),
+    desk('Console lumière', 'light', 1, -14),
+    flightCase('Flight-case', 7.5, 11.2),
+  ],
+  screens: [
+    screen('Mur LED', 0, 11.6, 14, 6, 1.6, '#DB2777'),
+    screen('IMAG jardin', -11.8, 1.5, 4, 2.25, 5, '#0EA5E9'),
+    screen('IMAG cour', 11.8, 1.5, 4, 2.25, 5, '#0EA5E9'),
   ],
   looks: [
     { name: 'Attente', parts: [{ rigs: ['PAR'], colors: [C.blue], level: 0.4 }, { rigs: ['BAR'], colors: [C.navy], level: 0.4 }] },
@@ -364,6 +434,14 @@ const runway: DemoSpec = {
     { name: 'Podium', kind: 'riser', x: 0, y: 10, width: 2.4, depth: 20, height: 0.6, color: '#F8FAFC' },
     { name: 'Estrade photographes', kind: 'riser', x: 0, y: -1.5, width: 4, depth: 1.2, height: 0.5 },
     { name: 'Rideau de fond', kind: 'drape', x: 0, y: 19.9, width: 6, depth: 0.1, height: 4 },
+    arch('Arche d’entrée', 0, 19.2, 3.2, 3.5, '#E5E7EB', false),
+    fog('Fumée lourde', 1.6, 18.8, 'low'),
+    djBooth('DJ', 2.2, 19.4, 0, 1.6),
+    ...row(4, 3, 16, (y, i) => chair(`Premier rang jardin ${i + 1}`, -2.2, y, 90, '#18181B')),
+    ...row(4, 3, 16, (y, i) => chair(`Premier rang cour ${i + 1}`, 2.2, y, -90, '#18181B')),
+  ],
+  screens: [
+    screen('Mur LED', 0, 19.7, 5, 2.8, 3.6, '#F8FAFC'),
   ],
   looks: [
     { name: 'Entrée public', parts: [{ rigs: ['FOND'], colors: [C.violet], level: 0.4 }] },
@@ -401,6 +479,10 @@ const gospel: DemoSpec = {
     { name: 'Colonne jardin', kind: 'column', x: -4.8, y: 7, width: 0.8, depth: 0.8, height: 10, color: '#9CA3AF' },
     { name: 'Colonne cour', kind: 'column', x: 4.8, y: 7, width: 0.8, depth: 0.8, height: 10, color: '#9CA3AF' },
     { name: 'Micro soliste', kind: 'mic', x: 0, y: 1.5, width: 0.3, depth: 0.3, height: 1.6 },
+    piano('Piano', -3.6, 7.6, 30),
+    keyboard('Orgue', 3.6, 7.8, 0, 2, 'organ'),
+    ...row(3, -2.5, 2.5, (x, i) => mic(`Micro chœur ${i + 1}`, x, 8.2)),
+    musicStand('Pupitre du chef', 0, 4),
   ],
   looks: [
     { name: 'Recueillement', parts: [{ rigs: ['PILIER'], colors: [C.navy, C.violet], level: 0.4 }, { rigs: ['VOUTE'], colors: [C.blue], level: 0.4, tilt: 0.2 }] },
@@ -435,6 +517,9 @@ const gala: DemoSpec = {
     { name: 'Barre de danse', kind: 'box', x: -2.5, y: 6, width: 3, depth: 0.1, height: 1.1, color: '#A16207' },
     { name: 'Enceinte jardin', kind: 'speaker', x: -4.8, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
     { name: 'Enceinte cour', kind: 'speaker', x: 4.8, y: 0.5, width: 0.6, depth: 0.6, height: 1.2 },
+    backdrop('Cyclorama', 'canvas', 0, 6.8, 9, 4.5, '#E0E7FF'),
+    fog('Fumée lourde', 3.6, 6.2, 'low'),
+    desk('Régie', 'light', 0, -7),
   ],
   looks: [
     { name: 'Classique', parts: [{ rigs: ['FACE'], colors: ['#E0E8FF'], level: 0.7 }, { rigs: ['CONTRE'], colors: [C.blue], level: 0.6 }] },

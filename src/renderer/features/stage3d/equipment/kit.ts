@@ -101,14 +101,14 @@ export class Builder {
   }
 }
 
-/** Distance (m) beyond which a detailed piece is drawn as its simple outline. */
-export const LOD_DISTANCE = 28;
+/** Distance (m) beyond which a detailed piece is drawn as its simple outline (beyond the default views of a stadium). */
+export const LOD_DISTANCE = 60;
 
-/** Detailed model near the camera, a body-coloured box of the footprint far away. */
-export function withLod(detailed: THREE.Object3D, w: number, h: number, d: number, mat: THREE.Material): THREE.LOD {
+/** Detailed model near the camera, a dark, slightly lower box of the footprint far away (a silhouette, not a coloured cube). */
+export function withLod(detailed: THREE.Object3D, w: number, h: number, d: number, mat: THREE.MeshStandardMaterial): THREE.LOD {
   const lod = new THREE.LOD();
   const far = new THREE.Group();
-  new Builder(far).block(w, h, d, 0, 0, 0, mat);
+  new Builder(far).block(w * 0.9, h * 0.8, d * 0.9, 0, 0, 0, new THREE.MeshStandardMaterial({ color: 0x1a1c21, roughness: 0.9, emissive: mat.emissive }));
   lod.addLevel(detailed, 0);
   lod.addLevel(far, LOD_DISTANCE);
   return lod;

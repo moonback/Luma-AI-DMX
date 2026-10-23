@@ -1,4 +1,5 @@
 import type { DemoSpec } from './catalog';
+import { row, lineArray, groundArray, sub, paStand, monitor, drums, amp, guitar, keyboard, piano, mic, musicStand, chair, stool, fog, co2, spark, djBooth, desk, flightCase, barriers, backdrop, arch, screen } from './decor';
 import { C } from './palette';
 
 /** Third batch: ten more fictional demos (see `catalog.ts`). */
@@ -21,6 +22,9 @@ const opera: DemoSpec = {
     { name: 'Colonne jardin', kind: 'column', x: -4, y: 7, width: 0.8, depth: 0.8, height: 6, color: '#D6D3D1' },
     { name: 'Colonne cour', kind: 'column', x: 4, y: 7, width: 0.8, depth: 0.8, height: 6, color: '#D6D3D1' },
     { name: 'Toile peinte', kind: 'drape', x: 0, y: 9.9, width: 14, depth: 0.1, height: 8 },
+    ...row(4, -4.5, 4.5, (x, i) => musicStand(`Pupitre fosse ${i + 1}`, x, 0.5, 0.1, 180)),
+    backdrop('Porte du palais', 'frame', 0, 9.2, 2.4, 3.6, '#D6D3D1'),
+    fog('Fumée lourde', 3, 9, 'low'),
   ],
   looks: [
     { name: 'Ouverture', parts: [{ rigs: ['CYCLO'], colors: [C.navy], level: 0.4 }, { rigs: ['RAMPE'], colors: [C.warm], level: 0.3 }] },
@@ -62,10 +66,16 @@ const cathedral: DemoSpec = {
   ],
   decor: [
     { name: 'Façade de la cathédrale', kind: 'drape', x: 0, y: 13.95, width: 24, depth: 0.1, height: 20, color: '#E7E5E4' },
-    { name: 'Tour nord', kind: 'column', x: -8, y: 13, width: 4, depth: 2, height: 26, color: '#D6D3D1' },
-    { name: 'Tour sud', kind: 'column', x: 8, y: 13, width: 4, depth: 2, height: 26, color: '#D6D3D1' },
+    { name: 'Tour nord', kind: 'column', x: -8, y: 13, width: 4, depth: 2, height: 20, color: '#D6D3D1' },
+    { name: 'Tour sud', kind: 'column', x: 8, y: 13, width: 4, depth: 2, height: 20, color: '#D6D3D1' },
     { name: 'Marches du portail', kind: 'stairs', x: 0, y: 12.5, width: 6, depth: 1.5, height: 0.8 },
-    { name: 'Régie', kind: 'table', x: 0, y: 1, width: 2, depth: 1, height: 1 },
+    desk('Régie', 'light', 0, 1),
+    groundArray('Diffusion jardin', -10, 3, 0.55, 6),
+    sub('Sub jardin', -10, 3),
+    groundArray('Diffusion cour', 10, 3, 0.55, 6),
+    sub('Sub cour', 10, 3),
+    ...barriers(6, -7.5, 7.5, 4.5, 'vauban'),
+    fog('Hazer', 0, 11, 'haze'),
   ],
   looks: [
     { name: 'Pierre au naturel', parts: [{ rigs: ['FACADE'], colors: [C.warm], level: 0.7 }] },
@@ -112,11 +122,19 @@ const hiphop: DemoSpec = {
   ],
   decor: [
     { name: 'Praticable DJ', kind: 'riser', x: 2.5, y: 5, width: 2, depth: 1.5, height: 0.6 },
-    { name: 'Platines', kind: 'table', x: 2.5, y: 5, width: 1.6, depth: 0.6, height: 1, elevation: 0.6 },
+    djBooth('Platines', 2.5, 5, 0.6, 1.6),
     { name: 'Micro MC', kind: 'mic', x: 0, y: 2, width: 0.3, depth: 0.3, height: 1.6 },
-    { name: 'Retour jardin', kind: 'monitor', x: -1, y: 1, width: 0.6, depth: 0.5, height: 0.35 },
-    { name: 'Retour cour', kind: 'monitor', x: 1, y: 1, width: 0.6, depth: 0.5, height: 0.35 },
+    monitor('Retour jardin', -1, 1),
+    monitor('Retour cour', 1, 1),
     { name: 'Rideau de fond', kind: 'drape', x: 0, y: 6.9, width: 10, depth: 0.1, height: 5 },
+    mic('Micro backeur', -1.5, 2.6, 0, true),
+    sub('Sub jardin', -4.4, 0.4, 0, '2x18'),
+    sub('Sub cour', 4.4, 0.4, 0, '2x18'),
+    co2('CO2 jardin', -3, 0.3),
+    co2('CO2 cour', 3, 0.3),
+  ],
+  screens: [
+    screen('Mur LED', 0, 6.6, 6, 3.4, 1.2, '#EAB308'),
   ],
   looks: [
     { name: 'Intro beat', parts: [{ rigs: ['PAR'], colors: [C.violet], level: 0.5 }] },
@@ -166,6 +184,10 @@ const gallery: DemoSpec = {
     { name: 'Socle cour', kind: 'box', x: 3, y: 6, width: 0.8, depth: 0.8, height: 1, color: '#E7E5E4' },
     { name: 'Sculpture', kind: 'column', x: 0, y: 4, width: 0.6, depth: 0.6, height: 1.8, color: '#A8A29E' },
     { name: 'Bar à champagne', kind: 'table', x: -4.5, y: 1, width: 2, depth: 0.6, height: 1.1, color: '#E5E7EB' },
+    backdrop('Toile 1', 'panel', -3.5, 7.85, 1.4, 1, '#B45309', 1.3),
+    backdrop('Toile 2', 'panel', 0, 7.85, 2, 1.4, '#1D4ED8', 1.1),
+    backdrop('Toile 3', 'panel', 3.5, 7.85, 1.2, 1.2, '#BE123C', 1.2),
+    ...row(2, -5, -4, (x, i) => stool(`Tabouret ${i + 1}`, x, 0.4)),
   ],
   looks: [
     { name: 'Accueil', parts: [{ rigs: ['WASH'], colors: [C.warm], level: 0.6, tilt: 0.6 }, { rigs: ['MUR'], colors: [C.warm], level: 0.5 }] },
@@ -204,11 +226,16 @@ const basketball: DemoSpec = {
     { prefix: 'STR', label: 'Strobes', profile: 'demo-strobe', mode: '2ch', count: 6, y: 7.5, height: 12, span: 0.8, color: '#FACC15' },
   ],
   decor: [
-    { name: 'Parquet', kind: 'riser', x: 0, y: 7.5, width: 28, depth: 15, height: 0.02, color: '#B45309' },
+    { name: 'Parquet', kind: 'riser', x: 0, y: 7.5, width: 28, depth: 15, height: 0.05, color: '#B45309' },
     { name: 'Panier jardin', kind: 'column', x: -13, y: 7.5, width: 0.5, depth: 0.5, height: 3.05, color: '#E5E7EB' },
     { name: 'Panier cour', kind: 'column', x: 13, y: 7.5, width: 0.5, depth: 0.5, height: 3.05, color: '#E5E7EB' },
     { name: 'Table de marque', kind: 'table', x: 0, y: 0.5, width: 4, depth: 0.8, height: 0.8 },
     { name: 'Écran géant', kind: 'box', x: 0, y: 7.5, width: 3, depth: 3, height: 2, elevation: 9, color: '#020617' },
+    ...row(5, -7, -3, (x, i) => chair(`Banc visiteurs ${i + 1}`, x, -0.3, 180, '#1E3A8A')),
+    ...row(5, 3, 7, (x, i) => chair(`Banc Lynx ${i + 1}`, x, -0.3, 180, '#B45309')),
+    lineArray('Cluster central 1', -1, 7.5, 10, 6),
+    lineArray('Cluster central 2', 1, 7.5, 10, 6),
+    desk('Régie show', 'light', 0, -4),
   ],
   looks: [
     { name: 'Échauffement', parts: [{ rigs: ['WASH'], colors: [C.white], level: 0.7, tilt: 0.5 }] },
@@ -258,7 +285,15 @@ const talkShow: DemoSpec = {
     { name: 'Bureau de l’animateur', kind: 'table', x: -2, y: 4, width: 2.5, depth: 1, height: 0.8, color: '#1E293B' },
     { name: 'Canapé des invités', kind: 'box', x: 2.5, y: 4.5, width: 2.5, depth: 0.9, height: 0.5, color: '#7C3AED' },
     { name: 'Estrade musiciens', kind: 'riser', x: 4.5, y: 7, width: 3.5, depth: 2, height: 0.4 },
-    { name: 'Mur LED', kind: 'drape', x: 0, y: 8.95, width: 14, depth: 0.1, height: 4, color: '#020617' },
+    drums('Batterie', 5.4, 7.4, 0.4, 0.75),
+    keyboard('Clavier', 3.4, 6.6, 0.4),
+    guitar('Guitare', 'electric', 6.1, 6.4, 0.4),
+    mic('Micro chant', 4.5, 6.2, 0.4),
+    ...row(2, 2, 3, (x, i) => chair(`Fauteuil invité ${i + 1}`, x, 5.3, 0, '#7C3AED')),
+    { name: 'Passe-câble', kind: 'cable', x: 0, y: 1.5, width: 2, depth: 0.5, height: 0.06, color: '#F59E0B', params: { channels: 3 } },
+  ],
+  screens: [
+    screen('Mur LED', 0, 8.8, 12, 4, 0.3, '#7C3AED'),
   ],
   looks: [
     { name: 'Générique', parts: [{ rigs: ['DECOR'], colors: [C.violet, C.cyan], level: 1 }, { rigs: ['SPOT'], colors: [C.white], level: 0.9, tilt: 0.4 }, { rigs: ['CONTRE'], colors: [C.violet], level: 0.7, tilt: 0.6 }] },
@@ -305,11 +340,16 @@ const poolParty: DemoSpec = {
   decor: [
     { name: 'Piscine', kind: 'box', x: 0, y: 5, width: 10, depth: 5, height: 0.05, color: '#0891B2' },
     { name: 'Booth DJ', kind: 'riser', x: 0, y: 1.5, width: 3, depth: 1.5, height: 0.5 },
-    { name: 'Platines', kind: 'table', x: 0, y: 1.5, width: 2, depth: 0.6, height: 1, elevation: 0.5 },
+    djBooth('Platines', 0, 1.5, 0.5, 2),
     { name: 'Transats jardin', kind: 'box', x: -6.5, y: 5, width: 1, depth: 2, height: 0.4, color: '#F5F5F4' },
     { name: 'Transats cour', kind: 'box', x: 6.5, y: 5, width: 1, depth: 2, height: 0.4, color: '#F5F5F4' },
     { name: 'Palmier jardin', kind: 'column', x: -7, y: 9, width: 0.4, depth: 0.4, height: 4, color: '#65A30D' },
     { name: 'Palmier cour', kind: 'column', x: 7, y: 9, width: 0.4, depth: 0.4, height: 4, color: '#65A30D' },
+    paStand('Enceinte jardin', -2.6, 1.3),
+    paStand('Enceinte cour', 2.6, 1.3),
+    co2('CO2 jardin', -1.8, 0.4),
+    co2('CO2 cour', 1.8, 0.4),
+    arch('Arche fleurie', 0, 9.2, 4, 3.5, '#F472B6'),
   ],
   looks: [
     { name: 'Golden hour', parts: [{ rigs: ['WASH'], colors: [C.gold, C.orange], level: 0.7, tilt: 0.6 }, { rigs: ['BORD'], colors: [C.amber], level: 0.5 }] },
@@ -355,6 +395,11 @@ const magician: DemoSpec = {
     { name: 'Table de lévitation', kind: 'table', x: 2, y: 4, width: 1.6, depth: 0.8, height: 0.9 },
     { name: 'Escalier', kind: 'stairs', x: 0, y: 6.5, width: 2.5, depth: 1.2, height: 0.9 },
     { name: 'Rideau rouge', kind: 'drape', x: 0, y: 7.9, width: 10, depth: 0.1, height: 6, color: '#7F1D1D' },
+    backdrop('Cadre des apparitions', 'frame', 0, 5.3, 2, 2.6, '#FBBF24'),
+    fog('Fumée lourde', -3.5, 7.2, 'low'),
+    spark('Étincelles jardin', -3, 1),
+    spark('Étincelles cour', 3, 1),
+    chair('Chaise de l’assistante', -3.6, 3.2, 30, '#7F1D1D'),
   ],
   looks: [
     { name: 'Mystère', parts: [{ rigs: ['CONTRE'], colors: [C.violet], level: 0.5, tilt: 0.6 }, { rigs: ['RAMPE'], colors: [C.navy], level: 0.2 }] },
@@ -403,9 +448,13 @@ const symphony: DemoSpec = {
   decor: [
     { name: 'Gradins de l’orchestre', kind: 'stairs', x: 0, y: 8, width: 16, depth: 4, height: 1.2 },
     { name: 'Podium du chef', kind: 'riser', x: 0, y: 2, width: 1.2, depth: 1.2, height: 0.3 },
-    { name: 'Pupitre du chef', kind: 'table', x: 0, y: 2.3, width: 0.6, depth: 0.4, height: 1.1, elevation: 0.3 },
-    { name: 'Piano du soliste', kind: 'box', x: -3, y: 3, width: 1.5, depth: 2.5, height: 1, color: '#0A0A0A' },
+    musicStand('Pupitre du chef', 0, 2.3, 0.3, 180),
+    piano('Piano du soliste', -3, 3.2, 180),
     { name: 'Buffet d’orgue', kind: 'drape', x: 0, y: 11.95, width: 18, depth: 0.1, height: 10, color: '#78350F' },
+    ...row(8, -6, 6, (x, i) => chair(`Cordes ${i + 1}`, x, 4.6, 180)),
+    ...row(8, -6, 6, (x, i) => musicStand(`Pupitre cordes ${i + 1}`, x, 4.1, 0, 180)),
+    ...row(6, -5, 5, (x, i) => chair(`Vents ${i + 1}`, x, 6, 180)),
+    ...row(6, -5, 5, (x, i) => musicStand(`Pupitre vents ${i + 1}`, x, 5.5, 0, 180)),
   ],
   looks: [
     { name: 'Salle', parts: [{ rigs: ['FACE'], colors: [C.warm], level: 0.3, tilt: 0.6 }] },
@@ -445,11 +494,17 @@ const streetStage: DemoSpec = {
   ],
   decor: [
     { name: 'Scène mobile', kind: 'riser', x: 0, y: 2.5, width: 8, depth: 5, height: 1 },
-    { name: 'Batterie', kind: 'box', x: 0, y: 3.8, width: 1.6, depth: 1.2, height: 1, elevation: 1, color: '#334155' },
+    drums('Batterie', 0, 3.8, 1, 0.85),
     { name: 'Micro chant', kind: 'mic', x: 0, y: 1.5, width: 0.3, depth: 0.3, height: 1.6, elevation: 1 },
-    { name: 'Ampli guitare', kind: 'speaker', x: -2.5, y: 3.5, width: 0.7, depth: 0.4, height: 0.7, elevation: 1 },
+    amp('Ampli guitare', 'combo', -2.5, 3.6, 1),
     { name: 'Enceinte jardin', kind: 'speaker', x: -4.5, y: 0.5, width: 0.6, depth: 0.6, height: 1.5 },
     { name: 'Enceinte cour', kind: 'speaker', x: 4.5, y: 0.5, width: 0.6, depth: 0.6, height: 1.5 },
+    amp('Ampli basse', 'bass', 2.5, 3.8, 1),
+    guitar('Guitare', 'electric', -1.8, 2.6, 1),
+    guitar('Basse', 'bass', 1.8, 2.6, 1),
+    keyboard('Clavier', 3, 1.8, 1),
+    ...barriers(3, -3, 3, -1, 'vauban'),
+    flightCase('Flight-case', -3.4, 4.6, 1),
   ],
   looks: [
     { name: 'Balance', parts: [{ rigs: ['FACE'], colors: [C.white], level: 0.6 }] },

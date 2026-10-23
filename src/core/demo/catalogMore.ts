@@ -1,4 +1,5 @@
 import type { DemoSpec } from './catalog';
+import { row, lineArray, sub, monitor, drums, amp, guitar, keyboard, mic, musicStand, fog, co2, spark, djBooth, desk, flightCase, barriers, backdrop, arch, screen } from './decor';
 import { C } from './palette';
 import { MORE_DEMOS_2 } from './catalogMore2';
 
@@ -18,13 +19,28 @@ const rock: DemoSpec = {
   ],
   decor: [
     { name: 'Praticable batterie', kind: 'riser', x: 0, y: 6.5, width: 3.5, depth: 2.5, height: 0.6 },
-    { name: 'Mur d’amplis jardin', kind: 'box', x: -4.5, y: 7.5, width: 2, depth: 0.8, height: 1.8, color: '#111111' },
-    { name: 'Mur d’amplis cour', kind: 'box', x: 4.5, y: 7.5, width: 2, depth: 0.8, height: 1.8, color: '#111111' },
+    amp('Stack jardin 1', 'stack', -5, 7.6),
+    amp('Stack jardin 2', 'stack', -4.1, 7.6),
+    amp('Ampli basse', 'bass', 4.1, 7.6),
+    amp('Stack cour', 'stack', 5, 7.6),
     { name: 'Micro chant', kind: 'mic', x: 0, y: 2, width: 0.3, depth: 0.3, height: 1.6 },
     { name: 'Micro guitare', kind: 'mic', x: -3.5, y: 3, width: 0.3, depth: 0.3, height: 1.6 },
     { name: 'Retour chant', kind: 'monitor', x: 0, y: 1, width: 0.6, depth: 0.45, height: 0.35, rotation: 180 },
-    { name: 'Enceinte jardin', kind: 'speaker', x: -6.6, y: 0.6, width: 0.8, depth: 0.8, height: 2 },
-    { name: 'Enceinte cour', kind: 'speaker', x: 6.6, y: 0.6, width: 0.8, depth: 0.8, height: 2 },
+    lineArray('Line array jardin', -7.8, 0.5, 5, 10),
+    lineArray('Line array cour', 7.8, 0.5, 5, 10),
+    drums('Batterie', 0, 6.6, 0.6, 1, '#111111', '7'),
+    guitar('Guitare rythmique', 'electric', -5.6, 5.5, 0, '#111111'),
+    guitar('Guitare solo', 'electric', -3.2, 5.5),
+    guitar('Basse', 'bass', 5.6, 5.5),
+    mic('Micro basse', 3.5, 3),
+    monitor('Retour guitare', -3.5, 2),
+    monitor('Retour basse', 3.5, 2),
+    ...row(4, -6, 6, (x, i) => sub(`Sub ${i + 1}`, x, -0.5, 0, '2x18')),
+    fog('Machine à fumée', -6, 8.6),
+    fog('Hazer', 6, 8.6, 'haze'),
+    flightCase('Flight-case backline', -6.4, 8.3, 0, 90),
+    flightCase('Flight-case guitares', 6.4, 8.3, 0, 90),
+    ...barriers(6, -5, 5, -1.8),
   ],
   looks: [
     { name: 'Intro', parts: [{ rigs: ['SPOT'], colors: [C.red], level: 0.6, tilt: 0.3 }, { rigs: ['PAR'], colors: [C.red], level: 0.3 }] },
@@ -72,12 +88,17 @@ const halloween: DemoSpec = {
     { prefix: 'BAR', label: 'Barres cabine', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 4, y: 1.5, height: 0.2, span: 0.4, color: '#F97316' },
   ],
   decor: [
-    { name: 'Cabine DJ', kind: 'table', x: 0, y: 1.5, width: 2.4, depth: 0.8, height: 1, color: '#1C1917' },
+    djBooth('Cabine DJ', 0, 1.5, 0, 2.4, '#1C1917'),
     { name: 'Cercueil', kind: 'box', x: -5, y: 3, width: 0.7, depth: 2, height: 0.6, color: '#3F1D0B' },
     { name: 'Chaudron', kind: 'column', x: 5, y: 3, width: 1, depth: 1, height: 0.9, color: '#0F172A' },
     { name: 'Colonne gothique jardin', kind: 'column', x: -6.5, y: 8, width: 0.8, depth: 0.8, height: 5, color: '#6B7280' },
     { name: 'Colonne gothique cour', kind: 'column', x: 6.5, y: 8, width: 0.8, depth: 0.8, height: 5, color: '#6B7280' },
     { name: 'Tenture déchirée', kind: 'drape', x: 0, y: 9.9, width: 14, depth: 0.1, height: 5, color: '#2E1065' },
+    arch('Portail gothique', 0, 8.8, 5, 5, '#44403C'),
+    fog('Fumée lourde jardin', -3, 6, 'low'),
+    fog('Fumée lourde cour', 3, 6, 'low'),
+    co2('Jet CO2', -6.5, 1),
+    co2('Jet CO2 2', 6.5, 1),
   ],
   looks: [
     { name: 'Arrivée dans la brume', parts: [{ rigs: ['UP'], colors: [C.green, C.violet], level: 0.5 }, { rigs: ['SPOT'], colors: [C.green], level: 0.4, tilt: 0.3 }] },
@@ -130,6 +151,11 @@ const musical: DemoSpec = {
     { name: 'Banc public', kind: 'box', x: 3, y: 4.5, width: 1.6, depth: 0.5, height: 0.45, color: '#6B4226' },
     { name: 'Pendrillon jardin', kind: 'drape', x: -5.4, y: 3, width: 1.2, depth: 0.1, height: 8 },
     { name: 'Pendrillon cour', kind: 'drape', x: 5.4, y: 3, width: 1.2, depth: 0.1, height: 8 },
+    keyboard('Piano de fosse', -4.6, 7.2, 0.4, 1, 'stage'),
+    drums('Batterie', -3, 7.8, 0.4, 0.75),
+    musicStand('Pupitre du chef', -4.2, 6.2, 0.4, 180),
+    backdrop('Toile « skyline »', 'canvas', 0, 9.8, 11, 6, '#1E3A8A'),
+    fog('Fumée lourde', 2, 9.2, 'low'),
   ],
   looks: [
     { name: 'Ouverture orchestre', parts: [{ rigs: ['CYCLO'], colors: [C.navy], level: 0.5 }, { rigs: ['CONTRE'], colors: [C.violet], level: 0.4, tilt: 0.5 }] },
@@ -179,6 +205,12 @@ const circus: DemoSpec = {
     { name: 'Mât cour', kind: 'column', x: 6.8, y: 7, width: 0.3, depth: 0.3, height: 12, color: '#D1D5DB' },
     { name: 'Rideau d’entrée des artistes', kind: 'drape', x: 0, y: 13.9, width: 4, depth: 0.1, height: 4, color: '#B91C1C' },
     { name: 'Tabouret de dompteur', kind: 'box', x: 2, y: 6, width: 0.6, depth: 0.6, height: 0.7, color: '#FBBF24' },
+    arch('Arche des artistes', 0, 13.5, 5, 5, '#FBBF24'),
+    spark('Étincelles jardin', -5.5, 7),
+    spark('Étincelles cour', 5.5, 7),
+    fog('Fumée lourde', 2.5, 12.8, 'low'),
+    drums('Batterie de l’orchestre', -5.5, 12.8, 0, 0.8),
+    keyboard('Clavier de l’orchestre', -3.8, 12.9),
   ],
   looks: [
     { name: 'Entrée public', parts: [{ rigs: ['BORD'], colors: [C.red, C.gold], level: 0.5 }, { rigs: ['PISTE'], colors: [C.warm], level: 0.3 }] },
@@ -228,6 +260,15 @@ const launch: DemoSpec = {
     { name: 'Mur d’images', kind: 'drape', x: 0, y: 9.9, width: 16, depth: 0.1, height: 5, color: '#020617' },
     { name: 'Enceinte jardin', kind: 'speaker', x: -7.5, y: 1, width: 0.6, depth: 0.6, height: 1.2 },
     { name: 'Enceinte cour', kind: 'speaker', x: 7.5, y: 1, width: 0.6, depth: 0.6, height: 1.2 },
+    co2('Jet CO2 1', -3.5, 2),
+    co2('Jet CO2 2', 3.5, 2),
+    spark('Étincelles 1', -3.5, 8),
+    spark('Étincelles 2', 3.5, 8),
+    ...barriers(4, -4.5, 4.5, 1.2, 'vauban'),
+    desk('Régie show', 'light', 0, -8),
+  ],
+  screens: [
+    screen('Mur LED', 0, 9.6, 14, 5, 0.4, '#0EA5E9'),
   ],
   looks: [
     { name: 'Attente', parts: [{ rigs: ['BAR'], colors: [C.blue], level: 0.4 }, { rigs: ['SPOT'], colors: [C.blue], level: 0.3, tilt: 0.3 }] },
