@@ -99,7 +99,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('project.openDemo'), id: z.string().min(1).max(40) }),
   z.object({ type: z.literal('onboarding.update'), completed: z.boolean().optional(), checklistHidden: z.boolean().optional() }),
   // Profiles
-  z.object({ type: z.literal('profile.import'), path: optPath }),
+  /** One file (`path`), several (`paths`: multiple selection, Fixture Share downloads) or the open dialog. */
+  z.object({ type: z.literal('profile.import'), path: optPath, paths: z.array(z.string().min(1).max(1000)).min(1).max(500).optional() }),
+  /** MA Fixture Share browser window: files downloaded there (grandMA2 .xml, .zip collections, .gdtf) become profiles. */
+  empty('profile.openFixtureShare'),
   z.object({ type: z.literal('profile.remove'), id: idSchema }),
   /** Writes library profiles (all when `ids` is omitted) as a Luma JSON file `{ profiles: [...] }`, re-importable by `profile.import`. */
   z.object({ type: z.literal('profile.export'), ids: z.array(idSchema).min(1).max(500).optional(), path: optPath }),
@@ -393,6 +396,7 @@ export interface CommandResults {
   'project.openDemo': Void;
   'onboarding.update': Void;
   'profile.import': { imported: string[]; errors: string[]; warnings: string[] };
+  'profile.openFixtureShare': Void;
   'profile.remove': Void;
   'profile.export': { path: string | null; count: number };
   'profile.save': { profileId: string };
@@ -524,7 +528,11 @@ export interface Progress {
   step: 'plan' | 'cache' | 'request' | 'compile';
 }
 
+/** Profiles imported outside a command of the window (MA Fixture Share downloads). */
+export interface ProfilesImported { source: 'fixtureShare'; file: string; imported: string[]; errors: string[]; warnings: string[] }
+
 export interface AppEvents {
+  imported: ProfilesImported;
   progress: Progress;
   project: ProjectState;
   runtime: RuntimeState;

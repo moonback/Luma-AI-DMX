@@ -38,17 +38,8 @@ import { METRICS_EVERY_MS, onEngineError, onFrame, onOutputStatus, rendererLost,
 import { autosave } from './files';
 import type { Alert, Command, CommandOf, CommandResults, CommandType, LocatePhoto, Progress, ProjectState, RuntimeState, ValuesFrame } from '../../shared/commands';
 
-export interface Dialogs {
-  openProject(): Promise<string | null>;
-  saveProject(defaultName: string): Promise<string | null>;
-  openProfile(): Promise<string | null>;
-  saveProfiles?(defaultName: string): Promise<string | null>;
-  saveDiagnostic?(defaultName: string): Promise<string | null>;
-  savePatchSheet?(defaultName: string, format: 'csv' | 'pdf'): Promise<string | null>;
-  savePatchPlan?(defaultName: string): Promise<string | null>;
-  saveFeedback?(defaultName: string): Promise<string | null>;
-  saveMvr?(defaultName: string): Promise<string | null>;
-}
+export type { Dialogs } from './dialogs';
+import type { Dialogs } from './dialogs';
 
 export interface SecretStore {
   get(name: string): string | null;

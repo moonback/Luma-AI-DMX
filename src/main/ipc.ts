@@ -27,3 +27,13 @@ export async function handleCommand(service: Pick<AppService, 'execute' | 'logge
     return { ok: false, error: message };
   }
 }
+
+/** MA Fixture Share window: MA Lighting pages (the share, its sign-in) stay inside; anything else opens in the system browser. */
+export function isFixtureShareUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && (u.hostname === 'malighting.com' || u.hostname.endsWith('.malighting.com'));
+  } catch {
+    return false;
+  }
+}

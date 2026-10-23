@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { LogEntry } from '../core/log/logger';
 import type { FixtureValues } from '../core/model/schemas';
-import type { Progress, ProjectState, RuntimeState } from '../shared/commands';
+import type { Progress, ProfilesImported, ProjectState, RuntimeState } from '../shared/commands';
+import { t } from './i18n';
 import type { PlaceSpec, SceneRef } from '../core/visualizer/sceneEdit';
 
 /** Stable empty defaults: selectors must not return fresh objects (would re-render forever). */
@@ -241,5 +242,11 @@ export function connectEvents(): () => void {
       useStore.setState(f.sources ? { values: f.values, sources: f.sources } : { values: f.values });
     } else if (name === 'log') useStore.setState({ logs: [...useStore.getState().logs.slice(-499), payload as LogEntry] });
     else if (name === 'progress') useStore.setState({ progress: payload as Progress });
+    else if (name === 'imported') {
+      // A file downloaded in the MA Fixture Share window was converted (or refused) by the main process.
+      const r = payload as ProfilesImported;
+      const detail = [...r.errors, ...r.warnings].slice(0, 3).join('\n') || r.imported.join(', ');
+      useStore.getState().toast({ kind: r.errors.length && !r.imported.length ? 'error' : r.errors.length || r.warnings.length ? 'warn' : 'success', title: t('fixtureShare.imported', { n: r.imported.length, file: r.file }), detail: detail || undefined });
+    }
   });
 }

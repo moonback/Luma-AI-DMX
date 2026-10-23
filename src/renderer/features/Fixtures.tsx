@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, Copy, FileDown, Lightbulb, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { Camera, Copy, FileDown, Globe, Lightbulb, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { useT } from '../i18n';
@@ -279,8 +279,9 @@ export function Fixtures() {
   return (
     <div className="page">
       <PageHead title="Fixtures" subtitle="Patch DMX : profils, univers, adresses et positions">
-        <button className="btn" onClick={() => void importProfiles()} title="Importer des profils : JSON Luma (docs/PROFILE_FORMAT.md) ou export grandMA2 (.xml, un fichier par mode)"><Upload size={15} />Importer des profils</button>
+        <button className="btn" onClick={() => void importProfiles()} title={tr('fixtureShare.importTitle')}><Upload size={15} />Importer des profils</button>
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
+        <button className="btn" data-testid="fixture-share" onClick={() => void act({ type: 'profile.openFixtureShare' })} title={tr('fixtureShare.buttonTitle')}><Globe size={15} />{tr('fixtureShare.button')}</button>
         <button className="btn" data-testid="profile-from-photo" onClick={() => setFromPhoto(true)} title={tr('pphoto.buttonTitle')}><Camera size={15} />{tr('pphoto.button')}</button>
         <button className="btn" data-testid="patch-sheet-pdf" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'pdf' })} title="Feuille de patch imprimable (A4 paysage), par univers"><FileDown size={15} />Patch PDF</button>
         <button className="btn" data-testid="patch-sheet-csv" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'csv' })} title="Feuille de patch pour tableur (CSV « ; », UTF-8)"><FileDown size={15} />CSV</button>
