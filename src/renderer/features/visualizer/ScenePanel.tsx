@@ -457,6 +457,7 @@ function FixtureCatalogue({ query }: { query: string }) {
         })}
       </div>
       <p className="scene-hint">{tr('build.pointHint')}</p>
+      <button className="btn sm" onClick={() => void act({ type: 'profile.openFixtureShare' })} title={tr('fixtureShare.buttonTitle')} data-testid="fixture-share-build">{tr('fixtureShare.more')}</button>
     </>
   );
 }

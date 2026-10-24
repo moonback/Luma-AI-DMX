@@ -2,10 +2,10 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { FixtureProfile } from '../../model/schemas';
+import { convertFixtureFiles } from '../../fixtures/importFile';
 import { convertMa2Fixture, mergeProfileModes } from '../../fixtures/ma2';
 import { decodeMa2File, loadMa2Library } from '../../fixtures/ma2Library';
-import { convertGdtf } from '../../fixtures/gdtf';
-import { channelCount, parseProfileFile } from '../../fixtures/profiles';
+import { channelCount } from '../../fixtures/profiles';
 import { BUILTIN_PROFILES } from '../../fixtures/builtinProfiles';
 import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../../fixtures/ofl';
 import { findFreeAddress, validatePatch } from '../../fixtures/patch';
@@ -20,46 +20,21 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'profile.import': {
-      const file = cmd.path ?? (await app.opts.dialogs.openProfile());
-      if (!file) return { imported: [], errors: [], warnings: [] };
-      const ext = path.extname(file).toLowerCase();
-      if (ext === '.qxf') throw new UserError('Format QLC+ (.qxf) pas encore pris en charge : importez l’export grandMA2 (.xml), un profil Luma (.json) ou passez par Open Fixture Library.');
-      let bytes: Buffer;
-      try {
-        bytes = await fs.readFile(file);
-      } catch (err) {
-        throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`);
-      }
-      const text = ext === '.gdtf' ? '' : ext === '.xmlp' ? decodeMa2File(bytes) : bytes.toString('utf8');
-      let warnings: string[] = [];
-      let parsed: { profiles: FixtureProfile[]; errors: string[] };
-      if (ext === '.gdtf') {
-        // GDTF: every DMX mode of the file, merged into the existing profile of the same fixture.
-        const r = convertGdtf(bytes);
-        warnings = r.warnings;
-        const existing = r.profile ? app.userProfiles.find((x) => x.id === r.profile!.id) ?? app.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
-        parsed = { profiles: r.profile ? [existing ? mergeProfileModes(existing, r.profile) : r.profile] : [], errors: r.errors };
-        for (const w of warnings) app.logger.warn('GDTF', `${path.basename(file)} : ${w}`);
-      } else if (ext === '.xml' || ext === '.xmlp' || text.trimStart().startsWith('<')) {
-        // grandMA2 export: one file = one mode, merged into the existing profile of the same fixture.
-        const r = convertMa2Fixture(text);
-        warnings = r.warnings;
-        const existing = r.profile ? app.userProfiles.find((x) => x.id === r.profile!.id) ?? app.project.profiles.find((x) => x.id === r.profile!.id) : undefined;
-        parsed = { profiles: r.profile ? [existing ? mergeProfileModes(existing, r.profile) : r.profile] : [], errors: r.errors };
-        for (const w of warnings) app.logger.warn('grandMA2', `${path.basename(file)} : ${w}`);
-      } else {
-        let json: unknown;
+      const files = cmd.paths ?? (cmd.path ? [cmd.path] : app.opts.dialogs.openProfiles ? await app.opts.dialogs.openProfiles() : [await app.opts.dialogs.openProfile()].filter((f): f is string => !!f));
+      if (!files.length) return { imported: [], errors: [], warnings: [] };
+      const read: { name: string; bytes: Uint8Array }[] = [];
+      for (const file of files) {
         try {
-          json = JSON.parse(text);
+          read.push({ name: path.basename(file), bytes: await fs.readFile(file) });
         } catch (err) {
-          throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`);
+          if (files.length === 1) throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`);
+          app.logger.warn('Profils', `${path.basename(file)} illisible : ${(err as Error).message}`);
         }
-        const j = json as Record<string, unknown> | null;
-        if (j && typeof j === 'object' && 'availableChannels' in j && !('profiles' in j)) {
-          throw new UserError('Fichier Open Fixture Library : utilisez « Open Fixture Library › Importer un fichier » pour préciser le fabricant.');
-        }
-        parsed = parseProfileFile(json);
       }
+      // grandMA2 (one file per mode), GDTF, Luma JSON and .zip collections; modes merged into the library profile.
+      const parsed = convertFixtureFiles(read, (id) => app.userProfiles.find((x) => x.id === id) ?? app.project.profiles.find((x) => x.id === id));
+      const warnings = parsed.warnings;
+      for (const w of warnings) app.logger.warn('Profils', w);
       const { profiles, errors } = parsed;
       const accepted = profiles.filter((p) => {
         if (BUILTIN_PROFILES.some((b) => b.id === p.id)) {
@@ -76,6 +51,10 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       if (accepted.length) app.logger.info('Profils', `${accepted.length} profil(s) importé(s)`);
       return { imported: accepted.map((p) => p.name), errors, warnings };
     }
+    case 'profile.openFixtureShare':
+      if (!app.opts.dialogs.openFixtureShare) throw new UserError('MA Fixture Share : disponible dans l’application de bureau');
+      app.opts.dialogs.openFixtureShare();
+      return ok;
     case 'ma2lib.manufacturers': {
       const lib = await loadMa2Library().catch((err: Error) => { throw new UserError(`Bibliothèque grandMA2 illisible : ${err.message}`); });
       return { dir: lib?.dir ?? null, manufacturers: lib ? [...lib.index.keys()].sort() : [] };

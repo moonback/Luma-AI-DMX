@@ -7,6 +7,7 @@ import { BRAND } from '../shared/brand';
 import { createSecretStore } from './secrets';
 import { createUpdater } from './updates';
 import { handleCommand, isTrustedSender as isTrusted } from './ipc';
+import { openFixtureShare } from './fixtureShare';
 import { discardAutosaveSync } from '../core/app/files';
 import type { Logger } from '../core/log/logger';
 import { LICENSE_PUBLIC_KEY } from '../core/license/publicKey';
@@ -32,6 +33,11 @@ let quitting = false;
 const projectFilters = [{ name: BRAND.productName, extensions: ['json'] }];
 
 const isTrustedSender = (url: string) => isTrusted(url, DEV_URL);
+
+/** App events go to the app's own windows only, never to an external page (MA Fixture Share window). */
+function sendEvent<K extends keyof AppEvents>(name: K, payload: AppEvents[K]): void {
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && isTrustedSender(w.webContents.getURL())) w.webContents.send('luma:event', name, payload);
+}
 
 /** Prints self-contained HTML to an A4 landscape PDF in a hidden, script-less window. */
 async function renderPdf(html: string): Promise<Uint8Array> {
@@ -79,6 +85,13 @@ async function createService(): Promise<AppService> {
         ], properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
       },
+      openProfiles: async () => {
+        const r = await dialog.showOpenDialog(win!, { title: 'Importer des profils', filters: [
+          { name: 'Profils (Luma, GDTF, grandMA2, collections .zip)', extensions: ['json', 'gdtf', 'xml', 'xmlp', 'zip'] },
+        ], properties: ['openFile', 'multiSelections'] });
+        return r.canceled ? [] : r.filePaths;
+      },
+      openFixtureShare: () => openFixtureShare(svc, (e) => sendEvent('imported', e), win),
       saveProfiles: async (name) => {
         const r = await dialog.showSaveDialog(win!, { title: 'Exporter des profils', defaultPath: name, filters: [{ name: 'Profils Luma', extensions: ['json'] }] });
         return r.canceled ? null : r.filePath ?? null;
@@ -277,9 +290,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('luma:cmd', (event, raw: unknown) => handleCommand(service!, raw, event.senderFrame?.url ?? '', DEV_URL));
 
-  const forward = <K extends keyof AppEvents>(name: K) => (payload: AppEvents[K]) => {
-    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('luma:event', name, payload);
-  };
+  const forward = <K extends keyof AppEvents>(name: K) => (payload: AppEvents[K]) => sendEvent(name, payload);
   service.on('project', forward('project'));
   service.on('runtime', forward('runtime'));
   service.on('values', forward('values'));

@@ -7,7 +7,7 @@
   "src/renderer/features/Cues.tsx": 2,
   "src/renderer/features/Dashboard.tsx": 2,
   "src/renderer/features/Effects.tsx": 64,
-  "src/renderer/features/Fixtures.tsx": 81,
+  "src/renderer/features/Fixtures.tsx": 80,
   "src/renderer/features/LiveConsole.tsx": 1,
   "src/renderer/features/Music.tsx": 2,
   "src/renderer/features/Onboarding.tsx": 58,
