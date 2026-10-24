@@ -98,7 +98,24 @@ function groupRe(name: string): RegExp {
   return new RegExp(`\\b${escapeRe(stem.length >= 4 ? stem : n)}${stem.length >= 4 ? 's?' : ''}\\b`);
 }
 
-export function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; label: string } {
+/**
+ * « les contre-jours » when the group is « Contres »: a word after an article that shares its start with a group or
+ * fixture name of the rig. Only read when nothing else matched, so the request asks instead of falling back to everything.
+ */
+function nearMiss(text: string, ctx: InterpreterContext): { word: string; name: string } | null {
+  const names = [...ctx.groups.map((g) => g.name), ...ctx.fixtures.map((f) => f.name)];
+  for (const m of text.matchAll(/\b(?:les|des|aux|du|la|le|sur)\s+([a-z][a-z-]{3,})/g)) {
+    const word = m[1]!;
+    const name = names.find((n) => {
+      const stem = normalize(n).trim().replace(/s$/, '');
+      return stem.length >= 4 && word.startsWith(stem.slice(0, Math.min(5, stem.length)));
+    });
+    if (name) return { word, name };
+  }
+  return null;
+}
+
+export function findTarget(text: string, ctx: InterpreterContext): { target: AiTarget; label: string; unknown?: { word: string; name: string } } {
   const groupNames = ctx.groups.filter((g) => g.name.length > 1 && groupRe(g.name).test(text)).map((g) => g.name);
   const fixtureNames = ctx.fixtures.filter((f) => new RegExp(`\\b${escapeRe(normalize(f.name))}\\b`).test(text)).map((f) => f.name);
   const limitMatch = new RegExp(`\\b${NUM}\\s+(premieres?\\s+)?(lyres?|moving|spots?|wash|pars?|projecteurs?|strobes?|stroboscopes?)\\b`).exec(text);
@@ -120,9 +137,10 @@ export function findTarget(text: string, ctx: InterpreterContext): { target: AiT
   if (fixtureNames.length) { target.fixtureNames = fixtureNames; parts.push(fixtureNames.join(', ')); }
   if (types.length) { target.fixtureTypes = [...new Set(types)]; parts.push(typeLabel(types)); }
   if (limit && Number.isFinite(limit)) { target.limit = limit; parts.unshift(`${limit} premier(s)`); }
+  const unknown = parts.length || module ? null : nearMiss(text, ctx);
   if (!parts.length) { target.all = true; parts.push('tous les projecteurs'); }
   if (module) { target.module = module; parts.unshift(`${module} de`); }
-  return { target, label: parts.join(' ') };
+  return { target, label: parts.join(' '), ...(unknown ? { unknown } : {}) };
 }
 
 function typeLabel(types: FixtureType[]): string {
@@ -194,9 +212,11 @@ const EFFECT_WORDS: [RegExp, AiEffectSpec['effectType'][], string][] = [
 /* Modifiers relative to the current look                              */
 /* ------------------------------------------------------------------ */
 
-function shiftCurrent(ctx: InterpreterContext, fn: (hex: string) => string): AiAction[] {
+/** Shifts the colour of the targeted fixtures that are lit, each from its own current colour. */
+function shiftCurrent(ctx: InterpreterContext, names: string[], fn: (hex: string) => string): AiAction[] {
   const byColor = new Map<string, string[]>();
   for (const f of ctx.fixtures) {
+    if (!names.includes(f.name)) continue;
     const cur = ctx.current[f.id];
     if (!cur || cur.level <= 0.01) continue;
     if (!f.attributes.some((a) => ['red', 'colorWheel', 'cyan'].includes(a.split('#')[0]!))) continue;
@@ -223,11 +243,6 @@ const cooler = (hex: string) => {
   if (d < -0.5) d += 1;
   return rgbToHex(hsvToRgb(hsv.h + d * 0.4, Math.max(0.5, hsv.s), Math.max(0.6, hsv.v)));
 };
-
-function averageLevel(ctx: InterpreterContext): number {
-  const lv = Object.values(ctx.current).map((c) => c.level).filter((l) => l > 0.01);
-  return lv.length ? lv.reduce((a, b) => a + b, 0) / lv.length : 0;
-}
 
 /* ------------------------------------------------------------------ */
 /* Main entry                                                          */
@@ -294,7 +309,12 @@ function interpretBody(full: string, ctx: InterpreterContext, keep: ParamFamily[
   const duration = findDuration(text);
   const percent = findPercent(text);
   const colors = findColors(text);
-  let { target, label: targetLabel } = findTarget(text, ctx);
+  const found = findTarget(text, ctx);
+  let { target, label: targetLabel } = found;
+  const { unknown } = found;
+  if (unknown) {
+    return { understanding: 'Cible non reconnue.', actions, notices, recognized: true, question: `Je ne connais pas « ${unknown.word} » dans ce projet. Vouliez-vous dire « ${unknown.name} » ? Précisez le groupe ou les projecteurs visés.` };
+  }
   if (exclusion?.[2]) {
     const clause = exclusion[2];
     const ex = findTarget(clause, ctx);
@@ -419,26 +439,29 @@ function interpretBody(full: string, ctx: InterpreterContext, keep: ParamFamily[
   }
 
   // 5. Relative modifiers
-  const warm = has(text, /\bplus (chaud|chaude|chaleureu\w*)\b|\bwarmer\b/);
-  const cold = has(text, /\bplus (froid|froide)\b|\bcooler\b/);
-  const softer = has(text, /\b(moins agressi\w*|plus dou\w*|moins fort\w*|plus calme|moins intense|softer)\b/);
-  const stronger = has(text, /\b(plus (fort|intense|lumineu\w*)|brighter)\b/);
+  // Adjectives agree with the target (« les lyres plus chaudes »): feminine and plural forms too.
+  const warm = has(text, /\bplus (chaude?s?|chaleureu\w*)\b|\bwarmer\b/);
+  const cold = has(text, /\bplus froide?s?\b|\bcooler\b/);
+  const softer = has(text, /\b(moins agressi\w*|plus dou\w*|moins fort\w*|plus calmes?|moins intenses?|softer)\b/);
+  const stronger = has(text, /\b(plus (forte?s?|intenses?|lumineu\w*)|brighter)\b/);
   if (warm || cold || softer || stronger) {
-    if (warm) { actions.push(...shiftCurrent(ctx, warmer)); said.push('teintes décalées vers le chaud'); }
-    if (cold) { actions.push(...shiftCurrent(ctx, cooler)); said.push('teintes décalées vers le froid'); }
-    const avg = averageLevel(ctx);
+    // Each targeted fixture keeps its own colour and level as the starting point; unlit ones are left alone.
+    const names = namesOf(target, ctx);
+    if (warm) { actions.push(...shiftCurrent(ctx, names, warmer)); said.push('teintes décalées vers le chaud'); }
+    if (cold) { actions.push(...shiftCurrent(ctx, names, cooler)); said.push('teintes décalées vers le froid'); }
     if (softer) {
-      actions.push({ type: 'setIntensity', target: { all: true }, level: Math.round(Math.max(0.1, avg * 0.7) * 100) / 100, fade: 3 });
-      const stops = (['strobe', 'chase'] as const).filter((t) => !ctx.runningEffects || ctx.runningEffects.includes(t));
+      actions.push(...relativeLevels(ctx, names, 0.7, 3));
+      // stopEffect has no target: AI effects are only stopped when the request is about the whole rig.
+      const stops = target.all ? (['strobe', 'chase'] as const).filter((t) => !ctx.runningEffects || ctx.runningEffects.includes(t)) : [];
       actions.push(...stops.map((effectType) => ({ type: 'stopEffect' as const, effectType })));
       said.push(`intensité réduite de 30 %${stops.length ? `, effets ${stops.join('/')} de l’IA arrêtés` : ''}`);
     }
     if (stronger) {
-      actions.push({ type: 'setIntensity', target: { all: true }, level: Math.round(Math.min(1, Math.max(0.3, avg * 1.3)) * 100) / 100, fade: 2 });
+      actions.push(...relativeLevels(ctx, names, 1.3, 2));
       said.push('intensité augmentée de 30 %');
     }
-    if (!actions.length) notices.push('Aucun projecteur allumé avec une couleur modifiable.');
-    return { understanding: `Ajuster l’état actuel : ${said.join(', ')}.`, actions, notices, recognized: true, relative: true };
+    if (!actions.length) notices.push(`Aucun projecteur allumé à modifier parmi ${targetLabel}.`);
+    return { understanding: `Ajuster l’état actuel de ${targetLabel} : ${said.join(', ')}.`, actions, notices, recognized: true, relative: true };
   }
 
   // 6. Stop or re-time running AI effects
