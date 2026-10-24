@@ -1,14 +1,14 @@
 # Feuille de route d’ingénierie — Luma AI DMX
 
-> Document généré le 19/10/2026 à partir d’un audit du code source (commit `f787f53`, version `1.2.0` de `package.json`). Il remplace intégralement la feuille de route précédente.
+> Document généré le 19/10/2026 à partir d’un audit du code source (commit `f787f53`, version `1.2.0` de `package.json`). Il remplace intégralement la feuille de route précédente. Mise à jour le 24/10/2026 (version `1.9.0`) après un audit complet : voir la section 3.
 
 ## 1. Titre et objectif du document
 
 Ce document fixe l’ordre et le contenu des travaux à mener sur **Luma AI DMX**, logiciel de bureau Electron de contrôle d’éclairage DMX assisté par IA. Il repose exclusivement sur l’état réel du code : ce qui fonctionne et est vérifié, ce qui est fragile, ce qui est présent mais inaccessible, et ce qui manque. Chaque élément est rédigé pour qu’un développeur, ou un agent de programmation, puisse le prendre, relire ses preuves, et commencer sans deviner l’intention.
 
-**Avancement au 19/10/2026** : 53 élément(s) terminé(s), 6 partiel(s), 25 à faire. Le statut affiché est le statut actuel ; celui constaté à l’audit est rappelé dans chaque fiche modifiée.
+**Avancement au 24/10/2026** : 53 élément(s) terminé(s), 6 partiel(s), 28 à faire. Le statut affiché est le statut actuel ; celui constaté à l’audit est rappelé dans chaque fiche modifiée.
 
-Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identifiants sont stables : un élément terminé garde son numéro, et un élément abandonné est marqué comme tel au lieu d’être renuméroté.
+Nombre d’éléments : **87**, identifiés `LUMA-001` à `LUMA-087`. Les identifiants sont stables : un élément terminé garde son numéro, et un élément abandonné est marqué comme tel au lieu d’être renuméroté.
 
 ## 2. Règles de lecture et méthode de preuve
 
@@ -84,6 +84,30 @@ Nombre d’éléments : **84**, identifiés `LUMA-001` à `LUMA-084`. Les identi
 | npx vitest run --config vitest.perf.config.ts | Succès 3 fois sur 3 depuis LUMA-004 et LUMA-005. |
 | node --check scripts/release.mjs | Syntaxe valide ; script non exécuté. |
 | npm run test:e2e | Non exécuté (build et fenêtres Electron sur le poste). |
+
+**Audit complet du 24/10/2026 (version `1.9.0`, [PR #22](https://github.com/moonback/Luma-AI-DMX/pull/22))**
+
+Lecture ligne à ligne du moteur (`Engine`, fusion, playback, timeline, rendu), des sorties (`OutputManager`, Art-Net, sACN, Enttec Pro, Open DMX), du processus principal (`index.ts`, `ipc.ts`, `fixtureShare.ts`, `secrets.ts`), de la télécommande, de la sauvegarde et de l’historique, des handlers projet, programmation, sorties et IA, et du store du rendu. Le rendu 3D, les importeurs de profils, l’analyse musicale et l’interpréteur IA local n’ont pas été relus ligne à ligne.
+
+| Commande | Résultat |
+|---|---|
+| `npx tsc -p tsconfig.json` | Succès. |
+| `npm run lint` | Échec avant correctifs : `Fixtures.tsx` à 92 textes en dur pour une référence de 80 (boîte « Bibliothèque grandMA2 »). Succès après ; textes en dur : 647. |
+| `npx vitest run` | Succès : 67 fichiers, 615 tests dont 2 nouveaux tests de non-régression, 1 ignoré. |
+| `npm run test:perf` | Échec : gigue p95 de 2,98 et 3,72 ms pour un seuil de 2 ms. Même échec sur `master` sans les correctifs ([LUMA-007](#luma-007)). |
+| `npm run test:coverage`, `npm run test:e2e` | Non exécutés. |
+
+Correctifs livrés :
+
+- Interface anglaise : la boîte « Bibliothèque grandMA2 » passe par les catalogues FR et EN ; son filtre « Modèle » ne dépend plus de la casse.
+- Une deuxième instance de l’application quitte sans démarrer le service (sockets OSC, ports série, fenêtre d’introduction).
+- Une modification faite pendant l’écriture du fichier de projet reste marquée non enregistrée (`project.save`, `project.saveAs`).
+- Enttec Pro et Open DMX : une écriture perdue avec l’ancien port ne rend plus muet le port reconnecté ([LUMA-036](#luma-036)).
+- sACN : le nom de source est borné à son champ de 64 octets et ne peut plus écraser l’octet de priorité.
+- MA Fixture Share : le fichier téléchargé est supprimé du dossier temporaire après import.
+- Barre latérale : abonnée au seul indicateur de couche IA au lieu de l’état complet du moteur (10 rendus par seconde évités).
+
+Constats non corrigés, ajoutés à la feuille de route : [LUMA-085](#luma-085), [LUMA-086](#luma-086), [LUMA-087](#luma-087). Le coût des mutations ([LUMA-073](#luma-073)) et celui de la surveillance photosensible ([LUMA-076](#luma-076)) sont confirmés, sans changement.
 
 ## 4. Résumé de l’état technique réel de Luma AI DMX
 
@@ -219,7 +243,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 | P0 | 1 |
 | P1 | 14 |
 | P2 | 36 |
-| P3 | 33 |
+| P3 | 36 |
 
 **Répartition par statut actuel**
 
@@ -227,17 +251,17 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 |---|---|
 | IMPLÉMENTÉ ET VÉRIFIÉ | 48 |
 | IMPLÉMENTÉ, VALIDATION INSUFFISANTE | 9 |
-| PARTIELLEMENT IMPLÉMENTÉ | 17 |
+| PARTIELLEMENT IMPLÉMENTÉ | 19 |
 | PRÉSENT MAIS NON RACCORDÉ | 0 |
 | ABSENT | 9 |
-| À INVESTIGUER | 1 |
+| À INVESTIGUER | 2 |
 
 **Répartition par nature de travaux**
 
 | Nature | Éléments |
 |---|---|
-| A — Correction et rupture fonctionnelle | 17 |
-| B — Fiabilisation de l’existant | 29 |
+| A — Correction et rupture fonctionnelle | 19 |
+| B — Fiabilisation de l’existant | 30 |
 | C — Amélioration fonctionnelle | 23 |
 | D — Évolution structurelle | 8 |
 | E — Capacité future | 7 |
@@ -272,7 +296,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Objectif.** Raccorder le code présent mais inaccessible, corriger les incohérences de références et de concurrence, et rendre les opérations longues maîtrisables (annulation, progression réelle, récupération après crash).
 
-**Éléments (21).**
+**Éléments (22).**
 
 | ID | Titre | Priorité | Statut | Effort | Avancement |
 |---|---|---|---|---|---|
@@ -297,6 +321,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 | [LUMA-028](#luma-028) | Ne pas marquer le projet comme modifié pour une simple requête IA non appliquée | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
 | [LUMA-029](#luma-029) | Retirer de la boîte d’import le filtre QLC+ annoncé mais refusé | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
 | [LUMA-030](#luma-030) | Nettoyer les fichiers audio, le cache IA et les copies de récupération orphelins | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | M | ✅ Terminé |
+| [LUMA-085](#luma-085) | Signaler les erreurs de commande sans fenêtre bloquante et dans la langue de l’interface | P3 | PARTIELLEMENT IMPLÉMENTÉ | S | À faire |
 
 **Dépendances principales.** Aucune dépendance vers une phase ultérieure. LUMA-013 dépend de LUMA-012 (même infrastructure d’opération en cours).
 
@@ -310,7 +335,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Objectif.** Couvrir les zones à faible couverture et à fort risque (programmation, processus principal, sorties, audio), valider le matériel réel, et rendre les intégrations externes résilientes et observables.
 
-**Éléments (23).**
+**Éléments (25).**
 
 | ID | Titre | Priorité | Statut | Effort | Avancement |
 |---|---|---|---|---|---|
@@ -337,6 +362,8 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 | [LUMA-050](#luma-050) | Ne plus effacer silencieusement les autres secrets quand `secrets.json` est illisible | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
 | [LUMA-051](#luma-051) | Borner la mémoire des limiteurs de la télécommande par adresse IP | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
 | [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | XS | ✅ Terminé |
+| [LUMA-086](#luma-086) | Vérifier l’export PDF des documents volumineux (limite de taille des URL `data:`) | P3 | À INVESTIGUER | XS | À faire |
+| [LUMA-087](#luma-087) | Resynchroniser le changelog avec les versions publiées | P3 | PARTIELLEMENT IMPLÉMENTÉ | XS | À faire |
 
 **Dépendances principales.** Cette phase s’appuie sur [LUMA-009](#luma-009), [LUMA-002](#luma-002), [LUMA-018](#luma-018), [LUMA-008](#luma-008), [LUMA-007](#luma-007), [LUMA-021](#luma-021), [LUMA-005](#luma-005) (phases antérieures). La phase suppose la CI de la phase 0 (LUMA-008) et la fiabilité de la couverture (LUMA-009).
 
@@ -754,6 +781,8 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Type** : performance
 - **Phase** : 0
 - **Avancement** : 🟡 Partiel
+
+**Constat (24/10/2026).** `npm run test:perf` de nouveau en échec sur la machine de développement (p95 de 2,98 et 3,72 ms), y compris sur `master`, sans changement de l’ordonnanceur. Le critère « 10 passes consécutives » reste non atteint.
 
 **Réalisation (19/10/2026).** `npm run test:perf` vert 2 fois sur 2 après LUMA-004 et LUMA-005 (aucune modification de l’ordonnanceur). Le critère « 10 passes consécutives » et le profilage restent à faire.
 
@@ -1605,6 +1634,8 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Phase** : 1
 - **Avancement** : 🟡 Partiel
 
+**Complément (24/10/2026).** Un scénario E2E existe (`tests/e2e/app.spec.ts`, F11 sur la fenêtre détachée) ; il n’a pas été exécuté pendant l’audit du 24/10, et l’essai sur build empaquetée reste à faire.
+
 **Réalisation (19/10/2026).** Permission `fullscreen` ajoutée à la liste autorisée (`src/main/index.ts`). Effet réel de F11 à vérifier sur une build empaquetée.
 
 **Constat technique (à l’audit).** La fenêtre détachée gère F11 via `document.documentElement.requestFullscreen()`. Le processus principal installe des gestionnaires de permissions qui n’autorisent que `media`, `midi` et `midiSysex`. Dans Electron, la demande de plein écran HTML passe par le type de permission `fullscreen` : elle est probablement refusée. Aucun test ne couvre F11.
@@ -1919,6 +1950,52 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Risques et précautions.** Un fichier audio peut servir à un projet absent des récents : la purge doit rester manuelle et explicite.
 
+#### LUMA-085
+
+- **ID** : LUMA-085
+- **Titre** : Signaler les erreurs de commande sans fenêtre bloquante et dans la langue de l’interface
+- **Catégorie** : Interface / retour d’erreur
+- **Nature** : A — Correction et rupture fonctionnelle
+- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Priorité** : P3
+- **Type** : correction de bug
+- **Phase** : 1
+- **Avancement** : À faire
+
+**Constat technique (audit du 24/10/2026).** `call()` affiche toute commande refusée dans une fenêtre modale bloquante, titrée « Action impossible » en dur, alors que son commentaire annonce un toast. Les appels périodiques passent par la même fonction : le moniteur DMX interroge `output.universe` toutes les 150 ms.
+
+**Preuves dans le code.**
+
+- `src/renderer/api.ts:5-8` : `setNotice({ title: 'Action impossible', detail: r.error })`.
+- `src/renderer/features/Output.tsx:100-105` : `call` dans un `setInterval` de 150 ms.
+
+**Problème ou opportunité.** L’interface anglaise affiche un titre français. Une erreur répétée d’un appel périodique rouvrirait la modale en boucle pendant l’exploitation.
+
+**Résultat attendu.** Les erreurs ordinaires s’affichent dans un toast traduit ; la modale reste réservée aux refus qui demandent une action (licence). Un appel périodique ne signale qu’une fois une erreur qui se répète.
+
+**Travaux à effectuer.**
+
+1. Passer le titre par les catalogues i18n.
+2. Distinguer dans `call` les refus bloquants (licence) des autres erreurs, affichées en toast.
+3. Donner aux appels périodiques une variante qui se tait après la première erreur.
+
+**Critères d’acceptation.**
+
+- [ ] Aucune chaîne en dur dans `src/renderer/api.ts`.
+- [ ] Une erreur répétée du moniteur DMX produit un seul message.
+
+**Tests requis.**
+
+- Test de composant : commande refusée → toast traduit en FR et en EN ; refus de licence → modale.
+
+**Dépendances.** Aucune.
+
+**Effort estimé.** S
+
+**Impact attendu.** moyen
+
+**Risques et précautions.** Ne masquer ni les refus de licence ni les erreurs de sécurité.
+
 ### Fiches de la phase 2 — Fiabilisation et couverture de tests
 
 #### LUMA-031
@@ -2220,6 +2297,8 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Type** : tests
 - **Phase** : 2
 - **Avancement** : 🟡 Partiel
+
+**Complément (24/10/2026).** Enttec Pro et Open DMX : l’indicateur d’écriture en cours est remis à zéro à l’ouverture du port ; sinon une écriture perdue lors d’une déconnexion rendait muet le port reconnecté. Test : `tests/unit/coverage-phase2.test.ts` (« reconnexion : une écriture perdue… »). La cible de 85 % de branches sur `OutputManager.ts` n’a pas été remesurée.
 
 **Réalisation (19/10/2026).** Transitions avec backoff et propriété « jamais ouverte sans arm() » sur 200 séquences aléatoires : `tests/unit/coverage-phase2.test.ts`. Branches d’`OutputManager.ts` à 73,6 % (objectif 85 %).
 
@@ -3008,6 +3087,95 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Risques et précautions.** Ne pas casser le rechargement à chaud en développement.
 
+#### LUMA-086
+
+- **ID** : LUMA-086
+- **Titre** : Vérifier l’export PDF des documents volumineux (limite de taille des URL `data:`)
+- **Catégorie** : Export / processus principal
+- **Nature** : A — Correction et rupture fonctionnelle
+- **Statut actuel** : À INVESTIGUER
+- **Priorité** : P3
+- **Type** : correction de bug
+- **Phase** : 2
+- **Avancement** : À faire
+
+**Constat technique (audit du 24/10/2026).** `renderPdf` charge le HTML à imprimer dans une fenêtre cachée par une URL `data:text/html`. Chromium limite la longueur des URL à 2 Mo : une feuille de patch ou un plan d’installation très volumineux pourrait échouer. La taille réelle des documents produits n’a pas été mesurée.
+
+**Preuves dans le code.**
+
+- `src/main/index.ts`, fonction `renderPdf` : `w.loadURL(`data:text/html;charset=utf-8,…`)`.
+
+**Problème ou opportunité.** Un export PDF qui échoue sur un grand kit, découvert juste avant un show.
+
+**Résultat attendu.** La taille maximale des documents produits est mesurée ; au-delà d’un seuil prudent, le HTML est écrit dans un fichier temporaire chargé par `loadFile`.
+
+**Travaux à effectuer.**
+
+1. Mesurer la taille du HTML de la feuille de patch et du plan d’installation sur la démo stade et sur un projet de 1 000 projecteurs.
+2. S’il approche 2 Mo, passer par un fichier temporaire supprimé après impression.
+
+**Critères d’acceptation.**
+
+- [ ] Mesure documentée dans cette fiche.
+- [ ] Export PDF réussi sur un projet de 1 000 projecteurs.
+
+**Tests requis.**
+
+- Test E2E d’export PDF sur un grand projet.
+
+**Dépendances.** Aucune.
+
+**Effort estimé.** XS
+
+**Impact attendu.** faible
+
+**Risques et précautions.** Le fichier temporaire ne doit pas être lisible par d’autres utilisateurs et doit être supprimé même en cas d’échec.
+
+#### LUMA-087
+
+- **ID** : LUMA-087
+- **Titre** : Resynchroniser le changelog avec les versions publiées
+- **Catégorie** : Release / documentation
+- **Nature** : B — Fiabilisation de l’existant
+- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
+- **Priorité** : P3
+- **Type** : documentation
+- **Phase** : 2
+- **Avancement** : À faire
+
+**Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0` et les tags `1.4.0` à `1.8.0` existent, mais `CHANGELOG.md` s’arrête à `0.2.0` : tout ce qui a été livré depuis s’accumule dans « Non publié ». `scripts/release.mjs` ne touche pas au changelog.
+
+**Preuves dans le code.**
+
+- `package.json` : `"version": "1.9.0"`.
+- `CHANGELOG.md` : dernière section versionnée `[0.2.0] — 2026-10-18`.
+- `scripts/release.mjs` : aucune mention du changelog.
+
+**Problème ou opportunité.** Les notes de version ne correspondent plus aux versions installées.
+
+**Résultat attendu.** Chaque version publiée a sa section datée dans `CHANGELOG.md`, et la release refuse de partir avec une section « Non publié » vide.
+
+**Travaux à effectuer.**
+
+1. Répartir le contenu de « Non publié » entre les versions 1.x d’après l’historique git.
+2. Faire renommer « Non publié » en `[x.y.z] — date` par `scripts/release.mjs`.
+
+**Critères d’acceptation.**
+
+- [ ] La dernière section versionnée de `CHANGELOG.md` correspond à `package.json`.
+
+**Tests requis.**
+
+- Test du script de release sur un dépôt temporaire.
+
+**Dépendances.** Aucune.
+
+**Effort estimé.** XS
+
+**Impact attendu.** faible
+
+**Risques et précautions.** Ne pas réécrire les tags existants.
+
 ### Fiches de la phase 3 — Améliorations fonctionnelles à fort impact
 
 #### LUMA-053
@@ -3124,6 +3292,8 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Type** : dette technique
 - **Phase** : 3
 - **Avancement** : À faire
+
+**Avancement (24/10/2026).** Le cliquet compte 647 textes en dur (782 à l’audit). Une partie de la baisse vient du changement de comptage du cliquet (génériques et commentaires exclus), pas seulement d’extractions.
 
 **Constat technique.** Le script `check-i18n.mjs` (cliquet) compte 782 textes en dur dans `src/renderer` lors de l’audit. Les fichiers les plus chargés sont `Output.tsx` (111), `visualizer/sceneCards.tsx` (93), `Fixtures.tsx` (82), `Effects.tsx` (65), `Audio.tsx` (63) et `Onboarding.tsx` (60). Ces textes restent en français quand l’interface est en anglais.
 
@@ -4677,4 +4847,6 @@ LUMA-029 → LUMA-083
 | [LUMA-082](#luma-082) | Construire et valider les versions macOS et Linux | P3 | ABSENT | 5 | L | À faire |
 | [LUMA-083](#luma-083) | Importer les profils QLC+ (`.qxf`) | P3 | ABSENT | 5 | M | À faire |
 | [LUMA-084](#luma-084) | Retirer de la CSP de production l’autorisation de connexion WebSocket vers localhost | P3 | IMPLÉMENTÉ ET VÉRIFIÉ | 2 | XS | ✅ Terminé |
-
+| [LUMA-085](#luma-085) | Signaler les erreurs de commande sans fenêtre bloquante et dans la langue de l’interface | P3 | PARTIELLEMENT IMPLÉMENTÉ | 1 | S | À faire |
+| [LUMA-086](#luma-086) | Vérifier l’export PDF des documents volumineux (limite de taille des URL `data:`) | P3 | À INVESTIGUER | 2 | XS | À faire |
+| [LUMA-087](#luma-087) | Resynchroniser le changelog avec les versions publiées | P3 | PARTIELLEMENT IMPLÉMENTÉ | 2 | XS | À faire |
