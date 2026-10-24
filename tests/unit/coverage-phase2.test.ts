@@ -359,6 +359,19 @@ describe('Enttec DMX USB Pro (LUMA-037)', () => {
     await out2.close();
   });
 
+  it('reconnexion : une écriture perdue avec l’ancien port ne rend pas le nouveau muet', async () => {
+    const f = fakePort(), g = fakePort();
+    let opened = 0;
+    const out = new EnttecProOutput(cfg, async () => (opened++ ? g.port : f.port));
+    await out.open();
+    out.send(1, new Uint8Array(512)); // never acknowledged: the port goes away first
+    await out.close();
+    await out.open();
+    out.send(1, new Uint8Array(512));
+    expect(g.writes).toHaveLength(1);
+    await out.close();
+  });
+
   it('ouverture impossible : état d’erreur', async () => {
     const out = new EnttecProOutput(cfg, async () => { throw new Error('port occupé'); });
     await out.open();

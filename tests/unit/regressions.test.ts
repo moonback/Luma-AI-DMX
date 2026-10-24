@@ -313,6 +313,20 @@ describe('IA : application, annulation, effets éphémères', () => {
   });
 });
 
+describe('enregistrement', () => {
+  it('une modification faite pendant l’écriture du fichier reste non enregistrée', async () => {
+    const { svc, dataDir } = makeService();
+    await svc.init();
+    svc.setProject(demoProject(), true);
+    await svc.execute({ type: 'project.saveAs', path: path.join(dataDir, 'show.luma.json') });
+    const saving = svc.execute({ type: 'project.save' });
+    await svc.execute({ type: 'project.update', meta: { notes: 'pendant l’écriture' } });
+    await saving;
+    expect(svc.dirty).toBe(true);
+    await svc.dispose();
+  });
+});
+
 describe('récupération au démarrage', () => {
   it('une autosauvegarde plus récente que le fichier est proposée et se réenregistre au même endroit', async () => {
     const { svc, dataDir } = makeService();

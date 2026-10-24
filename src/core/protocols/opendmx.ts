@@ -61,6 +61,7 @@ export class OpenDmxOutput extends OutputAdapter {
     });
     port.on('error', (err) => this.fail(err ?? new Error('Erreur série')));
     this.port = port;
+    this.busy = false; // a write lost with the previous port must not mute the new one
   }
 
   protected async doClose(): Promise<void> {

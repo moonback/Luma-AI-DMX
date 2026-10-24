@@ -146,6 +146,7 @@ function OflDialog({ onClose }: { onClose: () => void }) {
 }
 
 function Ma2LibDialog({ onClose }: { onClose: () => void }) {
+  const tr = useT();
   const [lib, setLib] = useState<{ dir: string | null; manufacturers: string[] } | null>(null);
   const [man, setMan] = useState('');
   const [fixtures, setFixtures] = useState<{ key: string; modes: number }[] | null>(null);
@@ -165,44 +166,44 @@ function Ma2LibDialog({ onClose }: { onClose: () => void }) {
     const r = await act({ type: 'profile.importMa2Lib', manufacturer: man, fixture });
     setBusy(false);
     if (r && (r.imported || r.errors.length)) setResult(r);
-    if (r?.imported) useStore.getState().toast({ kind: r.warnings.length ? 'warn' : 'success', title: `Profil importé : ${r.imported}`, detail: r.warnings.length ? `${r.warnings.length} avertissement(s)` : undefined });
+    if (r?.imported) useStore.getState().toast({ kind: r.warnings.length ? 'warn' : 'success', title: tr('ma2lib.imported', { name: r.imported }), detail: r.warnings.length ? tr('ma2lib.warnings', { n: r.warnings.length }) : undefined });
   };
-  const shown = (fixtures ?? []).filter((f) => f.key.includes(q.toLowerCase()));
+  const shown = (fixtures ?? []).filter((f) => f.key.toLowerCase().includes(q.toLowerCase()));
   return (
-    <Modal title="Importer depuis la bibliothèque grandMA2 (MA Fixture Share)" wide onClose={onClose} footer={<button className="btn" onClick={onClose}>Fermer</button>}>
+    <Modal title={tr('ma2lib.title')} wide onClose={onClose} footer={<button className="btn" onClick={onClose}>{tr('ma2lib.close')}</button>}>
       <div className="col">
         {lib && !lib.dir ? (
-          <p className="small" style={{ margin: 0 }}>Bibliothèque introuvable : installez grandMA2 onPC (elle contient la bibliothèque MA Fixture Share, mise à jour avec le logiciel). Un export .xml téléchargé sur fixtureshare.malighting.com s’importe aussi avec « Importer des profils ».</p>
+          <p className="small" style={{ margin: 0 }}>{tr('ma2lib.missing')}</p>
         ) : (
           <div className="grid g2">
-            <Field label="Fabricant" hint={lib ? `${lib.manufacturers.length} fabricants` : 'Lecture de la bibliothèque…'}>
+            <Field label={tr('ma2lib.manufacturer')} hint={lib ? tr('ma2lib.manufacturers', { n: lib.manufacturers.length }) : tr('ma2lib.reading')}>
               <select className="select" value={man} onChange={(e) => void pickMan(e.target.value)} data-testid="ma2lib-manufacturer">
-                <option value="">— choisir —</option>
+                <option value="">{tr('ma2lib.choose')}</option>
                 {(lib?.manufacturers ?? []).map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </Field>
-            <Field label="Modèle" hint={fixtures ? `${fixtures.length} modèle(s)` : man ? 'Chargement…' : ''}>
-              <input className="input" placeholder="Filtrer…" value={q} onChange={(e) => setQ(e.target.value)} disabled={!fixtures} />
+            <Field label={tr('ma2lib.model')} hint={fixtures ? tr('ma2lib.models', { n: fixtures.length }) : man ? tr('ma2lib.loading') : ''}>
+              <input className="input" placeholder={tr('ma2lib.filter')} value={q} onChange={(e) => setQ(e.target.value)} disabled={!fixtures} />
             </Field>
             <div className="panel" style={{ gridColumn: '1 / -1', maxHeight: 240, overflow: 'auto' }}>
               {shown.map((f) => (
                 <div key={f.key} className="row between" style={{ padding: '4px 10px', borderBottom: '1px solid var(--border)' }}>
-                  <span className="mono small">{f.key} <span className="dim">· {f.modes} mode(s)</span></span>
-                  <button className="btn sm primary" disabled={busy} onClick={() => void run(f.key)}>Importer</button>
+                  <span className="mono small">{f.key} <span className="dim">· {tr('ma2lib.modes', { n: f.modes })}</span></span>
+                  <button className="btn sm primary" disabled={busy} onClick={() => void run(f.key)}>{tr('ma2lib.import')}</button>
                 </div>
               ))}
-              {fixtures && !shown.length && <p className="muted small" style={{ padding: 10, margin: 0 }}>Aucun modèle.</p>}
+              {fixtures && !shown.length && <p className="muted small" style={{ padding: 10, margin: 0 }}>{tr('ma2lib.none')}</p>}
             </div>
           </div>
         )}
         {result && (
           <div className="col small">
-            {result.imported && <span style={{ color: '#34d399' }}>✓ {result.imported} ajouté au projet</span>}
+            {result.imported && <span style={{ color: '#34d399' }}>✓ {tr('ma2lib.added', { name: result.imported })}</span>}
             {result.errors.slice(0, 8).map((e, i) => <span key={i} style={{ color: '#fca5a5' }}>✗ {e}</span>)}
             {result.warnings.slice(0, 8).map((w, i) => <span key={i} style={{ color: '#f59e0b' }}>⚠ {w}</span>)}
           </div>
         )}
-        <p className="small dim" style={{ margin: 0 }}>{lib?.dir ? `Source : ${lib.dir}. ` : ''}Tous les modes de l’appareil sont importés dans un seul profil. Conversions automatiques : vérifiez-les avec le manuel du projecteur avant un spectacle.</p>
+        <p className="small dim" style={{ margin: 0 }}>{lib?.dir ? tr('ma2lib.source', { dir: lib.dir }) : ''}{tr('ma2lib.note')}</p>
       </div>
     </Modal>
   );
@@ -346,7 +347,7 @@ export function Fixtures() {
         <button className="btn" onClick={() => void importProfiles()} title={tr('fixtureShare.importTitle')}><Upload size={15} />Importer des profils</button>
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
         <button className="btn" data-testid="fixture-share" onClick={() => void act({ type: 'profile.openFixtureShare' })} title={tr('fixtureShare.buttonTitle')}><Globe size={15} />{tr('fixtureShare.button')}</button>
-        <button className="btn" data-testid="ma2lib-open" onClick={() => setMa2Lib(true)} title="Bibliothèque MA Fixture Share installée avec grandMA2 onPC"><Upload size={15} />Bibliothèque grandMA2</button>
+        <button className="btn" data-testid="ma2lib-open" onClick={() => setMa2Lib(true)} title={tr('ma2lib.openTitle')}><Upload size={15} />{tr('ma2lib.open')}</button>
         <button className="btn" data-testid="profile-from-photo" onClick={() => setFromPhoto(true)} title={tr('pphoto.buttonTitle')}><Camera size={15} />{tr('pphoto.button')}</button>
         <button className="btn" data-testid="patch-sheet-pdf" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'pdf' })} title="Feuille de patch imprimable (A4 paysage), par univers"><FileDown size={15} />Patch PDF</button>
         <button className="btn" data-testid="patch-sheet-csv" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'csv' })} title="Feuille de patch pour tableur (CSV « ; », UTF-8)"><FileDown size={15} />CSV</button>
