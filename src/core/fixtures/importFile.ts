@@ -1,6 +1,7 @@
 import type { FixtureProfile } from '../model/schemas';
 import { convertMa2Fixture, mergeProfileModes } from './ma2';
 import { convertGdtf } from './gdtf';
+import { decodeMa2File } from './ma2Library';
 import { parseProfileFile } from './profiles';
 import { readZip, ZipError } from '../util/zip';
 
@@ -33,7 +34,7 @@ function convertOne(name: string, bytes: Uint8Array, existing: (id: string) => F
     if (depth > 0) { into.warnings.push(prefix('archive imbriquée ignorée')); return; }
     let zip: ReturnType<typeof readZip>;
     try { zip = readZip(bytes); } catch (err) { into.errors.push(prefix(err instanceof ZipError ? err.message : 'archive illisible')); return; }
-    const files = zip.names.filter((n) => !n.endsWith('/') && !/(^|\/)(__MACOSX|\.)/u.test(n) && ['.xml', '.gdtf', '.json', '.zip'].includes(extOf(n)));
+    const files = zip.names.filter((n) => !n.endsWith('/') && !/(^|\/)(__MACOSX|\.)/u.test(n) && ['.xml', '.xmlp', '.gdtf', '.json', '.zip'].includes(extOf(n)));
     if (!files.length) { into.errors.push(prefix('aucun fichier de profil (.xml grandMA2, .gdtf, .json) dans l’archive')); return; }
     if (files.length > MAX_ARCHIVE_FILES) into.warnings.push(prefix(`${files.length} fichiers : seuls les ${MAX_ARCHIVE_FILES} premiers sont importés`));
     for (const n of files.slice(0, MAX_ARCHIVE_FILES)) {
@@ -50,8 +51,11 @@ function convertOne(name: string, bytes: Uint8Array, existing: (id: string) => F
     if (r.profile) collect(into.profiles, r.profile, existing);
     return;
   }
-  const text = Buffer.from(bytes).toString('utf8').replace(/^﻿/u, '');
-  if (ext === '.xml' || text.trimStart().startsWith('<')) {
+  let text: string;
+  try {
+    text = ext === '.xmlp' ? decodeMa2File(Buffer.from(bytes)) : Buffer.from(bytes).toString('utf8').replace(/^﻿/u, '');
+  } catch (err) { into.errors.push(prefix(`fichier grandMA2 illisible : ${(err as Error).message}`)); return; }
+  if (ext === '.xml' || ext === '.xmlp' || text.trimStart().startsWith('<')) {
     if (/<GMA3[\s>]/u.test(text.slice(0, 2000))) {
       into.errors.push(prefix('fiche grandMA3 non prise en charge : téléchargez la version grandMA2 (.xml) ou GDTF de la machine'));
       return;

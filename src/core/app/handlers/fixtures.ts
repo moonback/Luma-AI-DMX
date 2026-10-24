@@ -1,7 +1,10 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import type { FixtureProfile } from '../../model/schemas';
 import { convertFixtureFiles } from '../../fixtures/importFile';
+import { convertMa2Fixture, mergeProfileModes } from '../../fixtures/ma2';
+import { decodeMa2File, loadMa2Library } from '../../fixtures/ma2Library';
 import { channelCount } from '../../fixtures/profiles';
 import { BUILTIN_PROFILES } from '../../fixtures/builtinProfiles';
 import { convertOflFixture, oflFetchFixture, oflFixtureKeys, oflManufacturers } from '../../fixtures/ofl';
@@ -13,7 +16,7 @@ import type { AppService, CommandIn } from '../AppService';
 import { removeFromLibrary, saveToLibrary } from '../library';
 
 /* Fixture profiles (Luma, grandMA2, Open Fixture Library) and the patch. */
-export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' | 'ofl' | 'fixture' | 'patch'>): Promise<unknown> {
+export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' | 'ofl' | 'ma2lib' | 'fixture' | 'patch'>): Promise<unknown> {
   const ok = { ok: true } as const;
   switch (cmd.type) {
     case 'profile.import': {
@@ -52,6 +55,47 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       if (!app.opts.dialogs.openFixtureShare) throw new UserError('MA Fixture Share : disponible dans l’application de bureau');
       app.opts.dialogs.openFixtureShare();
       return ok;
+    case 'ma2lib.manufacturers': {
+      const lib = await loadMa2Library().catch((err: Error) => { throw new UserError(`Bibliothèque grandMA2 illisible : ${err.message}`); });
+      return { dir: lib?.dir ?? null, manufacturers: lib ? [...lib.index.keys()].sort() : [] };
+    }
+    case 'ma2lib.fixtures': {
+      const fixtures = (await loadMa2Library())?.index.get(cmd.manufacturer) ?? new Map<string, string[]>();
+      return [...fixtures].map(([key, modes]) => ({ key, modes: modes.length })).sort((a, b) => a.key.localeCompare(b.key));
+    }
+    case 'profile.importMa2Lib': {
+      const lib = await loadMa2Library();
+      const files = lib?.index.get(cmd.manufacturer)?.get(cmd.fixture);
+      if (!lib || !files) throw new UserError('Appareil introuvable dans la bibliothèque grandMA2');
+      // Library files: one per mode, merged into one profile (and into the existing one of the same fixture).
+      const warnings: string[] = [];
+      const errors: string[] = [];
+      let profile: FixtureProfile | null = null;
+      for (const file of files) {
+        let r: ReturnType<typeof convertMa2Fixture>;
+        try {
+          r = convertMa2Fixture(decodeMa2File(await fs.readFile(path.join(lib.dir, file))));
+        } catch (err) {
+          r = { profile: null, warnings: [], errors: [(err as Error).message] };
+        }
+        warnings.push(...r.warnings.map((w) => `${file} : ${w}`));
+        errors.push(...r.errors.map((e) => `${file} : ${e}`));
+        if (r.profile) profile = profile ? mergeProfileModes(profile, r.profile) : r.profile;
+      }
+      for (const w of warnings) app.logger.warn('grandMA2', w);
+      if (!profile) {
+        app.logger.error('grandMA2', `${cmd.manufacturer}@${cmd.fixture} : conversion impossible — ${errors.join(' ; ')}`);
+        return { imported: null, profileId: null, warnings, errors };
+      }
+      const id = profile.id;
+      if (BUILTIN_PROFILES.some((b) => b.id === id)) throw new UserError(`Profil « ${id} » : identifiant réservé à un profil intégré`);
+      const existing = app.userProfiles.find((x) => x.id === id) ?? app.project.profiles.find((x) => x.id === id);
+      const merged = existing ? mergeProfileModes(existing, profile) : profile;
+      await saveToLibrary(app, [merged]);
+      app.mutate((d) => { d.profiles = [...d.profiles.filter((x) => x.id !== id), merged]; });
+      app.logger.info('grandMA2', `Profil importé : ${merged.manufacturer} ${merged.name} (${merged.modes.length} mode(s))`);
+      return { imported: `${merged.manufacturer} ${merged.name}`, profileId: id, warnings, errors };
+    }
     case 'ofl.manufacturers':
       return oflManufacturers().catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`); });
     case 'ofl.fixtures':

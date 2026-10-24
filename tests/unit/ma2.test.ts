@@ -1,7 +1,9 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { convertMa2Fixture, mergeProfileModes } from '../../src/core/fixtures/ma2';
+import { decodeMa2File, findMa2LibraryDir } from '../../src/core/fixtures/ma2Library';
 import { validateProfile } from '../../src/core/fixtures/profiles';
 import { makeService } from '../helpers';
 
@@ -153,5 +155,32 @@ describe('import grandMA2', () => {
     expect(bad.imported).toEqual([]);
     expect(bad.errors[0]).toMatch(/GDTF illisible/);
     await svc.dispose();
+  });
+
+  it('bibliothèque grandMA2 onPC : .xmlp (gzip + en-tête binaire) indexés et importés mode par mode', async () => {
+    const programData = mkdtempSync(path.join(tmpdir(), 'luma-ma2lib-'));
+    const lib = path.join(programData, 'MA Lighting Technologies', 'grandma', 'gma2_V_3.9.61', 'library');
+    mkdirSync(lib, { recursive: true });
+    const xmlp = (xml: string) => gzipSync(Buffer.concat([Buffer.from([0x4d, 0x41, 0x20, 0x3d, 0x09, 0x81, 0x31, 0, 0]), Buffer.from(`﻿${xml}`)]));
+    writeFileSync(path.join(lib, 'beamz@mhl1940@26channels.xmlp'), xmlp(sample()));
+    writeFileSync(path.join(lib, 'beamz@mhl1940@autre.xmlp'), xmlp(sample().replace('mode="26Channels"', 'mode="Autre"')));
+    writeFileSync(path.join(lib, '_fixture_type_cache_3_9.tmp'), '');
+    expect(decodeMa2File(xmlp('<MA/>'))).toBe('<MA/>');
+    expect(await findMa2LibraryDir(programData)).toBe(lib);
+    const prev = process.env.ProgramData;
+    process.env.ProgramData = programData;
+    const { svc } = makeService();
+    await svc.init();
+    try {
+      expect(await svc.execute({ type: 'ma2lib.manufacturers' })).toEqual({ dir: lib, manufacturers: ['beamz'] });
+      expect(await svc.execute({ type: 'ma2lib.fixtures', manufacturer: 'beamz' })).toEqual([{ key: 'mhl1940', modes: 2 }]);
+      const r = await svc.execute({ type: 'profile.importMa2Lib', manufacturer: 'beamz', fixture: 'mhl1940' });
+      expect([r.imported, r.errors]).toEqual(['BeamZ MHL1940', []]);
+      expect(svc.projectState().project.profiles.map((p) => p.modes.map((m) => m.name).sort())).toEqual([['26Channels', 'Autre']]);
+      await expect(svc.execute({ type: 'profile.importMa2Lib', manufacturer: 'beamz', fixture: '../x' })).rejects.toThrow(/introuvable/);
+    } finally {
+      process.env.ProgramData = prev;
+      await svc.dispose();
+    }
   });
 });
