@@ -20,7 +20,9 @@ const DEV_URL = process.env.ELECTRON_RENDERER_URL;
 if (process.env.LUMA_USER_DATA) app.setPath('userData', process.env.LUMA_USER_DATA);
 
 app.setName(BRAND.productName);
-if (!app.requestSingleInstanceLock()) app.quit();
+// A second instance only hands focus to the first: it must not open outputs, sockets or windows while quitting.
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
 
 // Native crashes leave a minidump in userData/Crashpad; nothing is ever uploaded.
 crashReporter.start({ uploadToServer: false });
@@ -279,6 +281,7 @@ app.on('child-process-gone', (_e, details) => {
 });
 
 app.whenReady().then(async () => {
+  if (!primaryInstance) return;
   const splash = process.env.LUMA_E2E ? null : showSplash();
   // Only the microphone (audio-reactive input, LTC), MIDI (controllers, MTC) and the HTML fullscreen of the detached
   // 3D view (F11) may be requested by the renderer.

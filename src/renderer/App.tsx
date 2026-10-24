@@ -64,8 +64,8 @@ function Sidebar() {
   const collapsed = useStore((s) => s.collapsed);
   const toggle = useStore((s) => s.toggleCollapsed);
   const keys = resolveShortcuts(useStore((s) => s.shortcuts));
-  const rt = useStore((s) => s.runtime);
-  const aiActive = rt?.engine.aiActive ?? false;
+  // A boolean, not the whole runtime: the sidebar must not re-render 10 times per second.
+  const aiActive = useStore((s) => s.runtime?.engine.aiActive ?? false);
   return (
     <nav className="sidebar" aria-label={tr('nav.aria')}>
       {NAV_GROUPS.map((group, gi) => (

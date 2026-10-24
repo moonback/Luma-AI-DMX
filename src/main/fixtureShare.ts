@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { app, BrowserWindow, session, shell, type DownloadItem } from 'electron';
 import type { AppService } from '../core/app/AppService';
 import type { ProfilesImported } from '../shared/commands';
@@ -64,6 +64,6 @@ function handleDownload(item: DownloadItem, service: AppService, notify: (event:
     service.execute({ type: 'profile.import', paths: [file] }).then(
       (r) => notify({ source: 'fixtureShare', file: name, ...r }),
       (err: Error) => fail(err.message),
-    );
+    ).finally(() => rmSync(file, { force: true })); // imported into the library: the download itself is not kept
   });
 }

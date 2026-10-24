@@ -35,7 +35,7 @@ export function buildSacnPacket(opts: { universe: number; data: Uint8Array; sequ
   // Framing layer
   buf.writeUInt16BE(0x7000 | (buf.length - 38), 38);
   buf.writeUInt32BE(0x00000002, 40);
-  buf.write(sourceName.slice(0, 63), 44, 'utf8');
+  buf.write(sourceName, 44, 63, 'utf8'); // 64-byte field, null-terminated: never spills into the priority byte
   buf.writeUInt8(priority, 108);
   buf.writeUInt16BE(0, 109); // sync address
   buf.writeUInt8(sequence & 0xff, 111);

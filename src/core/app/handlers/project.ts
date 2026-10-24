@@ -48,22 +48,26 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
         throw err;
       }
     }
-    case 'project.save':
+    case 'project.save': {
       if (!app.projectPath) return app.handle({ type: 'project.saveAs' });
+      // The revision written, not the one after the await: an edit made during the write stays unsaved.
+      const revision = app.revision;
       await saveProjectFile(app.projectPath, app.project);
-      app.savedRevision = app.revision;
+      app.savedRevision = revision;
       await clearAutosave(app);
       app.logger.info('Projet', `Enregistré : ${path.basename(app.projectPath)}`);
       app.emitProject();
       return { path: app.projectPath };
+    }
     case 'project.saveAs':
     case 'project.export': {
       const file = cmd.path ?? (await app.opts.dialogs.saveProject(app.project.meta.name));
       if (!file) return { path: null };
+      const revision = app.revision;
       await saveProjectFile(file, app.project);
       if (cmd.type === 'project.saveAs') {
         app.projectPath = file;
-        app.savedRevision = app.revision;
+        app.savedRevision = revision;
         addRecent(app, file);
         await clearAutosave(app);
       }
