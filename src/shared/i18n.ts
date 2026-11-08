@@ -24,6 +24,7 @@ export const CORE_MESSAGES = {
   'locate.noFixtures': ['Aucun projecteur à localiser', 'No fixtures to locate'],
   'locate.noSequence': ['Aucune séquence de localisation en cours', 'No fixture-location sequence is running'],
   'locate.frameOutOfSequence': ['Image hors séquence', 'Frame is outside the sequence'],
+  'project.demoLoadFailed': ['Impossible de charger le projet de démonstration : {reason}', 'Could not load demo project: {reason}'],
   'project.notObject': ['Le fichier ne contient pas un objet projet. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'The file does not contain a project object. A recovery copy may be available (Settings › Backups).'],
   'project.invalidFile': ['Ce fichier n’est pas un projet Luma AI DMX. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'This file is not a Luma AI DMX project. A recovery copy may be available (Settings › Backups).'],
   'project.versionMissing': ['Version de format absente. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'Project format version is missing. A recovery copy may be available (Settings › Backups).'],
