@@ -3144,37 +3144,37 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Phase** : 2
 - **Avancement** : 🟡 Partiel
 
-**Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0`, alors que le changelog versionné s’arrête à `0.2.0` et que les notes récentes sont regroupées dans « Non publié ». L’historique publié ne doit pas être reconstitué par supposition.
+**Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0`, alors que le changelog versionné s’arrêtait à `0.2.0` et que plusieurs notes livrées restaient sous « Non publié ».
 
-**Réalisation (08/11/2026).** `scripts/release-validation.mjs` fournit une validation pure et testable : SemVer stricte, absence de section de version dupliquée, présence de notes catégorisées dans « Non publié » et absence du tag local. `scripts/release.mjs` exécute ce contrôle avant les builds, vérifie aussi le tag distant et la release GitHub, puis refuse de publier si une vérification échoue. Huit tests unitaires couvrent les cas valides et les principaux refus. Une déclaration TypeScript accompagne le module ESM.
+**Historique vérifié (08/11/2026).** Les tags Git `1.4.0` à `1.8.0`, leurs commits et les comparaisons entre versions ont été consultés. Les sections `1.4.0` à `1.8.0` ont été reconstituées dans `CHANGELOG.md` à partir des changements inclus dans chaque plage de tags et des descriptions de PR/release disponibles. Les dates proviennent des releases GitHub. Les notes du tag `1.8.0` et les corrections déjà présentes dans le changelog du tag `1.6.0` ont été replacées dans les versions correspondantes ; les éléments encore non publiés restent sous « Non publié ». Aucune attribution n'a été faite à partir de suppositions.
 
-**Limite volontaire.** Les notes accumulées ne sont pas ventilées artificiellement entre les versions 1.4.0 à 1.8.0. Cette attribution reste à faire à partir des commits réellement inclus dans chaque tag. Le script ne réécrit pas automatiquement le changelog ni les tags : une mutation automatique au moment d’une release risquerait de publier une documentation non vérifiée.
-
-**Problème restant.** Les versions historiques publiées ne disposent pas encore chacune d’une section datée et vérifiée dans `CHANGELOG.md`.
+**Réalisation technique.** `scripts/release-validation.mjs` fournit une validation pure : SemVer stricte, identifiants numériques de pré-release sans zéro initial, absence de section de version dupliquée et présence de notes catégorisées dans « Non publié ». Le contrôle du tag distant est isolé dans `hasRemoteTag`, injecte son lecteur Git et peut être testé sur un dépôt distant temporaire. `scripts/release.mjs` exécute ces contrôles avant les builds et vérifie également la release GitHub. Huit tests unitaires et deux tests d'intégration sur dépôt Git temporaire ont été ajoutés. Une déclaration TypeScript accompagne le module ESM.
 
 **Résultat attendu.** Chaque version publiée possède une section fidèle à son contenu livré ; une release future est bloquée si ses notes sont absentes, vides, mal catégorisées ou si son tag existe déjà.
 
 **Travaux restants.**
 
-1. Comparer les tags 1.4.0 à 1.8.0 avec leurs commits et établir l’attribution des changements sans extrapolation.
-2. Créer les sections historiques datées uniquement après vérification des commits concernés.
-3. Ajouter un test d’intégration du script dans un dépôt Git temporaire, sans lancer de publication ni toucher au dépôt de travail.
+1. Exécuter les huit tests unitaires et les deux tests d'intégration.
+2. Exécuter typecheck et lint pour vérifier la déclaration ESM et les nouveaux fichiers.
+3. Vérifier manuellement le rendu Markdown et les dates des sections versionnées.
 
-**Critères d’acceptation.**
+**Critères d'acceptation.**
 
+- [x] Les tags 1.4.0 à 1.8.0 et leurs changements ont été examinés.
+- [x] Les sections historiques 1.4.0 à 1.8.0 sont présentes et datées dans `CHANGELOG.md`.
 - [x] La prévalidation SemVer / changelog / tag local est isolée et testable.
-- [x] La release vérifie aussi l’absence du tag distant et d’une release GitHub existante.
-- [ ] La dernière section versionnée de `CHANGELOG.md` correspond à la version publiée et les versions 1.x historiques sont attribuées à partir des tags.
-- [ ] Le test d’intégration sur dépôt temporaire couvre le préflight complet.
+- [x] La release vérifie aussi l'absence du tag distant et d'une release GitHub existante.
+- [x] Le contrôle du tag distant est couvert par un test sur dépôt bare temporaire.
+- [ ] Les tests, le typecheck et le lint ont été exécutés et validés.
 
-**Tests requis.**
+**Tests ajoutés (exécution non effectuée ici).**
 
-- Huit tests unitaires dans `tests/unit/release-validation.test.ts` (ajoutés, exécution non effectuée ici).
-- Test d’intégration de `scripts/release.mjs` sur un dépôt temporaire avec tags locaux et distants simulés.
+- Huit tests unitaires dans `tests/unit/release-validation.test.ts`.
+- Deux tests d'intégration dans `tests/integration/release-preflight.test.ts` : tag local et tag distant réel via un dépôt bare temporaire.
 
 **Dépendances.** Aucune.
 
-**Effort estimé.** XS
+**Effort restant estimé.** XS
 
 **Impact attendu.** faible
 
