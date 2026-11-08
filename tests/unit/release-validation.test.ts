@@ -17,6 +17,15 @@ describe('release metadata validation', () => {
     expect(validateReleaseMetadata({ version: '2.0.0-beta.01', changelog }))
       .toContain('Identifiant numérique de pré-release SemVer avec zéro initial : 2.0.0-beta.01.');
   });
+  it('rejects a published tag with no matching changelog section', () => {
+    expect(validateReleaseMetadata({ version: '1.9.0', changelog, existingTags: ['1.7.0'] }))
+      .toContain('Le tag Git 1.7.0 ne possède aucune section dans le CHANGELOG.md.');
+  });
+  it('requires published tag sections to include a release date', () => {
+    const undated = changelog.replace('## [1.8.0] — 2026-10-01', '## [1.8.0]');
+    expect(validateReleaseMetadata({ version: '1.9.0', changelog: undated, existingTags: ['1.8.0'] }))
+      .toContain('La section du tag Git 1.8.0 doit comporter une date YYYY-MM-DD.');
+  });
   it('rejects an existing local tag', () => {
     expect(validateReleaseMetadata({ version: '1.9.0', changelog, existingTags: ['1.9.0'] })).toContain('Le tag Git 1.9.0 existe déjà.');
   });
