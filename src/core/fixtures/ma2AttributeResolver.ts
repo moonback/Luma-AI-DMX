@@ -26,7 +26,8 @@ export function resolveMa2SemanticAttribute(input: {
   const semantic = [sub, preset, name].filter(Boolean).join(' ');
 
   // Explicit functional subattributes are stronger than broad feature families.
-  if (has(semantic, 'STROBE', 'SHUTTER', 'FLASH')) return 'shutter';
+  if (has(semantic, 'STROBE')) return 'strobe';
+  if (has(semantic, 'SHUTTER', 'FLASH')) return 'shutter';
   if (has(semantic, 'DIMMER', 'INTENSITY')) return 'dimmer';
   if (has(semantic, 'PAN')) return 'pan';
   if (has(semantic, 'TILT')) return 'tilt';
@@ -45,6 +46,8 @@ export function resolveMa2SemanticAttribute(input: {
   if (has(semantic, 'CYAN')) return 'cyan';
   if (has(semantic, 'MAGENTA')) return 'magenta';
   if (has(semantic, 'YELLOW')) return 'yellow';
+  if (has(semantic, 'COLOR') && has(semantic, 'WHEEL')) return 'colorWheel';
+  if (has(semantic, 'COLOR') && has(semantic, 'MACRO')) return 'colorMacro';
   if (has(semantic, 'WHITE')) return has(semantic, 'WARM') ? 'warmWhite' : has(semantic, 'COLD', 'COOL') ? 'coldWhite' : 'white';
   if (has(semantic, 'UV', 'ULTRAVIOLET')) return 'uv';
 
