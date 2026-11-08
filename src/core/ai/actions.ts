@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { FIXTURE_TYPES, hexColorSchema, unitSchema, type EffectType } from '../model/schemas';
+import type { CoreMessage } from '../../shared/i18n';
 
 /** Effect types the AI may ask for (contract v2 added the fan and the band followers). */
 export const AI_EFFECT_TYPES = ['fade', 'pulse', 'chase', 'wave', 'rainbow', 'strobe', 'dimmerWave', 'colorCycle', 'panTilt', 'randomMove', 'fan', 'bassFollow', 'brightnessColor'] as const satisfies readonly EffectType[];
@@ -153,6 +154,8 @@ export interface ValidatedAction {
   raw: unknown;
   summary: string;
   messages: string[];
+  /** Optional structured translations, indexed like `messages`; missing entries keep the French fallback. */
+  messageTranslations?: (CoreMessage | null)[];
   /** Resolved fixture ids per target in the action (flattened). */
   fixtureIds: string[];
 }
