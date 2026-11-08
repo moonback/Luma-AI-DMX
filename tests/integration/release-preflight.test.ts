@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { validateReleaseMetadata } from '../../scripts/release-validation.mjs';
+import { hasRemoteTag, validateReleaseMetadata } from '../../scripts/release-validation.mjs';
 
 const roots: string[] = [];
 const changelog = '# Changelog\\n\\n## [Non publié]\\n\\n### Ajouté\\n- Une fonctionnalité.\\n';
@@ -47,8 +47,8 @@ describe('release preflight with a temporary Git repository', () => {
     const { root } = createRepository();
     git(root, 'tag', '1.9.0');
     git(root, 'push', 'origin', 'refs/tags/1.9.0');
-    const remoteTag = git(root, 'ls-remote', '--tags', 'origin', 'refs/tags/1.9.0');
-    expect(remoteTag).toContain('refs/tags/1.9.0');
+    expect(hasRemoteTag('1.9.0', (tag) => git(root, 'ls-remote', '--tags', 'origin', 'refs/tags/' + tag))).toBe(true);
+    expect(hasRemoteTag('2.0.0', (tag) => git(root, 'ls-remote', '--tags', 'origin', 'refs/tags/' + tag))).toBe(false);
     expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain('release test');
   });
 });
