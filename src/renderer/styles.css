@@ -1042,19 +1042,6 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
-.sc-group-create {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.sc-group-create .input {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  padding: 4px 8px;
-  height: 28px;
-}
 .sc-groups-list {
   display: flex;
   flex-direction: column;

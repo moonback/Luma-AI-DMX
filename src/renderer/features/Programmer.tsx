@@ -3,22 +3,9 @@ import { ArrowDown, ArrowUp, Copy, Eye, Palette as PaletteIcon, Pencil, Plus, Tr
 import { useStore, confirmAction } from '../store';
 import { useT } from '../i18n';
 import { act, newId } from '../api';
-import { Empty, Field, Modal, PageHead, Panel, useResolved } from '../components/ui';
+import { Empty, Field, PageHead, Panel, useResolved } from '../components/ui';
+import { GroupDialog, NameDialog } from '../components/NameDialog';
 import type { Group, Palette, Scene } from '../../core/model/schemas';
-
-function NameDialog({ title, initial, onSubmit, onClose, children }: { title: string; initial: string; onSubmit: (name: string) => void; onClose: () => void; children?: React.ReactNode }) {
-  const tr = useT();
-  const [name, setName] = useState(initial);
-  const ok = () => { if (name.trim()) { onSubmit(name.trim()); onClose(); } };
-  return (
-    <Modal title={title} onClose={onClose} footer={<><button className="btn" onClick={onClose}>{tr('common.cancel')}</button><button className="btn primary" onClick={ok}>{tr('prog.validate')}</button></>}>
-      <div className="col">
-        <Field label={tr('prog.name')}><input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ok()} /></Field>
-        {children}
-      </div>
-    </Modal>
-  );
-}
 
 function Groups() {
   const tr = useT();
@@ -63,20 +50,8 @@ function Groups() {
           </tbody>
         </table>
       )}
-      {dialog && <GroupDialog group={dialog.group} onClose={() => setDialog(null)} />}
+      {dialog && <GroupDialog group={dialog.group} fixtureIds={selection} onClose={() => setDialog(null)} />}
     </Panel>
-  );
-}
-
-function GroupDialog({ group, onClose }: { group?: Group; onClose: () => void }) {
-  const tr = useT();
-  const selection = useStore((s) => s.selection);
-  const [color, setColor] = useState(group?.color ?? '#8B5CF6');
-  return (
-    <NameDialog title={group ? tr('prog.editGroup') : tr('prog.newGroup')} initial={group?.name ?? tr('console.group.defaultName', { n: selection.length })} onClose={onClose}
-      onSubmit={(name) => void act({ type: 'group.upsert', group: { id: group?.id ?? newId(), name, color: color.toUpperCase(), fixtureIds: group?.fixtureIds ?? selection } })}>
-      <Field label={tr('prog.groupColor')}><input type="color" value={color} onChange={(e) => setColor(e.target.value)} /></Field>
-    </NameDialog>
   );
 }
 

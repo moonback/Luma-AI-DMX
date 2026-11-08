@@ -110,12 +110,14 @@ describe('Live Console', () => {
     expect(screen.getByRole('button', { name: 'Éventail pan' })).toBeDisabled();
   });
 
-  it('crée un groupe depuis la sélection en un clic et résume la sélection contrôlée', async () => {
+  it('crée un groupe depuis la sélection via la boîte partagée et résume la sélection contrôlée', async () => {
     render(<LiveConsole />);
     fireEvent.click(screen.getByText('PAR 1'));
     expect(screen.getByTestId('selection-summary')).toHaveTextContent('PAR 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Groupe' }));
+    expect(screen.getByText('Nouveau groupe')).toBeInTheDocument();
     await rtlAct(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Groupe' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Valider' }));
     });
     expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ type: 'group.upsert', group: expect.objectContaining({ fixtureIds: ['par1'] }) }));
   });

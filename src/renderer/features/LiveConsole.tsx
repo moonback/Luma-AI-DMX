@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Columns2, Eraser, ExternalLink, GripHorizontal, Pin, PinOff, Plus, Save, SlidersHorizontal, Users, X } from 'lucide-react';
 import { useStore, confirmAction, EMPTY_OBJ } from '../store';
 import { useT } from '../i18n';
-import { act, newId } from '../api';
+import { act } from '../api';
 import { Empty, Modal, Field, PageHead, Panel, pct, useResolved, useThrottled } from '../components/ui';
+import { GroupDialog } from '../components/NameDialog';
 import { attributeClass, attributeLabel, EMITTER_ATTRIBUTES, type AttributeClass } from '../../core/fixtures/attributes';
 import { cellColors, colorCapability, colorCells, displayColor } from '../../core/fixtures/color';
 import { channelKey, coarseChannel, type ResolvedFixture } from '../../core/fixtures/profiles';
@@ -12,7 +13,6 @@ import { rgbToHex } from '../../core/util/math';
 import type { Channel, Palette } from '../../core/model/schemas';
 
 const QUICK_COLORS = ['#FFFFFF', '#FF0000', '#FF7000', '#FFD000', '#00FF40', '#00E5FF', '#0040FF', '#8B00FF', '#FF00C8', '#FFB000'];
-const GROUP_COLORS = ['#8B5CF6', '#22D3EE', '#F59E0B', '#34D399', '#F472B6', '#60A5FA'];
 
 /** Fixture ids holding programmer values (the « touched » state shown on tiles and panels). */
 const touchedIds = (programmer: Record<string, Record<string, number>>, ids: string[]) => ids.filter((id) => Object.keys(programmer[id] ?? {}).length > 0);
@@ -38,14 +38,10 @@ export function FixtureTiles({ onPick }: { onPick?: () => void }) {
     onPick?.();
   };
   const same = (ids: string[]) => ids.length > 0 && ids.length === selection.length && ids.every((id) => selection.includes(id));
-  // One click, no dialog: rename / recolour later in Programmer.
-  const newGroup = async () => {
-    const name = tr('console.group.defaultName', { n: groups.length + 1 });
-    const r = await act({ type: 'group.upsert', group: { id: newId(), name, color: GROUP_COLORS[groups.length % GROUP_COLORS.length]!, fixtureIds: selection } });
-    if (r) useStore.getState().toast({ kind: 'success', title: tr('console.group.created', { name }), detail: tr('console.group.createdDetail') });
-  };
+  const [groupDialog, setGroupDialog] = useState(false);
   return (
     <div className="col">
+      {groupDialog && <GroupDialog fixtureIds={selection} onClose={() => setGroupDialog(false)} />}
       <div className="sel-bar">
         <div className="chips" role="group" aria-label={tr('console.select.aria')}>
           <button className="chip" onClick={() => setSelection(all)}>{tr('console.select.all')}</button>
@@ -73,7 +69,7 @@ export function FixtureTiles({ onPick }: { onPick?: () => void }) {
             );
           })}
           {selection.length > 0 && !groups.some((g) => same(g.fixtureIds)) && (
-            <button className="chip add" title={tr('console.group.newHint')} onClick={() => void newGroup()}><Plus size={12} />{tr('console.group.new')}</button>
+            <button className="chip add" title={tr('console.group.newHint')} onClick={() => setGroupDialog(true)}><Plus size={12} />{tr('console.group.new')}</button>
           )}
         </div>
       )}

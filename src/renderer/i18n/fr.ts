@@ -13,7 +13,7 @@ export const fr = {
   'nav.fixtures': 'Machines',
   'nav.console': 'Console Live ',
   'nav.pantilt': 'Console Simplifi\u00e9e',
-  'nav.programmer': 'Programmer',
+  'nav.programmer': 'Bibliothèque',
   'nav.cues': 'Cues & Sequences',
   'nav.effects': 'Effects',
   'nav.quick': 'Actions rapides',
@@ -261,7 +261,7 @@ export const fr = {
   'console.center': 'Centrer',
 
   'pantilt.title': 'Console Simplifi\u00e9e',
-  'pantilt.subtitle': 'Une carte par machine \u2014 tous les param\u00e8tres en sliders',
+  'pantilt.subtitle': 'Pour débuter ou dépanner vite : une carte par machine, tous les paramètres en sliders. Groupes partagés avec la Live Console et la Bibliothèque.',
   'pantilt.selectionMode': 'Mode sélection',
   'pantilt.selectionModeActive': 'Sélection activée',
   'pantilt.selectionModeHint': 'Activer pour sélectionner plusieurs machines au clic',

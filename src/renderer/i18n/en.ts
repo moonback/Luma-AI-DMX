@@ -11,7 +11,7 @@ export const en: Record<MessageKey, string> = {
   'nav.fixtures': 'Fixtures',
   'nav.console': 'Live Console',
   'nav.pantilt': 'Simple Console',
-  'nav.programmer': 'Programmer',
+  'nav.programmer': 'Library',
   'nav.cues': 'Cues & Sequences',
   'nav.effects': 'Effects',
   'nav.quick': 'Quick Actions',
@@ -259,7 +259,7 @@ export const en: Record<MessageKey, string> = {
   'console.center': 'Center',
 
   'pantilt.title': 'Simple Console',
-  'pantilt.subtitle': 'One card per fixture — all parameters as sliders',
+  'pantilt.subtitle': 'For beginners or quick fixes: one card per fixture, every parameter as a slider. Groups are shared with the Live Console and the Library.',
   'pantilt.selectionMode': 'Selection mode',
   'pantilt.selectionModeActive': 'Selection enabled',
   'pantilt.selectionModeHint': 'Enable to select multiple fixtures by clicking',
