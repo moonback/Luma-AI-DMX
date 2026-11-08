@@ -452,6 +452,31 @@ export function SettingsPage() {
                 <button className="btn sm" onClick={() => setS({ ...s, appearance: { ...s.appearance, components: DEFAULT_COMPONENT_VISIBILITY } })}>{tr('settings.components.reset')}</button>
               </div>
             </Panel>
+            <Panel title={tr('settings.components.dashboardTitle')}>
+              <p className="small muted" style={{ marginTop: 0 }}>{tr('settings.components.dashboardHint')}</p>
+              <div className="grid g2">
+                {([
+                  ['firstSteps', 'settings.components.dashboardFirstSteps'],
+                  ['hardware', 'settings.components.dashboardHardware'],
+                  ['show', 'settings.components.dashboardShow'],
+                  ['system', 'settings.components.dashboardSystem'],
+                  ['sceneFromText', 'settings.components.dashboardSceneFromText'],
+                  ['quickActions', 'settings.components.dashboardQuickActions'],
+                  ['alerts', 'settings.components.dashboardAlerts'],
+                ] as const).map(([id, label]) => (
+                  <label className="check" key={id}>
+                    <input type="checkbox" checked={s.appearance.components.dashboard[id]} onChange={(e) => setS({
+                      ...s,
+                      appearance: { ...s.appearance, components: { ...s.appearance.components, dashboard: { ...s.appearance.components.dashboard, [id]: e.target.checked } } },
+                    })} />
+                    {tr(label)}
+                  </label>
+                ))}
+              </div>
+              <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+                <button className="btn sm" onClick={() => setS({ ...s, appearance: { ...s.appearance, components: DEFAULT_COMPONENT_VISIBILITY } })}>{tr('settings.components.reset')}</button>
+              </div>
+            </Panel>
           </>
         )}
         {tab === 'engine' && (
