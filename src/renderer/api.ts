@@ -30,7 +30,7 @@ export async function call<T extends CommandType>(
     if (/licen[cs]e/i.test(r.error)) {
       useStore.getState().setNotice({ title: t('api.error.title'), detail });
     } else {
-      useStore.getState().toast({ kind: 'error', title: t('api.error.title'), detail: r.error });
+      useStore.getState().toast({ kind: 'error', title: t('api.error.title'), detail });
     }
   }
   throw new Error(detail);
