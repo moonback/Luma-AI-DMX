@@ -100,7 +100,7 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
       try {
         demo = buildDemo(cmd.id);
       } catch (err) {
-        throw new UserError((err as Error).message);
+        throw new UserError((err as Error).message, 'project.demoLoadFailed', { reason: (err as Error).message });
       }
       app.setProject(demo, true);
       app.projectPath = null;
