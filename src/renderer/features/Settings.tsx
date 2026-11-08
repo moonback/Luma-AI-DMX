@@ -394,7 +394,7 @@ export function SettingsPage() {
     link.href = url;
     link.download = 'luma-workspace-profiles.json';
     link.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const importWorkspaceProfiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
