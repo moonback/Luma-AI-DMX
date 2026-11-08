@@ -1,4 +1,4 @@
-import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2, CheckCircle2, CircleAlert, CircleDashed, ShieldAlert } from 'lucide-react';
+import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2, Activity, CheckCircle2, CircleAlert, CircleDashed, ShieldAlert } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useT } from '../i18n';
 import { describeScene } from '../sceneActions';
@@ -64,6 +64,61 @@ function ReadinessChecklist({ checks }: { checks: ReadinessCheck[] }) {
   );
 }
 
+
+function EngineHealthPanel({ metrics, outputs }: { metrics: NonNullable<NonNullable<ReturnType<typeof useStore.getState>['runtime']>['engine']['metrics']> | null; outputs: NonNullable<ReturnType<typeof useStore.getState>['runtime']>['outputs'] }) {
+  const tr = useT();
+  const measured = !!metrics && metrics.ticks > 0;
+  const load = measured ? Math.max(0, Math.min(1, metrics.load)) : 0;
+  const loadLevel = !measured ? 'unknown' : metrics.errors > 0 ? 'blocked' : load >= 0.85 || metrics.overruns > 0 ? 'warning' : 'ready';
+  const enabled = outputs.filter((output) => output.enabled);
+  const kindLabel = (kind: string) => ({ virtual: tr('dash.proto.virtual'), artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[kind] ?? kind;
+  const stateLabel = (state: string) => tr(`dash.health.outputState.${state}`);
+  const format = (value: number, digits = 1) => Number.isFinite(value) ? value.toFixed(digits) : '—';
+
+  return (
+    <Panel title={tr('dash.health.title')} actions={<span className={`badge ${loadLevel === 'blocked' ? 'err' : loadLevel === 'warning' ? 'warn' : ''}`}>{tr(`dash.health.state.${loadLevel}`)}</span>}>
+      <div className="grid g4">
+        <div className="panel kpi">
+          <span className="k">{tr('dash.health.rate')}</span>
+          <span className="v">{measured ? format(metrics.measuredHz) : '—'} <small className="muted">Hz</small></span>
+          <span className="s">{tr('dash.health.target', { n: metrics?.rateHz ?? 0 })}</span>
+        </div>
+        <div className="panel kpi">
+          <span className="k">{tr('dash.health.load')}</span>
+          <span className="v">{measured ? `${Math.round(load * 100)} %` : '—'}</span>
+          <div role="meter" aria-label={tr('dash.health.load')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={measured ? Math.round(load * 100) : 0} aria-valuetext={measured ? `${Math.round(load * 100)} %` : tr('dash.health.waiting')} style={{ height: 5, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+            <span style={{ display: 'block', width: `${Math.round(load * 100)}%`, height: '100%', background: load >= 0.85 ? '#ef4444' : load >= 0.65 ? '#f59e0b' : '#22c55e', transition: 'width 180ms ease' }} />
+          </div>
+        </div>
+        <div className="panel kpi">
+          <span className="k">{tr('dash.health.jitter')}</span>
+          <span className="v">{measured ? format(metrics.jitterMs, 2) : '—'} <small className="muted">ms</small></span>
+          <span className="s">{tr('dash.health.jitterHint')}</span>
+        </div>
+        <div className="panel kpi">
+          <span className="k">{tr('dash.health.maxTick')}</span>
+          <span className="v">{measured ? format(metrics.maxTickMs, 2) : '—'} <small className="muted">ms</small></span>
+          <span className="s">{tr('dash.health.overruns', { n: metrics?.overruns ?? 0 })} · {tr('dash.health.errors', { n: metrics?.errors ?? 0 })}</span>
+        </div>
+      </div>
+      <div className="col" style={{ gap: 6, marginTop: 12 }}>
+        <div className="row"><strong className="small">{tr('dash.health.outputs')}</strong><span className="grow" /><span className="small muted">{tr('dash.health.enabled', { n: enabled.length })}</span></div>
+        {outputs.length === 0 ? <p className="small muted">{tr('dash.health.noOutputs')}</p> : outputs.map((output) => (
+          <div key={output.id} className="row small" style={{ gap: 10, padding: '7px 9px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+            <span className={`badge ${output.state === 'error' ? 'err' : output.state === 'ready' && output.enabled ? '' : 'warn'}`}>{stateLabel(output.state)}</span>
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{output.name}</span>
+            <span className="grow" />
+            <span className="muted">{kindLabel(output.kind)}</span>
+            <span className="mono">{format(output.stats.measuredFps, 0)} FPS</span>
+            <span className={output.stats.errors > 0 ? 'err' : 'muted'}>{tr('dash.health.outputErrors', { n: output.stats.errors })}</span>
+          </div>
+        ))}
+      </div>
+      <p className="small muted" style={{ margin: '10px 0 0' }}>{tr('dash.health.disclaimer')}</p>
+    </Panel>
+  );
+}
+
 /** Home card: describe the stage in words (structures, fixtures, set) and build it in one go. */
 function SceneFromText() {
   const tr = useT();
@@ -123,6 +178,7 @@ export function Dashboard() {
       <PageHead title={tr('nav.dashboard')} subtitle={`${p.meta.name}${p.meta.show ? ` — ${p.meta.show}` : ''}`} />
       {/* Mandatory operational checklist: independent from optional dashboard card visibility. */}
       <ReadinessChecklist checks={readiness} />
+      <EngineHealthPanel metrics={rt?.engine.metrics ?? null} outputs={rt?.outputs ?? []} />
       {visibility.dashboard.firstSteps && <FirstSteps />}
       <div className="grid g2 kpi-groups">
         {visibility.dashboard.hardware && <section className="kpi-group wide" aria-labelledby="kpi-grp-hw">
