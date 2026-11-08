@@ -53,6 +53,15 @@ export function SectionEditor({ track, index, onClose, onNotices }: { track: Mus
           {draft?.locked && <span className="badge warn">{t('music.strip.locked')}</span>}
         </div>
         {plan?.why && <div className="small dim">{t('music.edit.why', { why: plan.why })}</div>}
+        {/* The quickest retouch comes first: describe the change and regenerate; the detailed controls follow. */}
+        {draft && (
+          <Field label={t('music.edit.instruction')} hint={t('music.edit.instructionHint')}>
+            <div className="row">
+              <input className="input" autoFocus value={instruction} onChange={(e) => setInstruction(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void regenerate()} data-testid="section-instruction" />
+              <button className="btn primary" disabled={busy} onClick={() => void regenerate()} data-testid="section-regenerate"><RefreshCw size={12} />{t('music.edit.regenerate')}</button>
+            </div>
+          </Field>
+        )}
         <Field label={t('music.edit.label')} hint={t('music.edit.labelHint')}>
           <select className="select" value={label} onChange={(e) => setLabel(e.target.value as SectionLabel)} data-testid="section-label">
             {SECTION_LABELS.map((l) => <option key={l} value={l}>{SECTION_NAMES[l]}</option>)}
@@ -105,12 +114,6 @@ export function SectionEditor({ track, index, onClose, onNotices }: { track: Mus
             </div>
             <label className="check"><input type="checkbox" checked={draft.accents} onChange={(e) => set({ accents: e.target.checked })} />{t('music.edit.accents')}</label>
             <label className="check"><input type="checkbox" checked={draft.locked} onChange={(e) => set({ locked: e.target.checked })} data-testid="section-locked" />{t('music.edit.locked')}</label>
-            <Field label={t('music.edit.instruction')} hint={t('music.edit.instructionHint')}>
-              <div className="row">
-                <input className="input" value={instruction} onChange={(e) => setInstruction(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void regenerate()} data-testid="section-instruction" />
-                <button className="btn" disabled={busy} onClick={() => void regenerate()}><RefreshCw size={12} />{t('music.edit.regenerate')}</button>
-              </div>
-            </Field>
           </>
         )}
       </div>

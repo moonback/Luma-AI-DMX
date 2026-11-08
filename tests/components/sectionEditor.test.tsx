@@ -46,6 +46,11 @@ describe('modale d’édition d’une section', () => {
   it('régénère avec la consigne ; sans plan, seule l’étiquette est modifiable', async () => {
     const onClose = vi.fn();
     const { unmount } = render(<SectionEditor track={track(true)} index={1} onClose={onClose} onNotices={() => undefined} />);
+    // The instruction opens the modal: first field, focused, and the only one.
+    const instruction = screen.getByTestId('section-instruction');
+    expect(instruction).toHaveFocus();
+    expect(instruction.compareDocumentPosition(screen.getByTestId('section-label')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByTestId('section-instruction')).toHaveLength(1);
     fireEvent.change(screen.getByTestId('section-instruction'), { target: { value: 'en rouge' } });
     fireEvent.keyDown(screen.getByTestId('section-instruction'), { key: 'Enter' });
     await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -55,6 +60,7 @@ describe('modale d’édition d’une section', () => {
     render(<SectionEditor track={track(false)} index={1} onClose={() => undefined} onNotices={() => undefined} />);
     expect(screen.getByText(/Générez le show/)).toBeInTheDocument();
     expect(screen.queryByTestId('section-energy')).toBeNull();
+    expect(screen.queryByTestId('section-instruction')).toBeNull();
     fireEvent.click(screen.getByTestId('section-save'));
     await waitFor(() => expect(invoke).not.toHaveBeenCalled());
   });

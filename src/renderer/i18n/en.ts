@@ -4,6 +4,7 @@ import { enStage } from './en.stage';
 import { enEquip } from './en.equip';
 import { enAi } from './en.ai';
 import { enSettings } from './en.settings';
+import { enMusic } from './en.music';
 
 /** English catalogue. Typed against fr.ts: a missing or extra key does not compile. */
 export const en: Record<MessageKey, string> = {
@@ -390,4 +391,5 @@ export const en: Record<MessageKey, string> = {
   ...enEquip,
   ...enAi,
   ...enSettings,
+  ...enMusic,
 };

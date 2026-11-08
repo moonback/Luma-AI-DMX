@@ -336,7 +336,6 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .music-table .col-start { width: 75px; }
 .music-table .col-energy { width: 110px; }
 .music-table .col-plan { width: auto; }
-.music-table .col-instr { width: 220px; }
 .music-table .col-actions { width: 115px; text-align: right; }
 .sec-label-cell { display: flex; align-items: center; gap: 8px; }
 .sec-color-bar { width: 4px; height: 24px; border-radius: 2px; flex: none; }
@@ -1383,3 +1382,14 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   .sc-pos-row { flex-direction: column; }
   .sc-xy { width: 100% !important; height: 110px !important; }
 }
+
+/* Song to Show stepper: highlights the current step, hides nothing. */
+.show-stepper { display: flex; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; flex-wrap: wrap; }
+.show-stepper li { flex: 1 1 160px; }
+.show-stepper button { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 10px; text-align: left; color: var(--text-2); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.show-stepper li.current button { color: var(--text); border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan) inset; }
+.show-stepper li.done button { color: var(--text); }
+.show-stepper-n { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; background: var(--panel-2); border: 1px solid var(--border); }
+.show-stepper li.current .show-stepper-n { background: var(--cyan); color: #000; border-color: transparent; }
+.show-stepper li.done .show-stepper-n { color: var(--cyan); }
+.panel.step-current { box-shadow: 0 0 0 1px var(--cyan); }

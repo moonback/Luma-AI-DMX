@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowLeftRight, Clock, Layers, Lock, LockOpen, Music2, Pause, Pencil, Play, RefreshCw, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
+import { Activity, ArrowLeftRight, Clock, Layers, Lock, Music2, Pause, Pencil, Play, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
 import { useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -7,7 +7,7 @@ import { Empty, PageHead, Panel } from '../components/ui';
 import { musicPlayer } from '../musicPlayer';
 import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
 import { suggestIntents } from '../../core/music/suggest';
-import { SECTION_LABELS, type Mood, type MusicTrack, type SectionLabel } from '../../core/model/schemas';
+import { type Mood, type MusicTrack } from '../../core/model/schemas';
 import { BEAM_NAMES, EFFECT_NAMES, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
 import { SectionEditor } from './music/SectionEditor';
 import { SongStudioTimeline } from './music/SongStudioTimeline';
@@ -15,7 +15,8 @@ import { ArtisticQualityBadge } from './music/ArtisticQualityBadge';
 import { VariantCompareModal } from './music/VariantCompareModal';
 import type { Progress } from '../../shared/commands';
 import { usePlayback } from './music/MiniPlayer';
-import { confirmOverwrite, notifyRelabeled } from './music/overwriteGuard';
+import { confirmOverwrite } from './music/overwriteGuard';
+import { currentShowStep, ShowStepper, type ShowStep } from './music/ShowStepper';
 
 // Kept in French whatever the UI language: the local rules (parseIntent) only read French.
 const NO_MOOD: Mood = { energy: 0, colors: 0, movement: 0, strobe: 0 };
@@ -102,10 +103,14 @@ export function MusicPage() {
   const [editing, setEditing] = useState(-1); // index of the section open in the editor
   const [comparingAB, setComparingAB] = useState(false);
   const t = useT();
-  const [instr, setInstr] = useState<Record<number, string>>({});
   const file = useRef<HTMLInputElement>(null);
   const { playing, pos } = usePlayback();
   const track = tracks.find((t) => t.id === trackId) ?? tracks[0] ?? null;
+  const step = currentShowStep(track, playing?.trackId ?? null);
+  // Panel of each step; the current one is highlighted, nothing is hidden.
+  const STEP_PANEL: Record<ShowStep, string> = { track: 'track', intent: 'intent', show: 'sections', play: 'track' };
+  const stepClass = (panel: string) => `music-step-${panel} ${STEP_PANEL[step] === panel ? 'step-current' : ''}`;
+  const pickStep = (s: ShowStep) => (s === 'track' && !track ? file.current?.click() : document.querySelector(`.music-step-${STEP_PANEL[s]}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
   const nowIdx = track && playing?.trackId === track.id ? track.analysis.sections.findIndex((s) => pos >= s.start && pos < s.end) : -1;
   const [aiSuggestions, setAiSuggestions] = useState<{ trackId: string; items: string[]; provider: 'local' | 'openrouter' } | null>(null);
   const [suggesting, setSuggesting] = useState(false);
@@ -183,13 +188,6 @@ export function MusicPage() {
     setBusy(false);
     if (r) setNotices(r.notices);
   };
-  const regenerate = async (index: number) => {
-    if (!track || !(await confirmOverwrite(track.id))) return;
-    setBusy(true);
-    const r = await act({ type: 'music.regenerateSection', trackId: track.id, index, instruction: instr[index] ?? '' });
-    setBusy(false);
-    if (r) setNotices(r.notices);
-  };
   const play = (tk: MusicTrack, from = tk.analysis.sections[selected]?.start ?? 0) => {
     try {
       musicPlayer.play(tk, from);
@@ -204,6 +202,7 @@ export function MusicPage() {
         <input ref={file} type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" style={{ display: 'none' }} data-testid="music-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
         <button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()} data-testid="music-import"><Upload size={14} />{t('music.import')}</button>
       </PageHead>
+      <ShowStepper current={step} onPick={pickStep} />
       {generating && <GeneratingModal />}
       {progress && (
         <Panel title={`${progress.step}…`}>
@@ -219,7 +218,7 @@ export function MusicPage() {
           )}
 
           {/* 2. Lecteur et timeline */}
-          <Panel title={track.name} actions={<span className="badge">{track.analysis.sections.length} {t('music.sections').toLowerCase()}</span>}>
+          <Panel className={stepClass('track')} title={track.name} actions={<span className="badge">{track.analysis.sections.length} {t('music.sections').toLowerCase()}</span>}>
             {/* Informations sous forme de petits indicateurs */}
             <div className="music-indicators" data-testid="music-summary">
               <div className="music-indicator-pill">
@@ -297,7 +296,7 @@ export function MusicPage() {
           </Panel>
 
           {/* 3. Configuration IA */}
-          <Panel title={t('music.intent')} actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : t('music.localRules')} · {t('music.variantN', { n: track.plan.variant })}</span> : null}>
+          <Panel className={stepClass('intent')} title={t('music.intent')} actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : t('music.localRules')} · {t('music.variantN', { n: track.plan.variant })}</span> : null}>
             <div className="col gap-lg">
               {/* Zone de description plus confortable */}
               <textarea className="input music-intent-area" rows={3} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
@@ -376,7 +375,7 @@ export function MusicPage() {
           </Panel>
 
           {/* 4. Tableau des sections musicales */}
-          <Panel title={t('music.sections')} flush>
+          <Panel className={stepClass('sections')} title={t('music.sections')} flush>
             <div className="music-table-wrap">
               <table className="table small music-table" data-testid="music-sections">
                 <thead>
@@ -386,7 +385,6 @@ export function MusicPage() {
                     <th className="col-start">{t('music.col.start')}</th>
                     <th className="col-energy">{t('music.col.energy')}</th>
                     <th className="col-plan">{t('music.col.plan')}</th>
-                    <th className="col-instr">{t('music.col.instruction')}</th>
                     <th className="col-actions" />
                   </tr>
                 </thead>
@@ -394,14 +392,12 @@ export function MusicPage() {
                   {track.analysis.sections.map((s, i) => {
                     const p = track.plan?.sections[i];
                     return (
-                      <tr key={i} className={`clickable ${i === selected ? 'sel' : ''} ${i === nowIdx ? 'active' : ''}`} onClick={() => setSelected(i)}>
+                      <tr key={i} className={`clickable ${i === selected ? 'sel' : ''} ${i === nowIdx ? 'active' : ''}`} onClick={() => setSelected(i)} onDoubleClick={() => setEditing(i)}>
                         <td className="mono col-idx">{i + 1}</td>
                         <td className="col-sec">
                           <div className="sec-label-cell">
                             <span className="sec-color-bar" style={{ background: LABEL_COLOR[s.label] }} />
-                            <select className="select" value={s.label} onChange={(e) => void act({ type: 'music.setSection', trackId: track.id, index: i, label: e.target.value as SectionLabel }).then((r) => { if (r && track.plan) notifyRelabeled(); })}>
-                              {SECTION_LABELS.map((l) => <option key={l} value={l}>{SECTION_NAMES[l]}</option>)}
-                            </select>
+                            <span>{SECTION_NAMES[s.label]}</span>{p?.locked && <Lock size={11} className="dim" aria-label={t('music.strip.locked')} />}
                           </div>
                         </td>
                         <td className="mono col-start">{fmt(s.start)}</td>
@@ -429,14 +425,9 @@ export function MusicPage() {
                             </div>
                           ) : <span className="dim">—</span>}
                         </td>
-                        <td className="col-instr">
-                          <input className="input" disabled={!p} placeholder={t('music.instrPlaceholder')} value={instr[i] ?? ''} onChange={(e) => setInstr({ ...instr, [i]: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && void regenerate(i)} />
-                        </td>
                         <td className="col-actions">
                           <div className="music-actions-cell">
                             <button className="btn ghost sm icon" title={t('music.edit.open')} onClick={(e) => { e.stopPropagation(); setEditing(i); }} data-testid="section-edit"><Pencil size={13} /></button>
-                            <button className="btn ghost sm icon" disabled={!p || busy} title={t('music.regenSection')} onClick={(e) => { e.stopPropagation(); void regenerate(i); }}><RefreshCw size={13} /></button>
-                            <button className={`btn ghost sm icon ${p?.locked ? 'on' : ''}`} disabled={!p} title={t(p?.locked ? 'music.unlock' : 'music.lock')} onClick={(e) => { e.stopPropagation(); void act({ type: 'music.setSection', trackId: track.id, index: i, locked: !p?.locked }); }}>{p?.locked ? <Lock size={13} /> : <LockOpen size={13} />}</button>
                           </div>
                         </td>
                       </tr>
