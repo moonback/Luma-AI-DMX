@@ -12,6 +12,11 @@ describe('catalogue partagé du cœur', () => {
     expect(translateCore('en', 'fixture.profileInUse', { count: 3 })).toBe('Profile is used by 3 fixture(s)');
   });
 
+  it('traduit les erreurs de validation et injecte le détail', () => {
+    expect(translateCore('fr', 'error.invalidCommand', { details: 'type requis' })).toBe('Commande invalide : type requis');
+    expect(translateCore('en', 'error.invalidCommand', { details: 'type is required' })).toBe('Invalid command: type is required');
+  });
+
   it('préserve le placeholder si un paramètre manque', () => {
     expect(translateCore('en', 'error.invalidCommand')).toBe('Invalid command: {details}');
   });
