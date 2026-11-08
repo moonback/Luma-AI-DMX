@@ -354,6 +354,8 @@ export const fr = {
   'settings.components.profileSavePending': 'Des modifications ne sont pas encore enregistrées. Enregistrez-les avant de changer de configuration.',
   'settings.components.dashboardTitle': 'Sections du Dashboard',
   'settings.components.dashboardHint': 'Masquez les blocs dont vous n’avez pas besoin. Les données et fonctions sous-jacentes restent actives.',
+  'settings.components.dashboardReadiness': 'Préparation du show',
+  'settings.components.dashboardEngineHealth': 'Santé du moteur et des sorties',
   'settings.components.dashboardFirstSteps': 'Guide de première prise en main',
   'settings.components.dashboardHardware': 'Indicateurs matériel et sorties DMX',
   'settings.components.dashboardShow': 'Indicateurs du spectacle et BPM',
