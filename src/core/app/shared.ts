@@ -1,7 +1,14 @@
 import type { Fixture, Project } from '../model/schemas';
 
-/** An error caused by the user's input or the current state, shown as is (never logged as an internal failure). */
-export class UserError extends Error {}
+import type { CoreMessageKey } from '../../shared/i18n';
+
+/** Expected refusal. The French fallback remains useful in logs and for older consumers. */
+export class UserError extends Error {
+  constructor(message: string, readonly messageKey?: CoreMessageKey, readonly messageVars?: Record<string, string | number>) {
+    super(message);
+    this.name = 'UserError';
+  }
+}
 
 /** Fixture fields that make up the scene layout (undone/redone together with the visualizer settings). */
 export const SCENE_FIELDS = ['position', 'height', 'rotation', 'mount', 'mountTilt', 'trussId'] as const;
