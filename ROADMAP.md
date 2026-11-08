@@ -3264,21 +3264,23 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Implémentation en cours (08/11/2026).**
 
-- Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts` (98 clés à ce stade), avec interpolation des paramètres et test de présence des deux langues.
+- Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts` (114 clés après extension des diagnostics IA), avec interpolation des paramètres et test de présence des deux langues.
 - `UserError` accepte une clé stable et des variables, sans supprimer le message français historique utilisé comme repli.
 - Réponses IPC enrichies avec `message: { key, vars? }` pour les refus d’origine, les commandes invalides et les `UserError` migrées ; le rendu traduit selon la langue active.
 - Messages migrés dans les handlers : refus d’origine, validation IPC et modifications du projet, contrôle OSC, programmeur, profils/patch, IA, voix Gemini, localisation, musique, sorties DMX/RDM et chargement de projets.
 - Dialogues Electron de fichiers (ouverture, sauvegarde, import/export, filtres) et confirmations de fermeture localisés à partir de `settings.appearance.language`.
 - Tests de traduction, d’interpolation des messages IA, de rendu anglais et de contrat IPC ajoutés ; non exécutés dans cette session.
+- Première tranche des validations du Directeur IA migrée : 16 clés bilingues pour les refus de stroboscope, limites de fréquence, capacités couleur/Pan-Tilt/faisceau, gobos, scènes et effets indisponibles. `ValidatedAction.messageTranslations` transporte les clés et paramètres jusqu’à `ActionCard`, qui traduit selon la langue active tout en conservant le fallback français. La validation des cues de séquence transmet également ces métadonnées.
+- Tests unitaires ciblés ajoutés pour les nouvelles traductions ; exécution toujours à confirmer.
 - Cliquet AST TypeScript intégré à `npm run lint` via `scripts/check-core-i18n.mjs` ; le contrôle couvre désormais tout `src/core/app`, pas seulement les handlers. Tous les refus `UserError` migrés portent une clé littérale du catalogue (référence à zéro). Le contrôle détecte aussi les appels multilignes et les templates dynamiques.
 
-**Travaux restants.** Identifier les 20 commandes les plus utilisées à partir des statistiques locales opt-in (si disponibles), puis migrer les messages de journal, notices IA, alertes et rapports matériels ; vérifier les diagnostics bilingues et le comportement des dialogues natifs. Les statistiques d’usage sont locales et désactivables : aucune donnée réelle d’usage n’est disponible dans le dépôt.
+**Travaux restants.** Identifier les 20 commandes les plus utilisées à partir des statistiques locales opt-in (si disponibles), puis poursuivre les diagnostics IA non migrés (résolution des cibles, erreurs de schéma, notices de proposition et rapports d’exécution), avant les messages de journal, alertes et rapports matériels ; vérifier le comportement des dialogues natifs. Les statistiques d’usage sont locales et désactivables : aucune donnée réelle d’usage n’est disponible dans le dépôt.
 
 **Suite de l’implémentation.**
 
 1. Exploiter les statistiques locales opt-in pour classer les commandes réellement les plus utilisées ; si les données sont absentes ou désactivées, documenter un ordre de priorité explicite sans prétendre disposer de statistiques.
 2. Vérifier les parcours prioritaires de bout en bout (ouverture projet, patch, musique, IA, DMX/RDM) et les textes contextuels qui ne passent pas par `UserError`.
-3. Étendre le catalogue aux journaux, notices IA, alertes et rapports matériels, en conservant une représentation diagnostique stable.
+3. Terminer les messages de validation et notices IA avec des métadonnées structurées, puis étendre le catalogue aux journaux, alertes et rapports matériels, en conservant une représentation diagnostique stable.
 4. Ajouter les tests de parité du catalogue partagé, de fallback et de changement de langue, puis exécuter typecheck, lint et tests ciblés.
 
 **Critères d’acceptation.**
