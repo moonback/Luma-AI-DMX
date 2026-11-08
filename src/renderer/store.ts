@@ -4,6 +4,7 @@ import type { FixtureValues } from '../core/model/schemas';
 import type { Progress, ProfilesImported, ProjectState, RuntimeState } from '../shared/commands';
 import { t } from './i18n';
 import type { PlaceSpec, SceneRef } from '../core/visualizer/sceneEdit';
+import { DEFAULT_COMPONENT_VISIBILITY, type ComponentVisibility } from '../core/settings/settings';
 
 /** Stable empty defaults: selectors must not return fresh objects (would re-render forever). */
 export const EMPTY_OBJ: Readonly<Record<string, never>> = Object.freeze({});
@@ -88,6 +89,9 @@ interface State {
   startScreen: string[] | null;
   /** User overrides of keyboard shortcuts (from settings). */
   shortcuts: Record<string, string>;
+  /** Per-user visibility preferences for navigation and workspace components. */
+  componentVisibility: ComponentVisibility;
+  setComponentVisibility(v: ComponentVisibility): void;
   /** Interface language (Settings › Apparence); catalogues in ./i18n. */
   language: 'fr' | 'en';
   /** Header button « Plan d’installation » (Settings › Général). */
@@ -152,6 +156,8 @@ export const useStore = create<State>((set, get) => ({
   newProjectOpen: false,
   startScreen: null,
   shortcuts: {},
+  componentVisibility: DEFAULT_COMPONENT_VISIBILITY,
+  setComponentVisibility: (componentVisibility) => set({ componentVisibility }),
   language: 'fr',
   installPlanButton: false,
   capturingShortcut: false,
