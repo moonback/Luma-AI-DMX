@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 
-const ROOT = path.join('src', 'core', 'app', 'handlers');
+const ROOT = path.join('src', 'core', 'app');
 const BASELINE = path.join('scripts', 'core-i18n-baseline.json');
 
 function* walk(dir) {
