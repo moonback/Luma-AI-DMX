@@ -179,9 +179,8 @@ export function Dashboard() {
   return (
     <div className="page">
       <PageHead title={tr('nav.dashboard')} subtitle={`${p.meta.name}${p.meta.show ? ` — ${p.meta.show}` : ''}`} />
-      {/* Mandatory operational checklist: independent from optional dashboard card visibility. */}
-      <ReadinessChecklist checks={readiness} />
-      <EngineHealthPanel metrics={rt?.engine.metrics ?? null} outputs={rt?.outputs ?? []} />
+      {visibility.dashboard.readiness && <ReadinessChecklist checks={readiness} />}
+      {visibility.dashboard.engineHealth && <EngineHealthPanel metrics={rt?.engine.metrics ?? null} outputs={rt?.outputs ?? []} />}
       {visibility.dashboard.firstSteps && <FirstSteps />}
       <div className="grid g2 kpi-groups">
         {visibility.dashboard.hardware && <section className="kpi-group wide" aria-labelledby="kpi-grp-hw">
