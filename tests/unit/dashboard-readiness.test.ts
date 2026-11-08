@@ -32,6 +32,17 @@ describe('dashboard readiness', () => {
     expect(summarizeReadiness(checks)).toBe('ready');
   });
 
+  it('warns when the patch is empty', () => {
+    const checks = evaluateDashboardReadiness({ ...base, patchCount: 0, resolvedFixtureCount: 0 });
+    expect(checks.find((check) => check.id === 'patch')?.level).toBe('warning');
+    expect(checks.find((check) => check.id === 'profiles')?.level).toBe('unknown');
+  });
+
+  it('accepts a physical output only when it is both armed and ready', () => {
+    const checks = evaluateDashboardReadiness({ ...base, outputs: [output({ kind: 'artnet', real: true, armed: true, state: 'ready' })] });
+    expect(checks.find((check) => check.id === 'outputs')?.level).toBe('ready');
+  });
+
   it('blocks a patch with conflicts and unresolved fixture profiles', () => {
     const checks = evaluateDashboardReadiness({ ...base, patchIssueCount: 2, resolvedFixtureCount: 3 });
     expect(checks.find((check) => check.id === 'patch')?.level).toBe('blocked');
