@@ -209,7 +209,7 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
       }
       case 'createSequence':
         for (const cue of a.cues) {
-          ids.push(...checkLook(cue.look, ctx, messages));
+          ids.push(...checkLook(cue.look, ctx, messages, messageTranslations));
           for (const fx of cue.effects) if (!checkEffect(fx, ctx, messages, messageTranslations)) messages.push(`Effet « ${fx.name} » retiré du cue « ${cue.name} »`);
         }
         ids = [...new Set(ids)];
