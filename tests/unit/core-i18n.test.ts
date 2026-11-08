@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { translateCore } from '../../src/shared/i18n';
+import { CORE_MESSAGES, translateCore } from '../../src/shared/i18n';
 
 describe('catalogue partagé du cœur', () => {
+  it('garantit deux traductions non vides pour chaque clé', () => {
+    for (const [key, translations] of Object.entries(CORE_MESSAGES)) {
+      expect(translations, key).toHaveLength(2);
+      expect(translations[0].trim(), key + ' fr').not.toBe('');
+      expect(translations[1].trim(), key + ' en').not.toBe('');
+    }
+  });
+
   it('fournit les messages en français et en anglais', () => {
     expect(translateCore('fr', 'error.unauthorizedOrigin')).toBe('Origine non autorisée');
     expect(translateCore('en', 'error.unauthorizedOrigin')).toBe('Unauthorized origin');
