@@ -3148,7 +3148,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Historique vérifié (08/11/2026).** Les tags Git `0.2.0` à `1.8.0`, leurs commits et les comparaisons entre versions ont été consultés. Les sections `0.3.0` à `1.8.0` ont été reconstituées dans `CHANGELOG.md` à partir des changements inclus dans chaque plage de tags et des descriptions de PR/release disponibles. Les dates proviennent des releases GitHub. Les notes des tags `1.8.0` et `1.6.0` ont été replacées dans les versions correspondantes. Les versions `0.3.0` à `1.3.0` ont été résumées depuis leurs plages de commits ; les éléments encore non publiés restent sous « Non publié ». Aucune attribution n'a été faite à partir de suppositions.
 
-**Réalisation technique.** `scripts/release-validation.mjs` fournit une validation pure : SemVer stricte, identifiants numériques de pré-release sans zéro initial, absence de section de version dupliquée et présence de notes catégorisées dans « Non publié ». Le contrôle du tag distant est isolé dans `hasRemoteTag`, injecte son lecteur Git et peut être testé sur un dépôt distant temporaire. `scripts/release.mjs` exécute ces contrôles avant les builds et vérifie également la release GitHub. Huit tests unitaires et deux tests d'intégration sur dépôt Git temporaire ont été ajoutés. Une déclaration TypeScript accompagne le module ESM.
+**Réalisation technique.** `scripts/release-validation.mjs` fournit une validation pure : SemVer stricte, identifiants numériques de pré-release sans zéro initial, absence de section de version dupliquée et présence de notes catégorisées dans « Non publié ». Le contrôle du tag distant est isolé dans `hasRemoteTag`, injecte son lecteur Git et peut être testé sur un dépôt distant temporaire. `scripts/release.mjs` exécute ces contrôles avant les builds et vérifie également la release GitHub. Dix tests unitaires et deux tests d'intégration sur dépôt Git temporaire ont été ajoutés. La prévalidation exige aussi que chaque tag SemVer local possède une section de changelog datée. Une déclaration TypeScript accompagne le module ESM.
 
 **Résultat attendu.** Chaque version publiée possède une section fidèle à son contenu livré ; une release future est bloquée si ses notes sont absentes, vides, mal catégorisées ou si son tag existe déjà.
 
@@ -3162,14 +3162,14 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 - [x] Les tags 0.2.0 à 1.8.0 et leurs changements ont été examinés.
 - [x] Les sections historiques 0.3.0 à 1.8.0 sont présentes et datées dans `CHANGELOG.md`.
-- [x] La prévalidation SemVer / changelog / tag local est isolée et testable.
+- [x] La prévalidation SemVer / changelog / tags locaux est isolée et testable.
 - [x] La release vérifie aussi l'absence du tag distant et d'une release GitHub existante.
-- [x] Le contrôle du tag distant est couvert par un test sur dépôt bare temporaire.
+- [x] Les contrôles des tags locaux et distants sont couverts par des tests sur dépôt bare temporaire.
 - [ ] Les tests, le typecheck et le lint ont été exécutés et validés.
 
 **Tests ajoutés (exécution non effectuée ici).**
 
-- Huit tests unitaires dans `tests/unit/release-validation.test.ts`.
+- Dix tests unitaires dans `tests/unit/release-validation.test.ts`.
 - Deux tests d'intégration dans `tests/integration/release-preflight.test.ts` : tag local et tag distant réel via un dépôt bare temporaire.
 
 **Dépendances.** Aucune.
