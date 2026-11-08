@@ -91,7 +91,7 @@ const messages: Record<CoreLanguage, Record<CoreMessageKey, string>> = {
 
 export function translateCore(language: CoreLanguage, key: CoreMessageKey, vars?: CoreMessage['vars']): string {
   const template = messages[language][key];
-  return template.replace(/\\{(\\w+)\\}/gu, (match, name: string) =>
+  return template.replace(/\{(\w+)\}/gu, (match, name: string) =>
     vars && Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match,
   );
 }
