@@ -569,6 +569,8 @@ export function SettingsPage() {
               <div className="grid g2">
                 {([
                   ['firstSteps', 'settings.components.dashboardFirstSteps'],
+                  ['readiness', 'settings.components.dashboardReadiness'],
+                  ['engineHealth', 'settings.components.dashboardEngineHealth'],
                   ['hardware', 'settings.components.dashboardHardware'],
                   ['show', 'settings.components.dashboardShow'],
                   ['system', 'settings.components.dashboardSystem'],
