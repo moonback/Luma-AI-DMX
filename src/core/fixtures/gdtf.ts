@@ -19,7 +19,7 @@ export interface GdtfConversion {
 }
 
 type Node = Record<string, unknown>;
-const ARRAYS = new Set(['DMXMode', 'DMXChannel', 'LogicalChannel', 'ChannelFunction', 'ChannelSet', 'Wheel', 'Slot', 'Geometry', 'Axis', 'Beam', 'GeometryReference', 'FilterBeam', 'Display', 'FeatureGroup', 'Feature', 'Attribute']);
+const ARRAYS = new Set(['DMXMode', 'DMXChannel', 'LogicalChannel', 'ChannelFunction', 'ChannelSet', 'Wheel', 'Slot', 'Geometry', 'Axis', 'Beam', 'GeometryReference', 'FilterBeam', 'Display', 'FeatureGroup', 'Feature', 'Attribute', 'SubPhysicalUnit']);
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', parseAttributeValue: false, parseTagValue: false, isArray: (name, _path, _leaf, isAttribute) => !isAttribute && ARRAYS.has(name) });
 const node = (v: unknown): Node => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Node) : {});
 const arr = (n: Node, key: string): Node[] => (Array.isArray(n[key]) ? (n[key] as unknown[]).map(node) : []);
@@ -105,7 +105,6 @@ function lumaAttribute(lc: Node, attributeMetadata: Map<string, GdtfAttributeMet
   const a = str(lc, 'Attribute') ?? '';
   const logicalMetadata = attributeMetadata.get(a);
   if (GDTF_ATTR[a]) return GDTF_ATTR[a]!;
-  if (logicalMetadata?.mainAttribute && GDTF_ATTR[logicalMetadata.mainAttribute]) return GDTF_ATTR[logicalMetadata.mainAttribute]!;
   const functions = arr(lc, 'ChannelFunction');
   for (const f of functions) {
     const fa = str(f, 'Attribute') ?? '';
@@ -124,6 +123,7 @@ function lumaAttribute(lc: Node, attributeMetadata: Map<string, GdtfAttributeMet
     });
     if (resolved) return resolved;
   }
+  if (logicalMetadata?.mainAttribute && GDTF_ATTR[logicalMetadata.mainAttribute]) return GDTF_ATTR[logicalMetadata.mainAttribute]!;
   return resolveMa2SemanticAttribute({
     attribute: a,
     feature: logicalMetadata?.feature,
