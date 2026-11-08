@@ -6,13 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { hasRemoteTag, validateReleaseMetadata } from '../../scripts/release-validation.mjs';
 
 const roots: string[] = [];
-const changelog = '# Changelog\\n\\n## [Non publié]\\n\\n### Ajouté\\n- Une fonctionnalité.\\n';
+const changelog = '# Changelog\n\n## [Non publié]\n\n### Ajouté\n- Une fonctionnalité.\n';
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
 
-function createRepository(): { root: string; remote: string } {
+function createRepository(): { root: string } {
   const root = mkdtempSync(join(tmpdir(), 'luma-release-preflight-'));
   roots.push(root);
   const remote = join(root, 'remote.git');
@@ -22,11 +22,11 @@ function createRepository(): { root: string; remote: string } {
   git(local, 'init');
   git(local, 'config', 'user.name', 'Luma Release Test');
   git(local, 'config', 'user.email', 'release-test@example.invalid');
-  writeFileSync(join(local, 'README.md'), 'release test\\n');
+  writeFileSync(join(local, 'README.md'), 'release test\n');
   git(local, 'add', 'README.md');
   git(local, 'commit', '-m', 'test fixture');
   git(local, 'remote', 'add', 'origin', remote);
-  return { root: local, remote };
+  return { root: local };
 }
 
 afterEach(() => {
@@ -37,7 +37,7 @@ describe('release preflight with a temporary Git repository', () => {
   it('detects a local tag and refuses a duplicate release version', () => {
     const { root } = createRepository();
     git(root, 'tag', '1.9.0');
-    const localTags = git(root, 'tag', '--list').split(/\\r?\\n/u).filter(Boolean);
+    const localTags = git(root, 'tag', '--list').split(/\r?\n/u).filter(Boolean);
     expect(localTags).toContain('1.9.0');
     expect(validateReleaseMetadata({ version: '1.9.0', changelog, existingTags: localTags }))
       .toContain('Le tag Git 1.9.0 existe déjà.');
