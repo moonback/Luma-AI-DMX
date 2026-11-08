@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { percentile } from '../../src/core/engine/metrics';
+import { percentile, RollingPercentileWindow } from '../../src/core/engine/metrics';
 
 describe('runtime metric percentiles', () => {
   it('returns null for an empty sample window', () => {
@@ -20,5 +20,24 @@ describe('runtime metric percentiles', () => {
 
   it('interpolates between adjacent samples', () => {
     expect(percentile([0, 10], 95)).toBeCloseTo(9.5);
+  });
+});
+
+describe('rolling percentile window', () => {
+  it('keeps only the newest samples and remains bounded', () => {
+    const window = new RollingPercentileWindow(3);
+    [1, 2, 3, 4].forEach((sample) => window.push(sample));
+    expect(window.count).toBe(3);
+    expect(window.percentile(50)).toBe(3);
+    expect(window.percentile(100)).toBe(4);
+  });
+
+  it('ignores non-finite samples and rejects invalid capacities', () => {
+    const window = new RollingPercentileWindow(2);
+    window.push(Number.NaN);
+    window.push(4);
+    expect(window.count).toBe(1);
+    expect(window.percentile(50)).toBe(4);
+    expect(() => new RollingPercentileWindow(0)).toThrow(RangeError);
   });
 });
