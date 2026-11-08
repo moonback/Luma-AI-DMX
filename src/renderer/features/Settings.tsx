@@ -375,7 +375,7 @@ export function SettingsPage() {
     if (await commitWorkspaceSettings(nextSettings)) setWorkspaceProfileName('');
   };
   const applyWorkspaceProfile = async (id: string) => {
-    const profile = saved.appearance.workspaceProfiles.find((p) => p.id === id);
+    const profile = saved!.appearance.workspaceProfiles.find((p) => p.id === id);
     if (!profile) return;
     const nextSettings = { ...saved, appearance: { ...saved.appearance, components: profile.components, activeWorkspaceProfileId: profile.id } };
     await commitWorkspaceSettings(nextSettings);
