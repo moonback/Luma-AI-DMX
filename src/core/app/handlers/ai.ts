@@ -28,7 +28,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
     case 'ai.usage': return { ...(await ledgerOf(app).totals()), budget: app.settings.ai.monthlyBudget };
     case 'ai.revise': {
       const prev = app.proposals.get(cmd.proposalId);
-      if (!prev) throw new UserError('Proposition expirée');
+      if (!prev) throw new UserError('Proposition expirée', 'ai.proposalExpired');
       const p = buildProposal({ prompt: prev.prompt, provider: prev.provider, model: prev.model, understanding: `${prev.understanding} (modifiée par l’utilisateur)`, notices: [], rawActions: cmd.actions, ctx: validationCtx(app) });
       if (prev.relative) p.relative = true;
       guardConstraints(app, p);
@@ -50,8 +50,8 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       return ok;
     case 'ai.undoApply': {
       const u = app.lastAiUndo;
-      if (!u) throw new UserError('Aucune application IA à annuler');
-      if (app.revision !== u.revision) throw new UserError('Le projet a été modifié depuis l’application IA : annulation impossible');
+      if (!u) throw new UserError('Aucune application IA à annuler', 'ai.nothingToUndo');
+      if (app.revision !== u.revision) throw new UserError('Le projet a été modifié depuis l’application IA : annulation impossible', 'ai.undoRevisionConflict');
       for (const fx of e.snapshot().effects) if (fx.owner === 'ai') e.stopEffect(fx.instanceId);
       e.releaseAi();
       app.mutate((d) => { Object.assign(d, structuredClone(u.project)); });
@@ -80,14 +80,14 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
 /** Executes a stored proposal once (button « Appliquer », voice « vas-y » or automatic application). */
 function applyProposal(app: AppService, id: string): AiExecutionReport {
   const p = app.proposals.get(id);
-  if (!p) throw new UserError('Proposition expirée ou inconnue');
+  if (!p) throw new UserError('Proposition expirée ou inconnue', 'ai.proposalUnknown');
   // What was previewed must be what is applied: refuse when the rig the actions were resolved against has changed.
-  if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.');
+  if (p.basis !== rigBasis(app)) throw new UserError('Proposition périmée : le patch, les groupes ou les scènes ont changé depuis l’aperçu. Relancez la demande.', 'ai.proposalStaleRig');
   // « Baisse de 20 % » was computed from the levels at proposal time: applying it on another look would be a different change.
   const now = p.liveLevels ? liveLevels(app, Object.keys(p.liveLevels)) : {};
   const drift = Object.entries(p.liveLevels ?? {}).filter(([fid, l]) => now[fid] !== undefined && Math.abs(now[fid] - l) > 0.05).map(([fid]) => app.index.fixtures.get(fid)?.fixture.name ?? fid);
-  if (drift.length) throw new UserError(`Proposition périmée : l’intensité de ${drift.slice(0, 5).join(', ')}${drift.length > 5 ? '…' : ''} a changé depuis l’aperçu, et cette proposition est relative à l’état courant. Relancez la demande.`);
-  if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)');
+  if (drift.length) throw new UserError(`Proposition périmée : l’intensité de ${drift.slice(0, 5).join(', ')}${drift.length > 5 ? '…' : ''} a changé depuis l’aperçu, et cette proposition est relative à l’état courant. Relancez la demande.`, 'ai.proposalStaleIntensity', { channels: drift.slice(0, 5).join(', ') + (drift.length > 5 ? '…' : '') });
+  if (Date.now() - app.lastAiApply < 300) throw new UserError('Applications IA trop rapprochées (protection anti-boucle)', 'ai.applyRateLimited');
   app.lastAiApply = Date.now();
   app.proposals.delete(id); // a proposal is applied at most once
   const t0 = performance.now();
@@ -185,7 +185,7 @@ export async function guardBudget(app: AppService): Promise<void> {
   const budget = app.settings.ai.monthlyBudget;
   if (budget === null) return;
   const { month } = await ledgerOf(app).totals();
-  if (month.cost >= budget) throw new UserError(`Budget IA mensuel atteint (${month.cost.toFixed(2)} $ sur ${budget} $) : modifiable dans Paramètres › IA`);
+  if (month.cost >= budget) throw new UserError(`Budget IA mensuel atteint (${month.cost.toFixed(2)} $ sur ${budget} $) : modifiable dans Paramètres › IA`, 'ai.monthlyBudgetReached', { spent: month.cost.toFixed(2), budget: budget.toFixed(2) });
 }
 
 /** Last exchanges of the conversation with the remote model, for follow-up requests (« plutôt l’inverse »). */
@@ -227,7 +227,7 @@ export function storeProposal(app: AppService, p: AiProposal): void {
 }
 
 export async function aiPropose(app: AppService, prompt: string, continueThread = false): Promise<AiProposal> {
-  if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
+  if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours', 'ai.requestInProgress');
   app.aiBusy = true;
   const abort = (app.aiAbort = new AbortController());
   try {
@@ -249,11 +249,11 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
         proposal.timings = { understandMs: t1 - t0, validateMs: performance.now() - t1 };
         app.aiLastError = null;
       } catch (err) {
-        if (abort.signal.aborted) throw new UserError('Demande IA annulée');
+        if (abort.signal.aborted) throw new UserError('Demande IA annulée', 'ai.requestCancelled');
         const msg = err instanceof Error ? err.message : String(err);
         app.aiLastError = msg;
         app.logger.error('IA', `Fournisseur OpenRouter indisponible : ${msg}`);
-        if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
+        if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`, 'ai.providerUnavailable', { reason: msg });
         proposal = proposeLocally(prompt, validationCtx(app), app.engine, ...(continueThread ? [lastTargets(app), proposedTargets(app)] : []));
         proposal.notices.unshift(`Fournisseur OpenRouter indisponible (${msg}) : proposition générée par le mode local déterministe.`);
       }
@@ -303,7 +303,7 @@ async function sceneFromPhoto(app: AppService, image: string) {
 /** Photo(s) of a manual's DMX chart → fixture profile; nothing is saved here, the renderer shows it for review first. */
 async function profileFromPhoto(app: AppService, images: string[]) {
   const r = await withVision(app, (opts) => profileFromPhotoWithOpenRouter(images, opts));
-  if (!r.profile) throw new UserError(`Aucun tableau de canaux DMX lu sur la photo : ${r.summary}`);
+  if (!r.profile) throw new UserError(`Aucun tableau de canaux DMX lu sur la photo : ${r.summary}`, 'ai.photoNoDmxChannels', { summary: r.summary });
   app.logger.info('IA', `Profil depuis photo : ${r.profile.manufacturer} ${r.profile.name}, ${r.profile.modes.length} mode(s)`);
   return r;
 }
@@ -312,8 +312,8 @@ async function profileFromPhoto(app: AppService, images: string[]) {
 async function withVision<T>(app: AppService, run: (opts: OpenRouterOptions) => Promise<T>): Promise<T> {
   const ai = app.settings.ai;
   const key = app.opts.secrets.get(OPENROUTER_KEY);
-  if (!key) throw new UserError('Analyse de photo : configurez une clé OpenRouter dans Paramètres › IA');
-  if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
+  if (!key) throw new UserError('Analyse de photo : configurez une clé OpenRouter dans Paramètres › IA', 'ai.photoApiKeyMissing');
+  if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours', 'ai.requestInProgress');
   app.aiBusy = true;
   const abort = (app.aiAbort = new AbortController());
   try {
@@ -327,7 +327,7 @@ async function withVision<T>(app: AppService, run: (opts: OpenRouterOptions) => 
     const msg = err instanceof Error ? err.message : String(err);
     app.aiLastError = msg;
     app.logger.error('IA', `Analyse de photo impossible : ${msg}`);
-    throw err instanceof UserError ? err : new UserError(`Analyse de photo impossible : ${msg}`);
+    throw err instanceof UserError ? err : new UserError(`Analyse de photo impossible : ${msg}`, 'ai.photoAnalysisFailed', { reason: msg });
   } finally {
     app.aiBusy = false;
     app.aiAbort = null;
