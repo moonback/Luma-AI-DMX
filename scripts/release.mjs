@@ -3,7 +3,7 @@
 // Needs the GitHub CLI logged in (`gh auth login`). A version with a suffix (0.5.0-beta.1) goes out as a pre-release.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { validateReleaseMetadata } from './release-validation.mjs';
+import { hasRemoteTag, validateReleaseMetadata } from './release-validation.mjs';
 
 const REPO = 'moonback/Luma-AI-DMX';
 const dryRun = process.argv.includes('--dry-run');
@@ -36,7 +36,7 @@ try {
 if (released) fail(`La release ${tag} existe déjà : passe "version" de package.json à la suivante.`);
 let remoteTagExists = false;
 try {
-  remoteTagExists = !!out(`git ls-remote --tags origin refs/tags/${tag}`);
+  remoteTagExists = hasRemoteTag(tag, (candidate) => out(`git ls-remote --tags origin refs/tags/${candidate}`));
 } catch {
   fail('Impossible de vérifier les tags distants : vérifie la connexion à origin.');
 }
