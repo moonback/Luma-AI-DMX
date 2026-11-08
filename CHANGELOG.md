@@ -51,7 +51,6 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ### Ajouté
 - Analyse musicale : détection de signature rythmique, analyse de structure adaptée à la mesure et cartographie locale du tempo avec interpolation BPM synchronisée aux beats.
 - Actions rapides : gestion des catégories, réglage de la taille des tuiles et ciblage des groupes ou projecteurs.
-- Démo concert de stade avec 72 projecteurs et configuration d'arène.
 
 ### Modifié
 - Analyse audio : agrégations plus efficaces, choix des faisceaux mieux corrélé à la brillance spectrale et suivi des caractéristiques du morceau.
@@ -73,6 +72,48 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 
 ### Corrigé
 - Stage 3D : suppression du rendu double-face inutile sur le matériau des ailes.
+
+## [1.3.0] — 2026-10-19
+
+### Ajouté
+- Song-to-Show : génération dramaturgique de spectacles, couleurs par couche, positions de lyres, gestion de la fin de show et vitesse adaptée au jeu musical.
+- Bibliothèque de projecteurs : transcription de profils depuis des photos de manuels, roues de couleurs et édition de profils.
+- IA : contrat d'actions v2, fil de conversation, budgets et suivi des coûts OpenRouter, description spatiale du kit et profils enrichis.
+- Contrôle : télécommande OSC avec adresses autorisées, retours d'état et alertes ; console Live détachable et améliorations de contrôle.
+- Actions rapides : page dédiée, édition, catégories et exclusion mutuelle des actions.
+- Console : panneaux déplaçables, mise en page multi-colonnes et nommage personnalisé des palettes.
+- Fiabilité : annulation/rétablissement des éditions, arrêt et reprise de l'IA, récupération au démarrage, stockage durable et reprise après erreurs de fournisseur.
+
+### Modifié
+- Moteur : remplacement des cues après un saut dans la timeline et maintien du DMX en état d'erreur.
+- Paramètres : persistance améliorée, gestion des secrets et commande « tout relâcher ».
+- Song-to-Show : lecteur persistant avec pause, position et arrêt depuis les autres pages ; historique des intentions et curseurs d'ambiance.
+
+## [1.2.0] — 2026-10-18
+
+### Ajouté
+- Écran « Quoi de neuf ? » présentant les nouveautés de version et accessible depuis l'accueil.
+- Amélioration du parcours d'accueil et de l'onboarding, avec mémorisation des préférences d'affichage.
+
+## [1.1.0] — 2026-10-18
+
+### Corrigé
+- Analyse audio : assainissement des trames audio avant traitement.
+- Interpréteur de scène depuis le texte : amélioration de l'analyse du français et de la conversion des demandes en éléments de scène.
+
+### Modifié
+- Dashboard : regroupement sémantique des cartes en sections titrées pour les lecteurs d'écran.
+- Navigation : la carte Projecteurs ouvre directement le patch.
+
+## [1.0.0] — 2026-10-18
+
+### Ajouté
+- Première release stable 1.0 : écran de démarrage, identité visuelle et icône de fenêtre.
+- Onboarding et catalogue de démonstrations enrichi pour découvrir les capacités de l'application.
+- Préparation de la distribution Windows avec configuration Electron Builder et script de release.
+
+### Modifié
+- Configuration de build Electron/Vite et règles de qualité adaptées au projet.
 
 ## [1.4.0] — 2026-10-19
 
