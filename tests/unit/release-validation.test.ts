@@ -5,7 +5,7 @@ const changelog = '# Changelog\n\n## [Non publié]\n\n### Ajouté\n- Une fonctio
 
 describe('release metadata validation', () => {
   it('accepts a valid stable version with categorized unreleased notes', () => {
-    expect(validateReleaseMetadata({ version: '1.9.0', changelog })).toEqual([]);
+    expect(validateReleaseMetadata({ version: '1.9.0', changelog, existingTags: ['1.8.0'] })).toEqual([]);
   });
   it('accepts a valid prerelease SemVer', () => {
     expect(validateReleaseMetadata({ version: '2.0.0-beta.1', changelog })).toEqual([]);
