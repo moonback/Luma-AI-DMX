@@ -32,6 +32,14 @@ describe('catalogue partagé du cœur', () => {
     expect(translateCore('fr', 'locate.noSequence')).toBe('Aucune séquence de localisation en cours');
   });
 
+  it('traduit les messages musique, sortie DMX et programmation', () => {
+    expect(translateCore('en', 'music.sectionNotFound')).toBe('Section not found');
+    expect(translateCore('fr', 'music.trackNotFound')).toBe('Morceau introuvable');
+    expect(translateCore('en', 'output.universeNotRouted', { universe: 4 })).toBe('Universe 4 is not routed to this output');
+    expect(translateCore('en', 'output.rdmFailed', { reason: 'socket closed' })).toBe('RDM: socket closed');
+    expect(translateCore('en', 'programming.cueSceneUnknown', { name: 'Opening' })).toBe('Cue “Opening”: unknown scene');
+  });
+
   it('préserve le placeholder si un paramètre manque', () => {
     expect(translateCore('en', 'error.invalidCommand')).toBe('Invalid command: {details}');
   });
