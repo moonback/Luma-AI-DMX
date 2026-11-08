@@ -31,6 +31,11 @@
 /* ── Bandeau de sélection ──────────────────────────────────────────── */
 .sc-sel-bar { border-radius: 10px; border-color: rgba(139, 92, 246, 0.45); background: linear-gradient(90deg, rgba(139, 92, 246, 0.22), rgba(34, 211, 238, 0.08)); box-shadow: 0 10px 30px -18px rgba(139, 92, 246, 0.8); justify-content: space-between; animation: sc-drop 260ms var(--ease-out); }
 
+/* ── Mode sélection explicite ─────────────────────────────────────── */
+.sc-mode-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid rgba(139, 92, 246, 0.38); border-radius: 10px; color: #ddd6fe; background: linear-gradient(90deg, rgba(139, 92, 246, 0.16), rgba(34, 211, 238, 0.05)); animation: sc-drop 220ms var(--ease-out); }
+.sc-mode-bar strong { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.sc-main--selection .sc-tile { cursor: pointer; }
+
 /* ── Tuiles ────────────────────────────────────────────────────────── */
 .sc-tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
 .sc-tile { width: auto; border-radius: 12px; border-color: rgba(255, 255, 255, 0.07); background: var(--glass); box-shadow: 0 12px 28px -20px rgba(0, 0, 0, 0.95); animation: sc-rise 420ms var(--ease-out) backwards; transition: transform var(--dur) var(--ease-out), border-color var(--dur), box-shadow var(--dur), background var(--dur); }
