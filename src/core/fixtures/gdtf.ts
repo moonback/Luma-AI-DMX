@@ -62,50 +62,73 @@ const GDTF_ATTR: Record<string, string> = {
   Fans: 'fan', Fog: 'fog', Haze: 'fog', DimmerCurve: 'dimmerCurve', EffectsSync: 'macroSpeed', Macro: 'macro', GlobalMSpeed: 'speed',
 };
 const CONTINUOUS = new Set(['dimmer', 'pan', 'tilt', 'zoom', 'focus', 'iris', 'panTiltSpeed', 'red', 'green', 'blue', 'white', 'amber', 'uv', 'warmWhite', 'coldWhite', 'lime', 'indigo', 'cyan', 'magenta', 'yellow', 'cto', 'colorTemperature']);
-/** Attribute name → official GDTF feature family and feature name (Feature="Group.Feature"). */
-function gdtfAttributeFeatures(fixtureType: Node): Map<string, string> {
+interface GdtfAttributeMetadata {
+  feature?: string;
+  mainAttribute?: string;
+  physicalUnit?: string;
+  subPhysicalUnits: string[];
+}
+
+/** Resolve official GDTF Attribute metadata and Node references relative to AttributeDefinitions. */
+function gdtfAttributeMetadata(fixtureType: Node): Map<string, GdtfAttributeMetadata> {
   const definitions = node(fixtureType.AttributeDefinitions);
   const groups = arr(node(definitions.FeatureGroups), 'FeatureGroup');
   const features = new Map<string, string>();
   for (const group of groups) {
-    const groupName = str(group, 'Name') ?? str(group, 'Pretty') ?? '';
+    const groupName = str(group, 'Name') ?? '';
     for (const feature of arr(group, 'Feature')) {
       const featureName = str(feature, 'Name') ?? '';
-      if (featureName) features.set(`${groupName}.${featureName}`, [groupName, str(group, 'Pretty'), featureName].filter(Boolean).join(' '));
+      if (groupName && featureName) features.set(`${groupName}.${featureName}`, [groupName, str(group, 'Pretty'), featureName].filter(Boolean).join(' '));
     }
   }
-  const byAttribute = new Map<string, string>();
+  const byAttribute = new Map<string, GdtfAttributeMetadata>();
   for (const attribute of arr(node(definitions.Attributes), 'Attribute')) {
     const name = str(attribute, 'Name');
-    const reference = str(attribute, 'Feature');
-    if (!name || !reference) continue;
-    const resolved = features.get(reference);
-    if (resolved) byAttribute.set(name, [resolved, str(attribute, 'Pretty')].filter(Boolean).join(' '));
+    if (!name) continue;
+    const featureRef = str(attribute, 'Feature');
+    const feature = featureRef ? features.get(featureRef) : undefined;
+    const subPhysicalUnits = arr(attribute, 'SubPhysicalUnit')
+      .map((unit) => str(unit, 'Type'))
+      .filter((value): value is string => Boolean(value));
+    byAttribute.set(name, {
+      ...(feature ? { feature: [feature, str(attribute, 'Pretty')].filter(Boolean).join(' ') } : {}),
+      ...(str(attribute, 'MainAttribute') ? { mainAttribute: str(attribute, 'MainAttribute') } : {}),
+      ...(str(attribute, 'PhysicalUnit') ? { physicalUnit: str(attribute, 'PhysicalUnit') } : {}),
+      subPhysicalUnits,
+    });
   }
   return byAttribute;
 }
 
 /** A channel's Luma attribute: direct mappings first, then official GDTF semantics. */
-function lumaAttribute(lc: Node, attributeFeatures: Map<string, string>): string | null {
+function lumaAttribute(lc: Node, attributeMetadata: Map<string, GdtfAttributeMetadata>): string | null {
   const a = str(lc, 'Attribute') ?? '';
+  const logicalMetadata = attributeMetadata.get(a);
   if (GDTF_ATTR[a]) return GDTF_ATTR[a]!;
+  if (logicalMetadata?.mainAttribute && GDTF_ATTR[logicalMetadata.mainAttribute]) return GDTF_ATTR[logicalMetadata.mainAttribute]!;
   const functions = arr(lc, 'ChannelFunction');
   for (const f of functions) {
     const fa = str(f, 'Attribute') ?? '';
+    const original = str(f, 'OriginalAttribute') ?? '';
+    const functionMetadata = attributeMetadata.get(fa) ?? attributeMetadata.get(original);
     if (GDTF_ATTR[fa]) return GDTF_ATTR[fa]!;
-    if (/^Shutter\\dStrobe/u.test(fa)) return 'strobe';
+    if (GDTF_ATTR[original]) return GDTF_ATTR[original]!;
+    if (functionMetadata?.mainAttribute && GDTF_ATTR[functionMetadata.mainAttribute]) return GDTF_ATTR[functionMetadata.mainAttribute]!;
+    if (/^Shutter\dStrobe/u.test(fa) || /^Shutter\dStrobe/u.test(original)) return 'strobe';
     const resolved = resolveMa2SemanticAttribute({
       attribute: a,
-      subattribute: fa,
-      feature: attributeFeatures.get(fa) ?? attributeFeatures.get(a),
-      names: [str(f, 'Name'), str(lc, 'Name'), a, fa],
+      subattribute: fa || original,
+      feature: functionMetadata?.feature ?? logicalMetadata?.feature,
+      preset: [functionMetadata?.physicalUnit, ...(functionMetadata?.subPhysicalUnits ?? [])].filter(Boolean).join(' '),
+      names: [str(f, 'Name'), str(lc, 'Name'), a, fa, original, functionMetadata?.mainAttribute],
     });
     if (resolved) return resolved;
   }
   return resolveMa2SemanticAttribute({
     attribute: a,
-    feature: attributeFeatures.get(a),
-    names: [str(lc, 'Name'), a],
+    feature: logicalMetadata?.feature,
+    preset: [logicalMetadata?.physicalUnit, ...(logicalMetadata?.subPhysicalUnits ?? [])].filter(Boolean).join(' '),
+    names: [str(lc, 'Name'), a, logicalMetadata?.mainAttribute],
   });
 }
 
@@ -216,7 +239,7 @@ export function convertGdtf(file: Uint8Array): GdtfConversion {
   const fx = node(ft);
   if (!str(fx, 'Name')) return fail('description.xml sans <GDTF><FixtureType>');
   const wheels = arr(node(fx.Wheels), 'Wheel');
-  const attributeFeatures = gdtfAttributeFeatures(fx);
+  const attributeMetadata = gdtfAttributeMetadata(fx);
   const geo = [...geometries(node(fx.Geometries))];
   const dmxModes = arr(node(fx.DMXModes), 'DMXMode');
   if (!dmxModes.length) return fail('Aucun mode DMX (<DMXModes>) dans le fichier');
@@ -231,7 +254,7 @@ export function convertGdtf(file: Uint8Array): GdtfConversion {
     // Repeated geometries (pixels, cells): a Luma attribute met on several geometries is split into cells.
     const geomsByAttr = new Map<string, string[]>();
     for (const ch of chans) {
-      const a = lumaAttribute(arr(ch, 'LogicalChannel')[0] ?? {}, attributeFeatures);
+      const a = lumaAttribute(arr(ch, 'LogicalChannel')[0] ?? {}, attributeMetadata);
       const g = str(ch, 'Geometry') ?? '';
       if (!a) continue;
       const list = geomsByAttr.get(a) ?? [];
@@ -264,7 +287,7 @@ export function convertGdtf(file: Uint8Array): GdtfConversion {
       const geomName = str(ch, 'Geometry') ?? '';
       const cellIdx = repeated.indexOf(geomName);
       const cell = cellIdx >= 0 ? cellIdx + 1 : undefined;
-      let attr = lumaAttribute(lc, attributeFeatures);
+      let attr = lumaAttribute(lc, attributeMetadata);
       const key = (a: string) => (cell ? `${a}#${cell}` : a);
       if (!attr) warnings.push(`Attribut GDTF « ${gAttr} » non reconnu, converti en canal générique`);
       else if (used.has(key(attr))) { warnings.push(`${modeName} · « ${gAttr} » duplique ${key(attr)}, converti en canal générique`); attr = null; }
