@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Ajouté
+- Dashboard : monitoring du scheduler avec fréquence mesurée, charge, tick maximum, dépassements, erreurs et percentiles de gigue p50/p95/p99 sur une fenêtre glissante bornée ; compteurs FPS et erreurs par transport DMX.
 - Dashboard : checklist Readiness persistante vérifiant le patch, la résolution des profils, les sorties DMX, la sauvegarde du projet et l’état Flash Guard, avec états inconnus explicites et accès direct aux écrans de correction.
 - Console Simplifiée : clic simple sur une machine pour ouvrir directement ses réglages ; mode de sélection multiple explicite et activable, avec sélection par plage et commandes de sélection dédiées.
 - Personnalisation du Dashboard : affichage indépendant du guide de démarrage, des indicateurs matériel/spectacle/système, de la création de scène par texte, des actions rapides et des alertes depuis Réglages → Apparence.
