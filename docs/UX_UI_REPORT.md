@@ -266,7 +266,7 @@ Première tranche intégrée dans la branche `feat/ux-dashboard-readiness-2026-1
 
 ### Tranche 2 — Monitoring moteur et transports DMX
 
-**Statut : en cours**
+**Statut : implémenté — validation locale en attente**
 
 - Carte de santé du moteur dans le Dashboard : fréquence mesurée et cible, charge du tick, durée maximale, dépassements et erreurs.
 - Percentiles p50/p95/p99 calculés sur les écarts absolus à la période scheduler, à partir d'une fenêtre glissante bornée à 512 échantillons.
