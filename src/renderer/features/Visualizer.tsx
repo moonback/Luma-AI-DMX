@@ -53,6 +53,12 @@ function StagePage() {
   const { fixtures } = useResolved();
   const mode = useStore((s) => s.stageMode);
   const setMode = useStore((s) => s.setStageMode);
+  const visibility = useStore((s) => s.componentVisibility);
+  const can2d = visibility.stage2d;
+  const can3d = visibility.stage3d;
+  const availableModes = MODES.filter((m) => m.id === '2d' ? can2d : m.id === '3d' ? can3d : can2d && can3d);
+  const effectiveMode = availableModes.some((m) => m.id === mode) ? mode : availableModes[0]?.id ?? null;
+  useEffect(() => { if (effectiveMode && mode !== effectiveMode) setMode(effectiveMode); }, [effectiveMode, mode, setMode]);
   const selCount = useStore((s) => (s.sceneSel ? 1 : s.selection.length));
   const project = useStore((s) => s.project!.project);
   const preview = useStore((s) => s.preview);
@@ -63,11 +69,11 @@ function StagePage() {
   const [group, setGroup] = useState<string | null>(null);
   const placing = useStore((s) => s.placing);
   useSceneShortcuts();
-  const modeLabel = tr(MODES.find((m) => m.id === mode)!.key);
+  const modeLabel = effectiveMode ? tr(MODES.find((m) => m.id === effectiveMode)!.key) : tr('settings.components.noStageView');
   const tools = (
     <>
       <div className="seg" role="group" aria-label={tr('stagePage.modeAria')} data-testid="stage-mode">
-        {MODES.map((m) => (
+        {availableModes.map((m) => (
           <button
             key={m.id}
             className={mode === m.id ? 'on' : ''}
@@ -106,11 +112,11 @@ function StagePage() {
   return (
     <div className="page stage-page">
       <div className="stage-layout">
-        {panels.build ? <ScenePanel vis={project.visualizer} modeLabel={modeLabel} /> : (
+        {visibility.stageBuildPanel && (panels.build ? <ScenePanel vis={project.visualizer} modeLabel={modeLabel} /> : (
           <nav className="scene-rail" aria-label={tr('build.expand')}>
             <button className="btn ghost sm icon" title={tr('build.expand')} aria-label={tr('build.expand')} onClick={() => setPanels({ build: true })} data-testid="stage-settings-toggle"><PanelLeftOpen size={15} /></button>
           </nav>
-        )}
+        ))}
         <div className="stage-view">
           {preview && (
             <div className="stage-preview row">
@@ -133,20 +139,22 @@ function StagePage() {
               {!panels.build && <button className="btn sm" onClick={() => setPanels({ build: true })}><PanelLeftOpen size={12} />{tr('stagePage.build')}</button>}
             </div>
           )}
-          <div className={`stage-panes ${mode === 'split-h' ? 'stage-panes-h' : ''}`}>
-            {mode === '2d' && plan(tools)}
-            {mode === '3d' && view3d(<>{tools}<span className="view-sep" />{detach}</>)}
-            {mode === 'split' && <>{plan(tools)}{view3d(detach)}</>}
-            {mode === 'split-h' && <>{plan(tools)}{view3d(detach)}</>}
-          </div>
+          {effectiveMode ? (
+            <div className={`stage-panes ${effectiveMode === 'split-h' ? 'stage-panes-h' : ''}`}>
+              {effectiveMode === '2d' && plan(tools)}
+              {effectiveMode === '3d' && view3d(<>{tools}<span className="view-sep" />{detach}</>)}
+              {effectiveMode === 'split' && <>{plan(tools)}{view3d(detach)}</>}
+              {effectiveMode === 'split-h' && <>{plan(tools)}{view3d(detach)}</>}
+            </div>
+          ) : <div className="stage-empty">{tr('settings.components.noStageView')}</div>}
         </div>
-        {panels.inspect ? <SelectionPanel vis={project.visualizer} mode={mode} /> : (
+        {visibility.stageInspectorPanel && (panels.inspect ? <SelectionPanel vis={project.visualizer} mode={effectiveMode ?? mode} /> : (
           <nav className="scene-rail" aria-label={tr('select.expand')}>
             <button className="btn ghost sm icon" title={tr('select.expand')} aria-label={tr('select.expand')} onClick={() => setPanels({ inspect: true })} data-testid="stage-inspect-toggle">
               <PanelRightOpen size={15} />{selCount > 0 && <span className="rail-count">{selCount}</span>}
             </button>
           </nav>
-        )}
+        ))}
       </div>
     </div>
   );
