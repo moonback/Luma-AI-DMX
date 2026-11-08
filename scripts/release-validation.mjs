@@ -17,7 +17,7 @@ export function validateReleaseMetadata({ version, changelog, existingTags = [] 
     return errors;
   }
   const prerelease = semverMatch[4];
-  if (prerelease && prerelease.split('.').some((part) => /^\\d+$/u.test(part) && part.length > 1 && part.startsWith('0'))) {
+  if (prerelease && prerelease.split('.').some((part) => /^[0-9]+$/u.test(part) && part.length > 1 && part.startsWith('0'))) {
     errors.push('Identifiant numérique de pré-release SemVer avec zéro initial : ' + version + '.');
     return errors;
   }
