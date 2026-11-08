@@ -14,31 +14,76 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 - Écrans : murs LED modulaires (côté de module, coutures visibles) ; structures : section carrée ou triangulaire.
 - MA Fixture Share intégré : bouton « MA Fixture Share » (page Fixtures et catalogue Machine de Construire) ouvrant le site dans une fenêtre isolée ; connecté avec votre compte MA, chaque fiche téléchargée (grandMA2 .xml, collection .zip, GDTF) est convertie et ajoutée à la bibliothèque, les modes d'une même machine fusionnés. Les fiches grandMA3 sont refusées avec un message clair.
 - Import de profils : sélection multiple et archives .zip (collections du MA Fixture Share) ; un fichier illisible n'interrompt plus l'import des autres.
-- Projets de démonstration : les 31 démos reçoivent un décor réaliste issu de la bibliothèque (line arrays suspendus, caissons, batteries, amplis, guitares, claviers, pianos, consoles de régie, barrières, machines à effets, arches, toiles, chaises et pupitres) et des murs LED ; les pièces génériques qui imitaient du matériel (boîte « piano », « mur d'amplis », rideau « écran géant »…) sont remplacées par le vrai équipement.
-- Stage 3D : 4 préréglages de qualité de rendu en un clic (Édition, Équilibré, Qualité, Présentation).
-- Stage 3D : barre d'état enrichie (mode Orbite/Édition, compteur de projecteurs, grille active, indicateur de framerate déplacé depuis la barre d'outils).
-- Stage 3D : inspecteur contextuel escamotable affichant les propriétés géométriques et photométriques des projecteurs ou éléments de scène sélectionnés (position, hauteur, rotation/pan/tilt, couleur, intensité).
-- Stage 3D : internationalisation complète de l'interface 3D (barre d'outils, dialogues de rendu, réglages, menus et aide) en français et anglais.
-- Stage 3D : suite de tests unitaires dédiés `tests/unit/stage3d.test.ts` (persistance des préférences, préréglages de rendu, libération des géométries partagées, géométrie du plateau).
+- Projets de démonstration : les 31 démos reçoivent un décor réaliste issu de la bibliothèque et des murs LED ; les pièces génériques qui imitaient du matériel sont remplacées par le vrai équipement.
+
+## [1.8.0] — 2026-10-22
+
+### Ajouté
+- Analyse musicale automatisée avec détection des beats, suivi du tempo et compilation Song-to-Show en une timeline de spectacle.
+- Planification des shows par sections, mapping des effets, évaluation de la qualité artistique et comparaison de variantes.
+- Refonte de l'espace Stage 3D : workspace de scène, édition des éléments, panneau de scène, commandes et styles dédiés.
+- Stage 3D : quatre préréglages de qualité (Édition, Équilibré, Qualité, Présentation), barre d'état enrichie et inspecteur contextuel des propriétés géométriques et photométriques.
+- Stage 3D : interface entièrement localisée en français et anglais, avec tests dédiés aux préférences, préréglages, géométries et ressources Three.js.
 
 ### Modifié
-- Console Live : la liste des projecteurs est de nouveau visible par défaut (colonne épinglée) ; un bouton la replie en rail qui se déplie au survol, et le choix est mémorisé sur la machine.
-- La page d'accueil au premier lancement redevient le Dashboard (« Actions rapides » vide s'ouvrait par défaut depuis un commit sans rapport) ; la dernière page visitée reste mémorisée.
-- E2E : délais Playwright doublés (test 120 s, attente 10 s) car l'application tourne sous rendu logiciel SwiftShader dans ces tests.
+- Directeur IA : refonte du pipeline de conversation et de génération de propositions ; contrat d'actions v3, contraintes de requête vérifiées et option d'application automatique désactivée par défaut.
+- Assistant IA : prompts configurables, onglet Assistant dans les paramètres et clarification explicite des demandes ambiguës.
+- Analyse audio et Song-to-Show : enrichissement de l'analyse, du suivi de tempo et de la couverture vocale.
 
 ### Corrigé
-- Démos « Son et lumière sur la cathédrale » et « Match de basket » : décors hors des bornes du format (tours de 26 m, parquet de 2 cm) qui empêchaient leur ouverture ; démo stade : praticables et micros posés sous le plancher de la grande scène.
-- Stage 3D : libération mémoire systématique des géométries Three.js partagées (`disposeGeometries()`) au démontage de la vue 3D.
-- Stage 3D : correction de la contrainte CSS `right: 290px` sur `.stage3d-status` qui tronquait inutilement la barre d'état.
-- Accessibilité Stage 3D : ajout des `aria-label` manquants sur les boutons d'outils Déplacer et Pivoter.
-- Thème animé : la couche « aurora », la scan-line de la barre supérieure et la respiration des LED repeignaient toute la fenêtre à chaque image (2 i/s sous rendu logiciel, page IA et vue 3D figées en E2E) ; elles vivent maintenant sur leur propre couche composée (27 i/s mesurés, mêmes visuels).
-- MIDI : une commande mappée sur un contrôleur continu (CC) ne se déclenche plus à chaque message ≥ 50 % mais au front montant (un fader qui monte envoyait une rafale de GO). Test : `tests/components/midi-edge.test.tsx`.
-- E2E : la liste des projecteurs de la Console Live est un rail qui ne se déplie qu'au survol depuis les panneaux déplaçables ; les scénarios la survolent avant de cliquer ; galerie des démos comptée depuis le catalogue ; vérification F11 de la fenêtre 3D détachée (LUMA-024).
-- Sûreté de l'armement (LUMA-036) : un désarmement pendant une reconnexion ou pendant l'ouverture du transport laissait la sortie réelle repasser « prête » et émettre ; `OutputAdapter` reste désarmé dans ces deux courses et `OutputManager.sendFrames` exige aussi l'armement. Tests de régression : `tests/unit/protocols.test.ts`.
-- Porte qualité rouge : test du contrat IA sensible aux fins de ligne CRLF (`core.autocrlf`), test des démos figé à 20 projets (21 depuis la démo stade), deux erreurs ESLint (import et variable inutilisés).
-- `npm run lint` : quatre fichiers au-dessus de la limite de 600 lignes découpés sans changement de comportement (`QuickActionsParts.tsx`, `model/primitives.ts`, `music/intent.ts`, `demo/catalogStadium.ts`).
-- Cliquet i18n : les génériques `useState<…>` et les commentaires ne sont plus comptés comme du texte d'interface ; libellés des groupes de navigation et cases à cocher du patch passés par les catalogues (fr / en).
+- Directeur IA : correction des négations, exclusions de projecteurs, ajustements relatifs d'intensité, références contextuelles et actions refusées après validation.
+- Stage 3D : libération des géométries Three.js partagées, correction de la barre d'état et ajout des libellés accessibles Déplacer/Pivoter.
 
+## [1.7.0] — 2026-10-21
+
+### Ajouté
+- Assistant vocal Gemini en temps réel, avec session audio, outils de contrôle du moteur et bouton d'accès depuis la barre supérieure.
+- Gestion des licences : clés, niveaux d'accès et restrictions de fonctionnalités selon le niveau de licence.
+- Console Pan/Tilt : sélection de groupes et contrôle visuel des mouvements des projecteurs.
+- Détection des changements de tempo et meilleure prise en charge des phrases vocales courtes dans l'analyse musicale.
+
+### Modifié
+- Console Simplifiée : feuille de style dédiée et option d'activation au prochain démarrage avec confirmation lors du retour à l'interface complète.
+- Documentation du projet mise à jour pour présenter l'assistant vocal et la structure du dépôt.
+
+## [1.6.0] — 2026-10-21
+
+### Ajouté
+- Analyse musicale : détection de signature rythmique, analyse de structure adaptée à la mesure et cartographie locale du tempo avec interpolation BPM synchronisée aux beats.
+- Actions rapides : gestion des catégories, réglage de la taille des tuiles et ciblage des groupes ou projecteurs.
+- Démo concert de stade avec 72 projecteurs et configuration d'arène.
+
+### Modifié
+- Analyse audio : agrégations plus efficaces, choix des faisceaux mieux corrélé à la brillance spectrale et suivi des caractéristiques du morceau.
+- Console Live : liste des projecteurs épinglable ou repliable dans un rail déployé au survol, avec préférence persistante.
+- Accueil : retour au Dashboard au premier lancement et mémorisation de la dernière page visitée.
+- E2E : délais adaptés au rendu logiciel SwiftShader.
+
+### Corrigé
+- Sortie DMX réelle : le désarmement reste effectif pendant une reconnexion ou l'ouverture du transport ; l'émission exige explicitement l'armement.
+- MIDI : les commandes mappées sur un contrôleur continu se déclenchent au front montant du seuil, et non à chaque valeur supérieure au seuil.
+- Performances du renderer : animations Aurora, scan-line et LED isolées sur des couches composées afin d'éviter les repeints complets de la fenêtre.
+- Qualité : corrections de tests sensibles aux fins de ligne, catalogue de démos, erreurs ESLint et extraction de fichiers trop volumineux.
+- Internationalisation : amélioration du contrôle des textes d'interface et traduction des libellés de groupes et de cases à cocher.
+
+## [1.5.0] — 2026-10-19
+
+### Modifié
+- Écran de démarrage : simplification de la gestion de la vidéo du splash screen et amélioration de la gestion de la fenêtre Electron.
+
+### Corrigé
+- Stage 3D : suppression du rendu double-face inutile sur le matériau des ailes.
+
+## [1.4.0] — 2026-10-19
+
+### Ajouté
+- Suggestions d'intentions assistées par IA pour les morceaux de musique.
+- Export du plan d'installation des projecteurs, avec analyse des matériaux et de la puissance.
+- Démo de concert en stade avec 72 projecteurs et configuration d'arène.
+
+### Modifié
+- Visualiseur : intégration du mode Stage 3D dans la page Visualizer avec bascule 2D/3D, au lieu d'une page indépendante.
+- Fixtures : amélioration de la sélection multiple et de la sélection globale des projecteurs.
 ## [0.2.0] — 2026-10-18
 
 Passage au « niveau 2 » (docs/RAPPORT-NIVEAU-2.md) : fondations, maintenabilité, outils de distribution et de bêta.
