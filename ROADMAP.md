@@ -2249,7 +2249,18 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P2
 - **Type** : tests
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : Première tranche réalisée le 08/11/2026 ; migration globale encore incomplète.
+
+**Réalisation (08/11/2026 — première tranche).**
+
+- Catalogue partagé bilingue et typé dans `src/shared/i18n.ts`, avec interpolation des paramètres.
+- `UserError` accepte désormais une clé et des paramètres, sans supprimer le texte de repli historique.
+- Le contrat IPC transporte la clé structurée ; le rendu la traduit dans la langue active.
+- Refus d’origine, commande invalide, erreurs courantes du programmeur (palette, valeurs, scène, effet, timeline) et profil encore utilisé migrés.
+- Titres de onze dialogues natifs Electron localisés selon `settings.appearance.language`.
+- Sept tests unitaires ajoutés (traduction et transport IPC) ; ils restent à exécuter.
+
+**Travaux restants.** Migrer les erreurs des commandes les plus utilisées à partir des statistiques d’usage, les messages du journal/alertes/IA, compléter les libellés de filtres des dialogues, ajouter le cliquet anti-régression pour les messages en dur dans les handlers et exécuter les tests/typecheck/lint.
 
 **Constat technique.** Le rendu compte environ 10 000 lignes (`src/renderer`), mais il est absent de la couverture et ne dispose que de 4 fichiers de tests de composants, soit 16 tests (console, éditeur de section, écran d’accueil, espaces). Les pages critiques en exploitation (Output avec armement et confirmation, Cues, Music, Settings) ne sont vérifiées que par l’E2E, plus lent et non lancé en CI.
 
