@@ -3093,31 +3093,32 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Vérifier l’export PDF des documents volumineux (limite de taille des URL `data:`)
 - **Catégorie** : Export / processus principal
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : À INVESTIGUER
+- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
 - **Priorité** : P3
 - **Type** : correction de bug
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : Correction technique implémentée ; validation E2E grand volume à faire
 
-**Constat technique (audit du 24/10/2026).** `renderPdf` charge le HTML à imprimer dans une fenêtre cachée par une URL `data:text/html`. Chromium limite la longueur des URL à 2 Mo : une feuille de patch ou un plan d’installation très volumineux pourrait échouer. La taille réelle des documents produits n’a pas été mesurée.
+**Constat technique (audit du 24/10/2026).** `renderPdf` chargeait le HTML via une URL `data:text/html`, exposant les exports volumineux à la limite de longueur des URL Chromium. La taille des documents n'avait pas été mesurée.
 
 **Preuves dans le code.**
 
-- `src/main/index.ts`, fonction `renderPdf` : `w.loadURL(`data:text/html;charset=utf-8,…`)`.
+- `src/main/index.ts`, fonction `renderPdf` : chargement via `BrowserWindow.loadFile` depuis un répertoire temporaire unique.
 
 **Problème ou opportunité.** Un export PDF qui échoue sur un grand kit, découvert juste avant un show.
 
-**Résultat attendu.** La taille maximale des documents produits est mesurée ; au-delà d’un seuil prudent, le HTML est écrit dans un fichier temporaire chargé par `loadFile`.
+**Correction implémentée.** Tous les exports PDF passent par un fichier HTML temporaire unique, ce qui supprime la dépendance à la longueur d'une URL `data:`. Le répertoire est supprimé dans un bloc `finally`, y compris si l'écriture, le chargement ou l'impression échoue.
 
 **Travaux à effectuer.**
 
-1. Mesurer la taille du HTML de la feuille de patch et du plan d’installation sur la démo stade et sur un projet de 1 000 projecteurs.
-2. S’il approche 2 Mo, passer par un fichier temporaire supprimé après impression.
+1. Ajouter/adapter un test E2E qui exporte une feuille de patch sur un projet de 1 000 projecteurs.
+2. Vérifier que le répertoire temporaire est nettoyé après une impression réussie et après une erreur.
 
 **Critères d’acceptation.**
 
-- [ ] Mesure documentée dans cette fiche.
-- [ ] Export PDF réussi sur un projet de 1 000 projecteurs.
+- [x] Suppression de la limite liée à l'URL `data:` par chargement de fichier temporaire.
+- [x] Nettoyage du répertoire temporaire dans `finally`.
+- [ ] Export PDF E2E réussi sur un projet de 1 000 projecteurs.
 
 **Tests requis.**
 
