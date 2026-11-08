@@ -3267,10 +3267,10 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts`, avec interpolation des paramètres.
 - `UserError` accepte une clé stable et des variables, sans supprimer le message français historique utilisé comme repli.
 - Réponses IPC enrichies avec `message: { key, vars? }` pour les refus d’origine, les commandes invalides et les `UserError` migrées ; le rendu traduit selon la langue active.
-- Premiers messages migrés : refus d’origine, validation de commande, erreurs courantes du programmeur (palette, valeurs, scène, effet, timeline) et profil encore utilisé.
+- Messages migrés : refus d’origine, validation de commande, programmeur, profil utilisé, propositions et annulations IA, budget et disponibilité du fournisseur IA, analyse photo, jetons Gemini et localisation des projecteurs.
 - Dialogues Electron de fichiers (ouverture, sauvegarde, import/export, filtres) et confirmations de fermeture localisés à partir de `settings.appearance.language`.
-- Tests de traduction, de rendu anglais et de contrat IPC ajoutés ; non exécutés dans cette session.
-- Cliquet de non-régression intégré à `npm run lint` via `scripts/check-core-i18n.mjs` ; référence actuelle : 66 messages `UserError` non migrés sur 9 handlers.
+- Tests de traduction, d’interpolation des messages IA, de rendu anglais et de contrat IPC ajoutés ; non exécutés dans cette session.
+- Cliquet de non-régression intégré à `npm run lint` via `scripts/check-core-i18n.mjs` ; référence initiale : 66 messages non migrés ; 45 restent actuellement sans clé dans 5 handlers (fixtures, music, output, programming et project).
 
 **Travaux restants.** Identifier les 20 commandes les plus utilisées à partir des statistiques locales opt-in (si disponibles), migrer leurs messages puis les journaux, notices IA, alertes et rapports matériels ; étendre les tests et vérifier les diagnostics bilingues. Les statistiques d’usage sont locales et désactivables : aucune donnée réelle d’usage n’est disponible dans le dépôt.
 
