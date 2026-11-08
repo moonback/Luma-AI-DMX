@@ -690,6 +690,7 @@ test('intelligence musicale : import, analyse, Song-to-Show, lecture synchronisÃ
   await page.getByTestId('music-file').setInputFiles(file);
   await expect(page.getByTestId('music-summary')).toContainText('124', { timeout: 30_000 });
   await expect(page.getByTestId('section-strip')).toContainText('Refrain');
+  await page.getByTestId('music-next').click(); // Morceau â†’ Intention
   await page.getByTestId('music-intent').fill('concert pop, sobre sur les couplets, explosion sur les refrains, pas de strobe');
   await page.getByTestId('music-generate').click();
   await expect(page.getByTestId('music-plan-summary')).toContainText('sections');

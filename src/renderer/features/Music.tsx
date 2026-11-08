@@ -1,51 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowLeftRight, Clock, Layers, Lock, Music2, Pause, Pencil, Play, Shuffle, Sparkles, Square, Undo2, Upload, Wand2 } from 'lucide-react';
+import { Music2, Upload } from 'lucide-react';
 import { useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
 import { Empty, PageHead, Panel } from '../components/ui';
 import { musicPlayer } from '../musicPlayer';
-import { KEY_NAMES, SECTION_NAMES } from '../../core/music/analyze';
 import { suggestIntents } from '../../core/music/suggest';
-import { type Mood, type MusicTrack } from '../../core/model/schemas';
-import { BEAM_NAMES, EFFECT_NAMES, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './music/names';
+import type { MusicTrack } from '../../core/model/schemas';
 import { SectionEditor } from './music/SectionEditor';
 import { SongStudioTimeline } from './music/SongStudioTimeline';
-import { ArtisticQualityBadge } from './music/ArtisticQualityBadge';
 import { VariantCompareModal } from './music/VariantCompareModal';
 import type { Progress } from '../../shared/commands';
 import { usePlayback } from './music/MiniPlayer';
 import { confirmOverwrite } from './music/overwriteGuard';
 import { currentShowStep, ShowStepper, type ShowStep } from './music/ShowStepper';
+import { TrackLibrary } from './music/TrackLibrary';
+import { Transport } from './music/Transport';
+import { TrackStep } from './music/TrackStep';
+import { IntentStep, loadHistory, NO_MOOD, remember } from './music/IntentStep';
+import { ShowStep as ShowScreen } from './music/ShowStep';
+import { PlayStep } from './music/PlayStep';
 
-// Kept in French whatever the UI language: the local rules (parseIntent) only read French.
-const NO_MOOD: Mood = { energy: 0, colors: 0, movement: 0, strobe: 0 };
-const MOOD_KEYS = ['energy', 'colors', 'movement', 'strobe'] as const;
-
-const HISTORY_KEY = 'luma.intentHistory';
-function loadHistory(): string[] {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 8) : [];
-  } catch {
-    return [];
-  }
-}
-/** Most recent first, no duplicates, 8 kept (per machine, all projects). */
-function remember(intent: string): string[] {
-  const list = [intent, ...loadHistory().filter((x) => x !== intent)].slice(0, 8);
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch { /* storage unavailable: the list stays in memory */ }
-  return list;
-}
-
-const INTENT_PRESETS = [
-  ['dark', 'ambiance calme, couleurs froides'],
-  ['edm', 'explosion sur les drops, strobe, lumières sur les basses, couleurs qui suivent la musique'],
-  ['rock', 'couplets sobres, refrains explosifs, couleurs chaudes'],
-  ['wedding', 'ambiance douce et chaleureuse, pas de strobe, sans fumée'],
-  ['minimal', 'sobre, sans mouvement, pas de strobe'],
-] as const;
-
+const AUDIO_ACCEPT = 'audio/*,.wav,.mp3,.flac,.ogg,.m4a';
 
 /** Real steps reported by the main process (`progress` events) and where each one sits on the bar. */
 const GEN_STEPS: Record<Progress['step'], { key: MessageKey; p: number }> = {
@@ -87,11 +63,19 @@ function GeneratingModal() {
   );
 }
 
+/** Song to Show: the track library beside a four-step flow (Morceau → Intention → Show → Jouer), one screen at a time. */
 export function MusicPage() {
   const project = useStore((s) => s.project!.project);
   const tracks = project.music.tracks;
   const { groups, visualizer: { markers } } = project;
+  const t = useT();
+  const { playing, pos } = usePlayback();
+  const playingId = playing?.trackId ?? null;
   const [trackId, setTrackId] = useState<string | null>(tracks[0]?.id ?? null);
+  const track = tracks.find((tk) => tk.id === trackId) ?? tracks[0] ?? null;
+  const progressStep = currentShowStep(track, playingId);
+  // Screen shown: set from the track's progress when a track is opened, then the user moves freely between the steps.
+  const [view, setView] = useState<ShowStep>(progressStep);
   const [progress, setProgress] = useState<{ p: number; step: string } | null>(null);
   const [intent, setIntent] = useState('');
   const [history, setHistory] = useState(loadHistory);
@@ -102,16 +86,10 @@ export function MusicPage() {
   const [selected, setSelected] = useState(0);
   const [editing, setEditing] = useState(-1); // index of the section open in the editor
   const [comparingAB, setComparingAB] = useState(false);
-  const t = useT();
   const file = useRef<HTMLInputElement>(null);
-  const { playing, pos } = usePlayback();
-  const track = tracks.find((t) => t.id === trackId) ?? tracks[0] ?? null;
-  const step = currentShowStep(track, playing?.trackId ?? null);
-  // Panel of each step; the current one is highlighted, nothing is hidden.
-  const STEP_PANEL: Record<ShowStep, string> = { track: 'track', intent: 'intent', show: 'sections', play: 'track' };
-  const stepClass = (panel: string) => `music-step-${panel} ${STEP_PANEL[step] === panel ? 'step-current' : ''}`;
-  const pickStep = (s: ShowStep) => (s === 'track' && !track ? file.current?.click() : document.querySelector(`.music-step-${STEP_PANEL[s]}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
-  const nowIdx = track && playing?.trackId === track.id ? track.analysis.sections.findIndex((s) => pos >= s.start && pos < s.end) : -1;
+  const replaceFile = useRef<HTMLInputElement>(null);
+  const isPlaying = !!track && playingId === track.id;
+  const nowIdx = isPlaying ? track.analysis.sections.findIndex((s) => pos >= s.start && pos < s.end) : -1;
   const [aiSuggestions, setAiSuggestions] = useState<{ trackId: string; items: string[]; provider: 'local' | 'openrouter' } | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   // With OpenRouter enabled, only the AI suggestions are shown; the local ones appear only without it.
@@ -126,15 +104,30 @@ export function MusicPage() {
   const hash = track?.hash;
   useEffect(() => { if (hash) musicPlayer.restore(hash).catch(() => undefined); }, [hash]);
 
-  const importFile = async (f: File) => {
+  const select = (id: string) => {
+    setTrackId(id);
+    setSelected(0);
+    setNotices([]);
+    setView(currentShowStep(tracks.find((x) => x.id === id) ?? null, playingId));
+  };
+  /** Imports `f`; with `replaceId`, the new track takes the place of that one (removed once the new one is added). */
+  const importFile = async (f: File, replaceId?: string) => {
     try {
-      const r = await musicPlayer.load(f, { bpmRange: project.audio.bpmRange, known: (h) => tracks.some((t) => t.hash === h), onProgress: (p, step) => setProgress({ p, step }) });
+      const r = await musicPlayer.load(f, { bpmRange: project.audio.bpmRange, known: (h) => tracks.some((tk) => tk.hash === h), onProgress: (p, step) => setProgress({ p, step }) });
       if (r.analysis) {
         const added = await act({ type: 'music.addTrack', name: r.name, hash: r.hash, analysis: r.analysis });
-        if (added) setTrackId(added.id);
+        if (added) {
+          if (replaceId && added.id !== replaceId) {
+            if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === replaceId) musicPlayer.stop();
+            await act({ type: 'music.removeTrack', id: replaceId });
+          }
+          setTrackId(added.id);
+          setSelected(0);
+          setView('track');
+        }
       } else {
-        const known = tracks.find((t) => t.hash === r.hash);
-        if (known) setTrackId(known.id);
+        const known = tracks.find((tk) => tk.hash === r.hash);
+        if (known) select(known.id);
         useStore.getState().toast({ kind: 'info', title: t('music.known'), detail: t('music.knownDetail') });
       }
     } catch (err) {
@@ -142,6 +135,11 @@ export function MusicPage() {
     } finally {
       setProgress(null);
     }
+  };
+  const remove = () => {
+    if (!track) return;
+    if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop();
+    void act({ type: 'music.removeTrack', id: track.id });
   };
   const generate = async (nextVariant: boolean) => {
     if (!track || !(await confirmOverwrite(track.id))) return;
@@ -152,14 +150,17 @@ export function MusicPage() {
     setGenerating(false);
     setBusy(false);
     if (r && intent.trim()) setHistory(remember(intent.trim()));
-    if (r) setNotices(r.notices);
+    if (r) {
+      setNotices(r.notices);
+      setView('show');
+    }
   };
-  const requestSuggestions = async (trackId: string, text: string) => {
+  const requestSuggestions = async (id: string, text: string) => {
     setSuggesting(true);
-    const r = await act({ type: 'music.suggestIntents', trackId, intent: text });
+    const r = await act({ type: 'music.suggestIntents', trackId: id, intent: text });
     setSuggesting(false);
     if (r) {
-      setAiSuggestions({ trackId, items: r.provider === 'openrouter' ? r.suggestions : [], provider: r.provider });
+      setAiSuggestions({ trackId: id, items: r.provider === 'openrouter' ? r.suggestions : [], provider: r.provider });
       setNotices(r.notices);
     }
   };
@@ -195,250 +196,50 @@ export function MusicPage() {
       useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
   };
+  const openTimeline = () => useStore.getState().setPage('timeline');
+  const pick = (s: ShowStep) => (track ? setView(s) : s === 'track' && file.current?.click());
+  const shown: ShowStep = track ? view : 'track';
+  const studio = track && (
+    <SongStudioTimeline track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} onOpenEditor={setEditing} pos={isPlaying ? pos : null} playing={isPlaying} />
+  );
 
   return (
     <div className="page">
-      <PageHead title={t('music.page.title')} subtitle={t('music.page.subtitle')}>
-        <input ref={file} type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" style={{ display: 'none' }} data-testid="music-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
-        <button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()} data-testid="music-import"><Upload size={14} />{t('music.import')}</button>
-      </PageHead>
-      <ShowStepper current={step} onPick={pickStep} />
+      <PageHead title={t('music.page.title')} subtitle={t('music.page.subtitle')} />
+      <input ref={file} type="file" accept={AUDIO_ACCEPT} style={{ display: 'none' }} data-testid="music-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
+      <input ref={replaceFile} type="file" accept={AUDIO_ACCEPT} style={{ display: 'none' }} data-testid="music-replace-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && track) void importFile(f, track.id); }} />
       {generating && <GeneratingModal />}
-      {progress && (
-        <Panel title={`${progress.step}…`}>
-          <div className="meter" data-testid="music-progress"><div style={{ width: `${Math.round(progress.p * 100)}%` }} /></div>
-        </Panel>
-      )}
-      {!track ? (
-        <Empty icon={<Music2 size={32} />} title={t('music.empty')}>{t('music.emptyHint')}</Empty>
-      ) : (
-        <div className="col gap-lg">
-          {tracks.length > 1 && (
-            <div className="chips" style={{ marginBottom: -4 }}>{tracks.map((tk) => <button key={tk.id} className={`chip ${tk.id === track.id ? 'on' : ''}`} onClick={() => { setTrackId(tk.id); setSelected(0); setNotices([]); }}>{tk.name}</button>)}</div>
+      <div className="music-layout">
+        <TrackLibrary tracks={tracks} selectedId={track?.id ?? null} playingId={playingId} importing={!!progress} onSelect={select} onImport={() => file.current?.click()} />
+        <div className="music-main col gap-lg">
+          <ShowStepper current={shown} progress={progressStep} onPick={pick} />
+          {progress && (
+            <Panel title={`${progress.step}…`}>
+              <div className="meter" data-testid="music-progress"><div style={{ width: `${Math.round(progress.p * 100)}%` }} /></div>
+            </Panel>
           )}
-
-          {/* 2. Lecteur et timeline */}
-          <Panel className={stepClass('track')} title={track.name} actions={<span className="badge">{track.analysis.sections.length} {t('music.sections').toLowerCase()}</span>}>
-            {/* Informations sous forme de petits indicateurs */}
-            <div className="music-indicators" data-testid="music-summary">
-              <div className="music-indicator-pill">
-                <Activity size={13} style={{ color: '#22d3ee' }} />
-                <span className="small muted">{t('music.tempo')} </span>
-                <b className="mono">{track.analysis.bpm.toFixed(1)}</b>
-                <span>BPM</span>
-                {!track.analysis.tempoStable && <span className="badge warn sm">{t('music.variable')}</span>}
-              </div>
-              <div className="music-indicator-pill">
-                <Music2 size={13} style={{ color: '#a78bfa' }} />
-                <span className="small muted">{t('music.key')} </span>
-                <b>{KEY_NAMES[track.analysis.key.tonic]} {t(track.analysis.key.mode === 'major' ? 'music.major' : 'music.minor')}</b>
-                <span className="small dim">({Math.round(track.analysis.key.confidence * 100)} %)</span>
-              </div>
-              <div className="music-indicator-pill">
-                <Clock size={13} style={{ color: '#38bdf8' }} />
-                <span className="small muted">{t('music.duration')} </span>
-                <b className="mono">
-                  {playing?.trackId === track.id
-                    ? `${fmt(pos)} / ${fmt(track.analysis.duration)}`
-                    : musicPlayer.paused?.trackId === track.id
-                    ? `${fmt(musicPlayer.paused.at)} / ${fmt(track.analysis.duration)}`
-                    : fmt(track.analysis.duration)}
-                </b>
-              </div>
-              <div className="music-indicator-pill">
-                <Layers size={13} style={{ color: '#f472b6' }} />
-                <span className="small muted">{t('music.sections')} </span>
-                <b>{track.analysis.sections.length}</b>
-              </div>
-              <div className="music-indicator-pill dim small" style={{ marginLeft: 'auto' }}>
-                <Sparkles size={12} style={{ color: '#fde047' }} />
-                <span>{t('music.eventsSummary', { impacts: track.analysis.events.filter((e) => e.kind === 'impact').length, risers: track.analysis.events.filter((e) => e.kind === 'riser').length, vocal: Math.round(track.analysis.events.filter((e) => e.kind === 'vocal').reduce((d, e) => d + e.duration, 0)) })}</span>
-              </div>
-            </div>
-
-            {/* Commandes de lecture regroupées */}
-            <div className="music-player-bar">
-              <div className="music-player-controls">
-                {musicPlayer.hasAudio(track.hash) ? (
-                  playing?.trackId === track.id ? (
-                    <>
-                      <button className="btn" onClick={() => musicPlayer.pause()} data-testid="music-pause"><Pause size={13} />{t('music.pause')}</button>
-                      <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(pos) })}</button>
-                    </>
-                  ) : musicPlayer.paused?.trackId === track.id ? (
-                    <>
-                      <button className="btn accent" onClick={() => play(track, musicPlayer.paused!.at)} data-testid="music-resume"><Play size={13} />{t('music.resume')}</button>
-                      <button className="btn" onClick={() => musicPlayer.stop()} data-testid="music-stop"><Square size={13} />{t('music.stop', { t: fmt(musicPlayer.paused.at) })}</button>
-                    </>
-                  ) : <button className="btn accent" onClick={() => play(track)} data-testid="music-play"><Play size={13} />{t('music.play')}</button>
-                ) : <span className="small dim">{t('music.noAudio')}</span>}
-              </div>
-              <button className="btn ghost sm" onClick={() => { if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop(); void act({ type: 'music.removeTrack', id: track.id }); }}>{t('music.remove')}</button>
-            </div>
-
-            {/* Studio Song-to-Show multi-piste */}
-            <SongStudioTimeline
-              track={track}
-              selected={selected}
-              onSelect={(i) => { setSelected(i); setEditing(i); }}
-              onOpenEditor={setEditing}
-              pos={playing?.trackId === track.id ? pos : null}
-              playing={playing?.trackId === track.id}
-            />
-
-            {(playing?.trackId ?? musicPlayer.paused?.trackId) === track.id && (
-              <div className="music-seek-row">
-                <span className="small mono dim" style={{ minWidth: 32 }}>{fmt(playing ? pos : musicPlayer.paused!.at)}</span>
-                <input type="range" className="mini-player-seek" min={0} max={track.analysis.duration} step={0.1} value={playing ? pos : musicPlayer.paused!.at} aria-label={t('music.seek')} data-testid="music-seek" onChange={(e) => play(track, Number(e.target.value))} />
-                <span className="small mono dim" style={{ minWidth: 32, textAlign: 'right' }}>{fmt(track.analysis.duration)}</span>
-              </div>
-            )}
-          </Panel>
-
-          {/* 3. Configuration IA */}
-          <Panel className={stepClass('intent')} title={t('music.intent')} actions={track.plan ? <span className={`badge ${track.plan.provider === 'openrouter' ? 'violet' : ''}`}>{track.plan.provider === 'openrouter' ? `OpenRouter · ${track.plan.model}` : t('music.localRules')} · {t('music.variantN', { n: track.plan.variant })}</span> : null}>
-            <div className="col gap-lg">
-              {/* Zone de description plus confortable */}
-              <textarea className="input music-intent-area" rows={3} value={intent} onChange={(e) => setIntent(e.target.value)} placeholder={t('music.intentPlaceholder')} data-testid="music-intent" />
-
-              {/* Préréglages regroupés et mieux espacés */}
-              <div className="music-presets-block">
-                {(aiOn || suggestions.length > 0) && (
-                  <div className="music-preset-row" data-testid="music-intent-suggestions">
-                    <span className="music-preset-label">{t('music.suggestions')}</span>
-                    <div className="chips">
-                      {suggestions.map((text) => <button key={text} className="chip" title={t('music.suggestions.hint')} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{text}</button>)}
-                      {aiOn && (
-                        <button className="chip" data-testid="music-intent-suggest-ai" disabled={suggesting || busy} title={t('music.suggestions.aiHint')} onClick={() => requestSuggestions(track.id, intent)}>
-                          {suggesting ? t('music.suggestions.aiBusy') : t('music.suggestions.ai')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div className="music-preset-row" data-testid="music-intent-presets">
-                  <span className="music-preset-label">Styles</span>
-                  <div className="chips" style={{ flex: 1 }}>
-                    {INTENT_PRESETS.map(([key, text]) => <button key={key} className="chip" title={text} onClick={() => setIntent((v) => (v.trim() ? `${v.trim()}, ${text}` : text).slice(0, 500))}>{t(`music.preset.${key}`)}</button>)}
-                  </div>
-                  {history.length > 0 && (
-                    <select className="select" value="" onChange={(e) => e.target.value && setIntent(e.target.value)} aria-label={t('music.recentIntents')} data-testid="music-intent-history" style={{ maxWidth: 220 }}>
-                      <option value="">{t('music.recentIntents')}</option>
-                      {history.map((h) => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                  )}
-                </div>
-              </div>
-
-              {/* Réglages d'ambiance présentés en grille */}
-              <div className="mood-grid" data-testid="music-mood">
-                {MOOD_KEYS.map((k) => (
-                  <div key={k} className="mood-card">
-                    <div className="mood-card-head">
-                      <span className="mood-card-title">{t(`music.mood.${k}`)}</span>
-                      <b className={`badge ${mood[k] ? 'violet' : ''}`}>{mood[k] ? t(`music.mood.${k}.${mood[k] < 0 ? 'low' : 'high'}`) : t('music.mood.auto')}</b>
-                    </div>
-                    <div className="mood-slider-row">
-                      <span className="dim">{t(`music.mood.${k}.low`)}</span>
-                      <input type="range" min={-1} max={1} step={1} value={mood[k]} onChange={(e) => setMood({ ...mood, [k]: Number(e.target.value) })} data-testid={`mood-${k}`} />
-                      <span className="dim">{t(`music.mood.${k}.high`)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Actions principales regroupées en bas du panneau */}
-              <div className="music-ai-footer">
-                <div className="row wrap" style={{ gap: 8 }}>
-                  <button className="btn primary" disabled={busy} onClick={() => void generate(false)} data-testid="music-generate"><Wand2 size={14} />{t(track.plan ? 'music.regenerateShow' : 'music.generateShow')}</button>
-                  <button className="btn" disabled={busy || !track.plan} onClick={() => void generate(true)} title={t('music.variantHint')}><Shuffle size={14} />{t('music.variant')}</button>
-                  <button className="btn" disabled={busy || !track.previousPlan} onClick={() => void restore()} title={t('music.restoreHint')} data-testid="music-restore"><Undo2 size={14} />{t('music.restore')}</button>
-                  {track.plan && track.previousPlan && (
-                    <button className="btn" onClick={() => setComparingAB(true)} title={t('music.studio.compareAB')} data-testid="music-compare-ab">
-                      <ArrowLeftRight size={14} />{t('music.studio.compareAB')}
-                    </button>
-                  )}
-                  {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>{t('music.openTimeline')}</button>}
-                  <label className="row small dim" style={{ gap: 6, marginLeft: 'auto' }} title={t('music.phraseBars.hint')}>
-                    {t('music.phraseBars')}
-                    <select className="select" value={phraseBars} onChange={(e) => void savePhraseBars(Number(e.target.value))} data-testid="music-phrase-bars">
-                      {/* The current value may come from Paramètres (2–32), outside the usual choices. */}
-                      {[...new Set([4, 8, 16, phraseBars])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  </label>
-                </div>
-                {track.plan && <div className="row small" style={{ gap: 6 }} data-testid="music-plan-summary"><Sparkles size={13} style={{ color: '#22d3ee' }} /><span>{track.plan.summary}</span></div>}
-                {track.plan && <ArtisticQualityBadge plan={track.plan} analysis={track.analysis} />}
-              </div>
-              {notices.map((n, i) => <div key={i} className="small" style={{ color: '#fcd34d' }}>{n}</div>)}
-            </div>
-          </Panel>
-
-          {/* 4. Tableau des sections musicales */}
-          <Panel className={stepClass('sections')} title={t('music.sections')} flush>
-            <div className="music-table-wrap">
-              <table className="table small music-table" data-testid="music-sections">
-                <thead>
-                  <tr>
-                    <th className="col-idx">#</th>
-                    <th className="col-sec">{t('music.col.section')}</th>
-                    <th className="col-start">{t('music.col.start')}</th>
-                    <th className="col-energy">{t('music.col.energy')}</th>
-                    <th className="col-plan">{t('music.col.plan')}</th>
-                    <th className="col-actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {track.analysis.sections.map((s, i) => {
-                    const p = track.plan?.sections[i];
-                    return (
-                      <tr key={i} className={`clickable ${i === selected ? 'sel' : ''} ${i === nowIdx ? 'active' : ''}`} onClick={() => setSelected(i)} onDoubleClick={() => setEditing(i)}>
-                        <td className="mono col-idx">{i + 1}</td>
-                        <td className="col-sec">
-                          <div className="sec-label-cell">
-                            <span className="sec-color-bar" style={{ background: LABEL_COLOR[s.label] }} />
-                            <span>{SECTION_NAMES[s.label]}</span>{p?.locked && <Lock size={11} className="dim" aria-label={t('music.strip.locked')} />}
-                          </div>
-                        </td>
-                        <td className="mono col-start">{fmt(s.start)}</td>
-                        <td className="col-energy">
-                          <div className="row" style={{ gap: 6 }}>
-                            <div className="meter grow"><div style={{ width: `${s.energy * 100}%` }} /></div>
-                            <span className="mono small dim" style={{ minWidth: 26, textAlign: 'right' }}>{Math.round(s.energy * 100)}%</span>
-                          </div>
-                        </td>
-                        <td className="col-plan">
-                          {p ? (
-                            <div className="col" style={{ gap: 4 }}>
-                              <div className="music-plan-chips">
-                                <span className="music-plan-energy-dots mono" title={t('music.planEnergy')}>{'●'.repeat(p.energy)}{'○'.repeat(5 - p.energy)}</span>
-                                <div className="row" style={{ gap: 3 }}>
-                                  {p.palette.map((c) => <span key={c} className="music-palette-swatch" style={{ background: c }} title={c} />)}
-                                </div>
-                                <span className="music-tag effect">{EFFECT_NAMES[p.effect]}{p.effect !== 'none' ? ` ${p.effectBeats} t` : ''}</span>
-                                <span className="music-tag">{MOVE_NAMES[p.movement]}{BEAM_NAMES[p.beam] ? ` · ${BEAM_NAMES[p.beam]}` : ''}{p.focus ? (p.focus === 'audience' ? t('music.towardAudience') : t('music.towardMarker', { name: markers.find((m) => m.id === p.focus)?.name ?? t('music.aMarker') })) : ''}</span>
-                                {p.groups.length > 0 && <span className="music-tag dim">{p.groups.map((g) => groups.find((x) => x.id === g)?.name).filter(Boolean).join(', ')}</span>}
-                                {p.extras.length > 0 && <span className="music-tag dim">{p.extras.map((x) => EXTRA_NAMES[x]).join(', ')}</span>}
-                                {p.note && <span className="badge">{p.note}</span>}
-                              </div>
-                              {p.why && <div className="small dim" data-testid="music-section-why">{t('music.edit.why', { why: p.why })}</div>}
-                            </div>
-                          ) : <span className="dim">—</span>}
-                        </td>
-                        <td className="col-actions">
-                          <div className="music-actions-cell">
-                            <button className="btn ghost sm icon" title={t('music.edit.open')} onClick={(e) => { e.stopPropagation(); setEditing(i); }} data-testid="section-edit"><Pencil size={13} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
+          {!track ? (
+            <Empty icon={<Music2 size={32} />} title={t('music.empty')} action={<button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()}><Upload size={14} />{t('music.import')}</button>}>{t('music.emptyHint')}</Empty>
+          ) : (
+            <>
+              <Transport track={track} playing={isPlaying} pos={pos} onPlay={(from) => play(track, from)} />
+              {notices.map((n, i) => <div key={i} className="small music-notice">{n}</div>)}
+              {shown === 'track' && <TrackStep track={track} studio={studio} replacing={!!progress} onReplace={() => replaceFile.current?.click()} onRemove={remove} onNext={() => setView('intent')} />}
+              {shown === 'intent' && (
+                <IntentStep track={track} intent={intent} onIntent={setIntent} mood={mood} onMood={setMood} history={history} suggestions={suggestions} aiOn={aiOn}
+                  suggesting={suggesting} onSuggestAi={() => void requestSuggestions(track.id, intent)} busy={busy} phraseBars={phraseBars} onPhraseBars={(n) => void savePhraseBars(n)}
+                  onGenerate={() => void generate(false)} onBack={() => setView('track')} />
+              )}
+              {shown === 'show' && (
+                <ShowScreen track={track} studio={studio} groups={groups} markers={markers} selected={selected} nowIdx={nowIdx} busy={busy}
+                  onSelect={setSelected} onEdit={setEditing} onVariant={() => void generate(true)} onRestore={() => void restore()} onCompare={() => setComparingAB(true)}
+                  onOpenTimeline={openTimeline} onBack={() => setView('intent')} onNext={() => { setView('play'); if (!isPlaying) play(track); }} />
+              )}
+              {shown === 'play' && <PlayStep track={track} pos={isPlaying ? pos : null} studio={studio} onPlay={(from) => play(track, from)} onOpenTimeline={openTimeline} onBack={() => setView('show')} />}
+            </>
+          )}
         </div>
-      )}
+      </div>
       {track && track.analysis.sections[editing] && (
         <SectionEditor key={`${track.id}:${editing}`} track={track} index={editing} onClose={() => setEditing(-1)} onNotices={setNotices} />
       )}
