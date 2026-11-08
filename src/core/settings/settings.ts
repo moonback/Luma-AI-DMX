@@ -51,6 +51,26 @@ export function shortcutConflicts(bindings: Record<string, string>): string[][] 
 /** Custom instruction text; a blank text means « use the built-in default » (null). */
 const customText = z.preprocess((v) => (typeof v === 'string' && !v.trim() ? null : v), z.string().max(20_000).nullable());
 
+/** Visibility preferences affect presentation only; they never disable DMX, playback or background services. */
+export const componentVisibilitySchema = z.object({
+  pages: z.object({
+    dashboard: z.boolean().default(true), fixtures: z.boolean().default(true), console: z.boolean().default(true),
+    pantilt: z.boolean().default(true), programmer: z.boolean().default(true), cues: z.boolean().default(true),
+    effects: z.boolean().default(true), quick: z.boolean().default(true), timeline: z.boolean().default(true),
+    ai: z.boolean().default(true), visualizer: z.boolean().default(true), audio: z.boolean().default(true),
+    music: z.boolean().default(true), output: z.boolean().default(true),
+  }).default({}),
+  stage2d: z.boolean().default(true),
+  stage3d: z.boolean().default(true),
+  stageBuildPanel: z.boolean().default(true),
+  stageInspectorPanel: z.boolean().default(true),
+  statusBar: z.boolean().default(true),
+  diagnosticsButton: z.boolean().default(true),
+  miniPlayer: z.boolean().default(true),
+});
+export type ComponentVisibility = z.infer<typeof componentVisibilitySchema>;
+export const DEFAULT_COMPONENT_VISIBILITY: ComponentVisibility = componentVisibilitySchema.parse({});
+
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
   general: z
@@ -78,8 +98,14 @@ export const settingsSchema = z.object({
     .object({ completed: z.boolean().default(false), checklistHidden: z.boolean().default(false) })
     .default({ completed: false, checklistHidden: false }),
   appearance: z
-    .object({ reducedMotion: z.boolean().default(false), uiScale: z.number().min(0.8).max(1.4).default(1), language: z.enum(['fr', 'en']).default('fr') })
-    .default({ reducedMotion: false, uiScale: 1, language: 'fr' }),
+    .object({
+      reducedMotion: z.boolean().default(false),
+      uiScale: z.number().min(0.8).max(1.4).default(1),
+      language: z.enum(['fr', 'en']).default('fr'),
+      /** Per-user workspace visibility, independent from the currently opened show. */
+      components: componentVisibilitySchema.default({}),
+    })
+    .default({ reducedMotion: false, uiScale: 1, language: 'fr', components: {} }),
   engine: z
     .object({
       rateHz: z.number().int().min(10).max(44).default(40),

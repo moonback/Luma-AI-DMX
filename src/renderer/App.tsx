@@ -66,13 +66,17 @@ function Sidebar() {
   const keys = resolveShortcuts(useStore((s) => s.shortcuts));
   // A boolean, not the whole runtime: the sidebar must not re-render 10 times per second.
   const aiActive = useStore((s) => s.runtime?.engine.aiActive ?? false);
+  const visibility = useStore((s) => s.componentVisibility);
   return (
     <nav className="sidebar" aria-label={tr('nav.aria')}>
-      {NAV_GROUPS.map((group, gi) => (
+      {NAV_GROUPS.map((group, gi) => {
+        const visibleIds = group.ids.filter((id) => id === 'settings' || visibility.pages[id as keyof typeof visibility.pages]);
+        if (visibleIds.length === 0) return null;
+        return (
         <div key={group.key} className="nav-group">
           {!collapsed && <span className="nav-group-label">{tr(group.key)}</span>}
           {collapsed && gi > 0 && <div className="nav-group-divider" />}
-          {group.ids.map((id: string) => {
+          {visibleIds.map((id: string) => {
             const p = PAGES.find((pg) => pg.id === id)!;
             const Icon = ICONS[p.id];
             const k = keys[`page:${p.id}` as ShortcutAction];
@@ -97,7 +101,8 @@ function Sidebar() {
             );
           })}
         </div>
-      ))}
+        );
+      })}
       <div className="grow" />
       <div className="sidebar-sep" />
       <button className="nav-item nav-collapse-btn" onClick={toggle} title={collapsed ? tr('nav.expand') : tr('nav.collapse')}>
@@ -113,7 +118,9 @@ function StatusBar() {
   const rt = useStore((s) => s.runtime);
   const project = useStore((s) => s.project);
   const toggleDiag = useStore((s) => s.toggleDiag);
+  const visibility = useStore((s) => s.componentVisibility);
   const m = rt?.engine.metrics;
+  if (!visibility.statusBar) return null;
   return (
     <footer className="statusbar">
       <span className="item"><Activity size={12} />{m ? tr('status.engine', { measured: m.measuredHz, rate: m.rateHz, tick: m.avgTickMs.toFixed(2), load: (m.load * 100).toFixed(1) }) : tr('status.engineLoading')}</span>
@@ -125,7 +132,7 @@ function StatusBar() {
       {rt?.audio.active && <span className="item"><AudioLines size={12} />{tr('status.audio')} {rt.audio.source === 'simulated' ? tr('status.audioSimulated') : ''}</span>}
       <div className="grow" />
       <span className="item">Master {Math.round((rt?.engine.master ?? 1) * 100)} %</span>
-      <button className="btn ghost sm" onClick={toggleDiag} title={tr('status.diagnosticsTitle')}><Terminal size={12} />{tr('status.diagnostics')}</button>
+      {visibility.diagnosticsButton && <button className="btn ghost sm" onClick={toggleDiag} title={tr('status.diagnosticsTitle')}><Terminal size={12} />{tr('status.diagnostics')}</button>}
     </footer>
   );
 }
@@ -183,9 +190,16 @@ export function runShortcut(action: ShortcutAction): boolean {
   const s = useStore.getState();
   const list = s.cueListId;
   // Former Stage 3D shortcut: the same page, opened in 3D.
-  if (action === 'page:stage3d') { s.setStageMode('3d'); s.setPage('visualizer'); return true; }
+  if (action === 'page:stage3d') {
+    if (!s.componentVisibility.pages.visualizer || !s.componentVisibility.stage3d) return false;
+    s.setStageMode('3d');
+    s.setPage('visualizer');
+    return true;
+  }
   if (action.startsWith('page:')) {
-    s.setPage(action.slice(5) as PageId);
+    const target = action.slice(5) as PageId;
+    if (target !== 'settings' && !s.componentVisibility.pages[target as keyof typeof s.componentVisibility.pages]) return false;
+    s.setPage(target);
     return true;
   }
   switch (action) {
@@ -242,6 +256,7 @@ export function App() {
   const tr = useT();
   const page = useStore((s) => s.page);
   const collapsed = useStore((s) => s.collapsed);
+  const visibility = useStore((s) => s.componentVisibility);
   const ready = useStore((s) => !!s.project);
   useShortcuts();
   // Navigation demandée pendant le verrouillage « console simplifiée » : on ne quitte qu'après confirmation.
@@ -261,7 +276,7 @@ export function App() {
       <main className="main">{ready ? <View key={page} /> : <div className="empty">{tr('app.connecting')}</div>}</main>
       <StatusBar />
       <DiagnosticsDrawer />
-      {ready && <MiniPlayer />}
+      {ready && visibility.miniPlayer && <MiniPlayer />}
       <Toasts />
       <OnboardingHost />
       <WhatsNewHost />
@@ -292,7 +307,7 @@ export async function bootstrap(): Promise<void> {
   // First run: the welcome screen replaces the release notes; afterwards they show once per new version.
   const firstRun = !settings.onboarding.completed;
   if (firstRun) markWhatsNewSeen();
-  useStore.setState({ shortcuts: settings.shortcuts, language: settings.appearance.language, installPlanButton: settings.general.installPlanButton, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
+  useStore.setState({ shortcuts: settings.shortcuts, componentVisibility: settings.appearance.components, language: settings.appearance.language, installPlanButton: settings.general.installPlanButton, onboarding: settings.onboarding, help: firstRun ? 'welcome' : whatsNewPending() ? 'whatsnew' : null, startScreen: settings.onboarding.completed ? settings.general.recentProjects : null });
   // bootstrap also runs in the detached window: only the main window listens to MIDI/timecode (else every GO fires twice)
   // and opens the detached window, after the first project opened.
   const main = location.hash !== DETACHED_STAGE_HASH && location.hash !== DETACHED_CONSOLE_HASH;

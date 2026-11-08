@@ -3,7 +3,7 @@ import { FolderOpen, KeyRound, Trash2, X } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { Field, NumberInput, PageHead, Panel, Tabs } from '../components/ui';
-import { resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, type Settings } from '../../core/settings/settings';
+import { DEFAULT_COMPONENT_VISIBILITY, resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, type Settings } from '../../core/settings/settings';
 import { comboFromEvent } from '../shortcuts';
 import type { RecoveryEntry } from '../../core/project/store';
 import type { StorageReport } from '../../core/app/storage';
@@ -345,7 +345,19 @@ export function SettingsPage() {
   if (!s) return <div className="page">{tr('common.loading')}</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
-  const save = async () => { if (await act({ type: 'settings.update', settings: s })) { setSaved(s); useStore.setState({ shortcuts: s.shortcuts, language: s.appearance.language, installPlanButton: s.general.installPlanButton }); void externalControl.configure(s.control); useStore.getState().toast({ kind: 'success', title: tr('settings.saved') }); } };
+  const save = async () => {
+    if (await act({ type: 'settings.update', settings: s })) {
+      setSaved(s);
+      useStore.setState({ shortcuts: s.shortcuts, componentVisibility: s.appearance.components, language: s.appearance.language, installPlanButton: s.general.installPlanButton });
+      const current = useStore.getState().page;
+      if (current !== 'settings' && !s.appearance.components.pages[current as keyof typeof s.appearance.components.pages]) {
+        const fallback = (Object.keys(s.appearance.components.pages) as Array<keyof typeof s.appearance.components.pages>).find((id) => s.appearance.components.pages[id]) ?? 'settings';
+        useStore.getState().setPage(fallback);
+      }
+      void externalControl.configure(s.control);
+      useStore.getState().toast({ kind: 'success', title: tr('settings.saved') });
+    }
+  };
   const tabs = TAB_IDS.map((id) => ({ id, label: tr(`settings.tab.${id}`) }));
   // Removing recent projects is saved at once, without committing the other pending edits.
   const forgetRecent = async (recentProjects: string[]) => {
@@ -394,6 +406,53 @@ export function SettingsPage() {
               </Field>
             </div>
           </Panel>
+        )}
+        {tab === 'appearance' && (
+          <>
+            <Panel title={tr('settings.components.navigationTitle')}>
+              <p className="small muted" style={{ marginTop: 0 }}>{tr('settings.components.navigationHint')}</p>
+              <div className="grid g2">
+                {([
+                  'dashboard', 'fixtures', 'console', 'pantilt', 'programmer', 'cues', 'effects',
+                  'quick', 'timeline', 'ai', 'visualizer', 'audio', 'music', 'output',
+                ] as const).map((id) => (
+                  <label className="check" key={id}>
+                    <input type="checkbox" checked={s.appearance.components.pages[id]} onChange={(e) => setS({
+                      ...s,
+                      appearance: { ...s.appearance, components: { ...s.appearance.components, pages: { ...s.appearance.components.pages, [id]: e.target.checked } } },
+                    })} />
+                    {tr(`nav.${id}`)}
+                  </label>
+                ))}
+                <div className="small dim">{tr('settings.components.settingsAlwaysVisible')}</div>
+              </div>
+            </Panel>
+            <Panel title={tr('settings.components.stageTitle')}>
+              <p className="small muted" style={{ marginTop: 0 }}>{tr('settings.components.stageHint')}</p>
+              <div className="grid g2">
+                {([
+                  ['stage2d', 'settings.components.stage2d'],
+                  ['stage3d', 'settings.components.stage3d'],
+                  ['stageBuildPanel', 'settings.components.stageBuildPanel'],
+                  ['stageInspectorPanel', 'settings.components.stageInspectorPanel'],
+                  ['statusBar', 'settings.components.statusBar'],
+                  ['diagnosticsButton', 'settings.components.diagnosticsButton'],
+                  ['miniPlayer', 'settings.components.miniPlayer'],
+                ] as const).map(([id, label]) => (
+                  <label className="check" key={id}>
+                    <input type="checkbox" checked={s.appearance.components[id]} onChange={(e) => setS({
+                      ...s,
+                      appearance: { ...s.appearance, components: { ...s.appearance.components, [id]: e.target.checked } },
+                    })} />
+                    {tr(label)}
+                  </label>
+                ))}
+              </div>
+              <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+                <button className="btn sm" onClick={() => setS({ ...s, appearance: { ...s.appearance, components: DEFAULT_COMPONENT_VISIBILITY } })}>{tr('settings.components.reset')}</button>
+              </div>
+            </Panel>
+          </>
         )}
         {tab === 'engine' && (
           <Panel title={tr('settings.engine.title')}>
