@@ -17,6 +17,21 @@ describe('catalogue partagé du cœur', () => {
     expect(translateCore('en', 'error.invalidCommand', { details: 'type is required' })).toBe('Invalid command: type is required');
   });
 
+  it('traduit les erreurs IA paramétrées', () => {
+    expect(translateCore('fr', 'ai.monthlyBudgetReached', { spent: '12.50', budget: '10.00' }))
+      .toBe('Budget IA mensuel atteint (12.50 $ sur 10.00 $) : modifiable dans Paramètres › IA');
+    expect(translateCore('en', 'ai.monthlyBudgetReached', { spent: '12.50', budget: '10.00' }))
+      .toBe('Monthly AI budget reached ($12.50 of $10.00); change it in Settings › AI');
+    expect(translateCore('en', 'ai.providerUnavailable', { reason: 'timeout' }))
+      .toBe('AI provider unavailable: timeout');
+  });
+
+  it('traduit les refus du service vocal et de la localisation', () => {
+    expect(translateCore('en', 'voice.geminiKeyMissing')).toBe('Gemini API key missing: enter it in Settings › AI');
+    expect(translateCore('en', 'locate.blackoutActive')).toBe('Disable blackout so the camera can see the fixtures');
+    expect(translateCore('fr', 'locate.noSequence')).toBe('Aucune séquence de localisation en cours');
+  });
+
   it('préserve le placeholder si un paramètre manque', () => {
     expect(translateCore('en', 'error.invalidCommand')).toBe('Invalid command: {details}');
   });
