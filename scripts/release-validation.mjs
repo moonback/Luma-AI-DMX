@@ -12,20 +12,17 @@ function getSectionBody(changelog, title) {
 export function validateReleaseMetadata({ version, changelog, existingTags = [] }) {
   const errors = [];
   if (typeof version !== 'string' || !SEMVER.test(version)) {
-    errors.push(`Version SemVer invalide : ${String(version)}.`);
+    errors.push('Version SemVer invalide : ' + String(version) + '.');
     return errors;
   }
-
-  if (existingTags.includes(version)) errors.push(`Le tag Git ${version} existe déjà.`);
-  if (changelog.split(/\\r?\\n/u).some((line) => line.startsWith(`## [${version}]`))) {
-    errors.push(`Le changelog contient déjà une section pour ${version}.`);
+  if (existingTags.includes(version)) errors.push('Le tag Git ' + version + ' existe déjà.');
+  if (changelog.split(/\\r?\\n/u).some((line) => line.startsWith('## [' + version + ']'))) {
+    errors.push('Le changelog contient déjà une section pour ' + version + '.');
   }
-
   const body = getSectionBody(changelog, 'Non publié');
   if (body === null) {
     errors.push('Section « [Non publié] » absente du CHANGELOG.md.');
-  } else if (!/^### (?:Ajouté|Modifié|Corrigé|Sécurité|Déprécié|Supprimé)\\s*$/mu.test(body)
-    || !/^[-*] .+/mu.test(body)) {
+  } else if (!/^### (?:Ajouté|Modifié|Corrigé|Sécurité|Déprécié|Supprimé)\\s*$/mu.test(body) || !/^[-*] .+/mu.test(body)) {
     errors.push('La section « [Non publié] » est vide ou ne contient aucune note catégorisée.');
   }
   return errors;
