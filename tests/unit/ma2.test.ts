@@ -99,6 +99,28 @@ describe('import grandMA2', () => {
     expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['red', 'green', 'blue', 'white', 'colorMacro', 'macroSpeed']);
   });
 
+  it('COLORMIXER nommés (ColorMixer_R/G/B) reconnus comme R/G/B sans avertissement', () => {
+    const xml = `<MA><FixtureType name="LED Bar 12x8W" mode="15 channel"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="LED">
+      <ChannelType coarse="1" attribute="DIM"/>
+      <ChannelType coarse="2" attribute="COLORMIXER"><ChannelFunction subattribute="ColorMixer_R"/></ChannelType>
+      <ChannelType coarse="3" attribute="COLORMIXER2"><ChannelFunction subattribute="ColorMixer_G"/></ChannelType>
+      <ChannelType coarse="4" attribute="COLORMIXER3"><ChannelFunction subattribute="ColorMixer_B"/></ChannelType>
+      </Module></Modules></FixtureType></MA>`;
+    const r = convertMa2Fixture(xml);
+    expect(r.warnings).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['dimmer', 'red', 'green', 'blue']);
+  });
+
+  it('COLORMIXER non nommés : repli sur l’ordre DMX (1→R, 2→G, 3→B)', () => {
+    const xml = `<MA><FixtureType name="LED Bar" mode="RGB"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="LED">
+      <ChannelType coarse="1" attribute="DIM"/><ChannelType coarse="2" attribute="COLORMIXER"/>
+      <ChannelType coarse="3" attribute="COLORMIXER2"/><ChannelType coarse="4" attribute="COLORMIXER3"/>
+      </Module></Modules></FixtureType></MA>`;
+    const r = convertMa2Fixture(xml);
+    expect(r.warnings).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['dimmer', 'red', 'green', 'blue']);
+  });
+
   it('class="None" + pan/tilt normalisés 0→1 (convertisseur GDTF) → lyre avec amplitudes par défaut', () => {
     const xml = `<MA><FixtureType name="MHL1912 Moving Head Wash" mode="M"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="None" beamtype="None">
       <ChannelType coarse="1" attribute="PAN"><ChannelFunction physfrom="0" physto="1"/></ChannelType>

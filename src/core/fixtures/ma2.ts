@@ -56,19 +56,28 @@ const NO_EQUIVALENT = /^(GOBO[3-9]|PRISMA[2-9]|EFFECTWHEEL[2-9])/;
 const CONTINUOUS = new Set(['dimmer', 'pan', 'tilt', 'zoom', 'focus', 'iris', 'panTiltSpeed', 'red', 'green', 'blue', 'white', 'amber', 'uv', 'warmWhite', 'coldWhite', 'lime', 'indigo', 'cyan', 'magenta', 'yellow', 'cto', 'colorTemperature']);
 const COLOR_BY_NAME: [RegExp, string][] = [
   [/warm/i, 'warmWhite'], [/cold|cool/i, 'coldWhite'], [/^w$|white/i, 'white'], [/^a$|amber/i, 'amber'], [/uv/i, 'uv'],
-  [/lime/i, 'lime'], [/indigo/i, 'indigo'], [/^r$|^red$/i, 'red'], [/^g$|^green$/i, 'green'], [/^b$|^blue$/i, 'blue'],
+  [/lime/i, 'lime'], [/indigo/i, 'indigo'], [/cyan/i, 'cyan'], [/magenta/i, 'magenta'], [/yellow/i, 'yellow'],
+  [/^r$|^red$/i, 'red'], [/^g$|^green$/i, 'green'], [/^b$|^blue$/i, 'blue'],
 ];
-/** COLORRGBn slots seen in MA2 exports when the user names are missing. */
-const COLOR_BY_INDEX: Record<string, string> = { COLORRGB1: 'red', COLORRGB2: 'green', COLORRGB3: 'blue', COLORRGB5: 'white', COLORRGB6: 'warmWhite' };
+/** COLORRGBn / COLORMIXERn slots seen in MA2 exports when the user names are missing (1=R, 2=G, 3=B, then W…). */
+const COLOR_BY_INDEX: Record<string, string> = { '1': 'red', '2': 'green', '3': 'blue', '4': 'white', '5': 'white', '6': 'warmWhite', '7': 'amber', '8': 'uv' };
+
+/** Resolve a colour-mix channel (COLORRGB*, COLORMIXER*) to a Luma colour by its subattribute / user name, else by index. */
+function colorMixAttribute(ct: Node, a: string, prefix: RegExp): string | null {
+  const fn = arr(ct, 'ChannelFunction')[0] ?? {};
+  // GDTF converters name the slot in the attribute itself (ColorRGB_Red); MA2 exports use subattribute (ColorMixer_R).
+  const named = str(fn, 'attribute_user_name') ?? str(fn, 'subattribute_user_name') ?? str(fn, 'subattribute') ?? a.replace(prefix, '');
+  const byName = COLOR_BY_NAME.find(([re]) => re.test(named))?.[1];
+  if (byName) return byName;
+  // Numbered channels with no colour hint: fall back to the DMX order (COLORMIXER→R, COLORMIXER2→G, COLORMIXER3→B…).
+  const index = a.replace(prefix, '') || '1';
+  return COLOR_BY_INDEX[index] ?? null;
+}
 
 function lumaAttribute(ct: Node): string | null {
   const a = (str(ct, 'attribute') ?? '').toUpperCase();
-  if (a.startsWith('COLORRGB')) {
-    const fn = arr(ct, 'ChannelFunction')[0] ?? {};
-    // GDTF converters name the slot in the attribute itself (ColorRGB_Red).
-    const name = str(fn, 'attribute_user_name') ?? str(fn, 'subattribute_user_name') ?? a.replace(/^COLORRGB_?/, '');
-    return COLOR_BY_NAME.find(([re]) => re.test(name))?.[1] ?? COLOR_BY_INDEX[a] ?? null;
-  }
+  if (a.startsWith('COLORRGB')) return colorMixAttribute(ct, a, /^COLORRGB_?/);
+  if (a.startsWith('COLORMIXER')) return colorMixAttribute(ct, a, /^COLORMIXER_?/);
   if (MA2_ATTR[a]) return MA2_ATTR[a]!;
   if (NO_EQUIVALENT.test(a)) return null;
   // Converters (GDTF → MA2) use free attribute names but standard subattributes (GOBO1_ROT…).
