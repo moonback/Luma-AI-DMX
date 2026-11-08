@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_COMPONENT_VISIBILITY, settingsSchema } from '../../src/core/settings/settings';
+import { DEFAULT_COMPONENT_VISIBILITY, settingsSchema, workspaceProfilesFileSchema } from '../../src/core/settings/settings';
 
 describe('workspace component visibility settings', () => {
   it('keeps every component visible by default', () => {
@@ -42,6 +42,40 @@ describe('workspace component visibility settings', () => {
     expect(settings.appearance.components.statusBar).toBe(false);
     expect(settings.appearance.components.diagnosticsButton).toBe(false);
     expect(settings.appearance.components.miniPlayer).toBe(false);
+  });
+
+  it('starts with no saved workspace profiles', () => {
+    const settings = settingsSchema.parse({});
+    expect(settings.appearance.workspaceProfiles).toEqual([]);
+    expect(settings.appearance.activeWorkspaceProfileId).toBeNull();
+  });
+
+  it('stores named profiles with all three visibility groups', () => {
+    const profile = {
+      id: 'profile-1',
+      name: 'Compact live',
+      components: {
+        pages: { dashboard: true, fixtures: false },
+        stage2d: false,
+        dashboard: { hardware: false, alerts: false },
+      },
+    };
+    const settings = settingsSchema.parse({ appearance: { workspaceProfiles: [profile], activeWorkspaceProfileId: 'profile-1' } });
+    expect(settings.appearance.workspaceProfiles[0].name).toBe('Compact live');
+    expect(settings.appearance.workspaceProfiles[0].components.pages.fixtures).toBe(false);
+    expect(settings.appearance.workspaceProfiles[0].components.stage2d).toBe(false);
+    expect(settings.appearance.workspaceProfiles[0].components.dashboard.hardware).toBe(false);
+    expect(settings.appearance.activeWorkspaceProfileId).toBe('profile-1');
+  });
+
+  it('validates portable workspace profile export files', () => {
+    const file = workspaceProfilesFileSchema.parse({
+      format: 'luma-workspace-presets',
+      version: 1,
+      profiles: [{ id: 'profile-1', name: 'Stage only', components: {} }],
+    });
+    expect(file.profiles).toHaveLength(1);
+    expect(workspaceProfilesFileSchema.safeParse({ format: 'other', version: 1, profiles: [] }).success).toBe(false);
   });
 
   it('persists dashboard section visibility independently', () => {
