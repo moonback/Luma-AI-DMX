@@ -19,7 +19,10 @@ export type IpcReply = { ok: true; data: unknown } | { ok: false; error: string;
 export async function handleCommand(service: Pick<AppService, 'execute' | 'logger'>, raw: unknown, senderUrl: string, devUrl: string | undefined): Promise<IpcReply> {
   if (!isTrustedSender(senderUrl, devUrl)) return { ok: false, error: 'Origine non autorisée', message: { key: 'error.unauthorizedOrigin' } };
   const parsed = commandSchema.safeParse(raw);
-  if (!parsed.success) {\n    const details = parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ');\n    return { ok: false, error: `Commande invalide : ${details}`, message: { key: 'error.invalidCommand', vars: { details } } };\n  }
+  if (!parsed.success) {
+    const details = parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ');
+    return { ok: false, error: `Commande invalide : ${details}`, message: { key: 'error.invalidCommand', vars: { details } } };
+  }
   try {
     return { ok: true, data: await service.execute(parsed.data) };
   } catch (err) {
