@@ -89,3 +89,15 @@ export function summarizeReadiness(checks: readonly ReadinessCheck[]): Readiness
   if (checks.some((check) => check.level === 'unknown')) return 'unknown';
   return 'ready';
 }
+
+export function classifyEngineHealth(metrics: {
+  ticks: number;
+  load: number;
+  overruns: number;
+  errors: number;
+} | null): ReadinessLevel {
+  if (!metrics || metrics.ticks <= 0) return 'unknown';
+  if (metrics.errors > 0) return 'blocked';
+  if (metrics.load >= 0.85 || metrics.overruns > 0) return 'warning';
+  return 'ready';
+}
