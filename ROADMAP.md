@@ -3146,7 +3146,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0`, alors que le changelog versionné s’arrêtait à `0.2.0` et que plusieurs notes livrées restaient sous « Non publié ».
 
-**Historique vérifié (08/11/2026).** Les tags Git `1.4.0` à `1.8.0`, leurs commits et les comparaisons entre versions ont été consultés. Les sections `1.4.0` à `1.8.0` ont été reconstituées dans `CHANGELOG.md` à partir des changements inclus dans chaque plage de tags et des descriptions de PR/release disponibles. Les dates proviennent des releases GitHub. Les notes du tag `1.8.0` et les corrections déjà présentes dans le changelog du tag `1.6.0` ont été replacées dans les versions correspondantes ; les éléments encore non publiés restent sous « Non publié ». Aucune attribution n'a été faite à partir de suppositions.
+**Historique vérifié (08/11/2026).** Les tags Git `1.0.0` à `1.8.0`, leurs commits et les comparaisons entre versions ont été consultés. Les sections `1.0.0` à `1.8.0` ont été reconstituées dans `CHANGELOG.md` à partir des changements inclus dans chaque plage de tags et des descriptions de PR/release disponibles. Les dates proviennent des releases GitHub. Les notes des tags `1.8.0` et `1.6.0` ont été replacées dans les versions correspondantes. Les versions `1.0.0` à `1.3.0` ont été résumées depuis leurs plages de commits ; les éléments encore non publiés restent sous « Non publié ». Aucune attribution n'a été faite à partir de suppositions.
 
 **Réalisation technique.** `scripts/release-validation.mjs` fournit une validation pure : SemVer stricte, identifiants numériques de pré-release sans zéro initial, absence de section de version dupliquée et présence de notes catégorisées dans « Non publié ». Le contrôle du tag distant est isolé dans `hasRemoteTag`, injecte son lecteur Git et peut être testé sur un dépôt distant temporaire. `scripts/release.mjs` exécute ces contrôles avant les builds et vérifie également la release GitHub. Huit tests unitaires et deux tests d'intégration sur dépôt Git temporaire ont été ajoutés. Une déclaration TypeScript accompagne le module ESM.
 
@@ -3160,8 +3160,8 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Critères d'acceptation.**
 
-- [x] Les tags 1.4.0 à 1.8.0 et leurs changements ont été examinés.
-- [x] Les sections historiques 1.4.0 à 1.8.0 sont présentes et datées dans `CHANGELOG.md`.
+- [x] Les tags 1.0.0 à 1.8.0 et leurs changements ont été examinés.
+- [x] Les sections historiques 1.0.0 à 1.8.0 sont présentes et datées dans `CHANGELOG.md`.
 - [x] La prévalidation SemVer / changelog / tag local est isolée et testable.
 - [x] La release vérifie aussi l'absence du tag distant et d'une release GitHub existante.
 - [x] Le contrôle du tag distant est couvert par un test sur dépôt bare temporaire.
