@@ -172,7 +172,7 @@ test('feuille de patch volumineuse exportée en PDF et CSV', async () => {
   const tempPdfDirs = () => readdirSync(tmpdir()).filter((name) => name.startsWith('luma-pdf-')).sort();
   const beforePdf = tempPdfDirs();
   const stressIds: string[] = [];
-  // 1 009 projecteurs supplémentaires répartis sur 12 univers (84 × 6 canaux au maximum par univers).
+  // 1 007 projecteurs supplémentaires (1 009 au total avec les deux projecteurs existants), répartis sur 12 univers (84 × 6 canaux au maximum par univers).
   for (let universe = 1; universe <= 12; universe++) {
     const count = universe === 1 ? 83 : 84; // deux PAR sont déjà présents dans l'univers 1.
     const result = await page.evaluate(async ({ universe: u, count: n }) => {
