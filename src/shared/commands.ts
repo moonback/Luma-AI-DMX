@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CoreMessage } from './i18n';
 import {
   addressSchema, attributeKeySchema, audioConfigSchema, cueListSchema, effectSchema, groupSchema, idSchema, nameSchema,
   paletteSchema, sceneSchema, timelineSchema, universeSchema, unitSchema, songAnalysisSchema, SECTION_LABELS,
@@ -521,7 +522,7 @@ export interface CommandResults {
   'storage.purge': { removed: number };
 }
 
-export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string };
+export type CommandResponse<T extends CommandType> = { ok: true; data: CommandResults[T] } | { ok: false; error: string; message?: CoreMessage };
 
 /** Photo of one localisation frame uploaded from the smartphone (JPEG, base64). */
 export interface LocatePhoto {
