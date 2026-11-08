@@ -3274,12 +3274,12 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Travaux restants.** Identifier les 20 commandes les plus utilisées à partir des statistiques locales opt-in (si disponibles), migrer leurs messages puis les journaux, notices IA, alertes et rapports matériels ; étendre les tests et vérifier les diagnostics bilingues. Les statistiques d’usage sont locales et désactivables : aucune donnée réelle d’usage n’est disponible dans le dépôt.
 
-**Travaux à effectuer.**
+**Suite de l’implémentation.**
 
-1. Définir un type `Message = { key: MessageKey; vars?: … }` partagé, et un catalogue `src/shared/i18n/`.
-2. Faire porter une clé optionnelle à `UserError` et faire traduire par le rendu (`api.ts`), avec repli sur le texte.
-3. Migrer progressivement par handler, avec un cliquet analogue à `check-i18n.mjs` pour `src/core/app/handlers`.
-4. Passer la langue au processus principal pour les dialogues.
+1. Exploiter les statistiques locales opt-in pour classer les commandes réellement les plus utilisées ; si les données sont absentes ou désactivées, documenter un ordre de priorité explicite sans prétendre disposer de statistiques.
+2. Migrer les erreurs des commandes prioritaires dans tous les handlers.
+3. Étendre le catalogue aux journaux, notices IA, alertes et rapports matériels, en conservant une représentation diagnostique stable.
+4. Ajouter les tests de parité du catalogue partagé, de fallback et de changement de langue, puis exécuter typecheck, lint et tests ciblés.
 
 **Critères d’acceptation.**
 
