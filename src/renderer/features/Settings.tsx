@@ -356,7 +356,7 @@ export function SettingsPage() {
       const fallback = (Object.keys(nextSettings.appearance.components.pages) as Array<keyof typeof nextSettings.appearance.components.pages>).find((id) => nextSettings.appearance.components.pages[id]) ?? 'settings';
       useStore.getState().setPage(fallback);
     }
-    useStore.getState().toast({ kind: 'success', title: tr('settings.components.profileApplied') });
+    useStore.getState().toast({ kind: 'success', title: tr(successKey) });
     return true;
   };
   const saveWorkspaceProfile = async (replaceActive = false) => {
