@@ -121,6 +121,22 @@ describe('import grandMA2', () => {
     expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['dimmer', 'red', 'green', 'blue']);
   });
 
+  it('résout les attributs propriétaires via subattribute, feature, preset et nom sans surinterpréter', () => {
+    const xml = `<MA><FixtureType name="Vendor fixture" mode="Semantic"><manufacturer>Acme</manufacturer><Modules><Module name="Main" class="Headmover">
+      <ChannelType coarse="1" attribute="VENDOR_ATTR_1" feature="BEAM"><ChannelFunction subattribute="VENDOR_STROBE_MODE" name="Electronic Strobe"/></ChannelType>
+      <ChannelType coarse="2" attribute="VENDOR_ATTR_2" feature="COLOR"><ChannelFunction subattribute="VENDOR_COLOR_WHEEL" name="Color Wheel"/></ChannelType>
+      <ChannelType coarse="3" attribute="VENDOR_ATTR_3" feature="COLOR"><ChannelFunction subattribute="VENDOR_CTC" name="Color Temperature"/></ChannelType>
+      <ChannelType coarse="4" attribute="VENDOR_ATTR_4" preset="RESET"><ChannelFunction name="Fixture Reset"/></ChannelType>
+      <ChannelType coarse="5" attribute="VENDOR_ATTR_5" feature="COLOR"><ChannelFunction name="Unknown color function"/></ChannelType>
+      </Module></Modules></FixtureType></MA>`;
+    const r = convertMa2Fixture(xml);
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual([
+      'shutter', 'colorWheel', 'colorTemperature', 'control', 'custom:vendor-attr-5',
+    ]);
+    expect(r.warnings).toContain('Attribut MA2 « VENDOR_ATTR_5 » non reconnu, converti en canal générique');
+  });
+
   it('class="None" + pan/tilt normalisés 0→1 (convertisseur GDTF) → lyre avec amplitudes par défaut', () => {
     const xml = `<MA><FixtureType name="MHL1912 Moving Head Wash" mode="M"><manufacturer>BeamZ</manufacturer><Modules><Module name="Main" class="None" beamtype="None">
       <ChannelType coarse="1" attribute="PAN"><ChannelFunction physfrom="0" physto="1"/></ChannelType>
