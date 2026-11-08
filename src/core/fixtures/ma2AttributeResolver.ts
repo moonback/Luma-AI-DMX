@@ -6,7 +6,7 @@
  * It deliberately returns null when the metadata is too ambiguous.
  */
 const token = (value: string | undefined): string =>
-  (value ?? '').normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  (value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
 
 const has = (value: string, ...needles: string[]): boolean =>
   needles.some((needle) => value.includes(needle));
