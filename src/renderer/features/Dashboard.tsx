@@ -74,8 +74,8 @@ function EngineHealthPanel({ metrics, outputs }: { metrics: EngineMetrics | null
   const load = measuredMetrics ? Math.max(0, Math.min(1, measuredMetrics.load)) : 0;
   const loadLevel = classifyEngineHealth(metrics);
   const enabled = outputs.filter((output) => output.enabled);
-  const kindLabel = (kind: string) => ({ virtual: tr('dash.proto.virtual'), artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[kind] ?? kind;
-  const stateLabel = (state: string) => tr(`dash.health.outputState.${state}`);
+  const kindLabel = (kind: OutputStatus['kind']) => ({ virtual: tr('dash.proto.virtual'), artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[kind] ?? kind;
+  const stateLabel = (state: OutputStatus['state']) => tr(`dash.health.outputState.${state}`);
   const format = (value: number, digits = 1) => Number.isFinite(value) ? value.toFixed(digits) : '—';
 
   return (
