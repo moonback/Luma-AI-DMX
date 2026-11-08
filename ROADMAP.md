@@ -3267,10 +3267,10 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts`, avec interpolation des paramètres.
 - `UserError` accepte une clé stable et des variables, sans supprimer le message français historique utilisé comme repli.
 - Réponses IPC enrichies avec `message: { key, vars? }` pour les refus d’origine, les commandes invalides et les `UserError` migrées ; le rendu traduit selon la langue active.
-- Messages migrés dans les handlers : refus d’origine, validation IPC, programmeur, profils/patch, IA, voix Gemini, localisation, musique, sorties DMX/RDM et chargement de projets.
+- Messages migrés dans les handlers : refus d’origine, validation IPC et modifications du projet, contrôle OSC, programmeur, profils/patch, IA, voix Gemini, localisation, musique, sorties DMX/RDM et chargement de projets.
 - Dialogues Electron de fichiers (ouverture, sauvegarde, import/export, filtres) et confirmations de fermeture localisés à partir de `settings.appearance.language`.
 - Tests de traduction, d’interpolation des messages IA, de rendu anglais et de contrat IPC ajoutés ; non exécutés dans cette session.
-- Cliquet AST TypeScript intégré à `npm run lint` via `scripts/check-core-i18n.mjs` ; tous les `UserError` des handlers portent désormais une clé littérale du catalogue (référence à zéro). Le contrôle détecte aussi les appels multilignes et les templates dynamiques.
+- Cliquet AST TypeScript intégré à `npm run lint` via `scripts/check-core-i18n.mjs` ; le contrôle couvre désormais tout `src/core/app`, pas seulement les handlers. Tous les refus `UserError` migrés portent une clé littérale du catalogue (référence à zéro). Le contrôle détecte aussi les appels multilignes et les templates dynamiques.
 
 **Travaux restants.** Identifier les 20 commandes les plus utilisées à partir des statistiques locales opt-in (si disponibles), puis migrer les messages de journal, notices IA, alertes et rapports matériels ; vérifier les diagnostics bilingues et le comportement des dialogues natifs. Les statistiques d’usage sont locales et désactivables : aucune donnée réelle d’usage n’est disponible dans le dépôt.
 
