@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act as rtlAct } from '@testing-library/react';
 import { vi } from 'vitest';
 import { PanTiltConsole } from '../../src/renderer/features/PanTiltConsole';
 import { useStore } from '../../src/renderer/store';
@@ -50,6 +50,26 @@ describe('Console Simplifiée — interaction des machines', () => {
 
     expect(screen.getByRole('dialog', { name: 'Console Simplifiée' })).toBeInTheDocument();
     expect(screen.getByText('2 machines sélectionnées')).toBeInTheDocument();
+  });
+
+  it('affiche « Mixte » quand les machines sélectionnées divergent', () => {
+    useStore.setState({ values: { spot1: { dimmer: 1, pan: 0.5 }, spot2: { dimmer: 0.2, pan: 0.5 } } });
+    render(<PanTiltConsole />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mode sélection' }));
+    fireEvent.click(screen.getByRole('button', { name: /Spot 1/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Spot 2/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Régler (2)' }));
+
+    expect(screen.getByText('Mixte', { selector: '.sc-fader-val' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Pan' }).parentElement).toHaveTextContent('50%');
+  });
+
+  it('signale les machines tenues manuellement et garde « Tout relâcher » accessible', () => {
+    render(<PanTiltConsole />);
+    expect(screen.queryByTestId('pantilt-held')).not.toBeInTheDocument();
+    rtlAct(() => { useStore.setState({ runtime: { programmer: { spot1: { dimmer: 1 }, spot2: { pan: 0.3 } } } as never }); });
+    expect(screen.getByTestId('pantilt-held')).toHaveTextContent('2 machine(s) tenue(s) manuellement');
+    expect(screen.getByRole('button', { name: /Tout relâcher/ })).toBeEnabled();
   });
 
   it('désactive le mode sélection et efface la sélection courante', () => {

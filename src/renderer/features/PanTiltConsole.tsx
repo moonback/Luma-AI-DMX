@@ -6,7 +6,7 @@
  */
 import { useRef, useState } from 'react';
 import { Crosshair, Eraser, Lock, MousePointerClick, SlidersHorizontal } from 'lucide-react';
-import { useStore } from '../store';
+import { useStore, EMPTY_OBJ } from '../store';
 import { useT } from '../i18n';
 import { act } from '../api';
 import { Empty, PageHead, useResolved } from '../components/ui';
@@ -20,6 +20,7 @@ import { useTileOrder } from './pantilt/useTileOrder';
 export function PanTiltConsole() {
   const tr = useT();
   const locked = useStore((s) => s.simpleLocked);
+  const programmer = useStore((s) => s.runtime?.programmer ?? EMPTY_OBJ) as Record<string, Record<string, number>>;
   const { fixtures, byId } = useResolved();
   const [picked, setSelIds] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -30,6 +31,7 @@ export function PanTiltConsole() {
   const allIds = ordered.map((rf) => rf.fixture.id);
   // Une machine supprimée du patch sort de la sélection (et du compteur).
   const selIds = picked.filter((id) => allIds.includes(id));
+  const heldCount = allIds.filter((id) => Object.keys(programmer[id] ?? {}).length > 0).length;
   const moverIds = fixtures
     .filter((rf) => rf.attributes.includes('pan') || rf.attributes.includes('tilt'))
     .map((rf) => rf.fixture.id);
@@ -100,7 +102,10 @@ export function PanTiltConsole() {
             <Crosshair size={14} /> {tr('pantilt.centerAll')}
           </button>
         )}
-        <button className="btn" disabled={allIds.length === 0}
+        {heldCount > 0 && (
+          <span className="badge cyan" role="status" data-testid="pantilt-held" title={tr('pantilt.heldHint')}>{tr('pantilt.held', { n: heldCount })}</span>
+        )}
+        <button className="btn" disabled={heldCount === 0} title={tr('pantilt.heldHint')}
           onClick={() => void act({ type: 'programmer.release', fixtureIds: allIds })}>
           <Eraser size={14} /> {tr('pantilt.releaseAll')}
         </button>

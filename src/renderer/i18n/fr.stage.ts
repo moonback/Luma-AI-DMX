@@ -86,4 +86,8 @@ export const frStage = {
   'select.intensity': 'Intensité {n} %',
   'select.color': 'Couleur',
   'select.liveHint': 'Valeurs envoyées au programmer (prioritaires sur la lecture) ; Pan / Tilt et gobos : Pan / Tilt et Live Console.',
+  // Console Simplifiée — held fixtures and mixed selection.
+  'pantilt.held': '{n} machine(s) tenue(s) manuellement',
+  'pantilt.heldHint': 'Ces valeurs restent prioritaires sur la lecture jusqu’à « Tout relâcher ».',
+  'pantilt.mixed': 'Mixte',
 } as const;

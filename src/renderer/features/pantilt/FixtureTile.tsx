@@ -47,14 +47,15 @@ export function FixtureTile({
   const programmer = useStore((s) => s.runtime?.programmer ?? EMPTY_OBJ) as Record<string, Record<string, number>>;
 
   const id = rf.fixture.id;
-  const cur = (attr: string) => programmer[id]?.[attr] ?? values[id]?.[attr] ?? 0;
+  // Engine output (after master, blackout, effects), not the programmer request.
+  const cur = (attr: string) => values[id]?.[attr] ?? 0;
   const anyTouched = Object.keys(programmer[id] ?? {}).length > 0;
 
   const d = displayColor(rf, values[id] ?? {});
   const swatchColor = rgbToHex(d.color);
-  const intensity = Math.round(cur('dimmer') * 100);
+  const level = d.intensity;
+  const intensity = Math.round(level * 100);
   const Icon = TYPE_ICON[rf.profile.type] ?? GenericFixture;
-  const level = cur('dimmer');
   const isMover = rf.attributes.includes('pan') || rf.attributes.includes('tilt');
 
   return (

@@ -26,10 +26,12 @@ const SIMPLE_BEAM = ['focus', 'zoom', 'iris', 'frost'];
 
 // ─── Slider ──────────────────────────────────────────────────────────────────
 function AttrSlider({
-  label, value, touched, onChange, showPct = false,
+  label, value, touched, onChange, showPct = false, mixed,
 }: {
   label: string; value: number; touched: boolean;
   onChange: (v: number) => void; showPct?: boolean;
+  /** Text shown instead of the value when the selection diverges. */
+  mixed?: string;
 }) {
   return (
     <div className={`sc-row ${touched ? 'touched' : ''}`}>
@@ -41,7 +43,7 @@ function AttrSlider({
         onChange={(e) => onChange(Number(e.target.value) / 255)}
       />
       <span className="mono small">
-        {showPct ? `${Math.round(value * 100)}%` : Math.round(value * 255)}
+        {mixed ?? (showPct ? `${Math.round(value * 100)}%` : Math.round(value * 255))}
       </span>
     </div>
   );
@@ -164,6 +166,10 @@ export function SelectionModal({
   const touched = (attr: string) => programmer[refId]?.[attr] !== undefined;
   const anyTouched = ids.some((id) => Object.keys(programmer[id] ?? {}).length > 0);
   const channelFor = (a: string) => coarseChannel(ref.mode, a);
+  // « Mixte » : the fixtures carrying this attribute disagree (DMX step resolution).
+  const isMixed = (attr: string) => new Set(selected.filter((rf) => rf.attributes.includes(attr))
+    .map((rf) => Math.round((programmer[rf.fixture.id]?.[attr] ?? values[rf.fixture.id]?.[attr] ?? 0) * 255))).size > 1;
+  const mixedLabel = (attr: string) => (isMixed(attr) ? tr('pantilt.mixed') : undefined);
 
   // Envoie à TOUTES les machines sélectionnées
   const send = useThrottled(
@@ -175,6 +181,8 @@ export function SelectionModal({
   // Couleur — référence = première machine
   const hasColor = selected.some((rf) => colorCapability(rf) !== 'none');
   const d = displayColor(ref, values[refId] ?? {});
+  const colorMixed = new Set(selected.filter((rf) => colorCapability(rf) !== 'none')
+    .map((rf) => rgbToHex(displayColor(rf, values[rf.fixture.id] ?? {}).color))).size > 1;
 
   const hasPos = has('pan') || has('tilt');
 
@@ -258,7 +266,7 @@ export function SelectionModal({
           <div className="sc-col">
             <SectionLabel label={tr('console.family.intensity')} color="#f5c542" />
             <div className="sc-fader-wrap">
-              <span className="sc-fader-val">{Math.round(cur('dimmer') * 100)}%</span>
+              <span className="sc-fader-val">{mixedLabel('dimmer') ?? `${Math.round(cur('dimmer') * 100)}%`}</span>
               <input
                 type="range" className="sc-fader" min={0} max={255}
                 value={Math.round(cur('dimmer') * 255)}
@@ -281,6 +289,7 @@ export function SelectionModal({
             {hasColor ? (
               <>
                 <SectionLabel label={tr('console.family.color')} color="var(--violet)" />
+                {colorMixed && <span className="badge" data-testid="pantilt-color-mixed">{tr('pantilt.mixed')}</span>}
                 <input
                   type="color" className="sc-color-big"
                   value={rgbToHex(d.color)}
@@ -303,7 +312,7 @@ export function SelectionModal({
                   channelFor('colorWheel')!.ranges.length > 0 && (
                     <ChipRow
                       channel={channelFor('colorWheel')!}
-                      current={cur('colorWheel')}
+                      current={isMixed('colorWheel') ? -1 : cur('colorWheel')}
                       onSet={(v) => send({ colorWheel: v })}
                     />
                   )}
@@ -329,11 +338,11 @@ export function SelectionModal({
                 />
                 <div className="sc-pos-sliders" style={{ marginTop: 8 }}>
                   {has('pan') && (
-                    <AttrSlider label={attributeLabel('pan')} value={cur('pan')}
+                    <AttrSlider label={attributeLabel('pan')} value={cur('pan')} mixed={mixedLabel('pan')}
                       touched={touched('pan')} onChange={(v) => send({ pan: v })} showPct />
                   )}
                   {has('tilt') && (
-                    <AttrSlider label={attributeLabel('tilt')} value={cur('tilt')}
+                    <AttrSlider label={attributeLabel('tilt')} value={cur('tilt')} mixed={mixedLabel('tilt')}
                       touched={touched('tilt')} onChange={(v) => send({ tilt: v })} showPct />
                   )}
                   <button className="btn sm" style={{ marginTop: 6 }}
@@ -353,11 +362,11 @@ export function SelectionModal({
               <>
                 <SectionLabel label={tr('console.family.beam')} color="#f472b6" />
                 {beamChipAttrs.map((a) => (
-                  <ChipRow key={a} channel={channelFor(a)!} current={cur(a)}
+                  <ChipRow key={a} channel={channelFor(a)!} current={isMixed(a) ? -1 : cur(a)}
                     onSet={(v) => send({ [a]: v })} />
                 ))}
                 {simpleBeamAttrs.map((a) => (
-                  <AttrSlider key={a} label={attributeLabel(a)} value={cur(a)}
+                  <AttrSlider key={a} label={attributeLabel(a)} value={cur(a)} mixed={mixedLabel(a)}
                     touched={touched(a)} onChange={(v) => send({ [a]: v })} showPct />
                 ))}
               </>

@@ -88,4 +88,8 @@ export const enStage: Record<keyof typeof frStage, string> = {
   'select.intensity': 'Intensity {n} %',
   'select.color': 'Colour',
   'select.liveHint': 'Values sent to the programmer (override playback); Pan / Tilt and gobos: Pan / Tilt and Live Console.',
+  // Console Simplifiée — held fixtures and mixed selection.
+  'pantilt.held': '{n} fixture(s) held manually',
+  'pantilt.heldHint': 'These values override playback until "Release all".',
+  'pantilt.mixed': 'Mixed',
 };
