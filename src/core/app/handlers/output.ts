@@ -63,7 +63,7 @@ export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'o
         const a = app.outputs.get(s.id);
         if (a instanceof VirtualOutput) v = a;
       }
-      if (!v) throw new UserError('Aucune sortie virtuelle configurée');
+      if (!v) throw new UserError('Aucune sortie virtuelle configurée', 'output.virtualNotConfigured');
       v.inject(cmd.injection);
       if (cmd.injection.type === 'reconnect') await v.open();
       app.logger.warn('Diagnostic', `Injection de test sur la sortie virtuelle : ${cmd.injection.type}`);
@@ -93,7 +93,7 @@ export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'o
         e.testPattern = null;
         return ok;
       }
-      if (!cmd.confirmed) throw new UserError('Confirmation requise : la mire pilote tous les canaux, reset et lampe compris.');
+      if (!cmd.confirmed) throw new UserError('Confirmation requise : la mire pilote tous les canaux, reset et lampe compris.', 'output.confirmTestPattern');
       e.testPattern = { kind: cmd.pattern, universes: [...new Set(cmd.universes)].sort((a, b) => a - b), startedAt: e.time };
       app.hardware.notePattern(e.testPattern);
       app.logger.warn('Mire', `Mire « ${cmd.pattern} » sur l’univers ${e.testPattern.universes.join(', ')} : le show est remplacé par des valeurs brutes`);
@@ -110,20 +110,20 @@ export async function handleOutput(app: AppService, cmd: CommandIn<'engine' | 'o
 /** Opens an RDM session on an Art-Net output for one local universe, runs `fn`, always closes the socket. */
 export async function withRdm<T>(app: AppService, outputId: string, universe: number, fn: (rdm: ArtNetRdm) => Promise<T>): Promise<T> {
   const o = app.settings.outputs.find((x) => x.id === outputId);
-  if (!o) throw new UserError('Sortie introuvable');
-  if (o.kind !== 'artnet') throw new UserError('RDM disponible uniquement via Art-Net pour l’instant (RDM Enttec non implémenté)');
+  if (!o) throw new UserError('Sortie introuvable', 'output.notFound');
+  if (o.kind !== 'artnet') throw new UserError('RDM disponible uniquement via Art-Net pour l’instant (RDM Enttec non implémenté)', 'output.rdmArtNetOnly');
   const map = o.universeMap.find((m) => m.local === universe);
-  if (!map) throw new UserError(`L’univers ${universe} n’est pas routé vers cette sortie`);
+  if (!map) throw new UserError(`L’univers ${universe} n’est pas routé vers cette sortie`, 'output.universeNotRouted', { universe });
   const rdm = new ArtNetRdm({ host: o.host, portAddress: map.remote, bindAddress: o.bindAddress, listenPort: app.opts.rdm?.listenPort, nodePort: app.opts.rdm?.nodePort, timeoutMs: app.opts.rdm?.timeoutMs });
   try {
     await rdm.open();
   } catch (err) {
-    throw new UserError(`Port Art-Net 6454 indisponible pour les réponses RDM : ${(err as Error).message}`);
+    throw new UserError(`Port Art-Net 6454 indisponible pour les réponses RDM : ${(err as Error).message}`, 'output.rdmPortUnavailable', { reason: (err as Error).message });
   }
   try {
     return await fn(rdm);
   } catch (err) {
-    throw new UserError(`RDM : ${(err as Error).message}`);
+    throw new UserError(`RDM : ${(err as Error).message}`, 'output.rdmFailed', { reason: (err as Error).message });
   } finally {
     await rdm.close();
   }
