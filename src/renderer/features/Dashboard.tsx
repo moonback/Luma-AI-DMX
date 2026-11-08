@@ -6,7 +6,7 @@ import { TEXT_SCENE_EXAMPLES } from '../../core/visualizer/sceneFromText';
 import { useStore } from '../store';
 import { newProjectFlow } from '../App';
 import { PageHead, Panel, useResolved } from '../components/ui';
-import { evaluateDashboardReadiness, summarizeReadiness, type ReadinessCheck, type ReadinessLevel } from './dashboardReadiness';
+import { classifyEngineHealth, evaluateDashboardReadiness, summarizeReadiness, type ReadinessCheck, type ReadinessLevel } from './dashboardReadiness';
 import { FirstSteps } from './Onboarding';
 import type { EngineMetrics } from '../../core/engine/Engine';
 import type { OutputStatus } from '../../core/protocols/config';
@@ -71,7 +71,7 @@ function EngineHealthPanel({ metrics, outputs }: { metrics: EngineMetrics | null
   const tr = useT();
   const measured = !!metrics && metrics.ticks > 0;
   const load = measured ? Math.max(0, Math.min(1, metrics.load)) : 0;
-  const loadLevel = !measured ? 'unknown' : metrics.errors > 0 ? 'blocked' : load >= 0.85 || metrics.overruns > 0 ? 'warning' : 'ready';
+  const loadLevel = classifyEngineHealth(metrics);
   const enabled = outputs.filter((output) => output.enabled);
   const kindLabel = (kind: string) => ({ virtual: tr('dash.proto.virtual'), artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[kind] ?? kind;
   const stateLabel = (state: string) => tr(`dash.health.outputState.${state}`);
