@@ -4,6 +4,7 @@ import { app, BrowserWindow, crashReporter, dialog, ipcMain, session, shell } fr
 import { AppService } from '../core/app/AppService';
 import type { AppEvents } from '../shared/commands';
 import { BRAND } from '../shared/brand';
+import { translateCore } from '../shared/i18n';
 import { createSecretStore } from './secrets';
 import { createUpdater } from './updates';
 import { handleCommand, isTrustedSender as isTrusted } from './ipc';
@@ -71,15 +72,15 @@ async function createService(): Promise<AppService> {
     secrets: createSecretStore(dataDir, (m) => svc.logger.warn('Secrets', m)),
     dialogs: {
       openProject: async () => {
-        const r = await dialog.showOpenDialog(win!, { title: 'Ouvrir un projet', filters: projectFilters, properties: ['openFile'] });
+        const r = await dialog.showOpenDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.openProject'), filters: projectFilters, properties: ['openFile'] });
         return r.canceled ? null : r.filePaths[0] ?? null;
       },
       saveProject: async (name) => {
-        const r = await dialog.showSaveDialog(win!, { title: 'Enregistrer le projet', defaultPath: `${name}.${BRAND.projectExtension}`, filters: projectFilters });
+        const r = await dialog.showSaveDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.saveProject'), defaultPath: `${name}.${BRAND.projectExtension}`, filters: projectFilters });
         return r.canceled ? null : r.filePath ?? null;
       },
       openProfile: async () => {
-        const r = await dialog.showOpenDialog(win!, { title: 'Importer des profils', filters: [
+        const r = await dialog.showOpenDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.importProfiles'), filters: [
           { name: 'Profils (Luma, GDTF, grandMA2)', extensions: ['json', 'gdtf', 'xml', 'xmlp'] },
           { name: 'Profils Luma', extensions: ['json'] },
           { name: 'GDTF', extensions: ['gdtf'] },
@@ -88,34 +89,34 @@ async function createService(): Promise<AppService> {
         return r.canceled ? null : r.filePaths[0] ?? null;
       },
       openProfiles: async () => {
-        const r = await dialog.showOpenDialog(win!, { title: 'Importer des profils', filters: [
-          { name: 'Profils (Luma, GDTF, grandMA2, collections .zip)', extensions: ['json', 'gdtf', 'xml', 'xmlp', 'zip'] },
+        const r = await dialog.showOpenDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.importProfiles'), filters: [
+          { name: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.importProfilesAll'), extensions: ['json', 'gdtf', 'xml', 'xmlp', 'zip'] },
         ], properties: ['openFile', 'multiSelections'] });
         return r.canceled ? [] : r.filePaths;
       },
       openFixtureShare: () => openFixtureShare(svc, (e) => sendEvent('imported', e), win),
       saveProfiles: async (name) => {
-        const r = await dialog.showSaveDialog(win!, { title: 'Exporter des profils', defaultPath: name, filters: [{ name: 'Profils Luma', extensions: ['json'] }] });
+        const r = await dialog.showSaveDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.exportProfiles'), defaultPath: name, filters: [{ name: 'Profils Luma', extensions: ['json'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
       savePatchSheet: async (name, format) => {
-        const r = await dialog.showSaveDialog(win!, { title: 'Exporter la feuille de patch', defaultPath: name, filters: [format === 'csv' ? { name: 'Tableur (CSV)', extensions: ['csv'] } : { name: 'PDF', extensions: ['pdf'] }] });
+        const r = await dialog.showSaveDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.exportPatchSheet'), defaultPath: name, filters: [format === 'csv' ? { name: 'Tableur (CSV)', extensions: ['csv'] } : { name: 'PDF', extensions: ['pdf'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
       savePatchPlan: async (name) => {
-        const r = await dialog.showSaveDialog(win!, { title: 'Exporter le plan d’installation', defaultPath: name, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+        const r = await dialog.showSaveDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.exportInstallPlan'), defaultPath: name, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
       saveMvr: async (name) => {
-        const r = await dialog.showSaveDialog(win!, { title: 'Exporter l’implantation (MVR)', defaultPath: name, filters: [{ name: 'My Virtual Rig', extensions: ['mvr'] }] });
+        const r = await dialog.showSaveDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.exportMvr'), defaultPath: name, filters: [{ name: 'My Virtual Rig', extensions: ['mvr'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
       saveFeedback: async (name) => {
-        const r = await dialog.showSaveDialog(win!, { title: 'Enregistrer le retour', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Retour', extensions: ['json'] }] });
+        const r = await dialog.showSaveDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.saveFeedback'), defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Retour', extensions: ['json'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
       saveDiagnostic: async (name) => {
-        const r = await dialog.showSaveDialog(win!, { title: 'Exporter un diagnostic', defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Diagnostic', extensions: ['json'] }] });
+        const r = await dialog.showSaveDialog(win!, { title: translateCore(service?.settings.appearance.language ?? 'fr', 'dialog.exportDiagnostic'), defaultPath: path.join(app.getPath('desktop'), name), filters: [{ name: 'Diagnostic', extensions: ['json'] }] });
         return r.canceled ? null : r.filePath ?? null;
       },
     },
