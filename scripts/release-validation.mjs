@@ -11,8 +11,14 @@ function getSectionBody(changelog, title) {
 /** Pure validation: no Git, filesystem, or network side effects. */
 export function validateReleaseMetadata({ version, changelog, existingTags = [] }) {
   const errors = [];
-  if (typeof version !== 'string' || !SEMVER.test(version)) {
+  const semverMatch = typeof version === 'string' ? SEMVER.exec(version) : null;
+  if (!semverMatch) {
     errors.push('Version SemVer invalide : ' + String(version) + '.');
+    return errors;
+  }
+  const prerelease = semverMatch[4];
+  if (prerelease && prerelease.split('.').some((part) => /^\\d+$/u.test(part) && part.length > 1 && part.startsWith('0'))) {
+    errors.push('Identifiant numérique de pré-release SemVer avec zéro initial : ' + version + '.');
     return errors;
   }
   if (existingTags.includes(version)) errors.push('Le tag Git ' + version + ' existe déjà.');
