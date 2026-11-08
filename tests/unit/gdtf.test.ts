@@ -112,6 +112,19 @@ describe('import GDTF', () => {
     expect(r.warnings.join(' ')).toMatch(/DMX break 2/);
   });
 
+  it('résout les attributs GDTF propriétaires à partir des noms de fonctions, sans deviner une famille ambiguë', () => {
+    const xml = `<GDTF><FixtureType Name="Vendor fixture" Manufacturer="Acme"><DMXModes><DMXMode Name="Semantic"><DMXChannels>
+      <DMXChannel Offset="1" Geometry="Beam"><LogicalChannel Attribute="VendorBeam"><ChannelFunction Attribute="VendorStrobe" Name="Electronic Strobe" DMXFrom="0/1" PhysicalFrom="1" PhysicalTo="20"/></LogicalChannel></DMXChannel>
+      <DMXChannel Offset="2" Geometry="Beam"><LogicalChannel Attribute="VendorColor"><ChannelFunction Attribute="VendorColorWheel" Name="Color Wheel" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+      <DMXChannel Offset="3" Geometry="Beam"><LogicalChannel Attribute="VendorUnknown"><ChannelFunction Attribute="VendorUnknown" Name="Auxiliary Function" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+    </DMXChannels></DMXMode></DMXModes></FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual([
+      'strobe', 'colorWheel', 'custom:vendorunknown',
+    ]);
+  });
+
   it('barre LED : géométries répétées → cellules', () => {
     const r = convertGdtf(gdtf(BAR));
     expect(r.errors).toEqual([]);
