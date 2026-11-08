@@ -13,6 +13,10 @@ describe('release metadata validation', () => {
   it('rejects invalid SemVer before release checks', () => {
     expect(validateReleaseMetadata({ version: '01.9.0', changelog })).toContain('Version SemVer invalide : 01.9.0.');
   });
+  it('rejects numeric prerelease identifiers with leading zeroes', () => {
+    expect(validateReleaseMetadata({ version: '2.0.0-beta.01', changelog }))
+      .toContain('Identifiant numérique de pré-release SemVer avec zéro initial : 2.0.0-beta.01.');
+  });
   it('rejects an existing local tag', () => {
     expect(validateReleaseMetadata({ version: '1.9.0', changelog, existingTags: ['1.9.0'] })).toContain('Le tag Git 1.9.0 existe déjà.');
   });
