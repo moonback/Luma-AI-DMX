@@ -3,6 +3,7 @@ export type CoreLanguage = 'fr' | 'en';
 
 export const CORE_MESSAGES = {
   'error.unauthorizedOrigin': ['Origine non autorisée', 'Unauthorized origin'],
+  'error.invalidProjectUpdate': ['Modification refusée : {details}', 'Update rejected: {details}'],
   'error.invalidCommand': ['Commande invalide : {details}', 'Invalid command: {details}'],
   'ai.proposalExpired': ['Proposition expirée', 'Proposal expired'],
   'ai.nothingToUndo': ['Aucune application IA à annuler', 'There is no AI application to undo'],
