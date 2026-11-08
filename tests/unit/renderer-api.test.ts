@@ -36,7 +36,7 @@ describe('renderer command errors', () => {
 
   it('keeps licence refusals in an explicit dialog', async () => {
     invoke.mockResolvedValue({ ok: false, error: 'Cette fonction nécessite la licence Standard.' });
-    await expect(call({ type: 'music.generate', timelineId: 'timeline-1' })).rejects.toThrow('licence Standard');
+    await expect(call({ type: 'music.generate', trackId: 'track-1', intent: 'club', nextVariant: false })).rejects.toThrow('licence Standard');
     expect(mocks.setNotice).toHaveBeenCalledWith({
       title: 'Action failed',
       detail: 'Cette fonction nécessite la licence Standard.',
