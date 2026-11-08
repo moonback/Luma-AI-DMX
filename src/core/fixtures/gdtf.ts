@@ -48,7 +48,7 @@ function dmx16(raw: string | undefined): number | undefined {
 }
 
 /** GDTF attribute → Luma attribute. */
-const GDTF_ATTR: Record<string, string> = {
+export const GDTF_ATTR: Readonly<Record<string, string>> = {
   Dimmer: 'dimmer', Pan: 'pan', Tilt: 'tilt', PositionMSpeed: 'panTiltSpeed', PanTiltMode: 'panTiltMode',
   Shutter1: 'shutter', Shutter1Strobe: 'strobe', StrobeFrequency: 'strobe', StrobeDuration: 'strobe', StrobeRate: 'strobe',
   ColorAdd_R: 'red', ColorAdd_G: 'green', ColorAdd_B: 'blue', ColorAdd_C: 'cyan', ColorAdd_M: 'magenta', ColorAdd_Y: 'yellow',
