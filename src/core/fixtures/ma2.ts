@@ -81,10 +81,24 @@ function lumaAttribute(ct: Node): string | null {
   if (a.startsWith('COLORMIXER')) return colorMixAttribute(ct, a, /^COLORMIXER_?/);
   if (MA2_ATTR[a]) return MA2_ATTR[a]!;
   if (NO_EQUIVALENT.test(a)) return null;
-  // Converters (GDTF → MA2) use free attribute names but standard subattributes (GOBO1_ROT…).
-  const sub = (str(arr(ct, 'ChannelFunction')[0] ?? {}, 'subattribute') ?? '').toUpperCase();
+  // Converters (GDTF → MA2) may keep a free attribute while preserving a standard subattribute.
+  const fn = arr(ct, 'ChannelFunction')[0] ?? {};
+  const sub = (str(fn, 'subattribute') ?? '').toUpperCase();
   if (MA2_ATTR[sub] && !NO_EQUIVALENT.test(sub)) return MA2_ATTR[sub]!;
-  return str(ct, 'feature') === 'RESET' || str(ct, 'preset') === 'CONTROL' ? 'control' : null;
+  return resolveMa2SemanticAttribute({
+    attribute: a,
+    subattribute: sub,
+    feature: str(ct, 'feature'),
+    preset: str(ct, 'preset'),
+    names: [
+      str(fn, 'subattribute_user_name'),
+      str(fn, 'attribute_user_name'),
+      str(fn, 'name'),
+      str(ct, 'attribute_user_name'),
+      str(ct, 'name'),
+      a,
+    ],
+  });
 }
 
 function fixtureType(cls: string, beam: string, instancesOfMain: number, hasPanTilt: boolean): FixtureType {
