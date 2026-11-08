@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { cieToHex, convertGdtf, dmx8 } from '../../src/core/fixtures/gdtf';
+import { cieToHex, convertGdtf, dmx8, GDTF_ATTR } from '../../src/core/fixtures/gdtf';
+import { buildAttributeCoverageReport } from '../../src/core/fixtures/attributeCoverage';
 import { writeZip } from '../../src/core/util/zip';
 import { makeService } from '../helpers';
 
@@ -273,5 +274,25 @@ describe('import GDTF', () => {
     expect(r.imported).toEqual(['Test Spot 300']);
     expect(svc.getProject().profiles.find((p) => p.id === 'gdtf-acme-s300')!.modes).toHaveLength(2);
     await svc.dispose();
+  });
+});
+
+
+describe('GDTF functional attribute coverage', () => {
+  it('classifies every direct GDTF mapping against the real Luma vocabulary and engine consumers', () => {
+    const report = buildAttributeCoverageReport(GDTF_ATTR);
+    expect(report.totalMappings).toBe(Object.keys(GDTF_ATTR).length);
+    expect(report.unsupported).toBe(0);
+    expect(report.native + report.generic + report.unsupported).toBe(report.totalMappings);
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'Dimmer')).toMatchObject({ support: 'native', lumaAttribute: 'dimmer' });
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'Color1')).toMatchObject({ support: 'native', lumaAttribute: 'colorWheel' });
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'GlobalMSpeed')).toMatchObject({ support: 'generic', lumaAttribute: 'speed' });
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'Fog1')).toMatchObject({ support: 'generic', lumaAttribute: 'fog' });
+  });
+
+  it('flags mappings outside the built-in model instead of silently calling them supported', () => {
+    const report = buildAttributeCoverageReport({ UnknownFixtureAttribute: 'notARealAttribute', Dimmer: 'dimmer' });
+    expect(report.unsupported).toBe(1);
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'UnknownFixtureAttribute')).toMatchObject({ support: 'unsupported', attributeClass: 'unknown' });
   });
 });
