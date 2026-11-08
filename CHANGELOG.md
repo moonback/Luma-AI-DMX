@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Ajouté
+- Personnalisation du Dashboard : affichage indépendant du guide de démarrage, des indicateurs matériel/spectacle/système, de la création de scène par texte, des actions rapides et des alertes depuis Réglages → Apparence.
 - Internationalisation : catalogue bilingue partagé pour le cœur, erreurs IPC structurées avec repli français, migration des UserError de l’application (IA, voix, localisation, musique, DMX/RDM, profils, programmation, projets et OSC), dialogues natifs Electron localisés selon la langue active et cliquet AST anti-régression. Première tranche des diagnostics de validation du Directeur IA traduite selon la langue active (sécurité stroboscope, capacités des projecteurs, faisceau, gobos, scènes et effets), avec métadonnées structurées et fallback français.
 - Release : prévalidation de la version SemVer, des notes catégorisées « Non publié », des tags Git locaux/distants et de l’existence d’une release GitHub avant toute compilation ou publication.
 - Export PDF (feuille de patch et plan d’installation) : rendu depuis un fichier HTML temporaire unique plutôt qu’une URL `data:`, sans limite de longueur d’URL ; nettoyage du répertoire temporaire après impression, y compris en cas d’erreur.

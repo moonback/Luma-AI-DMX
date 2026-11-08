@@ -67,6 +67,15 @@ export const componentVisibilitySchema = z.object({
   statusBar: z.boolean().default(true),
   diagnosticsButton: z.boolean().default(true),
   miniPlayer: z.boolean().default(true),
+  dashboard: z.object({
+    firstSteps: z.boolean().default(true),
+    hardware: z.boolean().default(true),
+    show: z.boolean().default(true),
+    system: z.boolean().default(true),
+    sceneFromText: z.boolean().default(true),
+    quickActions: z.boolean().default(true),
+    alerts: z.boolean().default(true),
+  }).default({}),
 });
 export type ComponentVisibility = z.infer<typeof componentVisibilitySchema>;
 export const DEFAULT_COMPONENT_VISIBILITY: ComponentVisibility = componentVisibilitySchema.parse({});

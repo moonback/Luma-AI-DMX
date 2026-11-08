@@ -43,4 +43,15 @@ describe('workspace component visibility settings', () => {
     expect(settings.appearance.components.diagnosticsButton).toBe(false);
     expect(settings.appearance.components.miniPlayer).toBe(false);
   });
+
+  it('persists dashboard section visibility independently', () => {
+    const settings = settingsSchema.parse({
+      appearance: { components: { dashboard: { hardware: false, sceneFromText: false, alerts: false } } },
+    });
+    expect(settings.appearance.components.dashboard.hardware).toBe(false);
+    expect(settings.appearance.components.dashboard.sceneFromText).toBe(false);
+    expect(settings.appearance.components.dashboard.alerts).toBe(false);
+    expect(settings.appearance.components.dashboard.show).toBe(true);
+    expect(settings.appearance.components.dashboard.quickActions).toBe(true);
+  });
 });
