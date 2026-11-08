@@ -568,7 +568,7 @@ export const frScreens = {
   'dash.readiness.state.blocked': 'Blocage détecté',
   'dash.readiness.state.unknown': 'Données incomplètes',
   'dash.readiness.patch': 'Patch DMX',
-  'dash.readiness.patch.ready': 'Aucun conflit détecté · {n} problème(s)',
+  'dash.readiness.patch.ready': 'Aucun conflit détecté sur le patch.',
   'dash.readiness.patch.warning': 'Aucun projecteur dans le patch.',
   'dash.readiness.patch.blocked': '{n} problème(s) de patch à corriger.',
   'dash.readiness.patch.unknown': 'État du patch indisponible.',
