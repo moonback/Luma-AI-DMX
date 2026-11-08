@@ -383,7 +383,7 @@ export function SettingsPage() {
     const profile = saved!.appearance.workspaceProfiles.find((p) => p.id === id);
     if (!profile) return;
     const nextSettings = { ...saved!, appearance: { ...saved!.appearance, components: profile.components, activeWorkspaceProfileId: profile.id } };
-    await commitWorkspaceSettings(nextSettings);
+    await commitWorkspaceSettings(nextSettings, 'settings.components.profileApplied');
   };
   const exportWorkspaceProfiles = () => {
     const profiles = s.appearance.workspaceProfiles;
