@@ -1,4 +1,4 @@
-import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2, Activity, CheckCircle2, CircleAlert, CircleDashed, ShieldAlert } from 'lucide-react';
+import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2, CheckCircle2, CircleAlert, CircleDashed, ShieldAlert } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useT } from '../i18n';
 import { describeScene } from '../sceneActions';
@@ -69,8 +69,9 @@ function ReadinessChecklist({ checks }: { checks: ReadinessCheck[] }) {
 
 function EngineHealthPanel({ metrics, outputs }: { metrics: EngineMetrics | null; outputs: readonly OutputStatus[] }) {
   const tr = useT();
-  const measured = !!metrics && metrics.ticks > 0;
-  const load = measured ? Math.max(0, Math.min(1, metrics.load)) : 0;
+  const measuredMetrics = metrics && metrics.ticks > 0 ? metrics : null;
+  const measured = measuredMetrics !== null;
+  const load = measuredMetrics ? Math.max(0, Math.min(1, measuredMetrics.load)) : 0;
   const loadLevel = classifyEngineHealth(metrics);
   const enabled = outputs.filter((output) => output.enabled);
   const kindLabel = (kind: string) => ({ virtual: tr('dash.proto.virtual'), artnet: 'Art-Net', sacn: 'sACN', 'enttec-pro': 'USB-DMX', 'open-dmx': 'Open DMX' })[kind] ?? kind;
@@ -82,7 +83,7 @@ function EngineHealthPanel({ metrics, outputs }: { metrics: EngineMetrics | null
       <div className="grid g4">
         <div className="panel kpi">
           <span className="k">{tr('dash.health.rate')}</span>
-          <span className="v">{measured ? format(metrics.measuredHz) : '—'} <small className="muted">Hz</small></span>
+          <span className="v">{measured ? format(measuredMetrics!.measuredHz) : '—'} <small className="muted">Hz</small></span>
           <span className="s">{tr('dash.health.target', { n: metrics?.rateHz ?? 0 })}</span>
         </div>
         <div className="panel kpi">
@@ -93,14 +94,14 @@ function EngineHealthPanel({ metrics, outputs }: { metrics: EngineMetrics | null
           </div>
         </div>
         <div className="panel kpi">
-          <span className="k">{tr('dash.health.jitter')}</span>
-          <span className="v">{measured ? format(metrics.jitterMs, 2) : '—'} <small className="muted">ms</small></span>
-          <span className="s">{tr('dash.health.jitterHint')}</span>
+          <span className="k">{tr('dash.health.jitterP95')}</span>
+          <span className="v">{measured ? (metrics?.jitterP95Ms === null || metrics?.jitterP95Ms === undefined ? '—' : format(metrics.jitterP95Ms, 2)) : '—'} <small className="muted">ms</small></span>
+          <span className="s">{tr('dash.health.jitterDetail', { p50: metrics?.jitterP50Ms == null ? '—' : format(metrics.jitterP50Ms, 2), p99: metrics?.jitterP99Ms == null ? '—' : format(metrics.jitterP99Ms, 2), samples: metrics?.jitterSamples ?? 0 })}</span>
         </div>
         <div className="panel kpi">
           <span className="k">{tr('dash.health.maxTick')}</span>
-          <span className="v">{measured ? format(metrics.maxTickMs, 2) : '—'} <small className="muted">ms</small></span>
-          <span className="s">{tr('dash.health.overruns', { n: metrics?.overruns ?? 0 })} · {tr('dash.health.errors', { n: metrics?.errors ?? 0 })}</span>
+          <span className="v">{measured ? format(measuredMetrics!.maxTickMs, 2) : '—'} <small className="muted">ms</small></span>
+          <span className="s">{tr('dash.health.overruns', { n: measuredMetrics?.overruns ?? 0 })} · {tr('dash.health.errors', { n: measuredMetrics?.errors ?? 0 })}</span>
         </div>
       </div>
       <div className="col" style={{ gap: 6, marginTop: 12 }}>
