@@ -48,7 +48,7 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
       return ok;
     case 'palette.apply': {
       const pal = app.project.palettes.find((p) => p.id === cmd.id);
-      if (!pal) throw new UserError('Palette introuvable');
+      if (!pal) throw new UserError('Palette introuvable', 'programming.paletteNotFound');
       let applied = 0;
       for (const fid of cmd.fixtureIds) {
         const rf = app.index.fixtures.get(fid);
@@ -62,10 +62,10 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
     }
     case 'palette.recordFromProgrammer': {
       const prog = e.getProgrammer()[cmd.fixtureId];
-      if (!prog) throw new UserError('Ce projecteur n’a aucune valeur dans le programmeur');
+      if (!prog) throw new UserError('Ce projecteur n’a aucune valeur dans le programmeur', 'programming.fixtureNoProgrammerValues');
       const cls = cmd.kind === 'color' ? ['color'] : cmd.kind === 'position' ? ['position'] : cmd.kind === 'intensity' ? ['intensity'] : ['beam'];
       const values = Object.fromEntries(Object.entries(prog).filter(([a]) => cls.includes(attributeClass(a))));
-      if (!Object.keys(values).length) throw new UserError('Aucune valeur de ce type dans le programmeur pour ce projecteur');
+      if (!Object.keys(values).length) throw new UserError('Aucune valeur de ce type dans le programmeur pour ce projecteur', 'programming.noValuesOfType');
       const id = randomUUID();
       app.mutate((d) => { d.palettes.push({ id, name: cmd.name, kind: cmd.kind, values }); });
       return { id };
@@ -88,7 +88,7 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
     case 'scene.record': {
       const prog = e.getProgrammer();
       const values: FixtureValues = cmd.fixtureIds ? Object.fromEntries(Object.entries(prog).filter(([id]) => cmd.fixtureIds!.includes(id))) : prog;
-      if (!Object.keys(values).length) throw new UserError('Le programmeur est vide : réglez des projecteurs dans la Live Console avant d’enregistrer.');
+      if (!Object.keys(values).length) throw new UserError('Le programmeur est vide : réglez des projecteurs dans la Live Console avant d’enregistrer.', 'programming.programmerEmpty');
       const id = randomUUID();
       app.mutate((d) => { d.scenes.push({ id, name: cmd.name, notes: '', values, origin: 'user' }); });
       app.logger.info('Scènes', `Scène « ${cmd.name} » enregistrée (${Object.keys(values).length} projecteurs)`);
@@ -106,20 +106,20 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
       return ok;
     case 'scene.duplicate': {
       const src = app.project.scenes.find((s) => s.id === cmd.id);
-      if (!src) throw new UserError('Scène introuvable');
+      if (!src) throw new UserError('Scène introuvable', 'programming.sceneNotFound');
       const id = randomUUID();
       app.mutate((d) => { d.scenes.push({ ...structuredClone(src), id, name: `${src.name} (copie)`.slice(0, 80) }); });
       return { id };
     }
     case 'scene.load': {
       const s = app.index.scenes.get(cmd.id);
-      if (!s) throw new UserError('Scène introuvable');
+      if (!s) throw new UserError('Scène introuvable', 'programming.sceneNotFound');
       for (const [fid, vals] of Object.entries(s.values)) e.setProgrammer([fid], vals);
       return ok;
     }
     case 'scene.preview': {
       const s = app.index.scenes.get(cmd.id);
-      if (!s) throw new UserError('Scène introuvable');
+      if (!s) throw new UserError('Scène introuvable', 'programming.sceneNotFound');
       return { values: e.compute(s.values).values };
     }
     case 'cueList.upsert':
@@ -159,7 +159,7 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
       return ok;
     case 'effect.start': {
       const id = e.startEffect(cmd.id, 'manual');
-      if (!id) throw new UserError('Effet introuvable');
+      if (!id) throw new UserError('Effet introuvable', 'programming.effectNotFound');
       return { instanceId: id };
     }
     case 'effect.stop': e.stopEffect(cmd.instanceId); return ok;
@@ -177,7 +177,7 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
       app.mutate((d) => { d.timelines = d.timelines.filter((t) => t.id !== cmd.id); });
       return ok;
     case 'timeline.play':
-      if (!e.timelinePlay(cmd.id)) throw new UserError('Timeline introuvable');
+      if (!e.timelinePlay(cmd.id)) throw new UserError('Timeline introuvable', 'programming.timelineNotFound');
       return ok;
     case 'timeline.pause': e.timelinePause(); return ok;
     case 'timeline.stop': e.timelineStop(); return ok;
