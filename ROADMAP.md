@@ -3154,7 +3154,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Travaux restants.**
 
-1. Exécuter les huit tests unitaires et les deux tests d'intégration.
+1. Exécuter les dix tests unitaires et les deux tests d'intégration.
 2. Exécuter typecheck et lint pour vérifier la déclaration ESM et les nouveaux fichiers.
 3. Vérifier manuellement le rendu Markdown et les dates des sections versionnées.
 
