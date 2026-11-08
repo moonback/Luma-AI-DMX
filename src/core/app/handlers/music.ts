@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { showSectionPlanSchema, type Mood, type Project, type MusicTrack, type ShowPlan, type ShowSectionPlan } from '../../model/schemas';
+import { cueListSchema, effectSchema, sceneSchema, showSectionPlanSchema, timelineSchema, type Mood, type Project, type MusicTrack, type ShowPlan, type ShowSectionPlan } from '../../model/schemas';
 import { adjustSection, compileShow, evaluateArtisticQuality, planLocally, rigInfo, validateShowIntegrity, withMood, type RigInfo } from '../../music/songToShow';
 import { KEY_NAMES, SECTION_NAMES } from '../../music/analyze';
 import { suggestIntents } from '../../music/suggest';
@@ -87,6 +87,10 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
     }
     case 'music.suggestIntents':
       return suggestIntentsFor(app, track(app, cmd.trackId), cmd.intent.trim());
+    case 'music.generatedEdited': {
+      const c = track(app, cmd.trackId).created;
+      return { edited: !!c.fingerprint && generatedFingerprint(app.project, c) !== c.fingerprint };
+    }
   }
 }
 
@@ -118,6 +122,20 @@ export function removeGenerated(app: AppService, d: Project, t: MusicTrack): voi
   if (t.created.timelineId) d.timelines = d.timelines.filter((x) => x.id !== t.created.timelineId);
   const cueLists = new Set(t.created.cueListIds);
   d.cueLists = d.cueLists.filter((c) => !cueLists.has(c.id));
+}
+
+/** JSON with sorted keys, so the same objects always give the same text (save/load reorders keys). */
+const stable = (v: unknown): string => Array.isArray(v) ? `[${v.map(stable).join(',')}]`
+  : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}`
+  : JSON.stringify(v) ?? 'null';
+
+/** Hash of a track's generated objects, normalised by their schemas (defaults filled) so a reload does not change it. */
+export function generatedFingerprint(p: Project, c: MusicTrack['created']): string {
+  const pick = <T extends { id: string }>(list: T[], ids: Iterable<string>, schema: z.ZodType) => [...ids].map((id) => list.find((x) => x.id === id)).map((x) => (x ? schema.parse(x) : null));
+  return createHash('sha256').update(stable([
+    pick(p.scenes, c.sceneIds, sceneSchema), pick(p.effects, c.effectIds, effectSchema),
+    pick(p.timelines, c.timelineId ? [c.timelineId] : [], timelineSchema), pick(p.cueLists, c.cueListIds, cueListSchema),
+  ])).digest('hex');
 }
 
 /** The song as the LLM sees it. Only the symbolic structure leaves the machine: no audio. */
@@ -242,6 +260,7 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
     track.previousPlan = track.plan; // so restoring twice swaps back (redo)
     track.plan = plan;
     track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id, cueListIds: [c.cueList.id] };
+    track.created.fingerprint = generatedFingerprint(d, track.created);
   });
   const all = [...notices, ...c.notices, ...integrity.errors, ...integrity.warnings, ...quality.notices];
   app.logger.info('Musique', `Show généré pour « ${t.name} » (${plan.provider === 'openrouter' ? `OpenRouter · ${plan.model}` : 'règles locales'}) : ${c.scenes.length} scènes, ${c.effects.length} effets, timeline « ${c.timeline.name} »`);

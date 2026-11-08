@@ -37,6 +37,7 @@ describe('modale d’édition d’une section', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(sent()).toEqual([
       { type: 'music.setSection', trackId: 'trk', index: 0, label: 'bridge' },
+      { type: 'music.generatedEdited', trackId: 'trk' }, // no hand edits reported: no confirmation, the update goes
       { type: 'music.updateSection', trackId: 'trk', index: 0, patch: { energy: 5, movement: 'fan', locked: true } },
     ]);
     expect(onNotices).toHaveBeenCalledWith(['ok']);
@@ -48,7 +49,7 @@ describe('modale d’édition d’une section', () => {
     fireEvent.change(screen.getByTestId('section-instruction'), { target: { value: 'en rouge' } });
     fireEvent.keyDown(screen.getByTestId('section-instruction'), { key: 'Enter' });
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(sent()).toEqual([{ type: 'music.regenerateSection', trackId: 'trk', index: 1, instruction: 'en rouge' }]);
+    expect(sent()).toEqual([{ type: 'music.generatedEdited', trackId: 'trk' }, { type: 'music.regenerateSection', trackId: 'trk', index: 1, instruction: 'en rouge' }]);
     unmount();
     invoke.mockClear();
     render(<SectionEditor track={track(false)} index={1} onClose={() => undefined} onNotices={() => undefined} />);

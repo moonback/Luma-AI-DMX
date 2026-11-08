@@ -37,6 +37,14 @@ describe('fusion des sources (politique de priorité)', () => {
     expect(r.values.g!.dimmer).toBe(1); // effect alone
   });
 
+  it('effet en mode offset : écart autour de la valeur sous-jacente, borné', () => {
+    const base = [{ id: 'a', label: 'A', kind: 'playback' as const, priority: 50, order: 1, values: { f: { pan: 0.2, tilt: 0.9 } } }];
+    const r = mergeSources(base, [{ id: 'e', label: 'M', priority: 50, order: 1, blend: 'offset', values: { f: { pan: 0.7, tilt: 0.8 }, g: { pan: 0.6 } } }], {});
+    expect(r.values.f!.pan).toBeCloseTo(0.4); // 0.2 + (0.7 - 0.5)
+    expect(r.values.f!.tilt).toBe(1); // 0.9 + 0.3, clamped
+    expect(r.values.g!.pan).toBe(0.6); // nothing underneath: absolute, like override
+  });
+
   it('effet en mode scale module la valeur sous-jacente', () => {
     const r = mergeSources([{ id: 'a', label: 'A', kind: 'playback', priority: 50, order: 1, values: { f: { dimmer: 0.8 } } }], [{ id: 'e', label: 'S', priority: 50, order: 1, blend: 'scale', values: { f: { dimmer: 0.5 } } }], {});
     expect(r.values.f!.dimmer).toBeCloseTo(0.4);

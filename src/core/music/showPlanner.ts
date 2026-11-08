@@ -98,7 +98,8 @@ function sectionPlan(
     effect = brightness >= 0.7 ? (alt ? 'dimmerWave' : 'glow') : 'wave';
     effectBeats = strat === 'cinematic' ? 12 : 8;
   } else if (energy === 3) {
-    if (strat === 'rhythmic' || perBeat >= 2.5) { effect = alt ? 'pulse' : 'flicker'; effectBeats = 2; }
+    // Flicker is a strobe: only proposed when the strobe is allowed (else it would be swapped for a chase with a notice).
+    if (strat === 'rhythmic' || perBeat >= 2.5) { effect = alt ? 'pulse' : rig.allowStrobe ? 'flicker' : 'chase'; effectBeats = 2; }
     else if (brightness >= 0.6) { effect = alt ? 'pulse' : 'dimmerWave'; effectBeats = 4; }
     else { effect = alt ? 'pulse' : 'chase'; effectBeats = 2; }
   } else if (energy === 4) {
@@ -252,8 +253,8 @@ export function adjustSection(s: ShowSectionPlan, instruction: string, rig: RigI
   else if (has(t, /\bvague (dimm|er|s?)\b|dimmerWave\b/)) { out.effect = 'dimmerWave'; explicitProps.add('effect'); }
   else if (has(t, /\bpulse (lent|slow)\b/)) { out.effect = 'pulseSlow'; explicitProps.add('effect'); }
   else if (has(t, /\bchase (lent|slow)\b/)) { out.effect = 'chaseSlow'; explicitProps.add('effect'); }
-  else if (has(t, /\bscintil(l|le|ement)\b|flicker\b/)) { out.effect = 'flicker'; explicitProps.add('effect'); }
-  else if (has(t, /\bsnap\b|flash\b|éclair\b/)) { out.effect = 'snap'; explicitProps.add('effect'); }
+  else if (has(t, /\bscintil(l|le|ement)\b|flicker\b/) && rig.allowStrobe) { out.effect = 'flicker'; explicitProps.add('effect'); }
+  else if (has(t, /\bsnap\b|flash\b|éclair\b/) && rig.allowStrobe) { out.effect = 'snap'; explicitProps.add('effect'); }
   else if (has(t, /\blueur\b|glow\b/)) { out.effect = 'glow'; explicitProps.add('effect'); }
   else if (has(t, /\b(dé)?gradient\b|gradient\b/)) { out.effect = 'gradient'; explicitProps.add('effect'); }
   else if (has(t, /\barc (en )?ciel\b|rainbow\b/)) { out.effect = 'rainbow'; explicitProps.add('effect'); }

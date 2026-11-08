@@ -30,7 +30,7 @@ export interface EffectOutput {
   label: string;
   priority: number;
   order: number;
-  blend: 'override' | 'scale';
+  blend: 'override' | 'scale' | 'offset';
   values: FixtureValues;
 }
 
@@ -82,6 +82,9 @@ export function mergeSources(layers: readonly LayerInput[], effects: readonly Ef
         if (e.blend === 'scale') {
           if (!cur) continue;
           m.set(attr, { v: cur.v * v, src: `${cur.src} × ${e.label}`, prio: e.priority });
+        } else if (e.blend === 'offset' && cur) {
+          // Relative: the effect swings around 0.5, so its deviation is added to the underlying value (clamped below).
+          m.set(attr, { v: cur.v + v - 0.5, src: `${cur.src} + ${e.label}`, prio: e.priority });
         } else {
           m.set(attr, { v, src: e.label, prio: e.priority });
         }

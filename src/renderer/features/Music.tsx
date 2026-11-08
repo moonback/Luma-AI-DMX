@@ -15,6 +15,7 @@ import { ArtisticQualityBadge } from './music/ArtisticQualityBadge';
 import { VariantCompareModal } from './music/VariantCompareModal';
 import type { Progress } from '../../shared/commands';
 import { usePlayback } from './music/MiniPlayer';
+import { confirmOverwrite } from './music/overwriteGuard';
 
 // Kept in French whatever the UI language: the local rules (parseIntent) only read French.
 const NO_MOOD: Mood = { energy: 0, colors: 0, movement: 0, strobe: 0 };
@@ -138,7 +139,7 @@ export function MusicPage() {
     }
   };
   const generate = async (nextVariant: boolean) => {
-    if (!track) return;
+    if (!track || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
     useStore.setState({ progress: null });
     setGenerating(true);
@@ -167,14 +168,14 @@ export function MusicPage() {
     return () => { cancelled = true; };
   }, [track?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per track, not on every render
   const restore = async () => {
-    if (!track) return;
+    if (!track || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
     const r = await act({ type: 'music.restorePrevious', trackId: track.id });
     setBusy(false);
     if (r) setNotices(r.notices);
   };
   const regenerate = async (index: number) => {
-    if (!track) return;
+    if (!track || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
     const r = await act({ type: 'music.regenerateSection', trackId: track.id, index, instruction: instr[index] ?? '' });
     setBusy(false);

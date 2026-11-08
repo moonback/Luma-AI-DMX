@@ -86,7 +86,7 @@ function Editor({ effect }: { effect: Effect }) {
         <Field label="Priorité (1–99)"><NumberInput value={draft.priority} min={1} max={99} onChange={(v) => setDraft({ ...draft, priority: v })} /></Field>
         <Field label="Mélange">
           <select className="select" value={draft.blend} onChange={(e) => setDraft({ ...draft, blend: e.target.value as Effect['blend'] })}>
-            <option value="override">Remplace</option><option value="scale">Module (multiplie)</option>
+            <option value="override">Remplace</option><option value="scale">Module (multiplie)</option><option value="offset">{t('effects.blend.offset')}</option>
           </select>
         </Field>
         <Field label="Durée (s)" hint="Vide = jusqu’à l’arrêt">
