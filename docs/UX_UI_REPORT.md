@@ -277,3 +277,14 @@ Première tranche intégrée dans la branche `feat/ux-dashboard-readiness-2026-1
 **Précision méthodologique :** la valeur historique `jitterMs` est une moyenne exponentielle. Le nouveau monitoring affiche séparément les percentiles calculés sur les échantillons de la fenêtre, sans renommer l'EMA en p95.
 
 **À valider localement :** typecheck, lint, tests unitaires moteur et test de performance avec plusieurs fréquences scheduler.
+### Ajustement UX — visibilité des panneaux Readiness et Engine Health
+
+**Statut : implémenté — validation locale en attente**
+
+- Les panneaux « Préparation du show » et « Santé du moteur et des sorties » disposent chacun d'un interrupteur indépendant dans **Paramètres → Apparence → Composants du Dashboard**.
+- Les deux options sont activées par défaut pour conserver le comportement actuel après mise à jour.
+- Les préférences sont persistées dans les paramètres utilisateur et intégrées aux profils d'espace de travail enregistrés, importés et exportés.
+- Masquer ces panneaux ne désactive ni le scheduler, ni les sorties DMX, ni les contrôles de sécurité : seule leur présentation sur le Dashboard est concernée.
+- Les catalogues français et anglais sont mis à jour ; les paramètres existants et anciens profils héritent de valeurs par défaut activées.
+
+**Test ajouté :** `tests/unit/dashboard-visibility.test.ts` couvre les valeurs par défaut, le masquage indépendant et les valeurs par défaut du profil d'espace de travail.
