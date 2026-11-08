@@ -69,6 +69,8 @@ export const componentVisibilitySchema = z.object({
   miniPlayer: z.boolean().default(true),
   dashboard: z.object({
     firstSteps: z.boolean().default(true),
+    readiness: z.boolean().default(true),
+    engineHealth: z.boolean().default(true),
     hardware: z.boolean().default(true),
     show: z.boolean().default(true),
     system: z.boolean().default(true),
