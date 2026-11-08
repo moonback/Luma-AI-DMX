@@ -21,9 +21,9 @@ const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 const tag = version; // Existing tags are 0.2.0, 0.3.0…: no "v" prefix.
 const prerelease = typeof version === 'string' && version.includes('-');
 const changelog = readFileSync('CHANGELOG.md', 'utf8');
-const localTags = out('git tag --list').split('\\n').filter(Boolean);
+const localTags = out('git tag --list').split(String.fromCharCode(10)).filter(Boolean);
 const metadataErrors = validateReleaseMetadata({ version, changelog, existingTags: localTags });
-if (metadataErrors.length) fail(metadataErrors.join('\\n'));
+if (metadataErrors.length) fail(metadataErrors.join('; '));
 
 if (out('git status --porcelain')) fail('Arbre de travail non propre : commite ou range tes changements.');
 if (out('git branch --show-current') !== 'master') fail('La release se fait depuis master.');
