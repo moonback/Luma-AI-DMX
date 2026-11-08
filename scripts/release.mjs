@@ -19,7 +19,7 @@ const fail = (msg) => {
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 const tag = version; // Existing tags are 0.2.0, 0.3.0…: no "v" prefix.
-const prerelease = version.includes('-');
+const prerelease = typeof version === 'string' && version.includes('-');
 const changelog = readFileSync('CHANGELOG.md', 'utf8');
 const localTags = out('git tag --list').split('\\n').filter(Boolean);
 const metadataErrors = validateReleaseMetadata({ version, changelog, existingTags: localTags });
