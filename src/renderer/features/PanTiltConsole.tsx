@@ -5,7 +5,7 @@
  * - Gestion des groupes : créer, sélectionner, supprimer directement depuis cette vue
  */
 import { useRef, useState } from 'react';
-import { Crosshair, Eraser, Lock, SlidersHorizontal } from 'lucide-react';
+import { Crosshair, Eraser, Lock, MousePointerClick, SlidersHorizontal } from 'lucide-react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { act } from '../api';
@@ -22,6 +22,7 @@ export function PanTiltConsole() {
   const locked = useStore((s) => s.simpleLocked);
   const { fixtures, byId } = useResolved();
   const [picked, setSelIds] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const lastClicked = useRef<string | null>(null);
 
@@ -45,7 +46,16 @@ export function PanTiltConsole() {
     setSelIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
-  const openSingle = (id: string) => { setSelIds([id]); setModalOpen(true); };
+  const openSingle = (id: string) => { lastClicked.current = id; setSelIds([id]); setModalOpen(true); };
+  const toggleSelectionMode = () => {
+    setSelectionMode((active) => {
+      if (active) {
+        setSelIds([]);
+        lastClicked.current = null;
+      }
+      return !active;
+    });
+  };
   const openModal = () => { if (selIds.length > 0) setModalOpen(true); };
   const closeModal = () => setModalOpen(false);
 
@@ -62,12 +72,24 @@ export function PanTiltConsole() {
         </div>
       )}
       <PageHead title={tr('pantilt.title')} subtitle={tr('pantilt.subtitle')}>
-        <button className="btn ghost sm" onClick={() => setSelIds(allIds)}>Tout sélectionner</button>
-        <button className="btn ghost sm" onClick={() => setSelIds([])} disabled={selIds.length === 0}>Désélectionner</button>
-        <button className="btn primary" disabled={selIds.length === 0} onClick={openModal}>
-          <SlidersHorizontal size={14} />
-          Régler {selIds.length > 0 ? `(${selIds.length})` : ''}
+        <button
+          className={`btn sm ${selectionMode ? 'primary' : 'ghost'}`}
+          data-testid="pantilt-selection-mode"
+          aria-pressed={selectionMode}
+          onClick={toggleSelectionMode}
+          title={selectionMode ? tr('pantilt.selectionModeExitHint') : tr('pantilt.selectionModeHint')}
+        >
+          <MousePointerClick size={14} />
+          {selectionMode ? tr('pantilt.selectionModeActive') : tr('pantilt.selectionMode')}
         </button>
+        {selectionMode && <>
+          <button className="btn ghost sm" onClick={() => setSelIds(allIds)}>{tr('pantilt.selectAll')}</button>
+          <button className="btn ghost sm" onClick={() => { setSelIds([]); lastClicked.current = null; }} disabled={selIds.length === 0}>{tr('pantilt.clearSelection')}</button>
+          <button className="btn primary" disabled={selIds.length === 0} onClick={openModal}>
+            <SlidersHorizontal size={14} />
+            {tr('pantilt.adjustSelected', { n: selIds.length })}
+          </button>
+        </>}
         {moverIds.length > 0 && (
           <button className="btn" onClick={() =>
             void act({ type: 'programmer.set', fixtureIds: moverIds, values: { pan: 0.5, tilt: 0.5 }, confirmSpecial: false })
@@ -99,12 +121,19 @@ export function PanTiltConsole() {
           {/* ── Panneau gauche : groupes ── */}
           <GroupsPanel
             selIds={selIds}
-            onSelectGroup={(ids) => setSelIds(ids)}
+            onSelectGroup={(ids) => { setSelectionMode(true); setSelIds(ids); lastClicked.current = null; }}
           />
 
           {/* ── Zone principale : tuiles ── */}
-          <div className="sc-main">
-            {selIds.length > 0 && (
+          <div className={`sc-main ${selectionMode ? 'sc-main--selection' : ''}`}>
+            {selectionMode && (
+              <div className="sc-mode-bar" role="status">
+                <MousePointerClick size={14} />
+                <span>{tr('pantilt.selectionHint')}</span>
+                <strong>{tr('pantilt.selectedCount', { n: selIds.length })}</strong>
+              </div>
+            )}
+            {selectionMode && selIds.length > 0 && (
               <div className="sc-sel-bar">
                 <span className="small">
                   <strong>{selIds.length}</strong> machine{selIds.length > 1 ? 's' : ''} sélectionnée{selIds.length > 1 ? 's' : ''}
@@ -121,7 +150,8 @@ export function PanTiltConsole() {
                   rf={rf}
                   onDropFrom={(from) => move(from, rf.fixture.id)}
                   onNudge={(dir) => { const t = ordered[i + dir]; if (t) move(rf.fixture.id, t.fixture.id); }}
-                  selected={selIds.includes(rf.fixture.id)}
+                  selected={selectionMode && selIds.includes(rf.fixture.id)}
+                  selectionMode={selectionMode}
                   onToggle={(range) => toggle(rf.fixture.id, range)}
                   onOpen={() => openSingle(rf.fixture.id)}
                 />
