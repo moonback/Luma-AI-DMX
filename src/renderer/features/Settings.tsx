@@ -417,7 +417,7 @@ export function SettingsPage() {
         return profile;
       });
       const nextSettings = { ...s, appearance: { ...s.appearance, workspaceProfiles: existing } };
-      await commitWorkspaceSettings(nextSettings);
+      await commitWorkspaceSettings(nextSettings, 'settings.components.profileImported');
     } catch (error) {
       useStore.getState().toast({ kind: 'error', title: tr('settings.components.profileImportFailed'), detail: error instanceof Error ? error.message : String(error) });
     }
