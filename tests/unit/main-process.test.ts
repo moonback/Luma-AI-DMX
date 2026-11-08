@@ -18,15 +18,16 @@ describe('frontière IPC (LUMA-032)', () => {
   it('refuse l’origine, borne les erreurs de schéma, ne journalise pas les erreurs utilisateur', async () => {
     const { svc } = makeService();
     await svc.init();
-    expect(await handleCommand(svc, { type: 'project.get' }, 'https://evil.example', undefined)).toEqual({ ok: false, error: 'Origine non autorisée' });
+    expect(await handleCommand(svc, { type: 'project.get' }, 'https://evil.example', undefined)).toEqual({ ok: false, error: 'Origine non autorisée', message: { key: 'error.unauthorizedOrigin' } });
     const invalid = await handleCommand(svc, { type: 'fixture.add', profileId: '', mode: '', universe: 0, address: 0, count: 0, namePrefix: '' }, 'file:///x', undefined);
     expect(invalid.ok).toBe(false);
+    expect(!invalid.ok && invalid.message?.key).toBe('error.invalidCommand');
     expect(!invalid.ok && invalid.error.startsWith('Commande invalide :') && invalid.error.split(' ; ').length).toBeLessThanOrEqual(3);
     const ok = await handleCommand(svc, { type: 'project.get' }, 'file:///x', undefined);
     expect(ok.ok).toBe(true);
     const before = svc.logger.recent().filter((e) => e.source === 'IPC').length;
     const user = await handleCommand(svc, { type: 'scene.load', id: 'nope' }, 'file:///x', undefined);
-    expect(user).toEqual({ ok: false, error: 'Scène introuvable' });
+    expect(user).toEqual({ ok: false, error: 'Scène introuvable', message: { key: 'programming.sceneNotFound' } });
     expect(svc.logger.recent().filter((e) => e.source === 'IPC').length).toBe(before);
     // An internal failure is logged with the command type.
     const broken = { execute: async () => { throw new Error('panne'); }, logger: svc.logger } as never;

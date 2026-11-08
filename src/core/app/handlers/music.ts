@@ -27,7 +27,7 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
     }
     // The audio itself is kept per machine (keyed by its SHA-256), not in the project file.
     case 'music.storeAudio': {
-      if (createHash('sha256').update(cmd.data).digest('hex') !== cmd.hash) throw new UserError('Empreinte du fichier audio incohérente');
+      if (createHash('sha256').update(cmd.data).digest('hex') !== cmd.hash) throw new UserError('Empreinte du fichier audio incohérente', 'music.audioHashMismatch');
       const file = audioFile(app, cmd.hash);
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, cmd.data);
@@ -47,7 +47,7 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       app.mutate((d) => {
         const t = d.music.tracks.find((x) => x.id === cmd.trackId);
         const s = t?.analysis.sections[cmd.index];
-        if (!t || !s) throw new UserError('Section introuvable');
+        if (!t || !s) throw new UserError('Section introuvable', 'music.sectionNotFound');
         if (cmd.label) s.label = cmd.label;
         const p = t.plan?.sections[cmd.index];
         if (cmd.locked !== undefined && p) p.locked = cmd.locked;
@@ -61,10 +61,10 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
     }
     case 'music.updateSection': {
       const t = track(app, cmd.trackId);
-      if (!t.plan) throw new UserError('Générez d’abord le show de ce morceau');
+      if (!t.plan) throw new UserError('Générez d’abord le show de ce morceau', 'music.showNotGenerated');
       const plan: ShowPlan = structuredClone(t.plan);
       const s = plan.sections[cmd.index];
-      if (!s) throw new UserError('Section introuvable');
+      if (!s) throw new UserError('Section introuvable', 'music.sectionNotFound');
       const patch = Object.fromEntries(Object.entries(cmd.patch).filter(([, v]) => v !== undefined));
       const why = s.why.startsWith('Modifié à la main') ? s.why : `Modifié à la main${s.why ? ` ; ${s.why}` : ''}`.slice(0, 300);
       // A hand-edited section is locked so « Régénérer le show » keeps it (unless the edit itself unlocks it).
@@ -73,14 +73,14 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
     }
     case 'music.restorePrevious': {
       const t = track(app, cmd.trackId);
-      if (!t.previousPlan) throw new UserError('Aucun show précédent pour ce morceau');
+      if (!t.previousPlan) throw new UserError('Aucun show précédent pour ce morceau', 'music.noPreviousShow');
       return applyShow(app, t, t.previousPlan, []);
     }
     case 'music.regenerateSection': {
       const t = track(app, cmd.trackId);
-      if (!t.plan) throw new UserError('Générez d’abord le show de ce morceau');
+      if (!t.plan) throw new UserError('Générez d’abord le show de ce morceau', 'music.showNotGenerated');
       const plan: ShowPlan = structuredClone(t.plan);
-      if (!plan.sections[cmd.index]) throw new UserError('Section introuvable');
+      if (!plan.sections[cmd.index]) throw new UserError('Section introuvable', 'music.sectionNotFound');
       const { section, notices } = await planSection(app, t, plan, cmd.index, cmd.instruction.trim());
       plan.sections[cmd.index] = section;
       return applyShow(app, t, plan, notices);
@@ -107,7 +107,7 @@ const audioFile = (app: AppService, hash: string) => path.join(app.opts.dataDir,
 
 export function track(app: AppService, id: string): MusicTrack {
   const t = app.project.music.tracks.find((x) => x.id === id);
-  if (!t) throw new UserError('Morceau introuvable');
+  if (!t) throw new UserError('Morceau introuvable', 'music.trackNotFound');
   return t;
 }
 
@@ -158,7 +158,7 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
     app.emit('progress', { op: 'music', step: 'cache' });
     return { ...hit, notices: ['Réponse IA reprise du cache (même demande, aucun nouvel appel).', ...hit.notices] };
   }
-  if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours');
+  if (app.aiBusy) throw new UserError('Une demande IA est déjà en cours', 'ai.requestInProgress');
   app.aiBusy = true;
   const abort = (app.aiAbort = new AbortController());
   app.emit('progress', { op: 'music', step: 'request' });
@@ -170,11 +170,11 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
     await cache.set(id, r).catch((err: unknown) => app.logger.warn('Musique', `Cache IA non enregistré : ${err instanceof Error ? err.message : String(err)}`));
     return r;
   } catch (err) {
-    if (abort.signal.aborted) throw new UserError('Génération annulée : rien n’a été appliqué');
+    if (abort.signal.aborted) throw new UserError('Génération annulée : rien n’a été appliqué', 'music.generationCancelled');
     const msg = err instanceof Error ? err.message : String(err);
     app.aiLastError = msg;
     app.logger.error('Musique', `Planification OpenRouter indisponible : ${msg}`);
-    if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`);
+    if (!ai.fallbackToLocal) throw new UserError(`Fournisseur IA indisponible : ${msg}`, 'ai.providerUnavailable', { reason: msg });
     notices.push(`OpenRouter indisponible (${msg}) : plan généré par les règles locales.`);
     return null;
   } finally {
@@ -223,7 +223,7 @@ async function planSection(app: AppService, t: MusicTrack, plan: ShowPlan, index
 export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[]) {
   // The plan may come back from a slow OpenRouter call: the track, or the whole project, can be gone by then.
   const cur = app.project.music.tracks.find((x) => x.id === t.id);
-  if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué');
+  if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué', 'music.trackChangedDuringGeneration');
   app.emit('progress', { op: 'music', step: 'compile' });
   const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
   const integrity = validateShowIntegrity(c, cur.analysis, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });

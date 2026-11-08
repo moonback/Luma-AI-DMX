@@ -3245,33 +3245,46 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P2
 - **Type** : amélioration
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : Première tranche implémentée le 08/11/2026 ; migration des messages métier encore incomplète.
 
-**Constat technique.** L’interface propose le français et l’anglais (catalogues `fr` et `en` complets et identiques en clés : 458 et 287 clés vérifiées lors de l’audit). En revanche, tous les messages produits par le cœur sont rédigés en dur en français : erreurs `UserError`, journal, notices IA, alertes, rapport matériel. Il en va de même pour les dialogues natifs du processus principal et pour le titre des toasts d’erreur.
+**Constat technique.** L’interface propose le français et l’anglais (catalogues `fr` et `en` complets et identiques en clés : 458 et 287 clés vérifiées lors de l’audit). En revanche, de nombreux messages produits par le cœur restent rédigés en dur en français : erreurs `UserError`, journal, notices IA, alertes et rapport matériel. Les dialogues natifs du processus principal étaient également en français. Le titre du toast d’erreur utilise déjà `api.error.title` dans le catalogue du rendu ; le travail porte surtout sur le contenu des erreurs.
 
 **Preuves dans le code.**
 
 - `src/core/settings/settings.ts:65` : `language: z.enum(["fr", "en"])`.
-- `src/core/app/handlers/fixtures.ts:24` : exemple de `UserError` en français.
+- `src/core/app/handlers/fixtures.ts` : les refus métier portent désormais une clé stable du catalogue partagé ; le texte français reste le fallback.
 - `src/main/index.ts:65-96` et `:150-157` : titres et boutons des dialogues en français.
-- `src/renderer/api.ts:8` : `title: "Action impossible"`.
+- `src/renderer/api.ts` : le titre et le détail des erreurs structurées sont traduits selon la langue active ; les erreurs historiques sans clé conservent leur texte de repli.
 - Comparaison des catalogues lors de l’audit : aucune clé présente dans une seule langue.
 
 **Problème ou opportunité.** Un utilisateur qui a choisi l’anglais reçoit toutes les erreurs, alertes et explications de l’IA en français, c’est-à-dire précisément les messages les plus importants.
 
 **Résultat attendu.** Les messages du cœur sont émis sous forme de clés avec paramètres (`{ key, vars }`) et traduits dans le rendu. Les dialogues natifs utilisent la langue des paramètres.
 
-**Travaux à effectuer.**
 
-1. Définir un type `Message = { key: MessageKey; vars?: … }` partagé, et un catalogue `src/shared/i18n/`.
-2. Faire porter une clé optionnelle à `UserError` et faire traduire par le rendu (`api.ts`), avec repli sur le texte.
-3. Migrer progressivement par handler, avec un cliquet analogue à `check-i18n.mjs` pour `src/core/app/handlers`.
-4. Passer la langue au processus principal pour les dialogues.
+**Implémentation en cours (08/11/2026).**
+
+- Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts` (98 clés à ce stade), avec interpolation des paramètres et test de présence des deux langues.
+- `UserError` accepte une clé stable et des variables, sans supprimer le message français historique utilisé comme repli.
+- Réponses IPC enrichies avec `message: { key, vars? }` pour les refus d’origine, les commandes invalides et les `UserError` migrées ; le rendu traduit selon la langue active.
+- Messages migrés dans les handlers : refus d’origine, validation IPC et modifications du projet, contrôle OSC, programmeur, profils/patch, IA, voix Gemini, localisation, musique, sorties DMX/RDM et chargement de projets.
+- Dialogues Electron de fichiers (ouverture, sauvegarde, import/export, filtres) et confirmations de fermeture localisés à partir de `settings.appearance.language`.
+- Tests de traduction, d’interpolation des messages IA, de rendu anglais et de contrat IPC ajoutés ; non exécutés dans cette session.
+- Cliquet AST TypeScript intégré à `npm run lint` via `scripts/check-core-i18n.mjs` ; le contrôle couvre désormais tout `src/core/app`, pas seulement les handlers. Tous les refus `UserError` migrés portent une clé littérale du catalogue (référence à zéro). Le contrôle détecte aussi les appels multilignes et les templates dynamiques.
+
+**Travaux restants.** Identifier les 20 commandes les plus utilisées à partir des statistiques locales opt-in (si disponibles), puis migrer les messages de journal, notices IA, alertes et rapports matériels ; vérifier les diagnostics bilingues et le comportement des dialogues natifs. Les statistiques d’usage sont locales et désactivables : aucune donnée réelle d’usage n’est disponible dans le dépôt.
+
+**Suite de l’implémentation.**
+
+1. Exploiter les statistiques locales opt-in pour classer les commandes réellement les plus utilisées ; si les données sont absentes ou désactivées, documenter un ordre de priorité explicite sans prétendre disposer de statistiques.
+2. Vérifier les parcours prioritaires de bout en bout (ouverture projet, patch, musique, IA, DMX/RDM) et les textes contextuels qui ne passent pas par `UserError`.
+3. Étendre le catalogue aux journaux, notices IA, alertes et rapports matériels, en conservant une représentation diagnostique stable.
+4. Ajouter les tests de parité du catalogue partagé, de fallback et de changement de langue, puis exécuter typecheck, lint et tests ciblés.
 
 **Critères d’acceptation.**
 
 - [ ] En anglais, les erreurs des 20 commandes les plus utilisées (statistiques d’usage) s’affichent en anglais.
-- [ ] Le cliquet empêche l’ajout de nouveaux messages en dur dans les handlers.
+- [ ] Le cliquet AST empêche l’ajout de nouveaux `UserError` sans clé i18n dans `src/core/app` (exécution du contrôle à confirmer).
 
 **Tests requis.**
 
@@ -3283,7 +3296,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Impact attendu.** moyen — utilisabilité internationale
 
-**Risques et précautions.** Les messages journalisés doivent rester lisibles dans les diagnostics : journaliser la clé et le texte français.
+**Risques et précautions.** Les messages journalisés doivent rester lisibles dans les diagnostics : conserver le texte français et ajouter la clé stable sans exposer de secrets ni de données personnelles.
 
 #### LUMA-055
 

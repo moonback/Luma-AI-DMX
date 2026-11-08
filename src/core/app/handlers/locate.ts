@@ -11,9 +11,9 @@ export async function handleLocate(app: AppService, cmd: CommandIn<'locate'>): P
   const e = app.engine;
   switch (cmd.type) {
     case 'locate.begin': {
-      if (e.blackout) throw new UserError('Désactivez le blackout : la caméra doit voir les projecteurs');
+      if (e.blackout) throw new UserError('Désactivez le blackout : la caméra doit voir les projecteurs', 'locate.blackoutActive');
       const ids = (cmd.fixtureIds ?? [...app.index.fixtures.keys()]).filter((id) => app.index.fixtures.has(id));
-      if (!ids.length) throw new UserError('Aucun projecteur à localiser');
+      if (!ids.length) throw new UserError('Aucun projecteur à localiser', 'locate.noFixtures');
       // Manual control would win over the localisation pattern: release it (stated in the confirmation dialog).
       e.releaseProgrammer();
       const seq = buildSequence(ids, cmd.mode);
@@ -23,8 +23,8 @@ export async function handleLocate(app: AppService, cmd: CommandIn<'locate'>): P
       return { fixtureIds: ids, frames: seq.frames, codes: seq.codes, mode: seq.mode, bits: seq.bits, settleMs: FRAME_SETTLE_MS, captureMs: FRAME_CAPTURE_MS };
     }
     case 'locate.frame':
-      if (!app.locate) throw new UserError('Aucune séquence de localisation en cours');
-      if (cmd.index >= app.locate.seq.frames.length) throw new UserError('Image hors séquence');
+      if (!app.locate) throw new UserError('Aucune séquence de localisation en cours', 'locate.noSequence');
+      if (cmd.index >= app.locate.seq.frames.length) throw new UserError('Image hors séquence', 'locate.frameOutOfSequence');
       showLocateFrame(app, cmd.index);
       return ok;
     case 'locate.end':

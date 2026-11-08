@@ -43,7 +43,7 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
       } catch (err) {
         if (err instanceof ProjectLoadError) {
           app.logger.error('Projet', `${err.message}${err.details.length ? ` — ${err.details.slice(0, 3).join(' ; ')}` : ''}`);
-          throw new UserError(`${err.message}${err.kind === 'corrupt-json' || err.kind === 'invalid-format' ? '. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).' : ''}`);
+          throw new UserError(`${err.message}${err.kind === 'corrupt-json' || err.kind === 'invalid-format' ? '. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).' : ''}`, err.messageKey, err.messageVars);
         }
         throw err;
       }
@@ -100,7 +100,7 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
       try {
         demo = buildDemo(cmd.id);
       } catch (err) {
-        throw new UserError((err as Error).message);
+        throw new UserError((err as Error).message, 'project.demoLoadFailed', { reason: (err as Error).message });
       }
       app.setProject(demo, true);
       app.projectPath = null;

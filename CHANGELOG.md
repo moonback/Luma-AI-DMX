@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Ajouté
+- Internationalisation : catalogue bilingue partagé pour le cœur, erreurs IPC structurées avec repli français, migration des UserError de l’application (IA, voix, localisation, musique, DMX/RDM, profils, programmation, projets et OSC), dialogues natifs Electron localisés selon la langue active et cliquet AST anti-régression.
 - Release : prévalidation de la version SemVer, des notes catégorisées « Non publié », des tags Git locaux/distants et de l’existence d’une release GitHub avant toute compilation ou publication.
 - Export PDF (feuille de patch et plan d’installation) : rendu depuis un fichier HTML temporaire unique plutôt qu’une URL `data:`, sans limite de longueur d’URL ; nettoyage du répertoire temporaire après impression, y compris en cas d’erreur.
 - Construire : bibliothèque d'équipements scéniques en 8 catégories (Machine, Structure, Sonorisation, Instruments, Décor, Interprète, Écran, Accessoires) : line arrays (modules, angles par module, bumper, suspension), caissons, façades, retours, racks ; batterie, cymbales, guitares, basses, amplis, claviers, pianos ; machines à fumée, étincelles, CO2 ; panneaux de fond, arches, rideaux ; régie DJ, consoles, flight-cases, chaises, barrières, passe-câbles ; structures triangulaires, embases, moteurs de levage, toiture. Modèles 3D procéduraux détaillés aux dimensions métriques, avec niveaux de détail et géométries partagées en cache.
