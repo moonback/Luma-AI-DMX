@@ -23,7 +23,9 @@ export function resolveMa2SemanticAttribute(input: {
   const feature = token(input.feature);
   const preset = token(input.preset);
   const name = (input.names ?? []).map(token).filter(Boolean).join(' ');
-  const semantic = [sub, preset, name].filter(Boolean).join(' ');
+  // The official GDTF Feature reference is corroborating metadata too; include it
+  // in semantic matching, while retaining the family-only conservative fallbacks.
+  const semantic = [sub, preset, name, feature].filter(Boolean).join(' ');
 
   // Explicit functional subattributes are stronger than broad feature families.
   if (has(semantic, 'STROBE')) return 'strobe';
