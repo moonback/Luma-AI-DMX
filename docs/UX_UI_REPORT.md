@@ -263,3 +263,16 @@ Première tranche intégrée dans la branche `feat/ux-dashboard-readiness-2026-1
 **Limite volontaire :** cette checklist vérifie les états logiciels connus de Luma. Elle ne prouve ni la réception des trames DMX, ni la conformité du câblage, ni la sécurité mécanique ou électrique du rig.
 
 **À valider localement :** typecheck, lint, tests unitaires et parcours visuel sur une fenêtre desktop standard. Ces commandes n'ont pas été exécutées dans cet environnement.
+### Tranche 2 — Monitoring moteur et transports DMX
+
+**Statut : en cours**
+
+- Carte de santé du moteur dans le Dashboard : fréquence mesurée et cible, charge du tick, durée maximale, dépassements et erreurs.
+- Percentiles p50/p95/p99 calculés sur les écarts absolus à la période scheduler, à partir d'une fenêtre glissante bornée à 512 échantillons.
+- Compteurs par transport : état, FPS rapportés par le transport et erreurs.
+- Les percentiles restent indisponibles tant que le scheduler n'a pas fourni d'échantillons.
+- Les mesures restent explicitement côté moteur/transport ; elles ne représentent pas une mesure de réception côté projecteur.
+
+**Précision méthodologique :** la valeur historique `jitterMs` est une moyenne exponentielle. Le nouveau monitoring affiche séparément les percentiles calculés sur les échantillons de la fenêtre, sans renommer l'EMA en p95.
+
+**À valider localement :** typecheck, lint, tests unitaires moteur et test de performance avec plusieurs fréquences scheduler.
