@@ -183,6 +183,29 @@ describe('import GDTF', () => {
     ]);
   });
 
+  it('couvre les variantes additives, soustractives et indirectes CMY du standard GDTF', () => {
+    const attrs = [
+      'ColorAdd_C', 'ColorAdd_M', 'ColorAdd_Y',
+      'ColorSub_R', 'ColorSub_G', 'ColorSub_B',
+      'ColorRGB_Cyan', 'ColorRGB_Magenta', 'ColorRGB_Yellow',
+      'StrobeRate',
+    ];
+    const channels = attrs.map((attribute, index) =>
+      `<DMXChannel Offset="${index + 1}" Geometry="Beam"><LogicalChannel Attribute="${attribute}"><ChannelFunction Attribute="${attribute}" Name="${attribute}" DMXFrom="0/1"/></LogicalChannel></DMXChannel>`
+    ).join('');
+    const xml = `<GDTF><FixtureType Name="GDTF color coverage" Manufacturer="Acme">
+      <DMXModes><DMXMode Name="Coverage"><DMXChannels>${channels}</DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((channel) => channel.attribute)).toEqual([
+      'cyan', 'magenta', 'yellow',
+      'red', 'green', 'blue',
+      'cyan', 'magenta', 'yellow',
+      'strobe',
+    ]);
+  });
+
   it('barre LED : géométries répétées → cellules', () => {
     const r = convertGdtf(gdtf(BAR));
     expect(r.errors).toEqual([]);
