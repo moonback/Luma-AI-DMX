@@ -182,6 +182,7 @@ export const useStore = create<State>((set, get) => ({
   simpleLocked: false,
   leaveRequest: null,
   setPage: (page) => {
+    if (page !== 'settings' && !get().componentVisibility.pages[page as keyof ComponentVisibility['pages']]) return;
     if (get().simpleLocked && page !== 'pantilt') {
       set({ leaveRequest: page });
       return;
