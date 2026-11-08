@@ -112,6 +112,31 @@ describe('import GDTF', () => {
     expect(r.warnings.join(' ')).toMatch(/DMX break 2/);
   });
 
+  it('utilise MainAttribute et OriginalAttribute comme références sémantiques de repli', () => {
+    const xml = `<GDTF><FixtureType Name="Legacy metadata" Manufacturer="Acme">
+      <AttributeDefinitions>
+        <FeatureGroups><FeatureGroup Name="Beam"><Feature Name="Beam"/></FeatureGroup></FeatureGroups>
+        <Attributes>
+          <Attribute Name="VendorShutter" Feature="Beam.Beam" PhysicalUnit="Frequency">
+            <SubPhysicalUnit Type="DutyCycle" PhysicalUnit="Percent" PhysicalFrom="10" PhysicalTo="90"/>
+          </Attribute>
+          <Attribute Name="VendorShutterMode" MainAttribute="Shutter1" Feature="Beam.Beam"/>
+        </Attributes>
+      </AttributeDefinitions>
+      <DMXModes><DMXMode Name="Metadata"><DMXChannels>
+        <DMXChannel Offset="1" Geometry="Beam"><LogicalChannel Attribute="VendorShutter">
+          <ChannelFunction Attribute="VendorShutter" OriginalAttribute="Shutter1Strobe" Name="Vendor effect" DMXFrom="0/1" PhysicalFrom="2" PhysicalTo="18"/>
+        </LogicalChannel></DMXChannel>
+        <DMXChannel Offset="2" Geometry="Beam"><LogicalChannel Attribute="VendorShutterMode">
+          <ChannelFunction Attribute="VendorShutterMode" Name="Vendor shutter mode" DMXFrom="0/1"/>
+        </LogicalChannel></DMXChannel>
+      </DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['strobe', 'shutter']);
+  });
+
   it('utilise les FeatureGroups et Feature officiels pour classifier les attributs fabricants', () => {
     const xml = `<GDTF><FixtureType Name="Feature fixture" Manufacturer="Acme">
       <AttributeDefinitions>
