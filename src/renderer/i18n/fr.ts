@@ -44,6 +44,7 @@ export const fr = {
   'project.unsavedMessage': 'Le projet actuel contient des modifications non enregistrées. Continuer sans enregistrer ?',
   'project.unsavedConfirm': 'Continuer sans enregistrer',
 
+  'api.error.title': 'Action impossible',
   'common.cancel': 'Annuler',
   'common.create': 'Créer',
   'common.close': 'Fermer',
