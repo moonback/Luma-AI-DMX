@@ -40,6 +40,16 @@ describe('catalogue partagé du cœur', () => {
     expect(translateCore('en', 'programming.cueSceneUnknown', { name: 'Opening' })).toBe('Cue “Opening”: unknown scene');
   });
 
+  it('traduit les erreurs de profils et de patch avec leurs paramètres', () => {
+    expect(translateCore('en', 'fixture.reservedBuiltinId', { id: 'generic-par' })).toBe('Profile “generic-par”: identifier is reserved for a built-in profile');
+    expect(translateCore('fr', 'fixture.universeCapacityExceeded', { universe: 2, channels: 8, fixtureIndex: 3, fixtureCount: 6 }))
+      .toBe('Plus de place dans l’univers 2 pour 8 canaux (projecteur 3/6)');
+    expect(translateCore('en', 'fixture.validationFailed', { details: 'Address overlaps fixture A' }))
+      .toBe('Validation failed: Address overlaps fixture A');
+    expect(translateCore('en', 'fixture.installPlanPdfUnavailable'))
+      .toBe('PDF export is unavailable here; the installation plan requires the rendering engine.');
+  });
+
   it('préserve le placeholder si un paramètre manque', () => {
     expect(translateCore('en', 'error.invalidCommand')).toBe('Invalid command: {details}');
   });
