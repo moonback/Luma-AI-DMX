@@ -276,6 +276,29 @@ describe('effets', () => {
   });
 });
 
+describe('formes panTilt pendule et zigzag', () => {
+  const index = new ProjectIndex(demoProject());
+  const spot = index.resolveTargets({ fixtureIds: ['spot1'], groupIds: [] });
+  const at = (shape: 'pingpong' | 'zigzag', phase: number) =>
+    computeEffect(fx({ type: 'panTilt', targets: { fixtureIds: ['spot1'], groupIds: [] }, params: { shape, amplitude: 1, offset: 0.5 } as Effect['params'] }), phase, spot).spot1!;
+
+  it('pendule : balance en pan, arc en tilt aux extrémités', () => {
+    expect(at('pingpong', 0)).toEqual({ pan: 0.5, tilt: 0.25 });
+    const end = at('pingpong', 0.25);
+    expect(end.pan).toBeCloseTo(1);
+    expect(end.tilt).toBeCloseTo(0.75);
+  });
+
+  it('zigzag : balayage linéaire en pan, aller-retours en tilt', () => {
+    const quarter = at('zigzag', 0.0625);
+    expect(quarter.pan).toBeCloseTo(0.625);
+    expect(quarter.tilt).toBeCloseTo(1);
+    const edge = at('zigzag', 0.25);
+    expect(edge.pan).toBeCloseTo(1);
+    expect(edge.tilt).toBeCloseTo(0.5);
+  });
+});
+
 describe('timeline', () => {
   it('les effets synchronisés suivent le BPM de la timeline, pas celui du moteur', () => {
     const p = demoProject();
