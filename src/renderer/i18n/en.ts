@@ -352,6 +352,8 @@ export const en: Record<MessageKey, string> = {
   'settings.components.profileSavePending': 'There are unsaved changes. Save them before switching configurations.',
   'settings.components.dashboardTitle': 'Dashboard sections',
   'settings.components.dashboardHint': 'Hide blocks you do not need. Underlying data and functions remain active.',
+  'settings.components.dashboardReadiness': 'Show readiness',
+  'settings.components.dashboardEngineHealth': 'Engine and output health',
   'settings.components.dashboardFirstSteps': 'Getting started guide',
   'settings.components.dashboardHardware': 'Hardware and DMX output indicators',
   'settings.components.dashboardShow': 'Show and BPM indicators',
