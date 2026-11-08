@@ -33,7 +33,7 @@ export const CORE_MESSAGES = {
   'project.versionTooNew': ['Format v{version} créé par une version plus récente du logiciel (supporté : v{supported}).', 'Format v{version} was created by a newer version of the software (supported: v{supported}).'],
   'project.noMigration': ['Aucune migration depuis la version {version}.', 'No migration is available from version {version}.'],
   'project.corruptJson': ['Fichier corrompu (JSON illisible) : {reason}. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'Corrupt file (unreadable JSON): {reason}. A recovery copy may be available (Settings › Backups).'],
-  'project.invalidData': ['Le projet contient des données invalides : {details}. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'The project contains invalid data: {details}. A recovery copy may be available (Settings › Backups).']
+  'project.invalidData': ['Le projet contient des données invalides : {details}. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'The project contains invalid data: {details}. A recovery copy may be available (Settings › Backups).'],
   'music.audioHashMismatch': ['Empreinte du fichier audio incohérente', 'Audio file fingerprint mismatch'],
   'music.sectionNotFound': ['Section introuvable', 'Section not found'],
   'music.showNotGenerated': ['Générez d’abord le show de ce morceau', 'Generate this track’s show first'],
