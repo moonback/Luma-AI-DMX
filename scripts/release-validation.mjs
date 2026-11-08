@@ -22,6 +22,16 @@ export function validateReleaseMetadata({ version, changelog, existingTags = [] 
     return errors;
   }
   if (existingTags.includes(version)) errors.push('Le tag Git ' + version + ' existe déjà.');
+  const changelogLines = changelog.split(/\r?\n/u);
+  for (const existingTag of existingTags) {
+    if (!SEMVER.test(existingTag)) continue;
+    const heading = changelogLines.find((line) => line.startsWith('## [' + existingTag + ']'));
+    if (!heading) {
+      errors.push('Le tag Git ' + existingTag + ' ne possède aucune section dans le CHANGELOG.md.');
+    } else if (!/^## \[[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?\] — \d{4}-\d{2}-\d{2}$/u.test(heading)) {
+      errors.push('La section du tag Git ' + existingTag + ' doit comporter une date YYYY-MM-DD.');
+    }
+  }
   if (changelog.split(/\r?\n/u).some((line) => line.startsWith('## [' + version + ']'))) {
     errors.push('Le changelog contient déjà une section pour ' + version + '.');
   }
