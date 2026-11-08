@@ -5,3 +5,5 @@ test-results/
 playwright-report/
 *.log
 coverage/
+.leanna
+.project-knowledge.json
