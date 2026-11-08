@@ -570,7 +570,7 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'dash.readiness.state.blocked': 'Issue detected',
   'dash.readiness.state.unknown': 'Incomplete data',
   'dash.readiness.patch': 'DMX patch',
-  'dash.readiness.patch.ready': 'No conflicts detected · {n} issue(s)',
+  'dash.readiness.patch.ready': 'No patch conflicts detected.',
   'dash.readiness.patch.warning': 'No fixtures in the patch.',
   'dash.readiness.patch.blocked': '{n} patch issue(s) need attention.',
   'dash.readiness.patch.unknown': 'Patch status unavailable.',
