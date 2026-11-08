@@ -2,6 +2,7 @@ import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import type { Channel, ChannelRange, FixtureMode, FixtureProfile, FixtureType } from '../model/schemas';
 import { dedupeRanges, slug } from './ofl';
 import { validateProfile } from './profiles';
+import { resolveMa2SemanticAttribute } from './ma2AttributeResolver';
 import { readZip, ZipError } from '../util/zip';
 
 /**
@@ -65,11 +66,19 @@ const CONTINUOUS = new Set(['dimmer', 'pan', 'tilt', 'zoom', 'focus', 'iris', 'p
 function lumaAttribute(lc: Node): string | null {
   const a = str(lc, 'Attribute') ?? '';
   if (GDTF_ATTR[a]) return GDTF_ATTR[a]!;
-  for (const f of arr(lc, 'ChannelFunction')) {
+  const functions = arr(lc, 'ChannelFunction');
+  for (const f of functions) {
     const fa = str(f, 'Attribute') ?? '';
-    if (/^Shutter\dStrobe/u.test(fa)) return 'strobe';
+    if (GDTF_ATTR[fa]) return GDTF_ATTR[fa]!;
+    if (/^Shutter\\dStrobe/u.test(fa)) return 'strobe';
+    const resolved = resolveMa2SemanticAttribute({
+      attribute: a,
+      subattribute: fa,
+      names: [str(f, 'Name'), str(lc, 'Name'), a, fa],
+    });
+    if (resolved) return resolved;
   }
-  return null;
+  return resolveMa2SemanticAttribute({ attribute: a, names: [str(lc, 'Name'), a] });
 }
 
 /** CIE 1931 xyY (« 0.64,0.33,21.3 ») → sRGB hex, brightness normalised. */
