@@ -3142,32 +3142,35 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P3
 - **Type** : documentation
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : 🟡 Partiel
 
-**Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0` et les tags `1.4.0` à `1.8.0` existent, mais `CHANGELOG.md` s’arrête à `0.2.0` : tout ce qui a été livré depuis s’accumule dans « Non publié ». `scripts/release.mjs` ne touche pas au changelog.
+**Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0`, alors que le changelog versionné s’arrête à `0.2.0` et que les notes récentes sont regroupées dans « Non publié ». L’historique publié ne doit pas être reconstitué par supposition.
 
-**Preuves dans le code.**
+**Réalisation (08/11/2026).** `scripts/release-validation.mjs` fournit une validation pure et testable : SemVer stricte, absence de section de version dupliquée, présence de notes catégorisées dans « Non publié » et absence du tag local. `scripts/release.mjs` exécute ce contrôle avant les builds, vérifie aussi le tag distant et la release GitHub, puis refuse de publier si une vérification échoue. Sept tests unitaires couvrent les cas valides et les principaux refus. Une déclaration TypeScript accompagne le module ESM.
 
-- `package.json` : `"version": "1.9.0"`.
-- `CHANGELOG.md` : dernière section versionnée `[0.2.0] — 2026-10-18`.
-- `scripts/release.mjs` : aucune mention du changelog.
+**Limite volontaire.** Les notes accumulées ne sont pas ventilées artificiellement entre les versions 1.4.0 à 1.8.0. Cette attribution reste à faire à partir des commits réellement inclus dans chaque tag. Le script ne réécrit pas automatiquement le changelog ni les tags : une mutation automatique au moment d’une release risquerait de publier une documentation non vérifiée.
 
-**Problème ou opportunité.** Les notes de version ne correspondent plus aux versions installées.
+**Problème restant.** Les versions historiques publiées ne disposent pas encore chacune d’une section datée et vérifiée dans `CHANGELOG.md`.
 
-**Résultat attendu.** Chaque version publiée a sa section datée dans `CHANGELOG.md`, et la release refuse de partir avec une section « Non publié » vide.
+**Résultat attendu.** Chaque version publiée possède une section fidèle à son contenu livré ; une release future est bloquée si ses notes sont absentes, vides, mal catégorisées ou si son tag existe déjà.
 
-**Travaux à effectuer.**
+**Travaux restants.**
 
-1. Répartir le contenu de « Non publié » entre les versions 1.x d’après l’historique git.
-2. Faire renommer « Non publié » en `[x.y.z] — date` par `scripts/release.mjs`.
+1. Comparer les tags 1.4.0 à 1.8.0 avec leurs commits et établir l’attribution des changements sans extrapolation.
+2. Créer les sections historiques datées uniquement après vérification des commits concernés.
+3. Ajouter un test d’intégration du script dans un dépôt Git temporaire, sans lancer de publication ni toucher au dépôt de travail.
 
 **Critères d’acceptation.**
 
-- [ ] La dernière section versionnée de `CHANGELOG.md` correspond à `package.json`.
+- [x] La prévalidation SemVer / changelog / tag local est isolée et testable.
+- [x] La release vérifie aussi l’absence du tag distant et d’une release GitHub existante.
+- [ ] La dernière section versionnée de `CHANGELOG.md` correspond à la version publiée et les versions 1.x historiques sont attribuées à partir des tags.
+- [ ] Le test d’intégration sur dépôt temporaire couvre le préflight complet.
 
 **Tests requis.**
 
-- Test du script de release sur un dépôt temporaire.
+- Sept tests unitaires dans `tests/unit/release-validation.test.ts` (ajoutés, exécution non effectuée ici).
+- Test d’intégration de `scripts/release.mjs` sur un dépôt temporaire avec tags locaux et distants simulés.
 
 **Dépendances.** Aucune.
 
@@ -3175,7 +3178,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Impact attendu.** faible
 
-**Risques et précautions.** Ne pas réécrire les tags existants.
+**Risques et précautions.** Ne jamais réécrire les tags existants ni attribuer des notes à une version sans preuve issue de son historique Git.
 
 ### Fiches de la phase 3 — Améliorations fonctionnelles à fort impact
 
