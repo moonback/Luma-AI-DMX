@@ -24,6 +24,13 @@ export const CORE_MESSAGES = {
   'locate.noFixtures': ['Aucun projecteur à localiser', 'No fixtures to locate'],
   'locate.noSequence': ['Aucune séquence de localisation en cours', 'No fixture-location sequence is running'],
   'locate.frameOutOfSequence': ['Image hors séquence', 'Frame is outside the sequence'],
+  'project.notObject': ['Le fichier ne contient pas un objet projet. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'The file does not contain a project object. A recovery copy may be available (Settings › Backups).'],
+  'project.invalidFile': ['Ce fichier n’est pas un projet Luma AI DMX. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'This file is not a Luma AI DMX project. A recovery copy may be available (Settings › Backups).'],
+  'project.versionMissing': ['Version de format absente. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'Project format version is missing. A recovery copy may be available (Settings › Backups).'],
+  'project.versionTooNew': ['Format v{version} créé par une version plus récente du logiciel (supporté : v{supported}).', 'Format v{version} was created by a newer version of the software (supported: v{supported}).'],
+  'project.noMigration': ['Aucune migration depuis la version {version}.', 'No migration is available from version {version}.'],
+  'project.corruptJson': ['Fichier corrompu (JSON illisible) : {reason}. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'Corrupt file (unreadable JSON): {reason}. A recovery copy may be available (Settings › Backups).'],
+  'project.invalidData': ['Le projet contient des données invalides : {details}. Une copie de récupération est peut-être disponible (Paramètres › Sauvegardes).', 'The project contains invalid data: {details}. A recovery copy may be available (Settings › Backups).']
   'music.audioHashMismatch': ['Empreinte du fichier audio incohérente', 'Audio file fingerprint mismatch'],
   'music.sectionNotFound': ['Section introuvable', 'Section not found'],
   'music.showNotGenerated': ['Générez d’abord le show de ce morceau', 'Generate this track’s show first'],
