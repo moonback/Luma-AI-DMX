@@ -57,7 +57,10 @@ export function PanTiltConsole() {
     setSelectionMode(true);
   };
   const openModal = () => { if (selIds.length > 0) setModalOpen(true); };
-  const closeModal = () => setModalOpen(false);
+  const closeModal = () => {
+    setModalOpen(false);
+    if (!selectionMode) setSelIds([]);
+  };
 
   const selectedFixtures = selIds
     .map((id) => byId.get(id))
