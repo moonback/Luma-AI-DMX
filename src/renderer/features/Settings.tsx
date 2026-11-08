@@ -364,7 +364,12 @@ export function SettingsPage() {
     const name = replaceActive && activeIndex >= 0 ? s.appearance.workspaceProfiles[activeIndex].name : workspaceProfileName.trim();
     if (!name) return;
     const profiles = [...s.appearance.workspaceProfiles];
-    const profile: WorkspaceProfile = { id: replaceActive && activeIndex >= 0 ? profiles[activeIndex].id : crypto.randomUUID(), name, components: s.appearance.components };
+    let uniqueName = name;
+    if (!replaceActive) {
+      let suffix = 2;
+      while (profiles.some((p) => p.name.toLocaleLowerCase() === uniqueName.toLocaleLowerCase())) uniqueName = name + ' (' + suffix++ + ')';
+    }
+    const profile: WorkspaceProfile = { id: replaceActive && activeIndex >= 0 ? profiles[activeIndex].id : crypto.randomUUID(), name: uniqueName, components: s.appearance.components };
     if (replaceActive && activeIndex >= 0) profiles[activeIndex] = profile;
     else profiles.push(profile);
     if (profiles.length > 30) {
@@ -411,7 +416,7 @@ export function SettingsPage() {
         existing.push(profile);
         return profile;
       });
-      const nextSettings = { ...s, appearance: { ...s.appearance, workspaceProfiles: existing, activeWorkspaceProfileId: imported[0]?.id ?? s.appearance.activeWorkspaceProfileId } };
+      const nextSettings = { ...s, appearance: { ...s.appearance, workspaceProfiles: existing } };
       await commitWorkspaceSettings(nextSettings);
     } catch (error) {
       useStore.getState().toast({ kind: 'error', title: tr('settings.components.profileImportFailed'), detail: error instanceof Error ? error.message : String(error) });
@@ -471,7 +476,7 @@ export function SettingsPage() {
             <p className="small muted" style={{ marginTop: 0 }}>{tr('settings.components.profilesHint')}</p>
             <div className="grid g2" style={{ alignItems: 'end' }}>
               <Field label={tr('settings.components.profileSelector')}>
-                <select className="select" value={s.appearance.activeWorkspaceProfileId ?? ''} disabled={dirty || s.appearance.workspaceProfiles.length === 0} onChange={(e) => void applyWorkspaceProfile(e.target.value)}>
+                <select className="select" value={s.appearance.activeWorkspaceProfileId ?? ''} disabled={dirty || s.appearance.workspaceProfiles.length === 0} onChange={(e) => void applyWorkspaceProfile(e.target.value)} data-testid="workspace-profile-select">
                   <option value="">{tr('settings.components.profileSelectPlaceholder')}</option>
                   {s.appearance.workspaceProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
                 </select>
@@ -490,11 +495,11 @@ export function SettingsPage() {
                   <input className="input" maxLength={60} value={workspaceProfileName} onChange={(e) => setWorkspaceProfileName(e.target.value)} placeholder={tr('settings.components.profileNamePlaceholder')} />
                 </Field>
               </div>
-              <button className="btn primary sm" disabled={!workspaceProfileName.trim() || s.appearance.workspaceProfiles.length >= 30} onClick={() => void saveWorkspaceProfile()}>{tr('settings.components.profileSave')}</button>
+              <button className="btn primary sm" disabled={!workspaceProfileName.trim() || s.appearance.workspaceProfiles.length >= 30} onClick={() => void saveWorkspaceProfile()} data-testid="workspace-profile-save">{tr('settings.components.profileSave')}</button>
             </div>
             <div className="row" style={{ flexWrap: 'wrap', marginTop: 10 }}>
-              <button className="btn sm" disabled={!s.appearance.workspaceProfiles.length} onClick={exportWorkspaceProfiles}>{tr('settings.components.profileExport')}</button>
-              <button className="btn sm" onClick={() => workspaceProfileFile.current?.click()}>{tr('settings.components.profileImport')}</button>
+              <button className="btn sm" disabled={!s.appearance.workspaceProfiles.length} onClick={exportWorkspaceProfiles} data-testid="workspace-profile-export">{tr('settings.components.profileExport')}</button>
+              <button className="btn sm" onClick={() => workspaceProfileFile.current?.click()} data-testid="workspace-profile-import">{tr('settings.components.profileImport')}</button>
               <input ref={workspaceProfileFile} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={(e) => void importWorkspaceProfiles(e)} />
             </div>
             {dirty && <p className="small muted">{tr('settings.components.profileSavePending')}</p>}
