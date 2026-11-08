@@ -32,6 +32,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 - Stage 3D : interface entièrement localisée en français et anglais, avec tests dédiés aux préférences, préréglages, géométries et ressources Three.js.
 
 ### Modifié
+- Paramètres › Apparence › Composants du Dashboard : visibilité indépendante des panneaux « Préparation du show » et « Santé du moteur et des sorties », incluse dans les profils d’espace de travail.
 - Directeur IA : refonte du pipeline de conversation et de génération de propositions ; contrat d'actions v3, contraintes de requête vérifiées et option d'application automatique désactivée par défaut.
 - Assistant IA : prompts configurables, onglet Assistant dans les paramètres et clarification explicite des demandes ambiguës.
 - Analyse audio et Song-to-Show : enrichissement de l'analyse, du suivi de tempo et de la couverture vocale.
