@@ -16,7 +16,7 @@ describe('messages structurés du canal IPC', () => {
     expect(reply).toEqual({
       ok: false,
       error: 'Scène introuvable',
-      message: { key: 'programming.sceneNotFound', vars: undefined },
+      message: { key: 'programming.sceneNotFound' },
     });
     expect(logger.error).not.toHaveBeenCalled();
   });
