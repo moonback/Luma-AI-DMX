@@ -3146,7 +3146,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0`, alors que le changelog versionné s’arrête à `0.2.0` et que les notes récentes sont regroupées dans « Non publié ». L’historique publié ne doit pas être reconstitué par supposition.
 
-**Réalisation (08/11/2026).** `scripts/release-validation.mjs` fournit une validation pure et testable : SemVer stricte, absence de section de version dupliquée, présence de notes catégorisées dans « Non publié » et absence du tag local. `scripts/release.mjs` exécute ce contrôle avant les builds, vérifie aussi le tag distant et la release GitHub, puis refuse de publier si une vérification échoue. Sept tests unitaires couvrent les cas valides et les principaux refus. Une déclaration TypeScript accompagne le module ESM.
+**Réalisation (08/11/2026).** `scripts/release-validation.mjs` fournit une validation pure et testable : SemVer stricte, absence de section de version dupliquée, présence de notes catégorisées dans « Non publié » et absence du tag local. `scripts/release.mjs` exécute ce contrôle avant les builds, vérifie aussi le tag distant et la release GitHub, puis refuse de publier si une vérification échoue. Huit tests unitaires couvrent les cas valides et les principaux refus. Une déclaration TypeScript accompagne le module ESM.
 
 **Limite volontaire.** Les notes accumulées ne sont pas ventilées artificiellement entre les versions 1.4.0 à 1.8.0. Cette attribution reste à faire à partir des commits réellement inclus dans chaque tag. Le script ne réécrit pas automatiquement le changelog ni les tags : une mutation automatique au moment d’une release risquerait de publier une documentation non vérifiée.
 
@@ -3169,7 +3169,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Tests requis.**
 
-- Sept tests unitaires dans `tests/unit/release-validation.test.ts` (ajoutés, exécution non effectuée ici).
+- Huit tests unitaires dans `tests/unit/release-validation.test.ts` (ajoutés, exécution non effectuée ici).
 - Test d’intégration de `scripts/release.mjs` sur un dépôt temporaire avec tags locaux et distants simulés.
 
 **Dépendances.** Aucune.
