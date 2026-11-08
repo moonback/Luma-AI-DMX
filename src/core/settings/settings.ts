@@ -80,6 +80,19 @@ export const componentVisibilitySchema = z.object({
 export type ComponentVisibility = z.infer<typeof componentVisibilitySchema>;
 export const DEFAULT_COMPONENT_VISIBILITY: ComponentVisibility = componentVisibilitySchema.parse({});
 
+/** A named, portable snapshot of the three workspace visibility groups. */
+export const workspaceProfileSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(60),
+  components: componentVisibilitySchema,
+});
+export type WorkspaceProfile = z.infer<typeof workspaceProfileSchema>;
+export const workspaceProfilesFileSchema = z.object({
+  format: z.literal('luma-workspace-presets'),
+  version: z.literal(1),
+  profiles: z.array(workspaceProfileSchema).min(1).max(30),
+});
+
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
   general: z
@@ -113,6 +126,9 @@ export const settingsSchema = z.object({
       language: z.enum(['fr', 'en']).default('fr'),
       /** Per-user workspace visibility, independent from the currently opened show. */
       components: componentVisibilitySchema.default({}),
+      /** Named visibility layouts, stored with user settings and portable as JSON. */
+      workspaceProfiles: z.array(workspaceProfileSchema).max(30).default([]),
+      activeWorkspaceProfileId: z.string().max(80).nullable().default(null),
     })
     .default({ reducedMotion: false, uiScale: 1, language: 'fr', components: {} }),
   engine: z
