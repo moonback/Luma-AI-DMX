@@ -190,7 +190,12 @@ export function runShortcut(action: ShortcutAction): boolean {
   const s = useStore.getState();
   const list = s.cueListId;
   // Former Stage 3D shortcut: the same page, opened in 3D.
-  if (action === 'page:stage3d') { s.setStageMode('3d'); s.setPage('visualizer'); return true; }
+  if (action === 'page:stage3d') {
+    if (!s.componentVisibility.pages.visualizer || !s.componentVisibility.stage3d) return false;
+    s.setStageMode('3d');
+    s.setPage('visualizer');
+    return true;
+  }
   if (action.startsWith('page:')) {
     const target = action.slice(5) as PageId;
     if (target !== 'settings' && !s.componentVisibility.pages[target as keyof typeof s.componentVisibility.pages]) return false;
