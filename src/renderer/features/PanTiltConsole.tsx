@@ -48,13 +48,13 @@ export function PanTiltConsole() {
 
   const openSingle = (id: string) => { lastClicked.current = id; setSelIds([id]); setModalOpen(true); };
   const toggleSelectionMode = () => {
-    setSelectionMode((active) => {
-      if (active) {
-        setSelIds([]);
-        lastClicked.current = null;
-      }
-      return !active;
-    });
+    if (selectionMode) {
+      setSelectionMode(false);
+      setSelIds([]);
+      lastClicked.current = null;
+      return;
+    }
+    setSelectionMode(true);
   };
   const openModal = () => { if (selIds.length > 0) setModalOpen(true); };
   const closeModal = () => setModalOpen(false);
