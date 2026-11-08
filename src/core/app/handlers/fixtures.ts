@@ -138,7 +138,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
     }
     case 'profile.remove': {
       const used = app.project.patch.filter((f) => f.profileId === cmd.id);
-      if (used.length) throw new UserError(`Profil utilisé par ${used.length} projecteur(s)`);
+      if (used.length) throw new UserError(`Profil utilisé par ${used.length} projecteur(s)`, 'fixture.profileInUse', { count: used.length });
       await removeFromLibrary(app, cmd.id);
       app.mutate((d) => { d.profiles = d.profiles.filter((p) => p.id !== cmd.id); });
       return ok;
