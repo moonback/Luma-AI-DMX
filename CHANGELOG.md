@@ -126,6 +126,23 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ### Modifié
 - Configuration de build Electron/Vite et règles de qualité adaptées au projet.
 
+## [0.4.0] — 2026-10-18
+
+### Ajouté
+- Console Live : palettes rapides organisées par famille de projecteurs.
+- Thème visuel futuriste animé et composants d'interface harmonisés.
+
+### Modifié
+- Refonte UX des vues Dashboard, Console Live, Cues, Programmer, Musique, Paramètres et Visualizer.
+- Éditeur de sections musicales et panneau de scène améliorés.
+- Localisation française et anglaise étendue aux écrans et composants concernés.
+
+## [0.3.0] — 2026-10-18
+
+### Modifié
+- Documentation du projet enrichie avec captures d'écran des principaux parcours : Dashboard, console, cues, moniteur DMX, IA, analyse audio, Song-to-Show et visualiseur 3D.
+- Scénarios E2E complétés pour accompagner les parcours documentés.
+
 ## [0.2.0] — 2026-10-18
 
 Passage au « niveau 2 » (docs/RAPPORT-NIVEAU-2.md) : fondations, maintenabilité, outils de distribution et de bêta.
