@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ChangeEvent } from 'react';
-import { FolderOpen, KeyRound, Trash2, X } from 'lucide-react';
+import { AudioLines, Bot, Check, DatabaseBackup, FolderOpen, Keyboard, KeyRound, LayoutTemplate, Network, Palette, ScrollText, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, X, type LucideIcon } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
-import { Field, NumberInput, PageHead, Panel, Tabs } from '../components/ui';
+import { Field, Modal, NumberInput, PageHead, Panel } from '../components/ui';
 import { DEFAULT_COMPONENT_VISIBILITY, resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, workspaceProfilesFileSchema, type Settings, type WorkspaceProfile } from '../../core/settings/settings';
 import { comboFromEvent } from '../shortcuts';
 import type { RecoveryEntry } from '../../core/project/store';
@@ -18,8 +18,17 @@ import { useT } from '../i18n';
 import { openProject } from '../App';
 import { splitPath } from './StartScreen';
 
-const TAB_IDS = ['general', 'appearance', 'engine', 'network', 'ai', 'assistant', 'audio', 'shortcuts', 'control', 'logs', 'backups'] as const;
-type TabId = (typeof TAB_IDS)[number];
+type TabId = 'general' | 'appearance' | 'engine' | 'network' | 'ai' | 'assistant' | 'audio' | 'shortcuts' | 'control' | 'logs' | 'backups';
+const TAB_ICONS: Record<TabId, LucideIcon> = {
+  general: Settings2, appearance: Palette, shortcuts: Keyboard, engine: ShieldCheck, network: Network, audio: AudioLines,
+  control: SlidersHorizontal, ai: Sparkles, assistant: Bot, logs: ScrollText, backups: DatabaseBackup,
+};
+const TAB_GROUPS: readonly { id: 'app' | 'show' | 'ai' | 'system'; tabs: readonly TabId[] }[] = [
+  { id: 'app', tabs: ['general', 'appearance', 'shortcuts'] },
+  { id: 'show', tabs: ['engine', 'network', 'audio', 'control'] },
+  { id: 'ai', tabs: ['ai', 'assistant'] },
+  { id: 'system', tabs: ['logs', 'backups'] },
+];
 
 function ShortcutEditor({ value, onChange }: { value: Record<string, string>; onChange: (v: Record<string, string>) => void }) {
   const tr = useT();
@@ -333,6 +342,7 @@ export function SettingsPage() {
   const [saved, setSaved] = useState<Settings | null>(null);
   const [tab, setTab] = useState<TabId>('general');
   const [workspaceProfileName, setWorkspaceProfileName] = useState('');
+  const [profilesOpen, setProfilesOpen] = useState(false);
   const workspaceProfileFile = useRef<HTMLInputElement>(null);
   const [key, setKey] = useState('');
   const [voiceKey, setVoiceKey] = useState('');
@@ -423,20 +433,27 @@ export function SettingsPage() {
     }
   };
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
-  const save = async () => {
-    if (await act({ type: 'settings.update', settings: s })) {
-      setSaved(s);
-      useStore.setState({ shortcuts: s.shortcuts, componentVisibility: s.appearance.components, language: s.appearance.language, installPlanButton: s.general.installPlanButton });
+  const save = async (n: Settings = s) => {
+    if (await act({ type: 'settings.update', settings: n })) {
+      setS(n);
+      setSaved(n);
+      useStore.setState({ shortcuts: n.shortcuts, componentVisibility: n.appearance.components, language: n.appearance.language, installPlanButton: n.general.installPlanButton });
       const current = useStore.getState().page;
-      if (current !== 'settings' && !s.appearance.components.pages[current as keyof typeof s.appearance.components.pages]) {
-        const fallback = (Object.keys(s.appearance.components.pages) as Array<keyof typeof s.appearance.components.pages>).find((id) => s.appearance.components.pages[id]) ?? 'settings';
+      if (current !== 'settings' && !n.appearance.components.pages[current as keyof typeof n.appearance.components.pages]) {
+        const fallback = (Object.keys(n.appearance.components.pages) as Array<keyof typeof n.appearance.components.pages>).find((id) => n.appearance.components.pages[id]) ?? 'settings';
         useStore.getState().setPage(fallback);
       }
-      void externalControl.configure(s.control);
+      void externalControl.configure(n.control);
       useStore.getState().toast({ kind: 'success', title: tr('settings.saved') });
     }
   };
-  const tabs = TAB_IDS.map((id) => ({ id, label: tr(`settings.tab.${id}`) }));
+  const activeProfile = s.appearance.workspaceProfiles.find((p) => p.id === s.appearance.activeWorkspaceProfileId);
+  // Saves every pending edit and copies the current layout into the active workspace profile.
+  const saveToActiveProfile = () => activeProfile && void save({
+    ...s,
+    appearance: { ...s.appearance, workspaceProfiles: s.appearance.workspaceProfiles.map((p) => (p.id === activeProfile.id ? { ...p, components: s.appearance.components } : p)) },
+  });
+  const TabIcon = TAB_ICONS[tab];
   // Removing recent projects is saved at once, without committing the other pending edits.
   const forgetRecent = async (recentProjects: string[]) => {
     const paths = s.general.recentProjects.filter((p) => !recentProjects.includes(p));
@@ -447,13 +464,38 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="page">
-      <PageHead title={tr('nav.settings')} subtitle={tr('settings.subtitle')}>
-        <button className="btn" disabled={!dirty} onClick={() => setS(saved)}>{tr('settings.discard')}</button>
-        <button className="btn primary" disabled={!dirty} onClick={() => void save()} data-testid="settings-save">{tr('common.save')}</button>
-      </PageHead>
-      <Tabs tabs={tabs} value={tab} onChange={setTab} />
-      <div style={{ maxWidth: 860, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="page settings-page">
+      <PageHead title={tr('nav.settings')} subtitle={tr('settings.subtitle')} />
+      <div className="settings-layout">
+        <nav className="settings-nav" role="tablist" aria-orientation="vertical" aria-label={tr('nav.settings')}>
+          {TAB_GROUPS.map((g) => (
+            <div key={g.id} className="settings-nav-group" role="presentation">
+              <div className="settings-nav-title" aria-hidden="true">{tr(`settings.group.${g.id}`)}</div>
+              {g.tabs.map((id) => {
+                const Icon = TAB_ICONS[id];
+                return (
+                  <button key={id} role="tab" aria-selected={tab === id} className={`settings-nav-item ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+                    <span className="settings-nav-icon"><Icon size={15} /></span>
+                    <span className="settings-nav-text">
+                      <span className="settings-nav-label">{tr(`settings.tab.${id}`)}</span>
+                      {/* Kept out of the accessible name, which stays the bare tab label. */}
+                      <span className="settings-nav-desc" aria-hidden="true">{tr(`settings.desc.${id}`)}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="settings-main">
+      <div key={tab} className="settings-content" role="tabpanel">
+        <header className="settings-hero">
+          <span className="settings-hero-icon"><TabIcon size={22} /></span>
+          <div>
+            <h2>{tr(`settings.tab.${tab}`)}</h2>
+            <p>{tr(`settings.desc.${tab}`)}</p>
+          </div>
+        </header>
         {tab === 'general' && (
           <Panel title={tr('settings.tab.general')}>
             <div className="grid g2" style={{ alignItems: 'start' }}>
@@ -473,6 +515,16 @@ export function SettingsPage() {
         {tab === 'general' && <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />}
         {tab === 'appearance' && (
           <Panel title={tr('settings.components.profilesTitle')}>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
+              <span className="grow small muted">{tr('settings.components.profilesHint')}</span>
+              <span className="badge cyan">{s.appearance.workspaceProfiles.find((p) => p.id === s.appearance.activeWorkspaceProfileId)?.name ?? tr('settings.components.profileSelectPlaceholder')}</span>
+              <span className="badge">{s.appearance.workspaceProfiles.length} / 30</span>
+              <button className="btn primary sm" onClick={() => setProfilesOpen(true)} data-testid="workspace-profiles-open"><LayoutTemplate size={13} />{tr('settings.components.profilesOpen')}</button>
+            </div>
+          </Panel>
+        )}
+        {tab === 'appearance' && profilesOpen && (
+          <Modal title={tr('settings.components.profilesTitle')} onClose={() => setProfilesOpen(false)} footer={<button className="btn" onClick={() => setProfilesOpen(false)}>{tr('common.close')}</button>}>
             <p className="small muted" style={{ marginTop: 0 }}>{tr('settings.components.profilesHint')}</p>
             <div className="grid g2" style={{ alignItems: 'end' }}>
               <Field label={tr('settings.components.profileSelector')}>
@@ -503,7 +555,7 @@ export function SettingsPage() {
               <input ref={workspaceProfileFile} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={(e) => void importWorkspaceProfiles(e)} />
             </div>
             {dirty && <p className="small muted">{tr('settings.components.profileSavePending')}</p>}
-          </Panel>
+          </Modal>
         )}
         {tab === 'appearance' && (
           <Panel title={tr('settings.tab.appearance')}>
@@ -714,6 +766,22 @@ export function SettingsPage() {
           </Panel>
         )}
         {tab === 'backups' && <StoragePanel />}
+      </div>
+          <div className={`settings-bar ${dirty ? 'dirty' : ''}`}>
+            <span className="settings-bar-state" role="status">
+              {dirty ? <span className="settings-bar-dot" /> : <Check size={14} />}
+              {tr(dirty ? 'settings.bar.dirty' : 'settings.bar.clean')}
+            </span>
+            <span className="grow" />
+            <button className="btn" disabled={!dirty} onClick={() => setS(saved)}>{tr('settings.discard')}</button>
+            {dirty && activeProfile && (
+              <button className="btn settings-bar-profile" onClick={saveToActiveProfile} data-testid="settings-save-profile" title={tr('settings.bar.saveProfileHint')}>
+                <LayoutTemplate size={13} />{tr('settings.bar.saveProfile', { name: activeProfile.name })}
+              </button>
+            )}
+            <button className="btn primary" disabled={!dirty} onClick={() => void save()} data-testid="settings-save">{tr('common.save')}</button>
+          </div>
+        </div>
       </div>
     </div>
   );

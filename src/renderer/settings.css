@@ -1,0 +1,106 @@
+/* ------------------------------------------------------------------ */
+/* Settings page: grouped side navigation, section hero, sticky save   */
+/* bar, toggle switches. Motion is transform/opacity only and from-    */
+/* frame keyframes, so no transform lingers on ancestors of modals.    */
+/* ------------------------------------------------------------------ */
+.settings-layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 18px; align-items: start; }
+
+/* Side navigation */
+.settings-nav { position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; padding: 10px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--glass, var(--panel)); }
+.settings-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.settings-nav-title { padding: 0 8px 4px; font-size: 10px; font-weight: 650; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-2); opacity: 0.7; }
+.settings-nav-item {
+  position: relative; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: var(--radius-sm);
+  background: none; color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dur), color var(--dur);
+}
+.settings-nav-item::before {
+  content: ''; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--violet), var(--cyan)); transform: scaleY(0); transition: transform 260ms var(--ease-out);
+}
+.settings-nav-item:hover { background: rgba(255, 255, 255, 0.045); color: var(--text); }
+.settings-nav-item:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
+.settings-nav-item.active { background: rgba(139, 92, 246, 0.14); color: var(--text); box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.22); }
+.settings-nav-item.active::before { transform: scaleY(1); }
+.settings-nav-icon {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); transition: color var(--dur), background var(--dur), transform 260ms var(--ease-out);
+}
+.settings-nav-item:hover .settings-nav-icon { transform: translateX(2px); }
+.settings-nav-item.active .settings-nav-icon { color: #c4b5fd; background: linear-gradient(140deg, rgba(139, 92, 246, 0.35), rgba(34, 211, 238, 0.18)); border-color: rgba(139, 92, 246, 0.4); }
+.settings-nav-text { display: flex; flex-direction: column; min-width: 0; }
+.settings-nav-label { font-weight: 560; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.settings-nav-desc { font-size: 11px; line-height: 1.3; color: var(--text-2); opacity: 0.7; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Content column */
+.settings-main { min-width: 0; max-width: 900px; display: flex; flex-direction: column; }
+.settings-content { display: flex; flex-direction: column; gap: 14px; }
+/* Re-mounted on each tab change (key), so the section replays its staggered entrance. */
+.settings-content > * { animation: settings-rise var(--enter) var(--ease-out) backwards; }
+.settings-content > :nth-child(2) { animation-delay: 50ms; }
+.settings-content > :nth-child(3) { animation-delay: 100ms; }
+.settings-content > :nth-child(4) { animation-delay: 150ms; }
+.settings-content > :nth-child(n + 5) { animation-delay: 200ms; }
+@keyframes settings-rise { from { opacity: 0; transform: translateY(12px); } }
+
+.settings-hero { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); position: relative; overflow: hidden;
+  background: radial-gradient(120% 140% at 0% 0%, rgba(139, 92, 246, 0.18), transparent 55%), radial-gradient(90% 120% at 100% 100%, rgba(34, 211, 238, 0.1), transparent 60%), var(--panel); }
+.settings-hero::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--violet), var(--cyan), transparent); opacity: 0.5; }
+.settings-hero-icon { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; color: #fff;
+  background: linear-gradient(140deg, var(--violet), var(--cyan)); box-shadow: var(--glow-violet, none); animation: settings-icon-pop 520ms var(--ease-out) backwards 80ms; }
+@keyframes settings-icon-pop { from { opacity: 0; transform: scale(0.6) rotate(-12deg); } }
+.settings-hero h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: 0.2px; }
+.settings-hero p { margin: 3px 0 0; color: var(--text-2); }
+
+/* Toggle switches: still real checkboxes, restyled. */
+.settings-content .check input[type='checkbox'] {
+  appearance: none; flex: none; position: relative; width: 32px; height: 18px; margin: 0; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.14); transition: background var(--dur), border-color var(--dur), box-shadow var(--dur);
+}
+.settings-content .check input[type='checkbox']::before {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); transition: transform 240ms var(--ease-out), background var(--dur);
+}
+.settings-content .check input[type='checkbox']:checked { background: linear-gradient(90deg, var(--violet), var(--cyan)); border-color: transparent; box-shadow: 0 0 12px rgba(139, 92, 246, 0.45); }
+.settings-content .check input[type='checkbox']:checked::before { transform: translateX(14px); background: #fff; }
+.settings-content .check input[type='checkbox']:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.settings-content .check input[type='checkbox']:disabled { opacity: 0.45; cursor: not-allowed; }
+.settings-content .check { color: var(--text); }
+
+/* Toggles laid out in a grid read as tiles. */
+.settings-content .grid > .check { padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.02); transition: border-color var(--dur), background var(--dur); }
+.settings-content .grid > .check:hover { border-color: rgba(139, 92, 246, 0.45); background: rgba(139, 92, 246, 0.06); }
+.settings-content .grid > .check:has(input:checked) { border-color: rgba(139, 92, 246, 0.35); background: rgba(139, 92, 246, 0.09); }
+
+/* Sticky save bar: always in the DOM, lights up when there are unsaved changes. */
+.settings-bar {
+  position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: rgba(14, 17, 26, 0.94); box-shadow: 0 -12px 30px -18px rgba(0, 0, 0, 0.9);
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.settings-bar-state { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12.5px; }
+.settings-bar:not(.dirty) .settings-bar-state svg { color: #34d399; }
+.settings-bar.dirty { border-color: rgba(139, 92, 246, 0.55); box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), 0 -12px 34px -16px rgba(139, 92, 246, 0.55); animation: settings-bar-nudge 420ms var(--ease-out); }
+.settings-bar.dirty .settings-bar-state { color: var(--text); }
+.settings-bar-dot { width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 10px rgba(251, 191, 36, 0.8); animation: settings-dot-pop 360ms var(--ease-out); }
+.settings-bar-profile { border-color: rgba(34, 211, 238, 0.45); animation: settings-pop-in 320ms var(--ease-out); }
+.settings-bar-profile:hover { box-shadow: var(--glow-cyan); }
+@keyframes settings-pop-in { from { opacity: 0; transform: translateX(10px) scale(0.96); } }
+@keyframes settings-bar-nudge { from { transform: translateY(8px); } }
+@keyframes settings-dot-pop { 0% { transform: scale(0); } 70% { transform: scale(1.4); } }
+
+/* Narrow windows (or a large UI scale): navigation becomes a scrolling strip. */
+@media (max-width: 1000px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); }
+  .settings-nav { position: static; flex-direction: row; gap: 4px; overflow-x: auto; padding: 6px; }
+  .settings-nav-group { flex-direction: row; }
+  .settings-nav-title, .settings-nav-desc { display: none; }
+  .settings-nav-item { width: auto; white-space: nowrap; padding: 6px 10px 6px 6px; }
+  .settings-nav-item::before { left: 8px; right: 8px; top: auto; bottom: -6px; width: auto; height: 2px; transform: scaleX(0); }
+  .settings-nav-item.active::before { transform: scaleX(1); }
+  .settings-nav-icon { width: 24px; height: 24px; }
+}
+
+/* Reduced motion also stops transitions (the global rule only zeroes animations). */
+.reduced-motion .settings-page *, .reduced-motion .settings-page *::before { transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .settings-page *, .settings-page *::before { transition: none !important; } }

@@ -5,6 +5,7 @@ import './futuristic.css';
 import './console-simple.css';
 import './stage.css';
 import './ai.css';
+import './settings.css';
 import { App, bootstrap } from './App';
 import { connectEvents } from './store';
 import { DETACHED_STAGE_HASH, DetachedStage3D } from './features/Visualizer';
