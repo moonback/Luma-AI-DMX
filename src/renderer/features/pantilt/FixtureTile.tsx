@@ -29,10 +29,11 @@ const TYPE_LABEL: Record<string, string> = {
 
 // ─── Tuile d'une machine ──────────────────────────────────────────────────────
 export function FixtureTile({
-  rf, selected, onToggle, onOpen, onDropFrom, onNudge,
+  rf, selected, selectionMode, onToggle, onOpen, onDropFrom, onNudge,
 }: {
   rf: ResolvedFixture;
   selected: boolean;
+  selectionMode: boolean;
   onToggle: (range: boolean) => void;
   onOpen: () => void;
   /** Une autre tuile (son id) est déposée sur celle-ci. */
@@ -59,9 +60,8 @@ export function FixtureTile({
   return (
     <button
       className={`sc-tile ${anyTouched ? 'sc-tile--active' : ''} ${selected ? 'sc-tile--selected' : ''} ${dragging ? 'sc-tile--dragging' : ''} ${over ? 'sc-tile--over' : ''}`}
-      onClick={(e) => onToggle(e.shiftKey)}
-      onDoubleClick={onOpen}
-      aria-pressed={selected}
+      onClick={(e) => selectionMode ? onToggle(e.shiftKey) : onOpen()}
+      aria-pressed={selectionMode ? selected : undefined}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData(DRAG_TYPE, id); e.dataTransfer.effectAllowed = 'move'; setDragging(true); }}
       onDragEnd={() => setDragging(false)}
@@ -73,7 +73,6 @@ export function FixtureTile({
         e.preventDefault();
         onNudge(e.key === 'ArrowLeft' ? -1 : 1);
       }}
-      title={selected ? 'Double-clic pour ouvrir · Clic pour désélectionner · Glisser pour déplacer' : 'Clic pour sélectionner · Maj+clic pour une plage · Double-clic pour ouvrir seul · Glisser (ou Alt+←/→) pour déplacer'}
     >
       {/* Indicateur programmé */}
       {anyTouched && <span className="sc-tile-dot" />}
