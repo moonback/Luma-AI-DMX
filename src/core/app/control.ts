@@ -92,7 +92,7 @@ export async function onOsc(app: AppService, m: OscMessage): Promise<boolean> {
   const num = (i: number) => (typeof m.args[i] === 'number' ? (m.args[i] as number) : typeof m.args[i] === 'boolean' ? Number(m.args[i]) : undefined);
   const list = (i: number) => {
     const l = app.project.cueLists[(num(i) ?? 1) - 1];
-    if (!l) throw new UserError('Liste de cues introuvable');
+    if (!l) throw new UserError('Liste de cues introuvable', 'control.cueListNotFound');
     return l.id;
   };
   const run = async (c: Command) => (await app.handle(c) as { ok?: boolean } | undefined)?.ok !== false;
