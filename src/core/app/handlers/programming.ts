@@ -124,8 +124,8 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
     }
     case 'cueList.upsert':
       for (const c of cmd.cueList.cues) {
-        if (c.sceneId && !app.index.scenes.has(c.sceneId)) throw new UserError(`Cue « ${c.name} » : scène inconnue`);
-        for (const fx of c.effectIds) if (!app.index.effects.has(fx)) throw new UserError(`Cue « ${c.name} » : effet inconnu`);
+        if (c.sceneId && !app.index.scenes.has(c.sceneId)) throw new UserError(`Cue « ${c.name} » : scène inconnue`, 'programming.cueSceneUnknown', { name: c.name });
+        for (const fx of c.effectIds) if (!app.index.effects.has(fx)) throw new UserError(`Cue « ${c.name} » : effet inconnu`, 'programming.cueEffectUnknown', { name: c.name });
       }
       app.mutate((d) => { d.cueLists = d.cueLists.some((l) => l.id === cmd.cueList.id) ? d.cueLists.map((l) => (l.id === cmd.cueList.id ? cmd.cueList : l)) : [...d.cueLists, cmd.cueList]; });
       return ok;
@@ -168,7 +168,7 @@ export async function handleProgramming(app: AppService, cmd: CommandIn<'group' 
     case 'timeline.upsert':
       for (const ev of cmd.timeline.events) {
         const exists = ev.kind === 'marker' || (ev.kind === 'scene' ? app.index.scenes.has(ev.refId!) : ev.kind === 'effect' ? app.index.effects.has(ev.refId!) : app.index.cueLists.has(ev.refId!));
-        if (!exists) throw new UserError(`Événement « ${ev.label || ev.kind} » : référence inconnue`);
+        if (!exists) throw new UserError(`Événement « ${ev.label || ev.kind} » : référence inconnue`, 'programming.eventReferenceUnknown', { label: ev.label || ev.kind });
       }
       app.mutate((d) => { d.timelines = d.timelines.some((t) => t.id === cmd.timeline.id) ? d.timelines.map((t) => (t.id === cmd.timeline.id ? cmd.timeline : t)) : [...d.timelines, cmd.timeline]; });
       return ok;
