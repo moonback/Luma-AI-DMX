@@ -3,6 +3,14 @@ export type CoreLanguage = 'fr' | 'en';
 export type CoreMessageKey =
   | 'error.unauthorizedOrigin'
   | 'error.invalidCommand'
+  | 'programming.paletteNotFound'
+  | 'programming.fixtureNoProgrammerValues'
+  | 'programming.noValuesOfType'
+  | 'programming.programmerEmpty'
+  | 'programming.sceneNotFound'
+  | 'programming.effectNotFound'
+  | 'programming.timelineNotFound'
+  | 'fixture.profileInUse'
   | 'dialog.openProject'
   | 'dialog.saveProject'
   | 'dialog.importProfiles'
@@ -23,6 +31,14 @@ const messages: Record<CoreLanguage, Record<CoreMessageKey, string>> = {
   fr: {
     'error.unauthorizedOrigin': 'Origine non autorisée',
     'error.invalidCommand': 'Commande invalide : {details}',
+    'programming.paletteNotFound': 'Palette introuvable',
+    'programming.fixtureNoProgrammerValues': 'Ce projecteur n’a aucune valeur dans le programmeur',
+    'programming.noValuesOfType': 'Aucune valeur de ce type dans le programmeur pour ce projecteur',
+    'programming.programmerEmpty': 'Le programmeur est vide : réglez des projecteurs dans la Live Console avant d’enregistrer.',
+    'programming.sceneNotFound': 'Scène introuvable',
+    'programming.effectNotFound': 'Effet introuvable',
+    'programming.timelineNotFound': 'Timeline introuvable',
+    'fixture.profileInUse': 'Profil utilisé par {count} projecteur(s)',
     'dialog.openProject': 'Ouvrir un projet',
     'dialog.saveProject': 'Enregistrer le projet',
     'dialog.importProfiles': 'Importer des profils',
@@ -37,6 +53,14 @@ const messages: Record<CoreLanguage, Record<CoreMessageKey, string>> = {
   en: {
     'error.unauthorizedOrigin': 'Unauthorized origin',
     'error.invalidCommand': 'Invalid command: {details}',
+    'programming.paletteNotFound': 'Palette not found',
+    'programming.fixtureNoProgrammerValues': 'This fixture has no values in the programmer',
+    'programming.noValuesOfType': 'No values of this type in the programmer for this fixture',
+    'programming.programmerEmpty': 'The programmer is empty: set fixtures in the Live Console before recording.',
+    'programming.sceneNotFound': 'Scene not found',
+    'programming.effectNotFound': 'Effect not found',
+    'programming.timelineNotFound': 'Timeline not found',
+    'fixture.profileInUse': 'Profile is used by {count} fixture(s)',
     'dialog.openProject': 'Open a project',
     'dialog.saveProject': 'Save project',
     'dialog.importProfiles': 'Import profiles',
@@ -52,7 +76,7 @@ const messages: Record<CoreLanguage, Record<CoreMessageKey, string>> = {
 
 export function translateCore(language: CoreLanguage, key: CoreMessageKey, vars?: CoreMessage['vars']): string {
   const template = messages[language][key];
-  return template.replace(/\\{(\\w+)\\}/gu, (match, name: string) =>
+  return template.replace(/\{(\w+)\}/gu, (match, name: string) =>
     vars && Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match,
   );
 }
