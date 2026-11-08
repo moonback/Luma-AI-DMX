@@ -1,4 +1,5 @@
 import type { CommandInput, CommandResults, CommandType } from '../shared/commands';
+import { translateCore } from '../shared/i18n';
 import { t } from './i18n';
 import { useStore } from './store';
 
@@ -23,15 +24,16 @@ export async function call<T extends CommandType>(
     return r.data;
   }
 
+  const detail = r.message ? translateCore(useStore.getState().language, r.message.key, r.message.vars) : r.error;
   if (!errorKey || !reportedErrors.has(errorKey)) {
     if (errorKey) reportedErrors.add(errorKey);
     if (/licen[cs]e/i.test(r.error)) {
-      useStore.getState().setNotice({ title: t('api.error.title'), detail: r.error });
+      useStore.getState().setNotice({ title: t('api.error.title'), detail });
     } else {
-      useStore.getState().toast({ kind: 'error', title: t('api.error.title'), detail: r.error });
+      useStore.getState().toast({ kind: 'error', title: t('api.error.title'), detail });
     }
   }
-  throw new Error(r.error);
+  throw new Error(detail);
 }
 
 /** Same as `call` but swallows the (already displayed) error. For fire-and-forget UI actions. */
