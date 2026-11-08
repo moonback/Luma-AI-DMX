@@ -3,6 +3,7 @@
 // Needs the GitHub CLI logged in (`gh auth login`). A version with a suffix (0.5.0-beta.1) goes out as a pre-release.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { hasRemoteTag, validateReleaseMetadata } from './release-validation.mjs';
 
 const REPO = 'moonback/Luma-AI-DMX';
 const dryRun = process.argv.includes('--dry-run');
@@ -18,7 +19,11 @@ const fail = (msg) => {
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 const tag = version; // Existing tags are 0.2.0, 0.3.0…: no "v" prefix.
-const prerelease = version.includes('-');
+const prerelease = typeof version === 'string' && version.includes('-');
+const changelog = readFileSync('CHANGELOG.md', 'utf8');
+const localTags = out('git tag --list').split(String.fromCharCode(10)).filter(Boolean);
+const metadataErrors = validateReleaseMetadata({ version, changelog, existingTags: localTags });
+if (metadataErrors.length) fail(metadataErrors.join('; '));
 
 if (out('git status --porcelain')) fail('Arbre de travail non propre : commite ou range tes changements.');
 if (out('git branch --show-current') !== 'master') fail('La release se fait depuis master.');
@@ -29,6 +34,13 @@ try {
   released = false;
 }
 if (released) fail(`La release ${tag} existe déjà : passe "version" de package.json à la suivante.`);
+let remoteTagExists = false;
+try {
+  remoteTagExists = hasRemoteTag(tag, (candidate) => out(`git ls-remote --tags origin refs/tags/${candidate}`));
+} catch {
+  fail('Impossible de vérifier les tags distants : vérifie la connexion à origin.');
+}
+if (remoteTagExists) fail(`Le tag distant ${tag} existe déjà : vérifie la release avant de continuer.`);
 
 console.log(`\n▶ Release ${tag}${prerelease ? ' (pré-release, canal bêta)' : ''}\n`);
 if (!prerelease && (allowUnsigned || skipE2e)) fail('--allow-unsigned et --skip-e2e sont réservés aux pré-releases.');

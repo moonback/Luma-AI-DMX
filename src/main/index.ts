@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, crashReporter, dialog, ipcMain, session, shell } from 'electron';
 import { AppService } from '../core/app/AppService';
@@ -43,12 +45,22 @@ function sendEvent<K extends keyof AppEvents>(name: K, payload: AppEvents[K]): v
 
 /** Prints self-contained HTML to an A4 landscape PDF in a hidden, script-less window. */
 async function renderPdf(html: string): Promise<Uint8Array> {
-  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false } });
+  // A file URL avoids Chromium's data-URL length limit on large patch sheets and installation plans.
+  // The unique directory is created under the current user's temp folder and removed after printing.
+  const tempDir = await fs.mkdtemp(path.join(app.getPath('temp'), 'luma-pdf-'));
+  const htmlPath = path.join(tempDir, `document-${randomUUID()}.html`);
+  let w: BrowserWindow | null = null;
   try {
-    await w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    await fs.writeFile(htmlPath, html, { encoding: 'utf8', flag: 'wx' });
+    w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false } });
+    await w.loadFile(htmlPath);
     return await w.webContents.printToPDF({ landscape: true, pageSize: 'A4', printBackground: true });
   } finally {
-    w.destroy();
+    try {
+      if (w && !w.isDestroyed()) w.destroy();
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   }
 }
 

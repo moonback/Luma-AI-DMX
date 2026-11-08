@@ -3093,31 +3093,32 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Titre** : Vérifier l’export PDF des documents volumineux (limite de taille des URL `data:`)
 - **Catégorie** : Export / processus principal
 - **Nature** : A — Correction et rupture fonctionnelle
-- **Statut actuel** : À INVESTIGUER
+- **Statut actuel** : PARTIELLEMENT IMPLÉMENTÉ
 - **Priorité** : P3
 - **Type** : correction de bug
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : Correction technique implémentée ; validation E2E grand volume à faire
 
-**Constat technique (audit du 24/10/2026).** `renderPdf` charge le HTML à imprimer dans une fenêtre cachée par une URL `data:text/html`. Chromium limite la longueur des URL à 2 Mo : une feuille de patch ou un plan d’installation très volumineux pourrait échouer. La taille réelle des documents produits n’a pas été mesurée.
+**Constat technique (audit du 24/10/2026).** `renderPdf` chargeait le HTML via une URL `data:text/html`, exposant les exports volumineux à la limite de longueur des URL Chromium. La taille des documents n'avait pas été mesurée.
 
 **Preuves dans le code.**
 
-- `src/main/index.ts`, fonction `renderPdf` : `w.loadURL(`data:text/html;charset=utf-8,…`)`.
+- `src/main/index.ts`, fonction `renderPdf` : chargement via `BrowserWindow.loadFile` depuis un répertoire temporaire unique.
 
 **Problème ou opportunité.** Un export PDF qui échoue sur un grand kit, découvert juste avant un show.
 
-**Résultat attendu.** La taille maximale des documents produits est mesurée ; au-delà d’un seuil prudent, le HTML est écrit dans un fichier temporaire chargé par `loadFile`.
+**Correction implémentée.** Tous les exports PDF passent par un fichier HTML temporaire unique, ce qui supprime la dépendance à la longueur d'une URL `data:`. Le répertoire est supprimé dans un bloc `finally`, y compris si l'écriture, le chargement ou l'impression échoue.
 
 **Travaux à effectuer.**
 
-1. Mesurer la taille du HTML de la feuille de patch et du plan d’installation sur la démo stade et sur un projet de 1 000 projecteurs.
-2. S’il approche 2 Mo, passer par un fichier temporaire supprimé après impression.
+1. Ajouter/adapter un test E2E qui exporte une feuille de patch sur un projet de 1 000 projecteurs.
+2. Vérifier que le répertoire temporaire est nettoyé après une impression réussie et après une erreur.
 
 **Critères d’acceptation.**
 
-- [ ] Mesure documentée dans cette fiche.
-- [ ] Export PDF réussi sur un projet de 1 000 projecteurs.
+- [x] Suppression de la limite liée à l'URL `data:` par chargement de fichier temporaire.
+- [x] Nettoyage du répertoire temporaire dans `finally`.
+- [ ] Export PDF E2E réussi sur un projet de 1 000 projecteurs.
 
 **Tests requis.**
 
@@ -3141,40 +3142,43 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P3
 - **Type** : documentation
 - **Phase** : 2
-- **Avancement** : À faire
+- **Avancement** : 🟡 Partiel
 
-**Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0` et les tags `1.4.0` à `1.8.0` existent, mais `CHANGELOG.md` s’arrête à `0.2.0` : tout ce qui a été livré depuis s’accumule dans « Non publié ». `scripts/release.mjs` ne touche pas au changelog.
+**Constat technique (audit du 24/10/2026).** `package.json` est en version `1.9.0`, alors que le changelog versionné s’arrêtait à `0.2.0` et que plusieurs notes livrées restaient sous « Non publié ».
 
-**Preuves dans le code.**
+**Historique vérifié (08/11/2026).** Les tags Git `0.2.0` à `1.8.0`, leurs commits et les comparaisons entre versions ont été consultés. Les sections `0.3.0` à `1.8.0` ont été reconstituées dans `CHANGELOG.md` à partir des changements inclus dans chaque plage de tags et des descriptions de PR/release disponibles. Les dates proviennent des releases GitHub. Les notes des tags `1.8.0` et `1.6.0` ont été replacées dans les versions correspondantes. Les versions `0.3.0` à `1.3.0` ont été résumées depuis leurs plages de commits ; les éléments encore non publiés restent sous « Non publié ». Aucune attribution n'a été faite à partir de suppositions.
 
-- `package.json` : `"version": "1.9.0"`.
-- `CHANGELOG.md` : dernière section versionnée `[0.2.0] — 2026-10-18`.
-- `scripts/release.mjs` : aucune mention du changelog.
+**Réalisation technique.** `scripts/release-validation.mjs` fournit une validation pure : SemVer stricte, identifiants numériques de pré-release sans zéro initial, absence de section de version dupliquée et présence de notes catégorisées dans « Non publié ». Le contrôle du tag distant est isolé dans `hasRemoteTag`, injecte son lecteur Git et peut être testé sur un dépôt distant temporaire. `scripts/release.mjs` exécute ces contrôles avant les builds et vérifie également la release GitHub. Dix tests unitaires et deux tests d'intégration sur dépôt Git temporaire ont été ajoutés. La prévalidation exige aussi que chaque tag SemVer local possède une section de changelog datée. Une déclaration TypeScript accompagne le module ESM.
 
-**Problème ou opportunité.** Les notes de version ne correspondent plus aux versions installées.
+**Résultat attendu.** Chaque version publiée possède une section fidèle à son contenu livré ; une release future est bloquée si ses notes sont absentes, vides, mal catégorisées ou si son tag existe déjà.
 
-**Résultat attendu.** Chaque version publiée a sa section datée dans `CHANGELOG.md`, et la release refuse de partir avec une section « Non publié » vide.
+**Travaux restants.**
 
-**Travaux à effectuer.**
+1. Exécuter les dix tests unitaires et les deux tests d'intégration.
+2. Exécuter typecheck et lint pour vérifier la déclaration ESM et les nouveaux fichiers.
+3. Vérifier manuellement le rendu Markdown et les dates des sections versionnées.
 
-1. Répartir le contenu de « Non publié » entre les versions 1.x d’après l’historique git.
-2. Faire renommer « Non publié » en `[x.y.z] — date` par `scripts/release.mjs`.
+**Critères d'acceptation.**
 
-**Critères d’acceptation.**
+- [x] Les tags 0.2.0 à 1.8.0 et leurs changements ont été examinés.
+- [x] Les sections historiques 0.3.0 à 1.8.0 sont présentes et datées dans `CHANGELOG.md`.
+- [x] La prévalidation SemVer / changelog / tags locaux est isolée et testable.
+- [x] La release vérifie aussi l'absence du tag distant et d'une release GitHub existante.
+- [x] Les contrôles des tags locaux et distants sont couverts par des tests sur dépôt bare temporaire.
+- [ ] Les tests, le typecheck et le lint ont été exécutés et validés.
 
-- [ ] La dernière section versionnée de `CHANGELOG.md` correspond à `package.json`.
+**Tests ajoutés (exécution non effectuée ici).**
 
-**Tests requis.**
-
-- Test du script de release sur un dépôt temporaire.
+- Dix tests unitaires dans `tests/unit/release-validation.test.ts`.
+- Deux tests d'intégration dans `tests/integration/release-preflight.test.ts` : tag local et tag distant réel via un dépôt bare temporaire.
 
 **Dépendances.** Aucune.
 
-**Effort estimé.** XS
+**Effort restant estimé.** XS
 
 **Impact attendu.** faible
 
-**Risques et précautions.** Ne pas réécrire les tags existants.
+**Risques et précautions.** Ne jamais réécrire les tags existants ni attribuer des notes à une version sans preuve issue de son historique Git.
 
 ### Fiches de la phase 3 — Améliorations fonctionnelles à fort impact
 

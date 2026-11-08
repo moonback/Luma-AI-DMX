@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -167,13 +167,33 @@ test('programmeur → scène → liste de cues → GO', async () => {
   await page.getByRole('button', { name: /Stop/ }).click();
 });
 
-test('feuille de patch exportée en PDF et CSV', async () => {
+test('feuille de patch volumineuse exportée en PDF et CSV', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'luma-patch-'));
+  const tempPdfDirs = () => readdirSync(tmpdir()).filter((name) => name.startsWith('luma-pdf-')).sort();
+  const beforePdf = tempPdfDirs();
+  const stressIds: string[] = [];
+  // 1 007 projecteurs supplémentaires (1 009 au total avec les deux projecteurs existants), répartis sur 12 univers (84 × 6 canaux au maximum par univers).
+  for (let universe = 1; universe <= 12; universe++) {
+    const count = universe === 1 ? 83 : 84; // deux PAR sont déjà présents dans l'univers 1.
+    const result = await page.evaluate(async ({ universe: u, count: n }) => {
+      const invoke = (window as unknown as { luma: { invoke: (c: unknown) => Promise<{ ok: boolean; data?: { ids: string[] }; error?: string }> } }).luma.invoke;
+      return invoke({ type: 'fixture.add', profileId: 'demo-par-rgbw', mode: '6ch DRGBW+Strobe', universe: u, address: null, count: n, namePrefix: 'PDF stress', tags: [] });
+    }, { universe, count });
+    expect(result.ok, result.error).toBe(true);
+    stressIds.push(...(result.data?.ids ?? []));
+  }
+  expect(stressIds).toHaveLength(1007);
+
   const run = (format: 'pdf' | 'csv') => page.evaluate(async ([f, p]) => (window as unknown as { luma: { invoke: (c: unknown) => Promise<{ ok: boolean; data?: { path: string } }> } }).luma.invoke({ type: 'patch.exportSheet', format: f, path: p }), [format, path.join(dir, `patch.${format}`)] as const);
   expect((await run('pdf')).ok).toBe(true);
   expect(readFileSync(path.join(dir, 'patch.pdf')).subarray(0, 5).toString()).toBe('%PDF-');
+  expect(tempPdfDirs()).toEqual(beforePdf);
   expect((await run('csv')).ok).toBe(true);
-  expect(readFileSync(path.join(dir, 'patch.csv'), 'utf8')).toContain('Demo PAR RGBW 1');
+  expect(readFileSync(path.join(dir, 'patch.csv'), 'utf8')).toContain('PDF stress');
+  await page.evaluate(async (ids) => {
+    const invoke = (window as unknown as { luma: { invoke: (c: unknown) => Promise<unknown> } }).luma.invoke;
+    await invoke({ type: 'fixture.remove', ids });
+  }, stressIds);
 });
 
 test('sortie réelle armée → STOP OUTPUT coupe les émissions', async () => {

@@ -97,7 +97,7 @@ function Monitor() {
     let alive = true;
     const tick = async () => {
       try {
-        const v = await call({ type: 'output.universe', universe: u });
+        const v = await call({ type: 'output.universe', universe: u }, { deduplicateErrors: true });
         if (alive) setView(v);
       } catch { /* toast already shown */ }
     };
