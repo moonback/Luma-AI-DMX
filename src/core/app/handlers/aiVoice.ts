@@ -5,7 +5,7 @@ import type { AppService } from '../AppService';
 /** One-use Gemini Live token for the voice assistant, with its instructions and tools locked server-side. */
 export async function voiceToken(app: AppService): Promise<{ token: string; model: string }> {
   const apiKey = app.opts.secrets.get(GEMINI_KEY);
-  if (!apiKey) throw new UserError('Clé Gemini manquante : saisissez-la dans Paramètres › IA');
+  if (!apiKey) throw new UserError('Clé Gemini manquante : saisissez-la dans Paramètres › IA', 'voice.geminiKeyMissing');
   const { GoogleGenAI, Modality, Behavior, Type } = await import('@google/genai');
   const now = Date.now();
   // systemInstruction and tools MUST be locked inside liveConnectConstraints so that the
@@ -69,6 +69,6 @@ export async function voiceToken(app: AppService): Promise<{ token: string; mode
       },
     },
   });
-  if (!token.name) throw new UserError('Jeton Gemini non délivré');
+  if (!token.name) throw new UserError('Jeton Gemini non délivré', 'voice.geminiTokenMissing');
   return { token: token.name, model: VOICE_MODEL };
 }
