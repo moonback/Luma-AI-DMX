@@ -3,7 +3,7 @@ import { FolderOpen, KeyRound, Trash2, X } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { Field, NumberInput, PageHead, Panel, Tabs } from '../components/ui';
-import { DEFAULT_COMPONENT_VISIBILITY, resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, type Settings } from '../../core/settings/settings';
+import { DEFAULT_COMPONENT_VISIBILITY, resolveShortcuts, SHORTCUT_ACTIONS, shortcutConflicts, workspaceProfilesFileSchema, type Settings, type WorkspaceProfile } from '../../core/settings/settings';
 import { comboFromEvent } from '../shortcuts';
 import type { RecoveryEntry } from '../../core/project/store';
 import type { StorageReport } from '../../core/app/storage';
@@ -332,6 +332,8 @@ export function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [saved, setSaved] = useState<Settings | null>(null);
   const [tab, setTab] = useState<TabId>('general');
+  const [workspaceProfileName, setWorkspaceProfileName] = useState('');
+  const workspaceProfileFile = useRef<HTMLInputElement>(null);
   const [key, setKey] = useState('');
   const [voiceKey, setVoiceKey] = useState('');
   const [recovery, setRecovery] = useState<RecoveryEntry[]>([]);
@@ -344,6 +346,77 @@ export function SettingsPage() {
   useEffect(() => { document.documentElement.classList.toggle('reduced-motion', reduced); document.documentElement.style.zoom = String(scale); }, [reduced, scale]);
   if (!s) return <div className="page">{tr('common.loading')}</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
+  const commitWorkspaceSettings = async (nextSettings: Settings) => {
+    if (!(await act({ type: 'settings.update', settings: nextSettings }))) return false;
+    setS(nextSettings);
+    setSaved(nextSettings);
+    useStore.setState({ componentVisibility: nextSettings.appearance.components });
+    const current = useStore.getState().page;
+    if (current !== 'settings' && !nextSettings.appearance.components.pages[current as keyof typeof nextSettings.appearance.components.pages]) {
+      const fallback = (Object.keys(nextSettings.appearance.components.pages) as Array<keyof typeof nextSettings.appearance.components.pages>).find((id) => nextSettings.appearance.components.pages[id]) ?? 'settings';
+      useStore.getState().setPage(fallback);
+    }
+    useStore.getState().toast({ kind: 'success', title: tr('settings.components.profileApplied') });
+    return true;
+  };
+  const saveWorkspaceProfile = async (replaceActive = false) => {
+    const activeIndex = s.appearance.workspaceProfiles.findIndex((p) => p.id === s.appearance.activeWorkspaceProfileId);
+    const name = replaceActive && activeIndex >= 0 ? s.appearance.workspaceProfiles[activeIndex].name : workspaceProfileName.trim();
+    if (!name) return;
+    const profiles = [...s.appearance.workspaceProfiles];
+    const profile: WorkspaceProfile = { id: replaceActive && activeIndex >= 0 ? profiles[activeIndex].id : crypto.randomUUID(), name, components: s.appearance.components };
+    if (replaceActive && activeIndex >= 0) profiles[activeIndex] = profile;
+    else profiles.push(profile);
+    if (profiles.length > 30) {
+      useStore.getState().toast({ kind: 'error', title: tr('settings.components.profileLimit') });
+      return;
+    }
+    const nextSettings = { ...s, appearance: { ...s.appearance, workspaceProfiles: profiles, activeWorkspaceProfileId: profile.id } };
+    if (await commitWorkspaceSettings(nextSettings)) setWorkspaceProfileName('');
+  };
+  const applyWorkspaceProfile = async (id: string) => {
+    const profile = saved.appearance.workspaceProfiles.find((p) => p.id === id);
+    if (!profile) return;
+    const nextSettings = { ...saved, appearance: { ...saved.appearance, components: profile.components, activeWorkspaceProfileId: profile.id } };
+    await commitWorkspaceSettings(nextSettings);
+  };
+  const exportWorkspaceProfiles = () => {
+    const profiles = s.appearance.workspaceProfiles;
+    if (!profiles.length) return;
+    const payload = JSON.stringify({ format: 'luma-workspace-presets', version: 1, profiles }, null, 2);
+    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'luma-workspace-profiles.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  const importWorkspaceProfiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = workspaceProfilesFileSchema.safeParse(JSON.parse(await file.text()));
+      if (!parsed.success) throw new Error(tr('settings.components.profileInvalidFile'));
+      const existing = [...s.appearance.workspaceProfiles];
+      const remaining = 30 - existing.length;
+      if (remaining <= 0) throw new Error(tr('settings.components.profileLimit'));
+      const imported = parsed.data.profiles.slice(0, remaining).map((item) => {
+        let name = item.name;
+        let suffix = 2;
+        while (existing.some((p) => p.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+          name = item.name + ' (' + suffix++ + ')';
+        }
+        const profile = { ...item, id: crypto.randomUUID(), name };
+        existing.push(profile);
+        return profile;
+      });
+      const nextSettings = { ...s, appearance: { ...s.appearance, workspaceProfiles: existing, activeWorkspaceProfileId: imported[0]?.id ?? s.appearance.activeWorkspaceProfileId } };
+      await commitWorkspaceSettings(nextSettings);
+    } catch (error) {
+      useStore.getState().toast({ kind: 'error', title: tr('settings.components.profileImportFailed'), detail: error instanceof Error ? error.message : String(error) });
+    }
+  };
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS({ ...s, [k]: { ...(s[k] as object), ...v } });
   const save = async () => {
     if (await act({ type: 'settings.update', settings: s })) {
@@ -393,6 +466,40 @@ export function SettingsPage() {
         {tab === 'general' && <RecentPanel recent={s.general.recentProjects} onChange={(recentProjects) => void forgetRecent(recentProjects)} />}
         {tab === 'general' && <LicensePanel />}
         {tab === 'general' && <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />}
+        {tab === 'appearance' && (
+          <Panel title={tr('settings.components.profilesTitle')}>
+            <p className="small muted" style={{ marginTop: 0 }}>{tr('settings.components.profilesHint')}</p>
+            <div className="grid g2" style={{ alignItems: 'end' }}>
+              <Field label={tr('settings.components.profileSelector')}>
+                <select className="select" value={s.appearance.activeWorkspaceProfileId ?? ''} disabled={dirty || s.appearance.workspaceProfiles.length === 0} onChange={(e) => void applyWorkspaceProfile(e.target.value)}>
+                  <option value="">{tr('settings.components.profileSelectPlaceholder')}</option>
+                  {s.appearance.workspaceProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                </select>
+              </Field>
+              <div className="row" style={{ flexWrap: 'wrap' }}>
+                <button className="btn sm" disabled={!s.appearance.activeWorkspaceProfileId || dirty} onClick={() => void saveWorkspaceProfile(true)}>{tr('settings.components.profileUpdate')}</button>
+                <button className="btn sm" disabled={!s.appearance.activeWorkspaceProfileId || dirty} onClick={() => {
+                  const profiles = s.appearance.workspaceProfiles.filter((p) => p.id !== s.appearance.activeWorkspaceProfileId);
+                  setS({ ...s, appearance: { ...s.appearance, workspaceProfiles: profiles, activeWorkspaceProfileId: null } });
+                }}>{tr('settings.components.profileDelete')}</button>
+              </div>
+            </div>
+            <div className="row" style={{ alignItems: 'end', marginTop: 10, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <Field label={tr('settings.components.profileName')}>
+                  <input className="input" maxLength={60} value={workspaceProfileName} onChange={(e) => setWorkspaceProfileName(e.target.value)} placeholder={tr('settings.components.profileNamePlaceholder')} />
+                </Field>
+              </div>
+              <button className="btn primary sm" disabled={!workspaceProfileName.trim() || s.appearance.workspaceProfiles.length >= 30} onClick={() => void saveWorkspaceProfile()}>{tr('settings.components.profileSave')}</button>
+            </div>
+            <div className="row" style={{ flexWrap: 'wrap', marginTop: 10 }}>
+              <button className="btn sm" disabled={!s.appearance.workspaceProfiles.length} onClick={exportWorkspaceProfiles}>{tr('settings.components.profileExport')}</button>
+              <button className="btn sm" onClick={() => workspaceProfileFile.current?.click()}>{tr('settings.components.profileImport')}</button>
+              <input ref={workspaceProfileFile} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={(e) => void importWorkspaceProfiles(e)} />
+            </div>
+            {dirty && <p className="small muted">{tr('settings.components.profileSavePending')}</p>}
+          </Panel>
+        )}
         {tab === 'appearance' && (
           <Panel title={tr('settings.tab.appearance')}>
             <div className="grid g2">
