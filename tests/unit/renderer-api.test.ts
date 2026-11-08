@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../src/renderer/store', () => ({
-  useStore: { getState: () => ({ toast: mocks.toast, setNotice: mocks.setNotice }) },
+  useStore: { getState: () => ({ toast: mocks.toast, setNotice: mocks.setNotice, language: 'en' }) },
 }));
 vi.mock('../../src/renderer/i18n', () => ({
   t: (key: string) => key === 'api.error.title' ? 'Action failed' : key,
@@ -32,6 +32,20 @@ describe('renderer command errors', () => {
       detail: 'Network unavailable',
     });
     expect(mocks.setNotice).not.toHaveBeenCalled();
+  });
+
+  it('translates structured core errors in the active renderer language', async () => {
+    invoke.mockResolvedValue({
+      ok: false,
+      error: 'Scène introuvable',
+      message: { key: 'programming.sceneNotFound' },
+    });
+    await expect(call({ type: 'scene.load', id: 'missing' })).rejects.toThrow('Scene not found');
+    expect(mocks.toast).toHaveBeenCalledWith({
+      kind: 'error',
+      title: 'Action failed',
+      detail: 'Scene not found',
+    });
   });
 
   it('keeps licence refusals in an explicit dialog', async () => {
