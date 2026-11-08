@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { PROJECT_FORMAT_VERSION, projectSchema, type Project } from '../model/schemas';
+import type { CoreMessageKey } from '../../shared/i18n';
 
 export class ProjectLoadError extends Error {
-  constructor(message: string, readonly kind: 'corrupt-json' | 'invalid-format' | 'unsupported-version' | 'io', readonly details: string[] = []) {
+  constructor(message: string, readonly kind: 'corrupt-json' | 'invalid-format' | 'unsupported-version' | 'io', readonly details: string[] = [], readonly messageKey?: CoreMessageKey, readonly messageVars?: Record<string, string | number>) {
     super(message);
+    this.name = 'ProjectLoadError';
   }
 }
 
@@ -37,16 +39,16 @@ const MIGRATIONS: Record<number, (p: Json) => Json> = {
 };
 
 export function migrateProject(raw: unknown): { data: unknown; migratedFrom: number | null } {
-  if (!raw || typeof raw !== 'object') throw new ProjectLoadError('Le fichier ne contient pas un objet projet', 'invalid-format');
+  if (!raw || typeof raw !== 'object') throw new ProjectLoadError('Le fichier ne contient pas un objet projet', 'invalid-format', [], 'project.notObject');
   let p = raw as Json;
-  if (p.format !== 'luma-ai-dmx-project') throw new ProjectLoadError('Ce fichier n’est pas un projet Luma AI DMX', 'invalid-format');
+  if (p.format !== 'luma-ai-dmx-project') throw new ProjectLoadError('Ce fichier n’est pas un projet Luma AI DMX', 'invalid-format', [], 'project.invalidFile');
   const start = typeof p.version === 'number' ? p.version : NaN;
-  if (!Number.isInteger(start)) throw new ProjectLoadError('Version de format absente', 'invalid-format');
-  if (start > PROJECT_FORMAT_VERSION) throw new ProjectLoadError(`Format v${start} créé par une version plus récente du logiciel (supporté : v${PROJECT_FORMAT_VERSION})`, 'unsupported-version');
+  if (!Number.isInteger(start)) throw new ProjectLoadError('Version de format absente', 'invalid-format', [], 'project.versionMissing');
+  if (start > PROJECT_FORMAT_VERSION) throw new ProjectLoadError(`Format v${start} créé par une version plus récente du logiciel (supporté : v${PROJECT_FORMAT_VERSION})`, 'unsupported-version', [], 'project.versionTooNew', { version: start, supported: PROJECT_FORMAT_VERSION });
   let v = start;
   while (v < PROJECT_FORMAT_VERSION) {
     const m = MIGRATIONS[v];
-    if (!m) throw new ProjectLoadError(`Aucune migration depuis la version ${v}`, 'unsupported-version');
+    if (!m) throw new ProjectLoadError(`Aucune migration depuis la version ${v}`, 'unsupported-version', [], 'project.noMigration', { version: v });
     p = m(p);
     v = p.version as number;
   }
@@ -58,12 +60,12 @@ export function parseProject(text: string): { project: Project; migratedFrom: nu
   try {
     raw = JSON.parse(text);
   } catch (err) {
-    throw new ProjectLoadError(`Fichier corrompu (JSON illisible) : ${err instanceof Error ? err.message : String(err)}`, 'corrupt-json');
+    throw new ProjectLoadError(`Fichier corrompu (JSON illisible) : ${err instanceof Error ? err.message : String(err)}`, 'corrupt-json', [], 'project.corruptJson', { reason: err instanceof Error ? err.message : String(err) });
   }
   const { data, migratedFrom } = migrateProject(raw);
   const parsed = projectSchema.safeParse(data);
   if (!parsed.success) {
-    throw new ProjectLoadError('Le projet contient des données invalides', 'invalid-format', parsed.error.issues.slice(0, 20).map((i) => `${i.path.join('.')}: ${i.message}`));
+    throw new ProjectLoadError('Le projet contient des données invalides', 'invalid-format', parsed.error.issues.slice(0, 20).map((i) => `${i.path.join('.')}: ${i.message}`), 'project.invalidData', { details: parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join(' ; ') });
   }
   return { project: parsed.data, migratedFrom };
 }
