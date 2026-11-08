@@ -1,10 +1,2 @@
 {
-  "src/core/app/handlers/ai.ts": 15,
-  "src/core/app/handlers/aiVoice.ts": 2,
-  "src/core/app/handlers/fixtures.ts": 22,
-  "src/core/app/handlers/locate.ts": 4,
-  "src/core/app/handlers/music.ts": 12,
-  "src/core/app/handlers/output.ts": 7,
-  "src/core/app/handlers/programming.ts": 3,
-  "src/core/app/handlers/project.ts": 1
 }
