@@ -346,7 +346,7 @@ export function SettingsPage() {
   useEffect(() => { document.documentElement.classList.toggle('reduced-motion', reduced); document.documentElement.style.zoom = String(scale); }, [reduced, scale]);
   if (!s) return <div className="page">{tr('common.loading')}</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
-  const commitWorkspaceSettings = async (nextSettings: Settings) => {
+  const commitWorkspaceSettings = async (nextSettings: Settings, successKey = 'settings.components.profileSaved') => {
     if (!(await act({ type: 'settings.update', settings: nextSettings }))) return false;
     setS(nextSettings);
     setSaved(nextSettings);
