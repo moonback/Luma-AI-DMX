@@ -73,6 +73,17 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ### Corrigé
 - Stage 3D : suppression du rendu double-face inutile sur le matériau des ailes.
 
+## [1.4.0] — 2026-10-19
+
+### Ajouté
+- Suggestions d'intentions assistées par IA pour les morceaux de musique.
+- Export du plan d'installation des projecteurs, avec analyse des matériaux et de la puissance.
+- Démo de concert en stade avec 72 projecteurs et configuration d'arène.
+
+### Modifié
+- Visualiseur : intégration du mode Stage 3D dans la page Visualizer avec bascule 2D/3D, au lieu d'une page indépendante.
+- Fixtures : amélioration de la sélection multiple et de la sélection globale des projecteurs.
+
 ## [1.3.0] — 2026-10-19
 
 ### Ajouté
@@ -115,16 +126,6 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ### Modifié
 - Configuration de build Electron/Vite et règles de qualité adaptées au projet.
 
-## [1.4.0] — 2026-10-19
-
-### Ajouté
-- Suggestions d'intentions assistées par IA pour les morceaux de musique.
-- Export du plan d'installation des projecteurs, avec analyse des matériaux et de la puissance.
-- Démo de concert en stade avec 72 projecteurs et configuration d'arène.
-
-### Modifié
-- Visualiseur : intégration du mode Stage 3D dans la page Visualizer avec bascule 2D/3D, au lieu d'une page indépendante.
-- Fixtures : amélioration de la sélection multiple et de la sélection globale des projecteurs.
 ## [0.2.0] — 2026-10-18
 
 Passage au « niveau 2 » (docs/RAPPORT-NIVEAU-2.md) : fondations, maintenabilité, outils de distribution et de bêta.
