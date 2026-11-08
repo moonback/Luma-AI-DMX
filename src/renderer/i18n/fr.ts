@@ -337,6 +337,8 @@ export const fr = {
   'settings.components.profileImport': 'Importer',
   'settings.components.profileExport': 'Exporter toutes les configurations',
   'settings.components.profileApplied': 'Configuration appliquée',
+  'settings.components.profileSaved': 'Configuration enregistrée',
+  'settings.components.profileImported': 'Configurations importées',
   'settings.components.profileLimit': 'Limite de 30 configurations atteinte.',
   'settings.components.profileInvalidFile': 'Fichier de configurations invalide ou non pris en charge.',
   'settings.components.profileImportFailed': 'Échec de l’importation',
