@@ -263,6 +263,7 @@ Première tranche intégrée dans la branche `feat/ux-dashboard-readiness-2026-1
 **Limite volontaire :** cette checklist vérifie les états logiciels connus de Luma. Elle ne prouve ni la réception des trames DMX, ni la conformité du câblage, ni la sécurité mécanique ou électrique du rig.
 
 **À valider localement :** typecheck, lint, tests unitaires et parcours visuel sur une fenêtre desktop standard. Ces commandes n'ont pas été exécutées dans cet environnement.
+
 ### Tranche 2 — Monitoring moteur et transports DMX
 
 **Statut : en cours**
