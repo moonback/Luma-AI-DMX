@@ -3,6 +3,7 @@ export type CoreLanguage = 'fr' | 'en';
 
 export const CORE_MESSAGES = {
   'error.unauthorizedOrigin': ['Origine non autorisée', 'Unauthorized origin'],
+  'control.cueListNotFound': ['Liste de cues introuvable', 'Cue list not found'],
   'error.invalidProjectUpdate': ['Modification refusée : {details}', 'Update rejected: {details}'],
   'error.invalidCommand': ['Commande invalide : {details}', 'Invalid command: {details}'],
   'ai.proposalExpired': ['Proposition expirée', 'Proposal expired'],
