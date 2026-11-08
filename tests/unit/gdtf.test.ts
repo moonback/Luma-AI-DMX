@@ -206,6 +206,49 @@ describe('import GDTF', () => {
     ]);
   });
 
+  it('reconnaît les attributs GDTF standards de vitesse, reset et ventilation', () => {
+    const attrs = [
+      'ColorAdd_GY', 'ColorMixMSpeed', 'ColorWheelSelectMSpeed', 'Effects1Rate',
+      'IntensityMSpeed', 'GoboWheel1MSpeed', 'IrisMSpeed', 'Prism1MSpeed',
+      'FocusMSpeed', 'Frost1MSpeed', 'ZoomMSpeed', 'FrameMSpeed', 'GlobalMSpeed',
+      'DimmerReset', 'ShutterReset', 'BeamReset', 'ColorMixReset', 'ColorWheelReset',
+      'FocusReset', 'FrameReset', 'GoboWheelReset', 'IntensityReset', 'IrisReset',
+      'PositionReset', 'PanReset', 'TiltReset', 'ZoomReset', 'CTBReset', 'CTOReset',
+      'CTCReset', 'AnimationSystemReset', 'FixtureCalibrationReset',
+      'Fan1', 'Fog1', 'Haze1', 'Blower1', 'ZoomMode',
+    ];
+    const channels = attrs.map((attribute, index) =>
+      `<DMXChannel Offset="${index + 1}" Geometry="Beam"><LogicalChannel Attribute="${attribute}"><ChannelFunction Attribute="${attribute}" Name="${attribute}" DMXFrom="0/1"/></LogicalChannel></DMXChannel>`
+    ).join('');
+    const xml = `<GDTF><FixtureType Name="GDTF standard coverage" Manufacturer="Acme">
+      <DMXModes><DMXMode Name="Coverage"><DMXChannels>${channels}</DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((channel) => channel.attribute)).toEqual([
+      'lime', 'macroSpeed', 'macroSpeed', 'macroSpeed',
+      'macroSpeed', 'macroSpeed', 'macroSpeed', 'macroSpeed',
+      'macroSpeed', 'macroSpeed', 'macroSpeed', 'macroSpeed', 'speed',
+      ...Array(19).fill('control'),
+      'fan', 'fog', 'fog', 'fan', 'zoomMode',
+    ]);
+  });
+
+  it('conserve les fonctions GDTF sans équivalent natif plutôt que de les assimiler', () => {
+    const attrs = ['Tint', 'HSB_Hue', 'CIE_X', 'BeamShaper', 'Blade1A', 'Gobo1WheelSpin'];
+    const channels = attrs.map((attribute, index) =>
+      `<DMXChannel Offset="${index + 1}" Geometry="Beam"><LogicalChannel Attribute="${attribute}"><ChannelFunction Attribute="${attribute}" Name="${attribute}" DMXFrom="0/1"/></LogicalChannel></DMXChannel>`
+    ).join('');
+    const xml = `<GDTF><FixtureType Name="Custom preservation" Manufacturer="Acme">
+      <DMXModes><DMXMode Name="Custom"><DMXChannels>${channels}</DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((channel) => channel.attribute)).toEqual([
+      'custom:tint', 'custom:hsb-hue', 'custom:cie-x', 'custom:beamshaper', 'custom:blade1a', 'custom:gobo1wheelspin',
+    ]);
+  });
+
   it('barre LED : géométries répétées → cellules', () => {
     const r = convertGdtf(gdtf(BAR));
     expect(r.errors).toEqual([]);
