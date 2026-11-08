@@ -3252,9 +3252,9 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 **Preuves dans le code.**
 
 - `src/core/settings/settings.ts:65` : `language: z.enum(["fr", "en"])`.
-- `src/core/app/handlers/fixtures.ts:24` : exemple de `UserError` en français.
+- `src/core/app/handlers/fixtures.ts` : les refus métier portent désormais une clé stable du catalogue partagé ; le texte français reste le fallback.
 - `src/main/index.ts:65-96` et `:150-157` : titres et boutons des dialogues en français.
-- `src/renderer/api.ts` : le titre du toast est déjà traduit via `t('api.error.title')` ; le détail de l’erreur reste à traduire.
+- `src/renderer/api.ts` : le titre et le détail des erreurs structurées sont traduits selon la langue active ; les erreurs historiques sans clé conservent leur texte de repli.
 - Comparaison des catalogues lors de l’audit : aucune clé présente dans une seule langue.
 
 **Problème ou opportunité.** Un utilisateur qui a choisi l’anglais reçoit toutes les erreurs, alertes et explications de l’IA en français, c’est-à-dire précisément les messages les plus importants.
@@ -3262,7 +3262,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 **Résultat attendu.** Les messages du cœur sont émis sous forme de clés avec paramètres (`{ key, vars }`) et traduits dans le rendu. Les dialogues natifs utilisent la langue des paramètres.
 
 
-**Première tranche implémentée (08/11/2026).**
+**Implémentation en cours (08/11/2026).**
 
 - Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts`, avec interpolation des paramètres.
 - `UserError` accepte une clé stable et des variables, sans supprimer le message français historique utilisé comme repli.
@@ -3296,7 +3296,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Impact attendu.** moyen — utilisabilité internationale
 
-**Risques et précautions.** Les messages journalisés doivent rester lisibles dans les diagnostics : journaliser la clé et le texte français.
+**Risques et précautions.** Les messages journalisés doivent rester lisibles dans les diagnostics : conserver le texte français et ajouter la clé stable sans exposer de secrets ni de données personnelles.
 
 #### LUMA-055
 
