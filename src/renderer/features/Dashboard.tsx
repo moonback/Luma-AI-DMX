@@ -8,6 +8,8 @@ import { newProjectFlow } from '../App';
 import { PageHead, Panel, useResolved } from '../components/ui';
 import { evaluateDashboardReadiness, summarizeReadiness, type ReadinessCheck, type ReadinessLevel } from './dashboardReadiness';
 import { FirstSteps } from './Onboarding';
+import type { EngineMetrics } from '../../core/engine/Engine';
+import type { OutputStatus } from '../../core/protocols/config';
 
 type Src = 'persisted' | 'measured' | 'computed' | 'simulated' | 'config' | 'estimate';
 
@@ -65,7 +67,7 @@ function ReadinessChecklist({ checks }: { checks: ReadinessCheck[] }) {
 }
 
 
-function EngineHealthPanel({ metrics, outputs }: { metrics: NonNullable<NonNullable<ReturnType<typeof useStore.getState>['runtime']>['engine']['metrics']> | null; outputs: NonNullable<ReturnType<typeof useStore.getState>['runtime']>['outputs'] }) {
+function EngineHealthPanel({ metrics, outputs }: { metrics: EngineMetrics | null; outputs: readonly OutputStatus[] }) {
   const tr = useT();
   const measured = !!metrics && metrics.ticks > 0;
   const load = measured ? Math.max(0, Math.min(1, metrics.load)) : 0;
