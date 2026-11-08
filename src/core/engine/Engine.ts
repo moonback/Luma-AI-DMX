@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { percentile } from './metrics';
 import type { FixtureValues } from '../model/schemas';
 import { coarseChannel, isDangerousValue } from '../fixtures/profiles';
 import { CURVES, lerp } from '../util/math';
@@ -42,6 +43,10 @@ export interface EngineMetrics {
   avgTickMs: number;
   maxTickMs: number;
   jitterMs: number;
+  jitterP50Ms: number | null;
+  jitterP95Ms: number | null;
+  jitterP99Ms: number | null;
+  jitterSamples: number;
   overruns: number;
   load: number; // avgTickMs / period
   /** Ticks that threw (the last complete frame was sent again instead). */
@@ -156,6 +161,9 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
   readonly universes = new Map<number, Uint8Array>();
 
   private metricsState = { ticks: 0, avgTick: 0, maxTick: 0, jitter: 0, overruns: 0, windowStart: 0, windowTicks: 0, measuredHz: 0, errors: 0 };
+  /** Last 512 scheduler interval deviations; bounded to keep telemetry overhead predictable. */
+  private readonly jitterWindow: number[] = [];
+  private jitterWindowIndex = 0;
 
   constructor(index: ProjectIndex, private readonly sink: FrameSink, private settings: EngineSettings) {
     super();
@@ -472,7 +480,13 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
     m.avgTick = m.avgTick === 0 ? ms : m.avgTick * 0.95 + ms * 0.05;
     m.maxTick = Math.max(m.maxTick, ms);
     if (this.timer) {
-      m.jitter = m.jitter * 0.9 + Math.abs(dtMs - period) * 0.1;
+      const deviation = Math.abs(dtMs - period);
+      m.jitter = m.jitter * 0.9 + deviation * 0.1;
+      if (this.jitterWindow.length < 512) this.jitterWindow.push(deviation);
+      else {
+        this.jitterWindow[this.jitterWindowIndex] = deviation;
+        this.jitterWindowIndex = (this.jitterWindowIndex + 1) % 512;
+      }
       if (ms > period) m.overruns++;
     }
     const now = performance.now();
@@ -552,6 +566,10 @@ export class Engine extends EventEmitter<{ frame: []; error: [Error] }> {
       avgTickMs: Math.round(m.avgTick * 1000) / 1000,
       maxTickMs: Math.round(m.maxTick * 1000) / 1000,
       jitterMs: Math.round(m.jitter * 100) / 100,
+      jitterP50Ms: percentile(this.jitterWindow, 50),
+      jitterP95Ms: percentile(this.jitterWindow, 95),
+      jitterP99Ms: percentile(this.jitterWindow, 99),
+      jitterSamples: this.jitterWindow.length,
       overruns: m.overruns,
       load: Math.round((m.avgTick / period) * 1000) / 1000,
       errors: m.errors,
