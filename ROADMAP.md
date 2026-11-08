@@ -3245,21 +3245,34 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P2
 - **Type** : amélioration
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : Première tranche implémentée le 08/11/2026 ; migration des messages métier encore incomplète.
 
-**Constat technique.** L’interface propose le français et l’anglais (catalogues `fr` et `en` complets et identiques en clés : 458 et 287 clés vérifiées lors de l’audit). En revanche, tous les messages produits par le cœur sont rédigés en dur en français : erreurs `UserError`, journal, notices IA, alertes, rapport matériel. Il en va de même pour les dialogues natifs du processus principal et pour le titre des toasts d’erreur.
+**Constat technique.** L’interface propose le français et l’anglais (catalogues `fr` et `en` complets et identiques en clés : 458 et 287 clés vérifiées lors de l’audit). En revanche, de nombreux messages produits par le cœur restent rédigés en dur en français : erreurs `UserError`, journal, notices IA, alertes et rapport matériel. Les dialogues natifs du processus principal étaient également en français. Le titre du toast d’erreur utilise déjà `api.error.title` dans le catalogue du rendu ; le travail porte surtout sur le contenu des erreurs.
 
 **Preuves dans le code.**
 
 - `src/core/settings/settings.ts:65` : `language: z.enum(["fr", "en"])`.
 - `src/core/app/handlers/fixtures.ts:24` : exemple de `UserError` en français.
 - `src/main/index.ts:65-96` et `:150-157` : titres et boutons des dialogues en français.
-- `src/renderer/api.ts:8` : `title: "Action impossible"`.
+- `src/renderer/api.ts` : le titre du toast est déjà traduit via `t('api.error.title')` ; le détail de l’erreur reste à traduire.
 - Comparaison des catalogues lors de l’audit : aucune clé présente dans une seule langue.
 
 **Problème ou opportunité.** Un utilisateur qui a choisi l’anglais reçoit toutes les erreurs, alertes et explications de l’IA en français, c’est-à-dire précisément les messages les plus importants.
 
 **Résultat attendu.** Les messages du cœur sont émis sous forme de clés avec paramètres (`{ key, vars }`) et traduits dans le rendu. Les dialogues natifs utilisent la langue des paramètres.
+
+
+**Première tranche implémentée (08/11/2026).**
+
+- Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts`, avec interpolation des paramètres.
+- `UserError` accepte une clé stable et des variables, sans supprimer le message français historique utilisé comme repli.
+- Réponses IPC enrichies avec `message: { key, vars? }` pour les refus d’origine, les commandes invalides et les `UserError` migrées ; le rendu traduit selon la langue active.
+- Premiers messages migrés : refus d’origine, validation de commande, erreurs courantes du programmeur (palette, valeurs, scène, effet, timeline) et profil encore utilisé.
+- Dialogues Electron de fichiers (ouverture, sauvegarde, import/export, filtres) et confirmations de fermeture localisés à partir de `settings.appearance.language`.
+- Tests de traduction, de rendu anglais et de contrat IPC ajoutés ; non exécutés dans cette session.
+- Cliquet de non-régression intégré à `npm run lint` via `scripts/check-core-i18n.mjs` ; référence actuelle : 66 messages `UserError` non migrés sur 9 handlers.
+
+**Travaux restants.** Identifier les 20 commandes les plus utilisées à partir des statistiques locales opt-in (si disponibles), migrer leurs messages puis les journaux, notices IA, alertes et rapports matériels ; étendre les tests et vérifier les diagnostics bilingues. Les statistiques d’usage sont locales et désactivables : aucune donnée réelle d’usage n’est disponible dans le dépôt.
 
 **Travaux à effectuer.**
 
