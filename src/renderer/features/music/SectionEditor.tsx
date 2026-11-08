@@ -6,7 +6,7 @@ import { useT } from '../../i18n';
 import { SECTION_NAMES } from '../../../core/music/analyze';
 import { SECTION_LABELS, SHOW_BEAMS, SHOW_EFFECTS, SHOW_EXTRAS, SHOW_MOVEMENTS, type MusicTrack, type SectionLabel, type ShowSectionPlan } from '../../../core/model/schemas';
 import { BEAM_NAMES, EFFECT_NAMES, EXTRA_NAMES, fmt, LABEL_COLOR, MOVE_NAMES } from './names';
-import { confirmOverwrite } from './overwriteGuard';
+import { confirmOverwrite, notifyRelabeled } from './overwriteGuard';
 
 type Patch = Partial<Pick<ShowSectionPlan, 'energy' | 'palette' | 'effect' | 'effectBeats' | 'movement' | 'beam' | 'extras' | 'accents' | 'locked'>>;
 const BEATS = [0.5, 1, 2, 4, 8, 16];
@@ -33,6 +33,7 @@ export function SectionEditor({ track, index, onClose, onNotices }: { track: Mus
   const save = () => run(async () => {
     if (label !== sec.label) await act({ type: 'music.setSection', trackId: track.id, index, label });
     if (!draft || !plan) return;
+    if (label !== sec.label) notifyRelabeled();
     const patch = Object.fromEntries(EDITABLE.filter((k) => JSON.stringify(draft[k]) !== JSON.stringify(plan[k])).map((k) => [k, draft[k]])) as Patch;
     if (Object.keys(patch).length && (await confirmOverwrite(track.id))) return act({ type: 'music.updateSection', trackId: track.id, index, patch });
   });

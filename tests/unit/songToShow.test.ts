@@ -3,7 +3,7 @@ import { analyzeAudio } from '../../src/core/music/analyze';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo, withMood } from '../../src/core/music/songToShow';
+import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo, validateShowIntegrity, withMood } from '../../src/core/music/songToShow';
 import { effectFlashViolation } from '../../src/core/safety/flashGuard';
 import { colorToAttributes } from '../../src/core/fixtures/color';
 import { hexToRgb } from '../../src/core/util/math';
@@ -435,6 +435,24 @@ describe('Song-to-Show', () => {
     const busy = (perBeat: number) => planLocally({ ...analysis, sections: analysis.sections.map((s, i) => (i === ci ? { ...s, density: (perBeat * analysis.bpm) / 60 } : s)) }, '', rigInfo(index, false)).sections[ci]!.effectBeats;
     expect(busy(4)).toBeLessThan(busy(2));
     expect(busy(0.5)).toBeGreaterThan(busy(2));
+  });
+
+  it('voix, variantes nommées, avertissements d’intégrité et granularité des cues', () => {
+    const index = new ProjectIndex(demoProject());
+    const rig = rigInfo(index, false);
+    // A sung section never gets erratic movement, whatever the take.
+    const sung = { ...analysis, sections: analysis.sections.map((s) => ({ ...s, hasVocals: true })) };
+    for (let v = 0; v < 10; v++) for (const s of planLocally(sung, '', rig, v).sections) expect(['ballyhoo', 'random']).not.toContain(s.movement);
+    // Every take after the first is named, including the 6th (styles come round again).
+    expect(planLocally(analysis, '', rig, 5).summary).toContain('[Variante 6 · Équilibrée]');
+    expect(planLocally(analysis, '', rig, 0).summary).not.toContain('Variante');
+    // Warnings: a timeline without its own tempo is reported.
+    const c = compileShow(index, 'T', analysis, planLocally(analysis, '', rig), { maxStrobeHz: 10, allowStrobe: false });
+    expect(validateShowIntegrity(c, analysis).warnings).toEqual([]);
+    expect(validateShowIntegrity({ ...c, timeline: { ...c.timeline, bpm: undefined } }, analysis).warnings.join()).toContain('BPM du moteur');
+    // phraseBars: smaller phrases → more cues.
+    const cues = (phraseBars: number) => compileShow(index, 'T', analysis, planLocally(analysis, '', rig), { maxStrobeHz: 10, allowStrobe: false, phraseBars }).cueList.cues.length;
+    expect(cues(4)).toBeGreaterThan(cues(16));
   });
 
   it('mouvements relatifs à la visée, snap au temps, pas de flicker sans strobe autorisé', () => {

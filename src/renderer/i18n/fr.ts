@@ -21,7 +21,7 @@ export const fr = {
   'nav.ai': 'Shows IA',
   'nav.visualizer': 'Scene 2D/3D',
   'nav.audio': 'Audio Reactive',
-  'nav.music': 'Show Musique',
+  'nav.music': 'Song to Show',
   'nav.output': 'DMX Output',
   'nav.settings': 'Réglages',
   'nav.group.live': 'Live',

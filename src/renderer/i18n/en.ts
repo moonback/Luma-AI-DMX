@@ -19,7 +19,7 @@ export const en: Record<MessageKey, string> = {
   'nav.ai': 'AI Lighting Director',
   'nav.visualizer': 'Stage',
   'nav.audio': 'Audio Reactive',
-  'nav.music': 'Music',
+  'nav.music': 'Song to Show',
   'nav.output': 'DMX Output',
   'nav.settings': 'Settings',
   'nav.group.live': 'Live',

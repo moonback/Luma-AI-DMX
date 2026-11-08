@@ -61,7 +61,7 @@ export const ARTISTIC_STRATEGIES: Record<number, { name: ArtisticStrategy; label
 function sectionPlan(
   index: number, energy: number, palette: string[], rig: RigInfo, intent: Intent,
   variant: number, label: SectionLabel, bars = 0, bassShare = 0.5, perBeat = 2, brightness = 0.5,
-  _hasVocals = false, _confidence = 1,
+  hasVocals = false,
 ): ShowSectionPlan {
   const strat = ARTISTIC_STRATEGIES[variant % 5]?.name ?? 'balanced';
   const peak = label === 'chorus' || label === 'drop';
@@ -87,6 +87,8 @@ function sectionPlan(
   if (label === 'intro' && me >= 2) movement = strat === 'cinematic' ? 'slow' : strat === 'minimalist' ? 'none' : 'circle';
   if (label === 'outro' && me >= 2) movement = alt ? 'pan' : 'slow';
   if (peak && me >= 4 && brightness >= 0.7) movement = strat === 'cinematic' ? 'sweep' : strat === 'minimalist' ? (alt ? 'slow' : 'pan') : alt ? 'ballyhoo' : 'random';
+  // A sung section keeps the heads readable: no erratic movement over the voice (same rule as the quality report).
+  if (hasVocals && (movement === 'ballyhoo' || movement === 'random')) movement = 'sweep';
   if (focus && focus !== 'audience') movement = 'none';
 
   let effect: ShowSectionPlan['effect'] = 'none', effectBeats = 4;
@@ -196,7 +198,8 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
   const byLabel = groupsBySection(intentText, rig.groups ?? []);
   const barSec = (analysis.meter ?? 4) * 60 / analysis.bpm;
   const strat = ARTISTIC_STRATEGIES[variant % 5] ?? ARTISTIC_STRATEGIES[0]!;
-  const stratDesc = variant % 5 !== 0 ? ` [Variante ${strat.label}]` : '';
+  // Every take is named (number + style): from the 6th the styles come round again, with the alternation and palette shifted.
+  const stratDesc = variant ? ` [Variante ${variant + 1} · ${strat.label}]` : '';
 
   const sections = analysis.sections.map((s, i): ShowSectionPlan => {
     const kept = previous?.sections[i];
@@ -208,7 +211,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     const rot = (s.cluster + variant) % base.length;
     const palette = [...base.slice(rot), ...base.slice(0, rot)];
     if ((label === 'chorus' || label === 'drop') && !intent.colors.length) palette.splice(1, 0, accent);
-    const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60), s.brightness, s.hasVocals, s.confidence);
+    const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60), s.brightness, s.hasVocals);
     const out = { ...plan, groups: byLabel.get(label) ?? [] };
     return { ...out, why: explain(analysis, i, out, intent, rig, variant) };
   });
@@ -226,61 +229,59 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
 export function adjustSection(s: ShowSectionPlan, instruction: string, rig: RigInfo): ShowSectionPlan {
   const t = normalize(instruction);
   const out: ShowSectionPlan = { ...s, palette: [...s.palette], layers: { ...s.layers }, groups: [...s.groups], extras: [...s.extras], note: instruction.slice(0, 200), why: `Retouche « ${instruction.slice(0, 80)} »${s.why ? ` ; ${s.why}` : ''}`.slice(0, 300) };
-  const explicitProps = new Set<keyof ShowSectionPlan>();
 
-  if (has(t, /\bplus (calme|doux|sobre)|moins (fort|energique|intense)/)) { out.energy = clampE(s.energy - 1); explicitProps.add('energy'); }
-  if (has(t, /\bplus (fort|energique|intense|puissant)|moins (calme|sobre)|explos/)) { out.energy = clampE(s.energy + 1); explicitProps.add('energy'); }
-  if (has(t, /\bplus chaud|chaleureu/)) { out.palette = WARM.slice(0, Math.max(1, s.palette.length)); explicitProps.add('palette'); }
-  if (has(t, /\bplus froid|glacial/)) { out.palette = COLD.slice(0, Math.max(1, s.palette.length)); explicitProps.add('palette'); }
+  if (has(t, /\bplus (calme|doux|sobre)|moins (fort|energique|intense)/)) { out.energy = clampE(s.energy - 1); }
+  if (has(t, /\bplus (fort|energique|intense|puissant)|moins (calme|sobre)|explos/)) { out.energy = clampE(s.energy + 1); }
+  if (has(t, /\bplus chaud|chaleureu/)) { out.palette = WARM.slice(0, Math.max(1, s.palette.length)); }
+  if (has(t, /\bplus froid|glacial/)) { out.palette = COLD.slice(0, Math.max(1, s.palette.length)); }
   const colors = COLORS.filter((c) => c.forms.some((f) => has(t, new RegExp(`\\b${normalize(f)}\\b`)))).map((c) => c.hex);
-  if (colors.length) { out.palette = colors.slice(0, 4); explicitProps.add('palette'); }
+  if (colors.length) { out.palette = colors.slice(0, 4); }
 
-  if (has(t, /\b(sans|pas de) mouvement/)) { out.movement = 'none'; explicitProps.add('movement'); }
-  else if (has(t, /\bplus de mouvement|bouge/)) { out.movement = out.energy >= 4 ? 'fast' : 'sweep'; explicitProps.add('movement'); }
-  else if (has(t, /\beventail\b/)) { out.movement = 'fan'; explicitProps.add('movement'); }
-  else if (has(t, /\bballyhoo\b/)) { out.movement = 'ballyhoo'; explicitProps.add('movement'); }
-  else if (has(t, /\bcercle\b|circle\b/)) { out.movement = 'circle'; explicitProps.add('movement'); }
-  else if (has(t, /\bhuit\b|8\b|figure8\b|figure-8\b/)) { out.movement = 'figure8'; explicitProps.add('movement'); }
-  else if (has(t, /\bpan (seul|horizontal|gauche|droite)?\b|pan\b/)) { out.movement = 'pan'; explicitProps.add('movement'); }
-  else if (has(t, /\btilt (seul|vertical|haut|bas)?\b|tilt\b/)) { out.movement = 'tilt'; explicitProps.add('movement'); }
-  else if (has(t, /\baléatoire\b|random\b|hasard\b/)) { out.movement = 'random'; explicitProps.add('movement'); }
-  else if (has(t, /\bpendule\b|balancier\b/)) { out.movement = 'pendulum'; explicitProps.add('movement'); }
-  else if (has(t, /\bzigzag\b|zig-zag\b/)) { out.movement = 'zigzag'; explicitProps.add('movement'); }
+  if (has(t, /\b(sans|pas de) mouvement/)) { out.movement = 'none'; }
+  else if (has(t, /\bplus de mouvement|bouge/)) { out.movement = out.energy >= 4 ? 'fast' : 'sweep'; }
+  else if (has(t, /\beventail\b/)) { out.movement = 'fan'; }
+  else if (has(t, /\bballyhoo\b/)) { out.movement = 'ballyhoo'; }
+  else if (has(t, /\bcercle\b|circle\b/)) { out.movement = 'circle'; }
+  else if (has(t, /\bhuit\b|8\b|figure8\b|figure-8\b/)) { out.movement = 'figure8'; }
+  else if (has(t, /\bpan (seul|horizontal|gauche|droite)?\b|pan\b/)) { out.movement = 'pan'; }
+  else if (has(t, /\btilt (seul|vertical|haut|bas)?\b|tilt\b/)) { out.movement = 'tilt'; }
+  else if (has(t, /\baléatoire\b|random\b|hasard\b/)) { out.movement = 'random'; }
+  else if (has(t, /\bpendule\b|balancier\b/)) { out.movement = 'pendulum'; }
+  else if (has(t, /\bzigzag\b|zig-zag\b/)) { out.movement = 'zigzag'; }
 
-  if (has(t, /\b(sans|pas de) strobe/) && out.effect === 'strobe') { out.effect = 'chase'; explicitProps.add('effect'); }
-  else if (has(t, /\bstrobe\b/) && rig.allowStrobe) { out.effect = 'strobe'; explicitProps.add('effect'); }
-  else if (has(t, /\bchase (de )?couleurs?\b/)) { out.effect = 'colorChase'; explicitProps.add('effect'); }
-  else if (has(t, /\bvague (dimm|er|s?)\b|dimmerWave\b/)) { out.effect = 'dimmerWave'; explicitProps.add('effect'); }
-  else if (has(t, /\bpulse (lent|slow)\b/)) { out.effect = 'pulseSlow'; explicitProps.add('effect'); }
-  else if (has(t, /\bchase (lent|slow)\b/)) { out.effect = 'chaseSlow'; explicitProps.add('effect'); }
-  else if (has(t, /\bscintil(l|le|ement)\b|flicker\b/) && rig.allowStrobe) { out.effect = 'flicker'; explicitProps.add('effect'); }
-  else if (has(t, /\bsnap\b|flash\b|éclair\b/) && rig.allowStrobe) { out.effect = 'snap'; explicitProps.add('effect'); }
-  else if (has(t, /\blueur\b|glow\b/)) { out.effect = 'glow'; explicitProps.add('effect'); }
-  else if (has(t, /\b(dé)?gradient\b|gradient\b/)) { out.effect = 'gradient'; explicitProps.add('effect'); }
-  else if (has(t, /\barc (en )?ciel\b|rainbow\b/)) { out.effect = 'rainbow'; explicitProps.add('effect'); }
+  if (has(t, /\b(sans|pas de) strobe/) && out.effect === 'strobe') { out.effect = 'chase'; }
+  else if (has(t, /\bstrobe\b/) && rig.allowStrobe) { out.effect = 'strobe'; }
+  else if (has(t, /\bchase (de )?couleurs?\b/)) { out.effect = 'colorChase'; }
+  else if (has(t, /\bvague (dimm|er|s?)\b|dimmerWave\b/)) { out.effect = 'dimmerWave'; }
+  else if (has(t, /\bpulse (lent|slow)\b/)) { out.effect = 'pulseSlow'; }
+  else if (has(t, /\bchase (lent|slow)\b/)) { out.effect = 'chaseSlow'; }
+  else if (has(t, /\bscintil(l|le|ement)\b|flicker\b/) && rig.allowStrobe) { out.effect = 'flicker'; }
+  else if (has(t, /\bsnap\b|flash\b|éclair\b/) && rig.allowStrobe) { out.effect = 'snap'; }
+  else if (has(t, /\blueur\b|glow\b/)) { out.effect = 'glow'; }
+  else if (has(t, /\b(dé)?gradient\b|gradient\b/)) { out.effect = 'gradient'; }
+  else if (has(t, /\barc (en )?ciel\b|rainbow\b/)) { out.effect = 'rainbow'; }
 
   const singer = singerMarker(rig.markers ?? []);
   if (singer && has(t, /\bdouche\b|\bsur (le |la )?(chanteu\w*|chant\w*|voix)\b/)) {
     out.focus = singer.id; out.movement = 'none'; out.layers = { ...out.layers, moving: true };
-    explicitProps.add('focus'); explicitProps.add('movement'); explicitProps.add('layers');
-  } else if (has(t, /\bpublic\b/)) { out.focus = 'audience'; explicitProps.add('focus'); }
+   
+  } else if (has(t, /\bpublic\b/)) { out.focus = 'audience'; }
 
   const groups = (rig.groups ?? []).filter((g) => namePattern(g.name).test(t));
-  if (groups.length) { out.groups = groups.map((g) => g.id); explicitProps.add('groups'); }
-  else if (has(t, /\btout le (kit|monde)|tous les projecteurs\b/)) { out.groups = []; explicitProps.add('groups'); }
+  if (groups.length) { out.groups = groups.map((g) => g.id); }
+  else if (has(t, /\btout le (kit|monde)|tous les projecteurs\b/)) { out.groups = []; }
 
-  const extra = (x: ShowExtra, on: boolean) => { out.extras = on ? [...new Set([...out.extras, x])] : out.extras.filter((e) => e !== x); explicitProps.add('extras'); };
+  const extra = (x: ShowExtra, on: boolean) => { out.extras = on ? [...new Set([...out.extras, x])] : out.extras.filter((e) => e !== x); };
   const toggles: [ShowExtra, string][] = [['blinder', 'blinders?'], ['ramp', 'monte\\w* (doucement|progressivement)|progressi\\w*'], ['breathe', 'zoom|iris'], ['bassFollow', 'basses?']];
   for (const [x, words] of toggles) {
     if (has(t, new RegExp(`\\b(sans|pas de)\\s+(${words})\\b`))) extra(x, false);
     else if (has(t, new RegExp(`\\b(${words})\\b`))) extra(x, true);
   }
 
-  if (has(t, /\b(sans|pas de) (gobos?|prismes?)\b|faisceau ouvert/)) { out.beam = 'open'; explicitProps.add('beam'); }
-  else if (has(t, /\bprismes?\b/)) { out.beam = 'prism'; explicitProps.add('beam'); }
-  else if (has(t, /\bgobos?\b/)) { out.beam = 'gobo'; explicitProps.add('beam'); }
-  else if (has(t, /\b(frost|flou|diffus\w*)\b/)) { out.beam = 'frost'; explicitProps.add('beam'); }
+  if (has(t, /\b(sans|pas de) (gobos?|prismes?)\b|faisceau ouvert/)) { out.beam = 'open'; }
+  else if (has(t, /\bprismes?\b/)) { out.beam = 'prism'; }
+  else if (has(t, /\bgobos?\b/)) { out.beam = 'gobo'; }
+  else if (has(t, /\b(frost|flou|diffus\w*)\b/)) { out.beam = 'frost'; }
 
-  void explicitProps; // documented: used to guard future auto-recompute
   return out;
 }

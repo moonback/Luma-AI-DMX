@@ -243,7 +243,7 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
   const cur = app.project.music.tracks.find((x) => x.id === t.id);
   if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué', 'music.trackChangedDuringGeneration');
   app.emit('progress', { op: 'music', step: 'compile' });
-  const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
+  const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe, phraseBars: app.settings.ai.phraseBars });
   const integrity = validateShowIntegrity(c, cur.analysis, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
   for (const err of integrity.errors) app.logger.error('Musique', `[Intégrité] ${err}`);
   for (const warn of integrity.warnings) app.logger.warn('Musique', `[Intégrité] ${warn}`);

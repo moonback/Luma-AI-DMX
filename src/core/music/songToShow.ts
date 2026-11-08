@@ -23,15 +23,9 @@ export { parseIntent, withMood, type Intent };
  * the analysed downbeats, within the rig's real capabilities and the safety rules (strobe permission, flash guard).
  */
 
-export interface RigInfo {
-  wash: number;
-  moving: number;
-  bars: number;
-  allowStrobe: boolean;
-  /** Named project groups and stage markers the planner may use. */
-  groups?: NamedRef[];
-  markers?: NamedRef[];
-}
+/** Rig summary: one declaration, in the planner (no divergent copy). */
+import type { RigInfo } from './showPlanner';
+export type { RigInfo };
 
 type Layer = 'wash' | 'moving' | 'bars';
 export function fixtureLayer(rf: ResolvedFixture): Layer {
