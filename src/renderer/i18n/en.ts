@@ -335,6 +335,8 @@ export const en: Record<MessageKey, string> = {
   'settings.components.profileImport': 'Import',
   'settings.components.profileExport': 'Export all configurations',
   'settings.components.profileApplied': 'Configuration applied',
+  'settings.components.profileSaved': 'Configuration saved',
+  'settings.components.profileImported': 'Configurations imported',
   'settings.components.profileLimit': 'The limit of 30 configurations has been reached.',
   'settings.components.profileInvalidFile': 'Invalid or unsupported configuration file.',
   'settings.components.profileImportFailed': 'Import failed',
