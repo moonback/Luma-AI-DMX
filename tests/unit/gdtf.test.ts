@@ -112,6 +112,39 @@ describe('import GDTF', () => {
     expect(r.warnings.join(' ')).toMatch(/DMX break 2/);
   });
 
+  it('utilise les FeatureGroups et Feature officiels pour classifier les attributs fabricants', () => {
+    const xml = `<GDTF><FixtureType Name="Feature fixture" Manufacturer="Acme">
+      <AttributeDefinitions>
+        <FeatureGroups>
+          <FeatureGroup Name="Beam" Pretty="Faisceau">
+            <Feature Name="Focus"/>
+            <Feature Name="Iris"/>
+          </FeatureGroup>
+          <FeatureGroup Name="Color" Pretty="Couleur">
+            <Feature Name="ColorMix"/>
+          </FeatureGroup>
+        </FeatureGroups>
+        <Attributes>
+          <Attribute Name="VendorFocus" Pretty="Mise au point" Feature="Beam.Focus"/>
+          <Attribute Name="VendorIris" Feature="Beam.Iris"/>
+          <Attribute Name="VendorColorMix" Feature="Color.ColorMix"/>
+          <Attribute Name="VendorUnlinked" Pretty="Auxiliary"/>
+        </Attributes>
+      </AttributeDefinitions>
+      <DMXModes><DMXMode Name="Semantic"><DMXChannels>
+        <DMXChannel Offset="1" Geometry="Beam"><LogicalChannel Attribute="VendorFocus"><ChannelFunction Attribute="VendorFocus" Name="Fine adjustment" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+        <DMXChannel Offset="2" Geometry="Beam"><LogicalChannel Attribute="VendorIris"><ChannelFunction Attribute="VendorIris" Name="Aperture" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+        <DMXChannel Offset="3" Geometry="Beam"><LogicalChannel Attribute="VendorColorMix"><ChannelFunction Attribute="VendorColorMix" Name="Auxiliary mix" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+        <DMXChannel Offset="4" Geometry="Beam"><LogicalChannel Attribute="VendorUnlinked"><ChannelFunction Attribute="VendorUnlinked" Name="Auxiliary function" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+      </DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual([
+      'focus', 'iris', 'custom:vendorcolormix', 'custom:vendorunlinked',
+    ]);
+  });
+
   it('résout les attributs GDTF propriétaires à partir des noms de fonctions, sans deviner une famille ambiguë', () => {
     const xml = `<GDTF><FixtureType Name="Vendor fixture" Manufacturer="Acme"><DMXModes><DMXMode Name="Semantic"><DMXChannels>
       <DMXChannel Offset="1" Geometry="Beam"><LogicalChannel Attribute="VendorBeam"><ChannelFunction Attribute="VendorStrobe" Name="Electronic Strobe" DMXFrom="0/1" PhysicalFrom="1" PhysicalTo="20"/></LogicalChannel></DMXChannel>
