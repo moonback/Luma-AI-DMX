@@ -50,11 +50,14 @@ function dmx16(raw: string | undefined): number | undefined {
 /** GDTF attribute → Luma attribute. */
 const GDTF_ATTR: Record<string, string> = {
   Dimmer: 'dimmer', Pan: 'pan', Tilt: 'tilt', PositionMSpeed: 'panTiltSpeed', PanTiltMode: 'panTiltMode',
-  Shutter1: 'shutter', Shutter1Strobe: 'strobe', StrobeFrequency: 'strobe', StrobeDuration: 'strobe',
-  ColorAdd_R: 'red', ColorAdd_G: 'green', ColorAdd_B: 'blue', ColorAdd_W: 'white', ColorAdd_WW: 'warmWhite', ColorAdd_CW: 'coldWhite',
+  Shutter1: 'shutter', Shutter1Strobe: 'strobe', StrobeFrequency: 'strobe', StrobeDuration: 'strobe', StrobeRate: 'strobe',
+  ColorAdd_R: 'red', ColorAdd_G: 'green', ColorAdd_B: 'blue', ColorAdd_C: 'cyan', ColorAdd_M: 'magenta', ColorAdd_Y: 'yellow',
+  ColorAdd_W: 'white', ColorAdd_WW: 'warmWhite', ColorAdd_CW: 'coldWhite',
   ColorAdd_A: 'amber', ColorAdd_RY: 'amber', ColorAdd_UV: 'uv', ColorAdd_L: 'lime', ColorAdd_I: 'indigo',
   ColorRGB_Red: 'red', ColorRGB_Green: 'green', ColorRGB_Blue: 'blue', ColorRGB_White: 'white',
-  ColorSub_C: 'cyan', ColorSub_M: 'magenta', ColorSub_Y: 'yellow', CTO: 'cto', CTC: 'colorTemperature', CTB: 'colorTemperature',
+  ColorSub_R: 'red', ColorSub_G: 'green', ColorSub_B: 'blue', ColorSub_C: 'cyan', ColorSub_M: 'magenta', ColorSub_Y: 'yellow',
+  ColorRGB_Cyan: 'cyan', ColorRGB_Magenta: 'magenta', ColorRGB_Yellow: 'yellow',
+  CTO: 'cto', CTC: 'colorTemperature', CTB: 'colorTemperature',
   Color1: 'colorWheel', ColorMacro1: 'colorMacro', ColorMixMSpeed: 'colorMacroFade',
   Gobo1: 'gobo', Gobo1Pos: 'goboRotation', Gobo1PosRotate: 'goboRotation', Gobo2: 'gobo2', Gobo2Pos: 'gobo2Rotation', Gobo2PosRotate: 'gobo2Rotation',
   Prism1: 'prism', Prism1Pos: 'prismIndex', Prism1PosRotate: 'prismRotation', Frost1: 'frost', Iris: 'iris', Focus1: 'focus', Zoom: 'zoom', ZoomModeSpot: 'zoomMode',
