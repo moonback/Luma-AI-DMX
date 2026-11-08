@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Ajouté
+- Dashboard : checklist Readiness persistante vérifiant le patch, la résolution des profils, les sorties DMX, la sauvegarde du projet et l’état Flash Guard, avec états inconnus explicites et accès direct aux écrans de correction.
 - Console Simplifiée : clic simple sur une machine pour ouvrir directement ses réglages ; mode de sélection multiple explicite et activable, avec sélection par plage et commandes de sélection dédiées.
 - Personnalisation du Dashboard : affichage indépendant du guide de démarrage, des indicateurs matériel/spectacle/système, de la création de scène par texte, des actions rapides et des alertes depuis Réglages → Apparence.
 - Configurations d’espace de travail : profils nommés regroupant les espaces visibles, les composants de scène et les sections du Dashboard ; application instantanée par sélecteur, mise à jour/suppression, import et export JSON avec validation et limite de 30 profils.
