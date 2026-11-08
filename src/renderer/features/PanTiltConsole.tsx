@@ -138,9 +138,6 @@ export function PanTiltConsole() {
                 <span className="small">
                   <strong>{selIds.length}</strong> machine{selIds.length > 1 ? 's' : ''} sélectionnée{selIds.length > 1 ? 's' : ''}
                 </span>
-                <button className="btn primary sm" onClick={openModal}>
-                  <SlidersHorizontal size={13} /> Ouvrir les réglages
-                </button>
               </div>
             )}
             <div className="sc-tile-grid">
