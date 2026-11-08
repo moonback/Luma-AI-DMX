@@ -242,3 +242,24 @@ Ne pas dépendre uniquement de la couleur pour exprimer un état.
 - Nombre d'alertes critiques masquées ou ignorées.
 
 **Conclusion :** l'évolution UX la plus importante n'est pas d'ajouter davantage de panneaux, mais de rendre chaque état explicite, chaque action réversible lorsque possible, chaque mesure traçable et chaque décision de sécurité compréhensible.
+
+## 8. Suivi de l'implémentation
+
+### Tranche 1 — Dashboard / Readiness
+
+<badge>En cours</badge>
+
+Première tranche intégrée dans la branche `feat/ux-dashboard-readiness-2026-11` :
+
+- Checklist de préparation persistante dans le Dashboard, indépendante des préférences de masquage des cartes facultatives.
+- Contrôle du patch et des profils réellement résolus par la bibliothèque de fixtures.
+- Contrôle des sorties activées, des erreurs et de l'état armé/prêt des sorties physiques.
+- Avertissement sur les projets nouveaux ou modifiés non sauvegardés.
+- Signalement explicite d'une violation Flash Guard.
+- Navigation depuis chaque contrôle vers l'écran de correction correspondant.
+- États distincts : validé, avertissement, bloquant et donnée indisponible.
+- Catalogue français / anglais et tests unitaires dédiés à l'évaluation de l'état.
+
+**Limite volontaire :** cette checklist vérifie les états logiciels connus de Luma. Elle ne prouve ni la réception des trames DMX, ni la conformité du câblage, ni la sécurité mécanique ou électrique du rig.
+
+**À valider localement :** typecheck, lint, tests unitaires et parcours visuel sur une fenêtre desktop standard. Ces commandes n'ont pas été exécutées dans cet environnement.
