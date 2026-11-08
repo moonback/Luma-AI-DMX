@@ -42,6 +42,7 @@ export const en: Record<MessageKey, string> = {
   'project.unsavedMessage': 'The current project has unsaved changes. Continue without saving?',
   'project.unsavedConfirm': 'Continue without saving',
 
+  'api.error.title': 'Action failed',
   'common.cancel': 'Cancel',
   'common.create': 'Create',
   'common.close': 'Close',
