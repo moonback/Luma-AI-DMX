@@ -246,6 +246,16 @@ Les outils vocaux comprennent la proposition et l'application d'un éclairage, l
 
 L'analyse musicale locale extrait notamment tempo, beats, sections, tonalité, impacts et passages vocaux estimés. Song-to-Show transforme l'intention artistique en timeline composée de scènes, effets, mouvements et accents.
 
+Comportement de la timeline générée :
+- **Tempo du morceau.** La timeline porte le BPM analysé : ses effets synchronisés restent sur les temps quel que soit le BPM du projet ou du suivi audio. Une timeline créée à la main, sans BPM propre, suit le BPM du moteur.
+- **Mouvements autour de la visée.** Les lyres oscillent autour de la position calculée pour chaque section, grâce au mode de mélange « Relatif » (`offset`), aussi disponible dans l'éditeur d'effets. Les formes pendule et zigzag ont leur propre trajectoire.
+- **Flashs au temps.** « Snap » donne un flash par temps. Le strobe et le scintillement restent soumis à l'autorisation du strobe (Paramètres › IA) et au garde-fou photosensible. Sans autorisation, le planificateur ne les propose pas.
+- **Voix.** Une section chantée n'a jamais de mouvement erratique (ballyhoo, aléatoire).
+- **Retouches protégées.** Si la timeline, les scènes, les effets ou la liste de cues générés ont été modifiés à la main, une confirmation est demandée avant de régénérer, de retoucher une section ou de revenir au show précédent.
+- **Granularité des cues.** Le sélecteur « Cue toutes les (mesures) » (4, 8 ou 16) règle la liste GO et les relances d'effets. Il s'applique à la prochaine génération.
+- **Libellés de section.** Un libellé corrigé ne modifie le show qu'après régénération de la section ; une notification le rappelle.
+- **Variantes.** Chaque variante est nommée par son numéro et son style. À partir de la 6e, les styles reviennent avec une alternance et une palette décalées.
+
 Le fichier audio n'est pas enregistré dans le projet ; l'analyse et une empreinte SHA-256 sont conservées. L'utilisation d'OpenRouter pour la planification transmet la demande, le contexte utile du morceau et la description du kit au fournisseur.
 
 ## Sécurité opérationnelle

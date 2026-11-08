@@ -16,6 +16,7 @@ export interface ShowIntegrityReport {
  *  2. All timeline events reference valid scenes/effects with positive durations and non-negative start times.
  *  3. CueList cue numbers are sequential and reference valid scenes/effects.
  *  4. No strobe effect is present when forbidden; strobe speed does not exceed maxStrobeHz.
+ * Warnings: events past the end, timeline without its own tempo, cue list truncated.
  */
 export function validateShowIntegrity(
   result: CompileResult,
@@ -51,6 +52,14 @@ export function validateShowIntegrity(
       errors.push(`Événement effet ${ev.id} référence un effet inconnu ${ev.refId}`);
     }
   }
+
+  // 2b. Warnings: not broken, but not what the operator expects.
+  const late = result.timeline.events.filter((ev) => ev.start + ev.duration > result.timeline.duration + 0.5);
+  if (late.length) warnings.push(`${late.length} événement(s) dépassent la fin de la timeline et seront coupés`);
+  if (result.timeline.bpm === undefined && result.timeline.events.some((ev) => ev.kind === 'effect')) {
+    warnings.push('Timeline sans tempo propre : ses effets suivront le BPM du moteur, pas celui du morceau');
+  }
+  if (result.cueList.cues.length >= 999) warnings.push('Liste de cues tronquée à 999 cues');
 
   // 3. CueList integrity
   for (let k = 0; k < result.cueList.cues.length; k++) {

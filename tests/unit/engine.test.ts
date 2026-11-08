@@ -3,6 +3,7 @@ import { mergeSources } from '../../src/core/engine/merge';
 import { computeEffect, effectRate } from '../../src/core/engine/effects';
 import { ProjectIndex } from '../../src/core/engine/resolve';
 import { finalizeFixture, renderFixture } from '../../src/core/engine/render';
+import { TimelineTransport } from '../../src/core/engine/timeline';
 import type { ResolvedFixture } from '../../src/core/fixtures/profiles';
 import { effectSchema, type Effect } from '../../src/core/model/schemas';
 import { demoProject, makeEngine, run, u1 } from '../helpers';
@@ -34,6 +35,14 @@ describe('fusion des sources (politique de priorité)', () => {
     expect(r.values.f!.blue).toBe(0.5); // manual over AI and effect
     expect(r.sources.f!.blue).toBe('Manuel');
     expect(r.values.g!.dimmer).toBe(1); // effect alone
+  });
+
+  it('effet en mode offset : écart autour de la valeur sous-jacente, borné', () => {
+    const base = [{ id: 'a', label: 'A', kind: 'playback' as const, priority: 50, order: 1, values: { f: { pan: 0.2, tilt: 0.9 } } }];
+    const r = mergeSources(base, [{ id: 'e', label: 'M', priority: 50, order: 1, blend: 'offset', values: { f: { pan: 0.7, tilt: 0.8 }, g: { pan: 0.6 } } }], {});
+    expect(r.values.f!.pan).toBeCloseTo(0.4); // 0.2 + (0.7 - 0.5)
+    expect(r.values.f!.tilt).toBe(1); // 0.9 + 0.3, clamped
+    expect(r.values.g!.pan).toBe(0.6); // nothing underneath: absolute, like override
   });
 
   it('effet en mode scale module la valeur sous-jacente', () => {
@@ -275,7 +284,49 @@ describe('effets', () => {
   });
 });
 
+describe('formes panTilt pendule et zigzag', () => {
+  const index = new ProjectIndex(demoProject());
+  const spot = index.resolveTargets({ fixtureIds: ['spot1'], groupIds: [] });
+  const at = (shape: 'pingpong' | 'zigzag', phase: number) =>
+    computeEffect(fx({ type: 'panTilt', targets: { fixtureIds: ['spot1'], groupIds: [] }, params: { shape, amplitude: 1, offset: 0.5 } as Effect['params'] }), phase, spot).spot1!;
+
+  it('pendule : balance en pan, arc en tilt aux extrémités', () => {
+    expect(at('pingpong', 0)).toEqual({ pan: 0.5, tilt: 0.25 });
+    const end = at('pingpong', 0.25);
+    expect(end.pan).toBeCloseTo(1);
+    expect(end.tilt).toBeCloseTo(0.75);
+  });
+
+  it('zigzag : balayage linéaire en pan, aller-retours en tilt', () => {
+    const quarter = at('zigzag', 0.0625);
+    expect(quarter.pan).toBeCloseTo(0.625);
+    expect(quarter.tilt).toBeCloseTo(1);
+    const edge = at('zigzag', 0.25);
+    expect(edge.pan).toBeCloseTo(1);
+    expect(edge.tilt).toBeCloseTo(0.5);
+  });
+});
+
 describe('timeline', () => {
+  it('les effets synchronisés suivent le BPM de la timeline, pas celui du moteur', () => {
+    const p = demoProject();
+    const def = fx({ id: 'w', type: 'dimmerWave', params: { bpmSync: true, beatsPerCycle: 1, phaseSpread: 0.5 } as Effect['params'] });
+    p.effects = [def];
+    const events = [{ id: 'e', kind: 'effect' as const, start: 0, duration: 10, refId: 'w', cueIndex: 0, fade: 0, label: '', lane: 1 }];
+    p.timelines = [{ id: 'T', name: 'T', duration: 10, loop: false, bpm: 128, events }, { id: 'U', name: 'U', duration: 10, loop: false, events }];
+    const index = new ProjectIndex(p);
+    const targets = index.resolveTargets(def.targets);
+    const at = (id: string) => {
+      const tr = new TimelineTransport();
+      tr.play(id);
+      tr.seek(0.3);
+      return tr.evaluate(index.timelines.get(id), index, 120, 10).effects[0]!.values;
+    };
+    expect(at('T')).toEqual(computeEffect(index.effects.get('w')!, 0.3 * 128 / 60, targets));
+    expect(at('U')).toEqual(computeEffect(index.effects.get('w')!, 0.3 * 120 / 60, targets)); // no timeline BPM: engine BPM
+    expect(at('T')).not.toEqual(at('U'));
+  });
+
   it('déclenche les cues au passage de la tête de lecture et applique les scènes actives', () => {
     const p = demoProject();
     p.scenes = [{ id: 's', name: 'S', notes: '', origin: 'user', values: { par2: { green: 1 } } }];

@@ -1,6 +1,8 @@
 # Audit Song to Show — Luma-AI-DMX 1.9.0
 
 > Audit réalisé le 2026-11-08 sur la branche `master` (commit `8467bfc`). Lecture directe du code : aucune capacité n'est retenue sans avoir été vérifiée dans la source. Les numéros de ligne renvoient à ce commit.
+>
+> **Mise à jour du 2026-11-08 :** les défauts des §3.1 à §3.6 ont été corrigés sur la branche `fix/timeline-track-bpm`. Le détail est en [§7](#7-correctifs-appliqués-mise-à-jour-du-2026-11-08) ; les constats d'origine sont conservés pour la traçabilité.
 
 ## 0. Grille de statut utilisée dans tous les documents
 
@@ -58,20 +60,20 @@ Points forts d'architecture, réels et rares dans ce segment :
 | Voix | Partiel | `vocals.ts` : activité des bandes 200-4000 Hz, segments d'au moins 1,5 s. | Heuristique : les synthés lead et les guitares sont souvent pris pour de la voix. Elle sert à la poursuite automatique et à la clarté vocale. |
 | Tonalité | Opérationnel | Krumhansl-Schmuckler (`detectKey`, l. 351-362). Elle choisit une palette chaude ou froide si la confiance est d'au moins 0,3. | Le choix « mineur = froid » est une convention discutable (voir §4). |
 | Structure | Partiel | Grappes de répétition par similarité cosinus > 0,9 (l. 489-494). | Le regroupement glouton dépend de l'ordre et n'a pas de garantie de stabilité. |
-| Synchronisation des effets | **Partiel, défaut majeur** | Les effets ont `bpmSync: true` et sont relancés à chaque phrase. | **Le BPM utilisé à la lecture est `engine.bpm`, pas celui du morceau** (voir §3.1). |
+| Synchronisation des effets | Opérationnel *(corrigé, §7)* | Les effets ont `bpmSync: true` et sont relancés à chaque phrase. La timeline porte le BPM du morceau (`Timeline.bpm`). | Tempo fixe par morceau : la carte de tempo (`tempoChanges`) n'est pas encore exploitée. *Avant correctif : `engine.bpm` (§3.1).* |
 | Génération des scènes | Opérationnel | Une scène par section, plus des surcouches (progression, blinder, accents, montées, poursuite, final). Une cue list GO est générée en parallèle. | Seulement 3 « couches » de machines : wash, moving, bars (`fixtureLayer`, l. 37-41). |
 | Couleurs | Opérationnel | Palette chaude ou froide tournée par grappe, couleur d'accent sur les pics, rôles wash/lyres contrastés, symétrie miroir. | 8 couleurs codées en dur (`WARM`, `COLD`). Aucune harmonie calculée. |
-| Mouvements | **Partiel, deux défauts** | 13 types de mouvement dans le plan. | (1) `pendulum` et `zigzag` ne sont pas rendus (§3.2). (2) Les mouvements écrasent la visée (§3.3). |
+| Mouvements | Opérationnel *(corrigé, §7)* | 13 types de mouvement, tous rendus ; mélange `offset` autour de la visée ; pas de mouvement erratique sur une section chantée. | Amplitude écrêtée près des butées pan/tilt. *Avant correctif : §3.2 et §3.3.* |
 | Synchro DMX temps réel | Opérationnel | La timeline suit le timecode : envoi à 10 Hz, avance libre entre deux messages, recalage au-delà de 80 ms (`Engine.timelineChase`, l. 352-357). | IPC renderer → main. Pas de compensation de latence de sortie audio. |
 | Personnalisation | Opérationnel | Intention texte, 4 curseurs d'ambiance, 5 préréglages de style, suggestions locales ou IA, retouche par section (texte libre ou éditeur), verrouillage, variantes, restauration. | Les règles locales ne comprennent **que le français** (commentaire de `Music.tsx` : « the local rules (parseIntent) only read French »). |
 | Prévisualisation | Partiel | On joue le morceau : visualiseur 2D/3D et sortie virtuelle suivent le moteur. | Pas d'aperçu d'une section isolée sans lecture, ni de vignettes par section. L'audition A/B se limite à comparer les textes des plans (`VariantCompareModal`). |
 | Export et sauvegarde | Partiel | Scènes, effets, timeline et cue list sont des objets standards du projet, donc éditables partout. | Pas d'export autonome du show (audio + timeline). Pas d'export vers d'autres consoles. |
 | Qualité artistique | Partiel | `evaluateArtisticQuality` donne un score sur 100 (contraste, variété, narration, voix). | Il note le **plan**, pas le rendu compilé. Ses seuils et pondérations ne sont pas calibrés. Score visible dans l'UI (badge). |
-| Intégrité | Partiel | `validateShowIntegrity` vérifie les références, la durée et le strobe. | `warnings` n'est jamais rempli. Les erreurs ne vont qu'au journal et aux notices, sans blocage. |
+| Intégrité | Partiel | `validateShowIntegrity` vérifie les références, la durée et le strobe, et avertit désormais (événements au-delà de la fin, timeline sans tempo propre, cues tronquées). | Les erreurs ne vont qu'au journal et aux notices, sans blocage. |
 
 ## 3. Défauts vérifiés, par ordre de gravité
 
-### 3.1 [P0] Les effets du show ne tournent pas au tempo du morceau
+### 3.1 [P0] Les effets du show ne tournent pas au tempo du morceau — ✅ corrigé (§7)
 
 - `TimelineTransport.evaluate` calcule la phase des effets avec `effectRate(def, bpm, …)`, où `bpm` vaut `this.bpm` du moteur (`Engine.ts` l. 372).
 - `engine.bpm` vient de `project.show.bpm` (`Engine.ts` l. 163), qui vaut **120 par défaut** (`createProject`, `format.ts`), ou du suivi BPM audio. Ce dernier est **désactivé par défaut** (`bpmFollow: { enabled: false }`, `schemas.ts` l. 319).
@@ -82,7 +84,7 @@ Points forts d'architecture, réels et rares dans ce segment :
 - Le garde-fou photosensible du compilateur, lui, évalue avec `analysis.bpm` (`songToShow.ts` l. 372). La **validation et la restitution n'utilisent donc pas le même tempo** : un effet jugé sûr à 128 BPM peut être joué à une autre cadence.
 - **Correctif ciblé.** Ajouter un `bpm` facultatif au schéma `Timeline` (rempli par `compileShow`) et l'utiliser dans `TimelineTransport.evaluate` à la place de `engine.bpm`. Variante minimale : régler `engine.bpm` sur la valeur du morceau dans `timeline.timecode`. C'est moins propre, car cela touche les autres effets en cours.
 
-### 3.2 [P0] `pendulum` et `zigzag` sont planifiés mais pas rendus
+### 3.2 [P0] `pendulum` et `zigzag` sont planifiés mais pas rendus — ✅ corrigé (§7)
 
 - `moveFor` associe `pendulum` à la forme `'pingpong'` et `zigzag` à la forme `'zigzag'` (l. 215-216). Le schéma accepte ces formes (`schemas.ts` l. 238).
 - `computeEffect`, cas `panTilt` (`engine/effects.ts`), ne traite que `circle`, `figure8` et `pan`. Tout le reste tombe dans `else set.tilt = …`.
@@ -90,28 +92,28 @@ Points forts d'architecture, réels et rares dans ce segment :
 - Aucun test ne couvre ces formes (`grep zigzag tests` est vide). Le LLM peut aussi les choisir.
 - **Correctif.** Ajouter deux branches dans `computeEffect`, soit une dizaine de lignes et un test.
 
-### 3.3 [P1] Les mouvements écrasent la position de repos dessinée
+### 3.3 [P1] Les mouvements écrasent la position de repos dessinée — ✅ corrigé (§7)
 
 - `sceneValues` calcule une visée soignée (croisement au sol, V vers le public, faisceaux aériens : `restingAim`, l. 103-107). Le commentaire de la l. 143 dit : « movement effects swing around it ».
 - Or `moveFor` crée des effets `panTilt` / `fan` / `randomMove` en `blend: 'override'` sans `offset`. L'offset vaut donc 0,5 par défaut (`effectParamsSchema`), et `mergeSources` remplace la valeur (`override`). **Les lyres oscillent autour du centre DMX (0,5 / 0,5), pas autour de la visée.**
 - Avec `focus === 'audience'`, seul le pan est remplacé et le tilt garde la visée : le cas « public » est donc partiellement juste.
 - **Correctif.** Soit des effets de position relatifs (un `blend: 'offset'` additif autour de la valeur sous-jacente, à ajouter dans `merge.ts`), soit un `offset` égal au pan/tilt calculé, par machine. La première option profite aussi au Directeur IA et aux effets manuels.
 
-### 3.4 [P1] `snap` et `flicker` ne sont pas des effets rythmiques, et la famille strobe est quasi inatteignable
+### 3.4 [P1] `snap` et `flicker` ne sont pas des effets rythmiques, et la famille strobe est quasi inatteignable — ✅ corrigé (§7)
 
 - `snap` et `flicker` sont des `strobe` **sans `bpmSync`** (l. 183, l. 186). `effectRate` prend donc `speed`, plafonné à `maxStrobeHz` (10 Hz par défaut). « Snap » n'est pas un flash par temps : c'est un strobe à 10 Hz avec un rapport cyclique de 10 %.
 - `allowStrobe` vaut `false` par défaut (`settings.ts`). Tout effet de type `strobe` est alors remplacé par un chase, avec la notice « strobe non autorisé (Paramètres › IA) », y compris le `flicker` que le planificateur choisit **lui-même** pour les sections d'énergie 3 (`showPlanner.ts`, `effect = alt ? 'pulse' : 'flicker'`).
 - Même avec le strobe autorisé, un strobe plein champ à 10 Hz dépasse très probablement les 3 flashes/s de `effectFlashViolation` (simulation de 3 s à 40 Hz) et devient une pulsation lente. **À confirmer par un test.** La famille strobe produit donc surtout des notices.
 - **Correctif.** Redéfinir `snap` comme un flash synchronisé au temps (`bpmSync`, `beatsPerCycle: 1`, rapport cyclique court, sur un sous-ensemble de machines), ce qui reste sous les 3 flashes/s à moins de 180 BPM. Ne plus proposer `flicker` sans autorisation du strobe.
 
-### 3.5 [P0 produit] Une régénération efface silencieusement les retouches de timeline
+### 3.5 [P0 produit] Une régénération efface silencieusement les retouches de timeline — ✅ correctif minimal appliqué (§7)
 
 - `applyShow` appelle `removeGenerated` : suppression des scènes, effets, timeline et cue list du morceau. Ce chemin sert à `music.generate`, `music.updateSection`, `music.regenerateSection` et `music.restorePrevious`.
 - Toute modification faite à la main dans l'éditeur de timeline (`Timeline.tsx`, `timeline.upsert`) ou sur les scènes générées est **perdue sans avertissement** dès qu'on retouche une section, même autre.
 - Il y a deux sources de vérité (`ShowPlan` d'un côté, objets compilés de l'autre) sans réconciliation.
 - **Correctif minimal (quick win).** Mémoriser une empreinte des objets générés et, si elle a changé, demander confirmation avant d'écraser. **Correctif complet.** Marquer les événements « édités à la main » et les réinjecter après compilation (fusion sur la timeline).
 
-### 3.6 [P2] Autres écarts constatés
+### 3.6 [P2] Autres écarts constatés — ✅ traités (§7)
 
 - `RigInfo` est déclarée deux fois (`songToShow.ts` et `showPlanner.ts`), avec une copie divergente des types.
 - `explicitProps` dans `adjustSection` est calculé puis jeté (`void explicitProps`, commentaire « used to guard future auto-recompute »).
@@ -202,11 +204,26 @@ Légende : **E** existe, **P** partiel, **N** nouveau. Verdict : ✅ recommandé
 
 ## 6. Vision cible : Song to Show v2, en quatre étapes sans réécriture
 
-1. **Fiabilité (S1).** Corriger §3.1 à §3.5. Sans cela, toute amélioration artistique est masquée par un rendu infidèle au plan.
+1. **Fiabilité (S1).** Corriger §3.1 à §3.5 *(fait, sauf la fusion complète des retouches : voir §7)*. Sans cela, toute amélioration artistique est masquée par un rendu infidèle au plan.
 2. **Maîtrise (S2).** Frontières éditables, grille de beats corrigeable (tap sur le premier temps), BPM par timeline, profils de style structurés, protection des retouches.
 3. **Intelligence du rig (S3).** Rôles de machines, palettes par harmonie, budget anti-répétition, vérification de cohérence après compilation, score de qualité calculé sur le **rendu** (simulation des frames) et pas seulement sur le plan.
 4. **Différenciation (S4).** Setlist enchaînée (transitions entre morceaux), mode live assisté (structure prédite et rôles), apprentissage local des préférences à partir des sections verrouillées ou retouchées. Pas de modèle cloud imposé.
 
 Ce qui reste volontairement hors périmètre : la séparation de sources, la reconnaissance d'instruments et l'« émotion » apprise. Le coût est élevé, la valeur faible et le résultat invérifiable par l'opérateur.
+
+## 7. Correctifs appliqués (mise à jour du 2026-11-08)
+
+Branche `fix/timeline-track-bpm`. Les constats des §3.1 à §3.6 sont conservés tels qu'observés au commit `8467bfc`, pour la traçabilité. Ce tableau décrit ce qui a changé.
+
+| § | Correctif | Fichiers | Tests |
+|---|---|---|---|
+| 3.1 | Champ facultatif `bpm` sur `Timeline`, rempli par `compileShow` avec le BPM du morceau. `TimelineTransport.evaluate` l'utilise (`tl.bpm ?? engine.bpm`). La validation (garde-fou) et la lecture utilisent désormais le même tempo. Les shows générés avant le correctif doivent être régénérés. | `model/schemas.ts`, `music/songToShow.ts`, `engine/timeline.ts` | `engine.test.ts` (timeline à 128 BPM, moteur à 120), `songToShow.test.ts` |
+| 3.2 | Formes `pingpong` (pendule : balancement en pan, arc en tilt) et `zigzag` (balayage linéaire en pan, 4 allers-retours en tilt) implémentées dans `computeEffect`. | `engine/effects.ts` | `engine.test.ts` |
+| 3.3 | Nouveau mode de mélange `offset` dans `mergeSources` : l'écart de l'effet autour de 0,5 s'ajoute à la valeur sous-jacente (borné à 0..1) ; sans valeur dessous, il se comporte comme `override`. Tous les mouvements Song to Show l'utilisent. Disponible dans l'éditeur d'effets (« Relatif ») et pris en compte par le garde-fou. | `engine/merge.ts`, `safety/flashGuard.ts`, `model/schemas.ts`, `music/songToShow.ts`, `features/Effects.tsx` | `engine.test.ts`, `songToShow.test.ts` |
+| 3.4 | `snap` = un flash par temps (`bpmSync`, `beatsPerCycle: 1`, rapport cyclique 10 %) : il passe le garde-fou à 124 BPM (vérifié par test). Le planificateur ne propose plus `flicker` sans strobe autorisé (repli `chase`), et la retouche locale n'applique `flicker` / `snap` que si le strobe est autorisé. | `music/songToShow.ts`, `music/showPlanner.ts` | `songToShow.test.ts` |
+| 3.5 | **Correctif minimal.** Empreinte SHA-256 des objets générés (normalisés par leurs schémas, clés triées : stable après sauvegarde et rechargement), stockée dans `created.fingerprint`. Nouvelle commande `music.generatedEdited`. Confirmation « Remplacer mes retouches » avant Générer, Variante, Revenir, retouche ou régénération d'une section. **Reste à faire** : la fusion des retouches (FEATURE_IDEAS F-09). | `handlers/music.ts`, `shared/commands.ts`, `model/schemas.ts`, `features/music/overwriteGuard.ts`, `Music.tsx`, `SectionEditor.tsx` | `songToShow.test.ts`, `sectionEditor.test.tsx` |
+| 3.6 | `RigInfo` déclarée une seule fois (ré-export). `explicitProps` supprimé. `hasVocals` exploité (pas de ballyhoo ni d'aléatoire sur une section chantée) ; `_confidence` supprimé, la confiance de section restant simulée. `warnings` d'intégrité remplis. Notification après changement de libellé. Variantes toutes nommées (« Variante 6 · Équilibrée »). `phraseBars` exposé (`settings.ai.phraseBars`, sélecteur 4 / 8 / 16 sur la page). Navigation et titre renommés « Song to Show ». | `music/*`, `handlers/music.ts`, `settings/settings.ts`, `Music.tsx`, `SectionEditor.tsx`, i18n | `songToShow.test.ts` |
+
+Écarts encore ouverts : `tempoChanges` toujours déclaratif, confiance de section simulée, mesure 3/4 ignorée par `compileShow` (`barDuration`), frontières de section non éditables, audio hors du projet.
 
 Tests existants : `tests/unit/songToShow.test.ts`, `songToShow.fiability.test.ts`, `music.test.ts`, `phase2.musicIntelligence.test.ts`, sur des signaux synthétiques (`tests/music-synth.ts`). Aucun corpus de morceaux réels annotés : c'est la première dette à combler pour mesurer la qualité de l'analyse.

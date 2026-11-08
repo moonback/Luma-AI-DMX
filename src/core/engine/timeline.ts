@@ -106,7 +106,7 @@ export class TimelineTransport {
       } else if (e.kind === 'effect') {
         const def = index.effects.get(e.refId!);
         if (!def) continue;
-        const phase = (t - e.start) * effectRate(def, bpm, maxStrobeHz);
+        const phase = (t - e.start) * effectRate(def, tl.bpm ?? bpm, maxStrobeHz);
         effects.push({
           id: `timeline:${e.id}`,
           label: `Timeline · ${def.name}`,

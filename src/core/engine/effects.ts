@@ -27,6 +27,8 @@ function fixturePhase(effect: Effect, phase: number, i: number, n: number): numb
 
 const frac = (x: number) => x - Math.floor(x);
 const smooth = (t: number) => t * t * (3 - 2 * t);
+/** Triangle wave, -1..1, 0 at x = 0, rising first (like sin). */
+const tri = (x: number) => 1 - 4 * Math.abs(frac(x + 0.25) - 0.5);
 
 function range(effect: Effect): [number, number] {
   const { offset, amplitude } = effect.params;
@@ -113,6 +115,8 @@ export function computeEffect(effect: Effect, phase: number, targets: readonly R
         const half = (hi - lo) / 2, mid = (hi + lo) / 2;
         if (p.shape === 'circle') { set.pan = mid + half * Math.cos(a); set.tilt = mid + half * Math.sin(a); }
         else if (p.shape === 'figure8') { set.pan = mid + half * Math.sin(a); set.tilt = mid + half * Math.sin(2 * a); }
+        else if (p.shape === 'pingpong') { set.pan = mid + half * Math.sin(a); set.tilt = mid - (half / 2) * Math.cos(2 * a); } // pendulum: swings, arcs at the ends
+        else if (p.shape === 'zigzag') { set.pan = mid + half * tri(ph); set.tilt = mid + half * tri(4 * ph); } // linear sweep with 4 tilt switchbacks
         else if (p.shape === 'pan') set.pan = mid + half * Math.sin(a);
         else set.tilt = mid + half * Math.sin(a);
         break;

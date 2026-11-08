@@ -3,12 +3,13 @@ import { analyzeAudio } from '../../src/core/music/analyze';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo, withMood } from '../../src/core/music/songToShow';
+import { adjustSection, compileShow, escalation, parseIntent, planLocally, rigInfo, validateShowIntegrity, withMood } from '../../src/core/music/songToShow';
 import { effectFlashViolation } from '../../src/core/safety/flashGuard';
 import { colorToAttributes } from '../../src/core/fixtures/color';
 import { hexToRgb } from '../../src/core/util/math';
 import { ProjectIndex } from '../../src/core/engine/resolve';
-import { profileSchema, type Effect, type Fixture, type SongAnalysis } from '../../src/core/model/schemas';
+import { profileSchema, projectSchema, type Effect, type Fixture, type SongAnalysis } from '../../src/core/model/schemas';
+import { generatedFingerprint } from '../../src/core/app/handlers/music';
 import * as openrouter from '../../src/core/ai/providers/openrouter';
 import { defaultSettings } from '../../src/core/settings/settings';
 import { demoSong } from '../music-synth';
@@ -99,6 +100,22 @@ describe('Song-to-Show', () => {
     const verseSec = analysis.sections.find((s) => s.label === 'verse')!;
     const chorusSec = analysis.sections.find((s) => s.label === 'chorus')!;
     expect(await level(chorusSec.start + 4)).toBeGreaterThan(await level(verseSec.start + 4));
+    await svc.dispose();
+  });
+
+  it('retouches manuelles du show généré : détectées, stables au rechargement, remises à zéro par la régénération', async () => {
+    const { svc, id } = await setup();
+    await svc.execute({ type: 'music.generate', trackId: id, intent: '', nextVariant: false });
+    expect(await svc.execute({ type: 'music.generatedEdited', trackId: id })).toEqual({ edited: false });
+    const p = svc.getProject();
+    const created = p.music.tracks[0]!.created;
+    // Save / load (JSON + schema parsing) does not change the fingerprint.
+    expect(generatedFingerprint(projectSchema.parse(JSON.parse(JSON.stringify(p))), created)).toBe(created.fingerprint);
+    const tl = p.timelines.find((x) => x.id === created.timelineId)!;
+    await svc.execute({ type: 'timeline.upsert', timeline: { ...tl, events: tl.events.slice(1) } });
+    expect(await svc.execute({ type: 'music.generatedEdited', trackId: id })).toEqual({ edited: true });
+    await svc.execute({ type: 'music.generate', trackId: id, intent: '', nextVariant: false });
+    expect(await svc.execute({ type: 'music.generatedEdited', trackId: id })).toEqual({ edited: false });
     await svc.dispose();
   });
 
@@ -297,6 +314,7 @@ describe('Song-to-Show', () => {
     const index = new ProjectIndex(p);
     const plan = planLocally(analysis, 'en rouge et bleu', rigInfo(index, false));
     const c = compileShow(index, 'T', analysis, plan, { maxStrobeHz: 10, allowStrobe: false });
+    expect(c.timeline.bpm).toBe(analysis.bpm); // the show's effects run at the track's tempo, not the engine's
     const ci = analysis.sections.findIndex((s) => s.label === 'chorus');
     const v = c.scenes[ci]!.values.m!;
     expect(v['dimmer#1']).toBeGreaterThan(0);
@@ -417,6 +435,41 @@ describe('Song-to-Show', () => {
     const busy = (perBeat: number) => planLocally({ ...analysis, sections: analysis.sections.map((s, i) => (i === ci ? { ...s, density: (perBeat * analysis.bpm) / 60 } : s)) }, '', rigInfo(index, false)).sections[ci]!.effectBeats;
     expect(busy(4)).toBeLessThan(busy(2));
     expect(busy(0.5)).toBeGreaterThan(busy(2));
+  });
+
+  it('voix, variantes nommées, avertissements d’intégrité et granularité des cues', () => {
+    const index = new ProjectIndex(demoProject());
+    const rig = rigInfo(index, false);
+    // A sung section never gets erratic movement, whatever the take.
+    const sung = { ...analysis, sections: analysis.sections.map((s) => ({ ...s, hasVocals: true })) };
+    for (let v = 0; v < 10; v++) for (const s of planLocally(sung, '', rig, v).sections) expect(['ballyhoo', 'random']).not.toContain(s.movement);
+    // Every take after the first is named, including the 6th (styles come round again).
+    expect(planLocally(analysis, '', rig, 5).summary).toContain('[Variante 6 · Équilibrée]');
+    expect(planLocally(analysis, '', rig, 0).summary).not.toContain('Variante');
+    // Warnings: a timeline without its own tempo is reported.
+    const c = compileShow(index, 'T', analysis, planLocally(analysis, '', rig), { maxStrobeHz: 10, allowStrobe: false });
+    expect(validateShowIntegrity(c, analysis).warnings).toEqual([]);
+    expect(validateShowIntegrity({ ...c, timeline: { ...c.timeline, bpm: undefined } }, analysis).warnings.join()).toContain('BPM du moteur');
+    // phraseBars: smaller phrases → more cues.
+    const cues = (phraseBars: number) => compileShow(index, 'T', analysis, planLocally(analysis, '', rig), { maxStrobeHz: 10, allowStrobe: false, phraseBars }).cueList.cues.length;
+    expect(cues(4)).toBeGreaterThan(cues(16));
+  });
+
+  it('mouvements relatifs à la visée, snap au temps, pas de flicker sans strobe autorisé', () => {
+    const index = new ProjectIndex(demoProject());
+    const ci = analysis.sections.findIndex((s) => s.label === 'chorus');
+    const plan = planLocally(analysis, '', rigInfo(index, true));
+    plan.sections[ci] = { ...plan.sections[ci]!, effect: 'snap', movement: 'circle', focus: null, layers: { wash: true, moving: true, bars: true } };
+    const c = compileShow(index, 'T', analysis, plan, { maxStrobeHz: 10, allowStrobe: true });
+    const move = c.effects.find((e) => e.type === 'panTilt')!;
+    expect(move.blend).toBe('offset'); // swings around the aimed position, not around DMX centre
+    const snap = c.effects.find((e) => e.type === 'strobe')!;
+    expect(snap).toBeDefined(); // a flash per beat passes the photosensitive guard (≈ 2 flashes/s at 124 BPM)
+    expect(snap.params).toMatchObject({ bpmSync: true, beatsPerCycle: 1 });
+
+    const strict = rigInfo(index, false);
+    for (let v = 0; v < 5; v++) expect(planLocally(analysis, '', strict, v).sections.map((s) => s.effect)).not.toContain('flicker');
+    expect(adjustSection(planLocally(analysis, '', strict).sections[ci]!, 'flash', strict).effect).not.toBe('snap');
   });
 });
 

@@ -124,7 +124,10 @@ export function effectFlashViolation(index: ProjectIndex, base: FixtureValues, d
     const out = structuredClone(base);
     for (const [fid, attrs] of Object.entries(computeEffect(def, i * dt * rate, targets))) {
       const o = (out[fid] ??= {});
-      for (const [a, v] of Object.entries(attrs)) o[a] = def.blend === 'scale' ? (o[a] ?? 0) * v : v;
+      for (const [a, v] of Object.entries(attrs)) {
+        const base = o[a];
+        o[a] = def.blend === 'scale' ? (base ?? 0) * v : def.blend === 'offset' && base !== undefined ? Math.min(1, Math.max(0, base + v - 0.5)) : v;
+      }
     }
     return out;
   });

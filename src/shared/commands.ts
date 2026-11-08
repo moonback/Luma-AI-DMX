@@ -225,6 +225,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('music.restorePrevious'), trackId: idSchema }),
   /** Intention suggestions for a track: with OpenRouter when configured, else from the measured sound. */
   z.object({ type: z.literal('music.suggestIntents'), trackId: idSchema, intent: z.string().max(500).default('') }),
+  /** True when the track's generated show was edited by hand since it was compiled (regenerating would discard it). */
+  z.object({ type: z.literal('music.generatedEdited'), trackId: idSchema }),
   empty('timeline.stop'),
   z.object({ type: z.literal('timeline.seek'), seconds: z.number().min(0).max(86400) }),
   // Engine
@@ -465,6 +467,7 @@ export interface CommandResults {
   'music.updateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.restorePrevious': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.suggestIntents': { suggestions: string[]; provider: 'local' | 'openrouter'; model: string | null; notices: string[] };
+  'music.generatedEdited': { edited: boolean };
   'timeline.stop': Void;
   'timeline.seek': Void;
   'engine.master': Void;

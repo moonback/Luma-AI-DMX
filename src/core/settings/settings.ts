@@ -158,10 +158,12 @@ export const settingsSchema = z.object({
       autoSuggestIntents: z.boolean().default(false),
       /** Fall back to the local interpreter when the external provider fails. */
       fallbackToLocal: z.boolean().default(true),
+      /** Song-to-Show: one GO cue (and one effect restart) every N bars in long sections. */
+      phraseBars: z.number().int().min(2).max(32).default(8),
       /** Monthly OpenRouter spending cap in USD (null: none); calls are refused once reached. */
       monthlyBudget: z.number().min(0).max(10_000).nullable().default(null),
     })
-    .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, autoSuggestIntents: false, fallbackToLocal: true, monthlyBudget: null }),
+    .default({ provider: 'local', model: 'openrouter/auto', effort: 'medium', timeoutSec: 60, allowStrobe: false, autoSuggestIntents: false, fallbackToLocal: true, phraseBars: 8, monthlyBudget: null }),
   /** The assistant's identity: name and Gemini voice of the voice assistant, custom instructions (null = built-in default). */
   assistant: z
     .object({

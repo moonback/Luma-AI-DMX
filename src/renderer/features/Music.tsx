@@ -15,6 +15,7 @@ import { ArtisticQualityBadge } from './music/ArtisticQualityBadge';
 import { VariantCompareModal } from './music/VariantCompareModal';
 import type { Progress } from '../../shared/commands';
 import { usePlayback } from './music/MiniPlayer';
+import { confirmOverwrite, notifyRelabeled } from './music/overwriteGuard';
 
 // Kept in French whatever the UI language: the local rules (parseIntent) only read French.
 const NO_MOOD: Mood = { energy: 0, colors: 0, movement: 0, strobe: 0 };
@@ -138,7 +139,7 @@ export function MusicPage() {
     }
   };
   const generate = async (nextVariant: boolean) => {
-    if (!track) return;
+    if (!track || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
     useStore.setState({ progress: null });
     setGenerating(true);
@@ -166,15 +167,24 @@ export function MusicPage() {
     });
     return () => { cancelled = true; };
   }, [track?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per track, not on every render
+  // Cue granularity of the compiled show (a setting, applied at the next generation).
+  const [phraseBars, setPhraseBars] = useState(8);
+  useEffect(() => { void act({ type: 'settings.get' }).then((s) => { if (s) setPhraseBars(s.ai.phraseBars); }); }, []);
+  const savePhraseBars = async (n: number) => {
+    const s = await act({ type: 'settings.get' });
+    if (!s) return;
+    setPhraseBars(n);
+    await act({ type: 'settings.update', settings: { ...s, ai: { ...s.ai, phraseBars: n } } });
+  };
   const restore = async () => {
-    if (!track) return;
+    if (!track || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
     const r = await act({ type: 'music.restorePrevious', trackId: track.id });
     setBusy(false);
     if (r) setNotices(r.notices);
   };
   const regenerate = async (index: number) => {
-    if (!track) return;
+    if (!track || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
     const r = await act({ type: 'music.regenerateSection', trackId: track.id, index, instruction: instr[index] ?? '' });
     setBusy(false);
@@ -350,6 +360,12 @@ export function MusicPage() {
                     </button>
                   )}
                   {track.created.timelineId && <button className="btn ghost" onClick={() => useStore.getState().setPage('timeline')}>{t('music.openTimeline')}</button>}
+                  <label className="row small dim" style={{ gap: 6, marginLeft: 'auto' }} title={t('music.phraseBars.hint')}>
+                    {t('music.phraseBars')}
+                    <select className="select" value={phraseBars} onChange={(e) => void savePhraseBars(Number(e.target.value))} data-testid="music-phrase-bars">
+                      {[4, 8, 16].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
                 </div>
                 {track.plan && <div className="row small" style={{ gap: 6 }} data-testid="music-plan-summary"><Sparkles size={13} style={{ color: '#22d3ee' }} /><span>{track.plan.summary}</span></div>}
                 {track.plan && <ArtisticQualityBadge plan={track.plan} analysis={track.analysis} />}
@@ -382,7 +398,7 @@ export function MusicPage() {
                         <td className="col-sec">
                           <div className="sec-label-cell">
                             <span className="sec-color-bar" style={{ background: LABEL_COLOR[s.label] }} />
-                            <select className="select" value={s.label} onChange={(e) => void act({ type: 'music.setSection', trackId: track.id, index: i, label: e.target.value as SectionLabel })}>
+                            <select className="select" value={s.label} onChange={(e) => void act({ type: 'music.setSection', trackId: track.id, index: i, label: e.target.value as SectionLabel }).then((r) => { if (r && track.plan) notifyRelabeled(); })}>
                               {SECTION_LABELS.map((l) => <option key={l} value={l}>{SECTION_NAMES[l]}</option>)}
                             </select>
                           </div>

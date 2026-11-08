@@ -23,15 +23,9 @@ export { parseIntent, withMood, type Intent };
  * the analysed downbeats, within the rig's real capabilities and the safety rules (strobe permission, flash guard).
  */
 
-export interface RigInfo {
-  wash: number;
-  moving: number;
-  bars: number;
-  allowStrobe: boolean;
-  /** Named project groups and stage markers the planner may use. */
-  groups?: NamedRef[];
-  markers?: NamedRef[];
-}
+/** Rig summary: one declaration, in the planner (no divergent copy). */
+import type { RigInfo } from './showPlanner';
+export type { RigInfo };
 
 type Layer = 'wash' | 'moving' | 'bars';
 export function fixtureLayer(rf: ResolvedFixture): Layer {
@@ -180,7 +174,8 @@ function effectFor(name: string, s: ShowSectionPlan, maxStrobeHz: number, lights
     
     // Strobe and flash effects
     case 'strobe': return fx(name, 'strobe', lights, 'scale', { speed: Math.min(maxStrobeHz, 20), offset: 0.5, amplitude: 1 });
-    case 'snap': return fx(name, 'strobe', lights, 'scale', { speed: Math.min(maxStrobeHz, 20), beatsPerCycle: 1, offset: 0.5, amplitude: 1, duty: 0.1 });
+    // One short flash per beat (≤ 3 flashes/s below 180 BPM), not a free-running strobe.
+    case 'snap': return fx(name, 'strobe', lights, 'scale', { ...sync, beatsPerCycle: 1, offset: 0.5, amplitude: 1, duty: 0.1 });
     
     // Special effects
     case 'flicker': return fx(name, 'strobe', lights, 'scale', { speed: Math.min(maxStrobeHz, 30), beatsPerCycle: 0.5, offset: 0.4, amplitude: 0.8, duty: 0.3 });
@@ -195,15 +190,15 @@ function moveFor(name: string, s: ShowSectionPlan, heads: string[]): Effect | nu
   const sync = { bpmSync: true, barSync: true };
   
   // Special movements with dedicated effect types
-  if (s.movement === 'fan') return fx(name, 'fan', heads, 'override', { ...sync, beatsPerCycle: 8, amplitude: 0.3 });
-  if (s.movement === 'ballyhoo') return fx(name, 'randomMove', heads, 'override', { ...sync, beatsPerCycle: 2, amplitude: 0.6, seed: 7 });
-  if (s.movement === 'random') return fx(name, 'randomMove', heads, 'override', { ...sync, beatsPerCycle: 4, amplitude: 0.5, seed: 42 });
+  if (s.movement === 'fan') return fx(name, 'fan', heads, 'offset', { ...sync, beatsPerCycle: 8, amplitude: 0.3 });
+  if (s.movement === 'ballyhoo') return fx(name, 'randomMove', heads, 'offset', { ...sync, beatsPerCycle: 2, amplitude: 0.6, seed: 7 });
+  if (s.movement === 'random') return fx(name, 'randomMove', heads, 'offset', { ...sync, beatsPerCycle: 4, amplitude: 0.5, seed: 42 });
   
   // Pan-only movements
-  if (s.movement === 'pan') return fx(name, 'panTilt', heads, 'override', { ...sync, beatsPerCycle: 8, amplitude: 0.4, phaseSpread: 0.5, shape: 'pan' });
+  if (s.movement === 'pan') return fx(name, 'panTilt', heads, 'offset', { ...sync, beatsPerCycle: 8, amplitude: 0.4, phaseSpread: 0.5, shape: 'pan' });
   
   // Tilt-only movements  
-  if (s.movement === 'tilt') return fx(name, 'panTilt', heads, 'override', { ...sync, beatsPerCycle: 8, amplitude: 0.4, phaseSpread: 0.5, shape: 'tilt' });
+  if (s.movement === 'tilt') return fx(name, 'panTilt', heads, 'offset', { ...sync, beatsPerCycle: 8, amplitude: 0.4, phaseSpread: 0.5, shape: 'tilt' });
   
   // Pattern movements with panTilt effect
   const patternMovements: Record<string, [number, number, string]> = {
@@ -220,7 +215,7 @@ function moveFor(name: string, s: ShowSectionPlan, heads: string[]): Effect | nu
   if (!config) return null;
   
   const [beats, amplitude, shape] = config;
-  return fx(name, 'panTilt', heads, 'override', { 
+  return fx(name, 'panTilt', heads, 'offset', { 
     ...sync, 
     beatsPerCycle: beats, 
     amplitude, 
@@ -464,7 +459,8 @@ export function compileShow(
     cut.push(...pieces.filter((p) => p.duration >= 0.05 && p.start >= 0));
   }
   cut.sort((a, b) => a.start - b.start || a.lane - b.lane);
-  const timeline: Timeline = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), duration: Math.max(1, Math.ceil(analysis.duration)), loop: false, events: cut };
+  // The effects run at the track's tempo, whatever the engine BPM (project default or live tracking).
+  const timeline: Timeline = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), duration: Math.max(1, Math.ceil(analysis.duration)), loop: false, bpm: Math.min(300, Math.max(20, analysis.bpm)), events: cut };
   
   // Follow trigger: a cue waits `wait` after the previous cue's fade, so the previous look holds until its step ends.
   cueSteps.sort((a, b) => a.t - b.t);
