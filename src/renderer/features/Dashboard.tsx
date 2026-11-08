@@ -43,14 +43,14 @@ function ReadinessChecklist({ checks }: { checks: ReadinessCheck[] }) {
         <span className="small muted mono">{tr('dash.readiness.progress', { ready, total: checks.length })}</span>
       </div>
     }>
-      <div className="readiness-list" data-testid="readiness-checklist">
+      <div className="readiness-list" data-testid="readiness-checklist" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 8 }}>
         {checks.map((check) => {
           const Icon = READINESS_ICONS[check.level];
           const detailVars = check.count === undefined ? undefined : { n: check.count };
           return (
-            <div key={check.id} className={`readiness-item readiness-${check.level}`} data-testid={`readiness-${check.id}`}>
-              <Icon size={16} aria-hidden="true" />
-              <div className="readiness-copy">
+            <div key={check.id} className={`readiness-item readiness-${check.level}`} data-testid={`readiness-${check.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--panel-2)' }}>
+              <Icon size={16} aria-hidden="true" color={check.level === 'ready' ? '#22c55e' : check.level === 'warning' ? '#f59e0b' : check.level === 'blocked' ? '#ef4444' : '#94a3b8'} />
+              <div className="readiness-copy" style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
                 <strong>{tr(`dash.readiness.${check.id}`)}</strong>
                 <span className="small muted">{tr(`dash.readiness.${check.id}.${check.level}`, detailVars)}</span>
               </div>
