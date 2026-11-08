@@ -296,3 +296,15 @@ describe('timeline', () => {
     expect(engine.snapshot().timeline.state).toBe('stopped');
   });
 });
+
+
+describe('métriques du moteur', () => {
+  it('expose des percentiles de gigue indisponibles avant les ticks du scheduler', () => {
+    const { engine } = makeEngine();
+    const metrics = engine.metrics();
+    expect(metrics.jitterSamples).toBe(0);
+    expect(metrics.jitterP50Ms).toBeNull();
+    expect(metrics.jitterP95Ms).toBeNull();
+    expect(metrics.jitterP99Ms).toBeNull();
+  });
+});
