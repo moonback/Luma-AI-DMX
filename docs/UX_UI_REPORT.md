@@ -247,7 +247,7 @@ Ne pas dépendre uniquement de la couleur pour exprimer un état.
 
 ### Tranche 1 — Dashboard / Readiness
 
-<badge>En cours</badge>
+**Statut : en cours**
 
 Première tranche intégrée dans la branche `feat/ux-dashboard-readiness-2026-11` :
 
