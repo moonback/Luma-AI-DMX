@@ -346,7 +346,7 @@ export function SettingsPage() {
   useEffect(() => { document.documentElement.classList.toggle('reduced-motion', reduced); document.documentElement.style.zoom = String(scale); }, [reduced, scale]);
   if (!s) return <div className="page">{tr('common.loading')}</div>;
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
-  const commitWorkspaceSettings = async (nextSettings: Settings, successKey = 'settings.components.profileSaved') => {
+  const commitWorkspaceSettings = async (nextSettings: Settings, successKey: 'settings.components.profileSaved' | 'settings.components.profileApplied' | 'settings.components.profileImported' = 'settings.components.profileSaved') => {
     if (!(await act({ type: 'settings.update', settings: nextSettings }))) return false;
     setS(nextSettings);
     setSaved(nextSettings);
@@ -406,7 +406,7 @@ export function SettingsPage() {
       const existing = [...s.appearance.workspaceProfiles];
       const remaining = 30 - existing.length;
       if (remaining <= 0 || parsed.data.profiles.length > remaining) throw new Error(tr('settings.components.profileLimit'));
-      const imported = parsed.data.profiles.slice(0, remaining).map((item) => {
+      parsed.data.profiles.forEach((item) => {
         let name = item.name;
         let suffix = 2;
         while (existing.some((p) => p.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
@@ -414,7 +414,6 @@ export function SettingsPage() {
         }
         const profile = { ...item, id: crypto.randomUUID(), name };
         existing.push(profile);
-        return profile;
       });
       const nextSettings = { ...s, appearance: { ...s.appearance, workspaceProfiles: existing } };
       await commitWorkspaceSettings(nextSettings, 'settings.components.profileImported');
