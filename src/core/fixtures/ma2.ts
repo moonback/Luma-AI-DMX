@@ -2,6 +2,7 @@ import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import type { Channel, ChannelRange, FixtureModule, FixtureMode, FixtureProfile, FixtureType } from '../model/schemas';
 import { dedupeRanges, slug } from './ofl';
 import { validateProfile } from './profiles';
+import { resolveMa2SemanticAttribute } from './ma2AttributeResolver';
 
 /**
  * Converter from a grandMA2 fixture export (`<MA><FixtureType>`, one file = one mode) to a Luma profile.
