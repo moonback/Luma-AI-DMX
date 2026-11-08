@@ -33,3 +33,8 @@ export function validateReleaseMetadata({ version, changelog, existingTags = [] 
   }
   return errors;
 }
+
+/** Query an injected Git reader so remote-tag checks can be integration-tested safely. */
+export function hasRemoteTag(tag, readRemoteTag) {
+  return readRemoteTag(tag).trim().length > 0;
+}
