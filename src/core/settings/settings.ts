@@ -175,7 +175,13 @@ export const settingsSchema = z.object({
       autoApply: z.boolean().default(false),
     })
     .default({ name: 'Luma', voice: 'Puck', directorPrompt: null, voicePrompt: null, autoApply: false }),
-  audio: z.object({ deviceId: z.string().max(300).nullable().default(null) }).default({ deviceId: null }),
+  audio: z
+    .object({
+      deviceId: z.string().max(300).nullable().default(null),
+      /** Delay between a sound and its detection on the live input (sound card, input buffer); beats and predictions are moved forward by it. Absent from older files: 0. */
+      latencyMs: z.number().int().min(0).max(250).default(0),
+    })
+    .default({ deviceId: null, latencyMs: 0 }),
   /** External control: MIDI mappings (renderer, Web MIDI), OSC over UDP (main) and timecode chase of the timeline. */
   control: z
     .object({

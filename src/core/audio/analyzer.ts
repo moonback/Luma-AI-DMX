@@ -1,4 +1,4 @@
-import { TempoTracker } from '../music/tempoTracker';
+import { TempoTracker, type TempoState } from '../music/tempoTracker';
 import { DropPredictor, type Prediction } from '../music/dropPredictor';
 
 /**
@@ -66,6 +66,9 @@ export class AudioAnalyzer {
   private highS = 0;
   readonly tempo: TempoTracker;
   readonly predictor = new DropPredictor();
+  /** Input latency in seconds (sound → detection): beats and predictions are reported this much earlier. */
+  latency = 0;
+  private earlyBeat: number | null = null;
 
   constructor(public opts: AnalyzerOptions) {
     this.tempo = new TempoTracker(opts.bpmRange);
@@ -123,13 +126,29 @@ export class AudioAnalyzer {
     const recent = this.onsets.filter((x) => x > f.t - 4).length;
     const bpmConf = Number.isFinite(tempo.confidence) ? Math.max(0, Math.min(1, tempo.confidence)) : 0;
     const onsetStr = threshold > 0 && Number.isFinite(nov / threshold) ? nov / threshold : 0;
+    const { beat, barPosition, lead } = this.compensate(f.t, tempo);
+    const prediction = this.predictor.at(f.t);
     return {
       t: f.t, level, levelDb, energy: this.energy, onset, onsetStrength: onsetStr,
       bpm: tempo.bpm && Number.isFinite(tempo.bpm) ? tempo.bpm : null, bpmConfidence: bpmConf, energyRise,
-      beat: tempo.beat, barPosition: tempo.barPosition, tempoLocked: tempo.locked,
+      beat, barPosition, tempoLocked: tempo.locked,
       bass: Math.min(1, this.bassS), brightness: Math.min(1, this.brightS), onsetDensity: Math.min(1, recent / 4 / 8),
-      prediction: this.predictor.at(f.t),
+      prediction: prediction && lead > 0 ? { ...prediction, at: prediction.at - lead } : prediction,
     };
+  }
+
+  /**
+   * Latency compensation: the beat grid lives on the detection clock, so the beat is reported `lead` seconds before
+   * the tracker reaches it (once per beat) and the bar position already names that beat. The tracker itself is left
+   * untouched (its downbeat accents stay aligned). Capped below one beat period. Onsets cannot be anticipated.
+   */
+  private compensate(t: number, tempo: TempoState): { beat: boolean; barPosition: number | null; lead: number } {
+    const lead = tempo.bpm ? Math.min(this.latency, (0.9 * 60) / tempo.bpm) : 0;
+    if (lead <= 0 || tempo.nextBeatAt === null) return { beat: tempo.beat, barPosition: tempo.barPosition, lead };
+    const ahead = t + lead >= tempo.nextBeatAt;
+    const beat = ahead && this.earlyBeat !== tempo.nextBeatAt;
+    if (beat) this.earlyBeat = tempo.nextBeatAt;
+    return { beat, barPosition: ahead && tempo.barPosition !== null ? (tempo.barPosition + 1) % 4 : tempo.barPosition, lead };
   }
 }
 

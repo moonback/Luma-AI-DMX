@@ -647,7 +647,7 @@ test('fournisseur OpenRouter sélectionnable avec choix du modèle', async () =>
 
 test('fiabilisation : garde-fou, contrôle externe, télécommande et RDM', async () => {
   await nav('settings');
-  await page.getByRole('tab', { name: 'Moteur & sécurité' }).click();
+  await page.getByRole('tab', { name: 'Sécurité du show' }).click();
   await page.getByTestId('flash-guard').selectOption('limit');
   await page.getByRole('tab', { name: 'Contrôle externe' }).click();
   await page.getByTestId('remote-enabled').check();

@@ -113,3 +113,13 @@
 /* Reduced motion also stops transitions (the global rule only zeroes animations). */
 .reduced-motion .settings-page *, .reduced-motion .settings-page *::before { transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .settings-page *, .settings-page *::before { transition: none !important; } }
+
+/* Global search and « modified » marker. */
+.settings-search { display: flex; align-items: center; gap: 6px; padding: 0 4px; }
+.settings-search .input { flex: 1; min-width: 0; }
+.settings-search-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; color: inherit; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; }
+.settings-search-item:hover, .settings-search-item:focus-visible { border-color: var(--cyan); }
+.setting-row { display: flex; flex-direction: column; gap: 4px; min-width: 0; border-radius: 6px; transition: box-shadow 0.3s; }
+.setting-row.modified { box-shadow: inset 2px 0 0 var(--cyan); padding-left: 8px; }
+.setting-row.flash { box-shadow: 0 0 0 2px var(--cyan); }
+.setting-modified { gap: 6px; }

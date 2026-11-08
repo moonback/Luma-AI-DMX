@@ -24,6 +24,7 @@ import { MusicPage } from './features/Music';
 import { OutputPage } from './features/Output';
 import { SettingsPage } from './features/Settings';
 import { externalControl } from './control';
+import { audioEngine } from './audioEngine';
 import { OnboardingHost } from './features/Onboarding';
 import { StartScreen } from './features/StartScreen';
 import { MiniPlayer } from './features/music/MiniPlayer';
@@ -312,6 +313,7 @@ export async function bootstrap(): Promise<void> {
   // and opens the detached window, after the first project opened.
   const main = location.hash !== DETACHED_STAGE_HASH && location.hash !== DETACHED_CONSOLE_HASH;
   if (main) void externalControl.configure(settings.control);
+  audioEngine.setLatency(settings.audio.latencyMs);
   if (main) void offerRecovery();
   setDetachOnOpen(settings.general.detachStage3dOnStart && main, settings.general.detachConsoleOnStart && main);
   // Lu au démarrage seulement : le réglage s'applique au prochain redémarrage, pas à la session en cours.

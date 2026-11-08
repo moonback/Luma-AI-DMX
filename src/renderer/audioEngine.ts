@@ -37,9 +37,16 @@ class AudioEngine {
     this.analyzer.configure({ sensitivity: cfg.sensitivity, smoothing: cfg.smoothing, onsetThreshold: cfg.onsetThreshold, riseRatio: cfg.reactions.energyRiseGo.ratio, bpmRange: cfg.bpmRange });
   }
 
-  /** Tap on the downbeat: re-phases the beat grid and makes this beat "1". */
+  /** Input latency (user setting, ms), compensated on the live input only: the player's own output is analysed before it plays. */
+  setLatency(ms: number): void {
+    this.latencyMs = ms;
+    this.analyzer.latency = this.source === 'live' ? ms / 1000 : 0;
+  }
+  private latencyMs = 0;
+
+  /** Tap on the downbeat: re-phases the beat grid and makes this beat "1". The tap is heard, so it is moved onto the detection clock. */
   tap(): void {
-    this.analyzer.tempo.tap(performance.now() / 1000);
+    this.analyzer.tempo.tap(performance.now() / 1000 + this.analyzer.latency);
   }
 
   subscribe(l: Listener): () => void {
@@ -65,6 +72,7 @@ class AudioEngine {
       this.analyser.smoothingTimeConstant = 0;
       this.ctx.createMediaStreamSource(this.stream).connect(this.analyser);
       this.source = 'live';
+      this.setLatency(this.latencyMs);
       this.error = null;
       this.loop();
     } catch (err) {
@@ -112,6 +120,7 @@ class AudioEngine {
     this.analyser = null;
     if (this.source !== 'none') void act({ type: 'audio.release' });
     this.source = 'none';
+    this.analyzer.latency = 0;
     this.last = null;
     this.emit(null);
   }

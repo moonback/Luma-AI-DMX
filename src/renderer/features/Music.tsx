@@ -363,7 +363,8 @@ export function MusicPage() {
                   <label className="row small dim" style={{ gap: 6, marginLeft: 'auto' }} title={t('music.phraseBars.hint')}>
                     {t('music.phraseBars')}
                     <select className="select" value={phraseBars} onChange={(e) => void savePhraseBars(Number(e.target.value))} data-testid="music-phrase-bars">
-                      {[4, 8, 16].map((n) => <option key={n} value={n}>{n}</option>)}
+                      {/* The current value may come from Paramètres (2–32), outside the usual choices. */}
+                      {[...new Set([4, 8, 16, phraseBars])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
                   </label>
                 </div>

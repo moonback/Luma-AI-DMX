@@ -162,7 +162,7 @@ function guardConstraints(app: AppService, p: AiProposal): void {
 export function guardFlashes(app: AppService, p: AiProposal): void {
   if (app.settings.engine.flashGuard === 'off') return;
   const n = guardProposalFlashes(p, app.index, app.engine, app.settings.engine.maxStrobeHz);
-  if (n) p.notices.push(`${n} effet(s) refusé(s) par le garde-fou photosensible (Paramètres › Moteur & sécurité).`);
+  if (n) p.notices.push(`${n} effet(s) refusé(s) par le garde-fou photosensible (Paramètres › Sécurité du show).`);
 }
 
 /** Digest of what AI actions resolve against: fixtures (id, profile, mode), groups and scene names. */
