@@ -367,7 +367,7 @@ export function SettingsPage() {
     let uniqueName = name;
     if (!replaceActive) {
       let suffix = 2;
-      while (profiles.some((p) => p.name.toLocaleLowerCase() === uniqueName.toLocaleLowerCase())) uniqueName = name + ' (' + suffix++ + ')';
+      while (profiles.some((p) => p.name.toLocaleLowerCase() === uniqueName.toLocaleLowerCase())) uniqueName = name.slice(0, 54) + ' (' + suffix++ + ')';
     }
     const profile: WorkspaceProfile = { id: replaceActive && activeIndex >= 0 ? profiles[activeIndex].id : crypto.randomUUID(), name: uniqueName, components: s.appearance.components };
     if (replaceActive && activeIndex >= 0) profiles[activeIndex] = profile;
@@ -401,6 +401,7 @@ export function SettingsPage() {
     event.target.value = '';
     if (!file) return;
     try {
+      if (file.size > 1_000_000) throw new Error(tr('settings.components.profileInvalidFile'));
       const parsed = workspaceProfilesFileSchema.safeParse(JSON.parse(await file.text()));
       if (!parsed.success) throw new Error(tr('settings.components.profileInvalidFile'));
       const existing = [...s.appearance.workspaceProfiles];
@@ -410,7 +411,7 @@ export function SettingsPage() {
         let name = item.name;
         let suffix = 2;
         while (existing.some((p) => p.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-          name = item.name + ' (' + suffix++ + ')';
+          name = item.name.slice(0, 54) + ' (' + suffix++ + ')';
         }
         const profile = { ...item, id: crypto.randomUUID(), name };
         existing.push(profile);
