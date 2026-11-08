@@ -48,7 +48,8 @@ describe('Console Simplifiée — interaction des machines', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Régler (2)' }));
 
-    expect(screen.getByRole('dialog', { name: '2 machines sélectionnées' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Console Simplifiée' })).toBeInTheDocument();
+    expect(screen.getByText('2 machines sélectionnées')).toBeInTheDocument();
   });
 
   it('désactive le mode sélection et efface la sélection courante', () => {
