@@ -3264,7 +3264,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 
 **Implémentation en cours (08/11/2026).**
 
-- Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts`, avec interpolation des paramètres.
+- Catalogue bilingue partagé et typé ajouté dans `src/shared/i18n.ts` (98 clés à ce stade), avec interpolation des paramètres et test de présence des deux langues.
 - `UserError` accepte une clé stable et des variables, sans supprimer le message français historique utilisé comme repli.
 - Réponses IPC enrichies avec `message: { key, vars? }` pour les refus d’origine, les commandes invalides et les `UserError` migrées ; le rendu traduit selon la langue active.
 - Messages migrés dans les handlers : refus d’origine, validation IPC et modifications du projet, contrôle OSC, programmeur, profils/patch, IA, voix Gemini, localisation, musique, sorties DMX/RDM et chargement de projets.
@@ -3284,7 +3284,7 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 **Critères d’acceptation.**
 
 - [ ] En anglais, les erreurs des 20 commandes les plus utilisées (statistiques d’usage) s’affichent en anglais.
-- [ ] Le cliquet empêche l’ajout de nouveaux messages en dur dans les handlers.
+- [ ] Le cliquet AST empêche l’ajout de nouveaux `UserError` sans clé i18n dans `src/core/app` (exécution du contrôle à confirmer).
 
 **Tests requis.**
 
