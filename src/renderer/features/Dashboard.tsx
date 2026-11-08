@@ -1,11 +1,12 @@
-import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2 } from 'lucide-react';
+import { Bot, Cable, FilePlus, Lightbulb, Palette, SlidersHorizontal, AlertTriangle, Wand2, CheckCircle2, CircleAlert, CircleDashed, ShieldAlert } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useT } from '../i18n';
 import { describeScene } from '../sceneActions';
 import { TEXT_SCENE_EXAMPLES } from '../../core/visualizer/sceneFromText';
 import { useStore } from '../store';
 import { newProjectFlow } from '../App';
-import { PageHead, Panel } from '../components/ui';
+import { PageHead, Panel, useResolved } from '../components/ui';
+import { evaluateDashboardReadiness, summarizeReadiness, type ReadinessCheck, type ReadinessLevel } from './dashboardReadiness';
 import { FirstSteps } from './Onboarding';
 
 type Src = 'persisted' | 'measured' | 'computed' | 'simulated' | 'config' | 'estimate';
@@ -19,6 +20,47 @@ function Kpi({ label, value, sub, src, icon, onClick }: { label: string; value: 
       <span className="v">{value}</span>
       {sub && <span className="s">{sub}</span>}
     </Tag>
+  );
+}
+
+
+const READINESS_ICONS: Record<ReadinessLevel, typeof CheckCircle2> = {
+  ready: CheckCircle2,
+  warning: CircleAlert,
+  blocked: ShieldAlert,
+  unknown: CircleDashed,
+};
+
+function ReadinessChecklist({ checks }: { checks: ReadinessCheck[] }) {
+  const tr = useT();
+  const ready = checks.filter((check) => check.level === 'ready').length;
+  const level = summarizeReadiness(checks);
+  const summaryClass = level === 'blocked' ? 'err' : level === 'warning' ? 'warn' : '';
+  return (
+    <Panel title={tr('dash.readiness.title')} actions={
+      <div className="row" style={{ gap: 8 }}>
+        <span className={`badge ${summaryClass}`} data-testid="readiness-status">{tr(`dash.readiness.state.${level}`)}</span>
+        <span className="small muted mono">{tr('dash.readiness.progress', { ready, total: checks.length })}</span>
+      </div>
+    }>
+      <div className="readiness-list" data-testid="readiness-checklist">
+        {checks.map((check) => {
+          const Icon = READINESS_ICONS[check.level];
+          const detailVars = check.count === undefined ? undefined : { n: check.count };
+          return (
+            <div key={check.id} className={`readiness-item readiness-${check.level}`} data-testid={`readiness-${check.id}`}>
+              <Icon size={16} aria-hidden="true" />
+              <div className="readiness-copy">
+                <strong>{tr(`dash.readiness.${check.id}`)}</strong>
+                <span className="small muted">{tr(`dash.readiness.${check.id}.${check.level}`, detailVars)}</span>
+              </div>
+              {check.page && <button type="button" className="btn ghost sm" onClick={() => useStore.getState().setPage(check.page!)}>{tr('dash.readiness.open')}</button>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="small muted" style={{ margin: '10px 0 0' }}>{tr('dash.readiness.disclaimer')}</p>
+    </Panel>
   );
 }
 
@@ -57,6 +99,7 @@ export function Dashboard() {
   const rt = useStore((s) => s.runtime);
   const setPage = useStore((s) => s.setPage);
   const visibility = useStore((s) => s.componentVisibility);
+  const resolved = useResolved();
   const p = ps.project;
   const outputs = rt?.outputs ?? [];
   const real = outputs.filter((o) => o.real);
@@ -65,10 +108,21 @@ export function Dashboard() {
   const universesUsed = new Set(p.patch.map((f) => f.universe)).size;
   const m = rt?.engine.metrics;
   const audio = rt?.audio;
+  const readiness = evaluateDashboardReadiness({
+    patchCount: p.patch.length,
+    patchIssueCount: ps.issues.length,
+    resolvedFixtureCount: resolved.fixtures.length,
+    outputs: rt ? rt.outputs : null,
+    projectPath: ps.path,
+    projectDirty: ps.dirty,
+    flashGuardViolation: rt ? rt.safety.violation : null,
+  });
 
   return (
     <div className="page">
       <PageHead title={tr('nav.dashboard')} subtitle={`${p.meta.name}${p.meta.show ? ` — ${p.meta.show}` : ''}`} />
+      {/* Mandatory operational checklist: independent from optional dashboard card visibility. */}
+      <ReadinessChecklist checks={readiness} />
       {visibility.dashboard.firstSteps && <FirstSteps />}
       <div className="grid g2 kpi-groups">
         {visibility.dashboard.hardware && <section className="kpi-group wide" aria-labelledby="kpi-grp-hw">
