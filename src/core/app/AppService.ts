@@ -286,7 +286,10 @@ export class AppService extends EventEmitter<{ project: [ProjectState]; runtime:
     embedUsedProfiles(draft, this.userProfiles);
     draft.meta.modifiedAt = new Date().toISOString();
     const parsed = projectSchema.safeParse(draft);
-    if (!parsed.success) throw new UserError(`Modification refusée : ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ')}`);
+    if (!parsed.success) {
+      const details = parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ');
+      throw new UserError(`Modification refusée : ${details}`, 'error.invalidProjectUpdate', { details });
+    }
     if (opts.history !== false) recordStep(this, this.project);
     this.setProject(parsed.data, false);
   }
