@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ChangeEvent } from 'react';
-import { AudioLines, Bot, Check, DatabaseBackup, FolderOpen, Keyboard, KeyRound, LayoutTemplate, Network, Palette, ScrollText, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, X, type LucideIcon } from 'lucide-react';
+import { AudioLines, Bot, Check, DatabaseBackup, FolderOpen, Keyboard, KeyRound, LayoutTemplate, Network, Palette, RefreshCw, ScrollText, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, X, type LucideIcon } from 'lucide-react';
 import { useStore, confirmAction } from '../store';
 import { act } from '../api';
 import { Field, Modal, NumberInput, PageHead, Panel } from '../components/ui';
@@ -155,25 +155,43 @@ function UpdatesPanel({ value, onChange }: { value: Settings['general']; onChang
     const r = await act({ type: 'app.checkUpdates' });
     if (r && info) setInfo({ ...info, updates: r });
   };
+  const [open, setOpen] = useState(false);
+  const canCheck = !!u && u.state !== 'disabled' && u.state !== 'checking';
   return (
-    <Panel title={tr('settings.updates.title')}>
-      <div className="grid g2">
-        <Field label={tr('settings.updates.installed')}><span className="mono" data-testid="app-version">{info?.version ?? '…'}</span></Field>
-        <Field label={tr('settings.updates.update')}>
+    <Panel title={tr('settings.updates.title')} className="settings-card">
+      <div className="settings-card-body">
+        <span className="settings-card-icon"><RefreshCw size={18} /></span>
+        <div className="col grow" style={{ gap: 4, minWidth: 0 }}>
+          <span className="mono" data-testid="app-version">{info?.version ?? '…'}</span>
           <span className="row" data-testid="update-state">
             <span className={`badge ${u?.state === 'ready' ? 'ok' : u?.state === 'error' ? 'err' : ''}`}>{u ? tr(`settings.updates.state.${u.state}`) : '…'}</span>
             {u?.version && <span className="mono small">v{u.version}{u.state === 'downloading' && u.progress !== null ? ` · ${Math.round(u.progress * 100)} %` : ''}</span>}
           </span>
-          {u?.detail && <div className="small dim">{u.detail}</div>}
-        </Field>
-        <Field label={tr('settings.updates.channel')} hint={tr('settings.updates.channelHint')}>
-          <select className="select" value={value.updateChannel} onChange={(e) => onChange({ updateChannel: e.target.value as Settings['general']['updateChannel'] })}>
-            <option value="stable">{tr('settings.updates.stable')}</option><option value="beta">{tr('settings.updates.beta')}</option>
-          </select>
-        </Field>
-        <label className="check"><input type="checkbox" checked={value.autoUpdate} onChange={(e) => onChange({ autoUpdate: e.target.checked })} />{tr('settings.updates.auto')}</label>
+        </div>
       </div>
-      <div className="row"><button className="btn" disabled={!u || u.state === 'disabled' || u.state === 'checking'} onClick={() => void check()}>{tr('settings.updates.check')}</button></div>
+      <div className="row settings-card-actions">
+        <button className="btn sm" disabled={!canCheck} onClick={() => void check()}>{tr('settings.updates.check')}</button>
+        <button className="btn sm primary" onClick={() => setOpen(true)} data-testid="updates-open">{tr('settings.manage')}</button>
+      </div>
+      {open && (
+        <Modal title={tr('settings.updates.title')} onClose={() => setOpen(false)} footer={<button className="btn" onClick={() => setOpen(false)}>{tr('common.close')}</button>}>
+          <div className="grid g2">
+            <Field label={tr('settings.updates.installed')}><span className="mono">{info?.version ?? '…'}</span></Field>
+            <Field label={tr('settings.updates.update')}>
+              <span className={`badge ${u?.state === 'ready' ? 'ok' : u?.state === 'error' ? 'err' : ''}`}>{u ? tr(`settings.updates.state.${u.state}`) : '…'}</span>
+              {u?.detail && <div className="small dim">{u.detail}</div>}
+            </Field>
+            <Field label={tr('settings.updates.channel')} hint={tr('settings.updates.channelHint')}>
+              <select className="select" value={value.updateChannel} onChange={(e) => onChange({ updateChannel: e.target.value as Settings['general']['updateChannel'] })}>
+                <option value="stable">{tr('settings.updates.stable')}</option><option value="beta">{tr('settings.updates.beta')}</option>
+              </select>
+            </Field>
+            <label className="check"><input type="checkbox" checked={value.autoUpdate} onChange={(e) => onChange({ autoUpdate: e.target.checked })} />{tr('settings.updates.auto')}</label>
+          </div>
+          <div className="row" style={{ marginTop: 12 }}><button className="btn" disabled={!canCheck} onClick={() => void check()}>{tr('settings.updates.check')}</button></div>
+          <p className="small dim" style={{ marginBottom: 0 }}>{tr('settings.updates.pendingSave')}</p>
+        </Modal>
+      )}
     </Panel>
   );
 }
@@ -289,7 +307,7 @@ function RecentPanel({ recent, onChange }: { recent: string[]; onChange: (list: 
     <Panel title={tr('start.recent')} actions={recent.length > 0 && <button className="btn ghost sm" onClick={() => void clearAll()} data-testid="recent-clear"><Trash2 size={12} />{tr('settings.recent.clear')}</button>}>
       {recent.length ? (
         <div className="start-recent" role="list" style={{ maxHeight: 'none' }}>
-          {recent.map((p) => {
+          {recent.slice(0, RECENT_SHOWN).map((p) => {
             const { name, dir } = splitPath(p);
             return (
               <div key={p} role="listitem" className="row" style={{ gap: 4 }}>
@@ -302,9 +320,11 @@ function RecentPanel({ recent, onChange }: { recent: string[]; onChange: (list: 
           })}
         </div>
       ) : <p className="small muted" style={{ margin: 0 }}>{tr('start.none')}</p>}
+      {recent.length > RECENT_SHOWN && <p className="small dim" style={{ margin: '8px 0 0' }}>{tr('settings.recent.more', { n: recent.length - RECENT_SHOWN })}</p>}
     </Panel>
   );
 }
+const RECENT_SHOWN = 5;
 
 const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} Mo`;
 
@@ -371,7 +391,8 @@ export function SettingsPage() {
   };
   const saveWorkspaceProfile = async (replaceActive = false) => {
     const activeIndex = s.appearance.workspaceProfiles.findIndex((p) => p.id === s.appearance.activeWorkspaceProfileId);
-    const name = replaceActive && activeIndex >= 0 ? s.appearance.workspaceProfiles[activeIndex].name : workspaceProfileName.trim();
+    const activeProfile = activeIndex >= 0 ? s.appearance.workspaceProfiles[activeIndex] : undefined;
+    const name = replaceActive && activeProfile ? activeProfile.name : workspaceProfileName.trim();
     if (!name) return;
     const profiles = [...s.appearance.workspaceProfiles];
     let uniqueName = name;
@@ -379,7 +400,7 @@ export function SettingsPage() {
       let suffix = 2;
       while (profiles.some((p) => p.name.toLocaleLowerCase() === uniqueName.toLocaleLowerCase())) uniqueName = name.slice(0, 54) + ' (' + suffix++ + ')';
     }
-    const profile: WorkspaceProfile = { id: replaceActive && activeIndex >= 0 ? profiles[activeIndex].id : crypto.randomUUID(), name: uniqueName, components: s.appearance.components };
+    const profile: WorkspaceProfile = { id: replaceActive && activeProfile ? activeProfile.id : crypto.randomUUID(), name: uniqueName, components: s.appearance.components };
     if (replaceActive && activeIndex >= 0) profiles[activeIndex] = profile;
     else profiles.push(profile);
     if (profiles.length > 30) {
@@ -497,7 +518,7 @@ export function SettingsPage() {
           </div>
         </header>
         {tab === 'general' && (
-          <Panel title={tr('settings.tab.general')}>
+          <Panel title={tr('settings.general.startup')}>
             <div className="grid g2" style={{ alignItems: 'start' }}>
               <Field label={tr('settings.general.autosave')} hint={tr('settings.general.autosaveHint')}><NumberInput value={s.general.autosaveMinutes} min={0} max={60} onChange={(v) => set('general', { autosaveMinutes: v })} /></Field>
               <div className="col" style={{ gap: 10, paddingTop: 22 }}>
@@ -511,8 +532,12 @@ export function SettingsPage() {
           </Panel>
         )}
         {tab === 'general' && <RecentPanel recent={s.general.recentProjects} onChange={(recentProjects) => void forgetRecent(recentProjects)} />}
-        {tab === 'general' && <LicensePanel />}
-        {tab === 'general' && <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />}
+        {tab === 'general' && (
+          <div className="grid g2 settings-cards">
+            <LicensePanel />
+            <UpdatesPanel value={s.general} onChange={(v) => set('general', v)} />
+          </div>
+        )}
         {tab === 'appearance' && (
           <Panel title={tr('settings.components.profilesTitle')}>
             <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}>
