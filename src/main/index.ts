@@ -56,8 +56,11 @@ async function renderPdf(html: string): Promise<Uint8Array> {
     await w.loadFile(htmlPath);
     return await w.webContents.printToPDF({ landscape: true, pageSize: 'A4', printBackground: true });
   } finally {
-    if (w && !w.isDestroyed()) w.destroy();
-    await fs.rm(tempDir, { recursive: true, force: true });
+    try {
+      if (w && !w.isDestroyed()) w.destroy();
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   }
 }
 
