@@ -58,6 +58,14 @@ describe('catalogue partagé du cœur', () => {
       .toBe('PDF export is unavailable here; the installation plan requires the rendering engine.');
   });
 
+  it('traduit les diagnostics de validation du directeur IA', () => {
+    expect(translateCore('en', 'ai.validation.strobeDisabled')).toBe('Strobe is disabled by the safety settings (Settings › Safety)');
+    expect(translateCore('en', 'ai.validation.strobeLimited', { hz: 8 })).toBe('Frequency limited to 8 Hz by the safety settings');
+    expect(translateCore('en', 'ai.validation.fixturesNoPosition', { fixtures: 'Moving Head 1' })).toBe('No pan/tilt capability (skipped): Moving Head 1');
+    expect(translateCore('fr', 'ai.validation.sceneNotFound', { name: 'Opening' })).toBe('Scène « Opening » introuvable');
+    expect(translateCore('en', 'ai.validation.noFixtureSupportsAction')).toBe('No targeted fixture supports this action');
+  });
+
   it('préserve le placeholder si un paramètre manque', () => {
     expect(translateCore('en', 'error.invalidCommand')).toBe('Invalid command: {details}');
   });

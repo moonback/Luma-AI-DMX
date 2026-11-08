@@ -16,6 +16,7 @@ import { effectFlashViolation } from '../safety/flashGuard';
 import { pruneTransientEffects } from './transient';
 import { resolveAiTarget } from './target';
 import type { LiveState } from './providers/openrouter';
+import { translateCore, type CoreMessage } from '../../shared/i18n';
 
 /* ------------------------------------------------------------------ */
 /* Target resolution & validation                                      */
@@ -24,6 +25,11 @@ import type { LiveState } from './providers/openrouter';
 export { resolveAiTarget };
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
+
+function addTranslatedMessage(messages: string[], translations: (CoreMessage | null)[], key: CoreMessage['key'], vars?: CoreMessage['vars']): void {
+  translations[messages.length] = { key, ...(vars ? { vars } : {}) };
+  messages.push(translateCore('fr', key, vars));
+}
 
 export interface ValidationContext {
   index: ProjectIndex;
@@ -68,35 +74,35 @@ export function beamToValues(rf: ResolvedFixture, a: Omit<BeamAction, 'type' | '
   return v;
 }
 
-function checkEffect(spec: AiEffectSpec, ctx: ValidationContext, messages: string[]): string[] | null {
+function checkEffect(spec: AiEffectSpec, ctx: ValidationContext, messages: string[], translations: (CoreMessage | null)[]): string[] | null {
   const { ids, problems } = resolveAiTarget(ctx.index, spec.target);
   messages.push(...problems);
-  if (spec.target.module) messages.push(`Les effets s’appliquent au projecteur entier, pas seulement au module « ${spec.target.module} »`);
+  if (spec.target.module) addTranslatedMessage(messages, translations, 'ai.validation.effectModuleWholeFixture', { module: spec.target.module });
   if (spec.effectType === 'strobe' && !ctx.allowStrobe) {
-    messages.push('Strobe interdit par les paramètres de sécurité (Paramètres › Sécurité)');
+    addTranslatedMessage(messages, translations, 'ai.validation.strobeDisabled');
     return null;
   }
-  if (spec.effectType === 'strobe' && (spec.speed ?? 0) > ctx.maxStrobeHz) messages.push(`Fréquence limitée à ${ctx.maxStrobeHz} Hz par la sécurité`);
+  if (spec.effectType === 'strobe' && (spec.speed ?? 0) > ctx.maxStrobeHz) addTranslatedMessage(messages, translations, 'ai.validation.strobeLimited', { hz: ctx.maxStrobeHz });
   let test: ((rf: ResolvedFixture) => boolean) | null = null;
   if (spec.effectType === 'panTilt' || spec.effectType === 'randomMove' || spec.effectType === 'fan') test = hasPosition;
   if (spec.effectType === 'rainbow' || spec.effectType === 'colorCycle' || spec.effectType === 'brightnessColor') test = hasColor;
   const { ok, skipped } = test ? capable(ctx.index, ids, test) : { ok: ids, skipped: [] };
-  if (skipped.length) messages.push(`Ignorés (capacité absente) : ${skipped.join(', ')}`);
+  if (skipped.length) addTranslatedMessage(messages, translations, 'ai.validation.fixturesSkipped', { fixtures: skipped.join(', ') });
   if (!ok.length) {
-    messages.push('Aucun projecteur compatible avec cet effet');
+    addTranslatedMessage(messages, translations, 'ai.validation.noCompatibleEffect');
     return null;
   }
   return ok;
 }
 
-function checkLook(look: LookPart[], ctx: ValidationContext, messages: string[]): string[] {
+function checkLook(look: LookPart[], ctx: ValidationContext, messages: string[], translations: (CoreMessage | null)[]): string[] {
   const all: string[] = [];
   for (const part of look) {
     const { ids, problems } = resolveAiTarget(ctx.index, part.target);
     messages.push(...problems);
     if ((part.color || part.colors) && ids.length) {
       const { skipped } = capable(ctx.index, ids, hasColor);
-      if (skipped.length) messages.push(`Sans couleur (ignorée) : ${skipped.join(', ')}`);
+      if (skipped.length) addTranslatedMessage(messages, translations, 'ai.validation.fixturesNoColor', { fixtures: skipped.join(', ') });
     }
     all.push(...ids);
   }
@@ -137,6 +143,7 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
     }
     const a = parsed.data;
     const messages: string[] = [];
+    const messageTranslations: (CoreMessage | null)[] = [];
     let ids: string[] = [];
     let rejected = false;
     let extra = '';
@@ -151,16 +158,16 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
         const r = resolveAiTarget(ctx.index, a.target);
         messages.push(...r.problems);
         const c = capable(ctx.index, r.ids, hasColor);
-        if (c.skipped.length) messages.push(`Sans capacité couleur (ignorés) : ${c.skipped.join(', ')}`);
+        if (c.skipped.length) addTranslatedMessage(messages, messageTranslations, 'ai.validation.fixturesNoColorAction', { fixtures: c.skipped.join(', ') });
         ids = c.ok;
         break;
       }
       case 'setPosition': {
         const r = resolveAiTarget(ctx.index, a.target);
         messages.push(...r.problems);
-        if (a.pan === undefined && a.tilt === undefined) { messages.push('Ni pan ni tilt fourni'); rejected = true; }
+        if (a.pan === undefined && a.tilt === undefined) { addTranslatedMessage(messages, messageTranslations, 'ai.validation.noPositionValue'); rejected = true; }
         const c = capable(ctx.index, r.ids, hasPosition);
-        if (c.skipped.length) messages.push(`Sans pan/tilt (ignorés) : ${c.skipped.join(', ')}`);
+        if (c.skipped.length) addTranslatedMessage(messages, messageTranslations, 'ai.validation.fixturesNoPosition', { fixtures: c.skipped.join(', ') });
         ids = c.ok;
         break;
       }
@@ -168,42 +175,42 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
         const r = resolveAiTarget(ctx.index, a.target);
         messages.push(...r.problems);
         const { type: _t, target: _g, fade: _f, ...fields } = a;
-        if (!Object.keys(fields).length) { messages.push('Aucun paramètre de faisceau fourni'); rejected = true; }
+        if (!Object.keys(fields).length) { addTranslatedMessage(messages, messageTranslations, 'ai.validation.noBeamParameter'); rejected = true; }
         const c = capable(ctx.index, r.ids, (rf) => Object.keys(beamToValues(rf, fields)).length > 0);
-        if (c.skipped.length) messages.push(`Sans ce réglage de faisceau (ignorés) : ${c.skipped.join(', ')}`);
+        if (c.skipped.length) addTranslatedMessage(messages, messageTranslations, 'ai.validation.fixturesNoBeam', { fixtures: c.skipped.join(', ') });
         if (a.gobo) {
           const missing = r.ids.map((id) => ctx.index.fixtures.get(id)!).filter((rf) => rf.attributes.includes('gobo') && beamToValues(rf, { gobo: a.gobo }).gobo === undefined);
-          if (missing.length) messages.push(`Gobo ${a.gobo} absent de la roue : ${missing.map((rf) => rf.fixture.name).join(', ')}`);
+          if (missing.length) addTranslatedMessage(messages, messageTranslations, 'ai.validation.goboMissing', { gobo: a.gobo, fixtures: missing.map((rf) => rf.fixture.name).join(', ') });
         }
         ids = c.ok;
         break;
       }
       case 'startEffect': {
-        const ok = checkEffect(a.effect, ctx, messages);
+        const ok = checkEffect(a.effect, ctx, messages, messageTranslations);
         if (!ok) rejected = true;
         else ids = ok;
         break;
       }
       case 'createScene':
-        ids = checkLook(a.look, ctx, messages);
+        ids = checkLook(a.look, ctx, messages, messageTranslations);
         pendingScenes.add(normalize(a.name));
         break;
       case 'applyScene':
       case 'createCue':
-        if (!sceneExists(a.sceneName)) { messages.push(`Scène « ${a.sceneName} » introuvable`); rejected = true; }
+        if (!sceneExists(a.sceneName)) { addTranslatedMessage(messages, messageTranslations, 'ai.validation.sceneNotFound', { name: a.sceneName }); rejected = true; }
         break;
       case 'stopEffect':
       case 'adjustEffect': {
         if (!ctx.aiEffects) break;
         const hit = ctx.aiEffects.filter((e) => (a.type === 'stopEffect' && a.all) || effectMatches(e, a));
         if (hit.length) extra = ` : ${[...new Set(hit.map((e) => e.name))].join(', ')}`;
-        else { messages.push(ctx.aiEffects.length ? `Aucun effet IA en cours ne correspond (en cours : ${ctx.aiEffects.map((e) => e.name).join(', ')})` : 'Aucun effet IA en cours'); rejected = true; }
+        else { if (ctx.aiEffects.length) addTranslatedMessage(messages, messageTranslations, 'ai.validation.noMatchingEffect', { effects: ctx.aiEffects.map((e) => e.name).join(', ') }); else addTranslatedMessage(messages, messageTranslations, 'ai.validation.noRunningEffects'); rejected = true; }
         break;
       }
       case 'createSequence':
         for (const cue of a.cues) {
-          ids.push(...checkLook(cue.look, ctx, messages));
-          for (const fx of cue.effects) if (!checkEffect(fx, ctx, messages)) messages.push(`Effet « ${fx.name} » retiré du cue « ${cue.name} »`);
+          ids.push(...checkLook(cue.look, ctx, messages, messageTranslations));
+          for (const fx of cue.effects) if (!checkEffect(fx, ctx, messages, messageTranslations)) messages.push(`Effet « ${fx.name} » retiré du cue « ${cue.name} »`);
         }
         ids = [...new Set(ids)];
         break;
@@ -212,10 +219,10 @@ export function validateActions(raws: readonly unknown[], ctx: ValidationContext
     }
     const needsFixtures = !['stopEffect', 'adjustEffect', 'applyScene', 'createCue', 'setBpm', 'releaseAi'].includes(a.type);
     if (needsFixtures && !rejected && ids.length === 0) {
-      messages.push('Aucun projecteur ciblé ne prend en charge cette action');
+      addTranslatedMessage(messages, messageTranslations, 'ai.validation.noFixtureSupportsAction');
       rejected = true;
     }
-    return { index, status: rejected ? 'rejected' : messages.length ? 'warning' : 'ok', action: a, raw, summary: describe(a) + extra, messages, fixtureIds: ids };
+    return { index, status: rejected ? 'rejected' : messages.length ? 'warning' : 'ok', action: a, raw, summary: describe(a) + extra, messages, messageTranslations, fixtureIds: ids };
   });
 }
 
