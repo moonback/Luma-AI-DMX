@@ -3245,7 +3245,19 @@ Statuts constatés à l’audit (19/10/2026). Les éléments réalisés depuis s
 - **Priorité** : P2
 - **Type** : amélioration
 - **Phase** : 3
-- **Avancement** : À faire
+- **Avancement** : Première tranche réalisée le 08/11/2026 ; migration globale encore incomplète.
+
+**Réalisation (08/11/2026 — première tranche).**
+
+- Catalogue partagé bilingue et typé dans `src/shared/i18n.ts`, avec interpolation des paramètres.
+- `UserError` accepte une clé et des paramètres, tout en conservant son texte de repli historique.
+- Le contrat IPC transporte la clé structurée ; le rendu la traduit dans la langue active.
+- Refus d’origine, commande invalide, erreurs courantes du programmeur (palette, valeurs, scène, effet, timeline) et profil encore utilisé migrés.
+- Titres des dialogues de fichiers et principales confirmations de fermeture Electron localisés selon `settings.appearance.language`.
+- Sept tests unitaires ajoutés (catalogue et transport IPC) ; ils restent à exécuter.
+- Cliquet ajouté à `npm run lint` : `scripts/check-handler-i18n.mjs` bloque toute augmentation du nombre de `UserError` sans clé i18n (référence initiale : 66 messages non migrés).
+
+**Travaux restants.** Migrer les erreurs des commandes les plus utilisées à partir des statistiques d’usage, les messages du journal/alertes/IA et les libellés de filtres natifs, puis exécuter les tests/typecheck/lint.
 
 **Constat technique.** L’interface propose le français et l’anglais (catalogues `fr` et `en` complets et identiques en clés : 458 et 287 clés vérifiées lors de l’audit). En revanche, tous les messages produits par le cœur sont rédigés en dur en français : erreurs `UserError`, journal, notices IA, alertes, rapport matériel. Il en va de même pour les dialogues natifs du processus principal et pour le titre des toasts d’erreur.
 
