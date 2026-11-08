@@ -27,7 +27,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         try {
           read.push({ name: path.basename(file), bytes: await fs.readFile(file) });
         } catch (err) {
-          if (files.length === 1) throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`);
+          if (files.length === 1) throw new UserError(`Fichier de profil illisible : ${(err as Error).message}`, 'fixture.profileFileUnreadable', { reason: (err as Error).message });
           app.logger.warn('Profils', `${path.basename(file)} illisible : ${(err as Error).message}`);
         }
       }
@@ -52,11 +52,11 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       return { imported: accepted.map((p) => p.name), errors, warnings };
     }
     case 'profile.openFixtureShare':
-      if (!app.opts.dialogs.openFixtureShare) throw new UserError('MA Fixture Share : disponible dans l’application de bureau');
+      if (!app.opts.dialogs.openFixtureShare) throw new UserError('MA Fixture Share : disponible dans l’application de bureau', 'fixture.shareDesktopOnly');
       app.opts.dialogs.openFixtureShare();
       return ok;
     case 'ma2lib.manufacturers': {
-      const lib = await loadMa2Library().catch((err: Error) => { throw new UserError(`Bibliothèque grandMA2 illisible : ${err.message}`); });
+      const lib = await loadMa2Library().catch((err: Error) => { throw new UserError(`Bibliothèque grandMA2 illisible : ${err.message}`, 'fixture.ma2LibraryUnreadable', { reason: err.message }); });
       return { dir: lib?.dir ?? null, manufacturers: lib ? [...lib.index.keys()].sort() : [] };
     }
     case 'ma2lib.fixtures': {
@@ -66,7 +66,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
     case 'profile.importMa2Lib': {
       const lib = await loadMa2Library();
       const files = lib?.index.get(cmd.manufacturer)?.get(cmd.fixture);
-      if (!lib || !files) throw new UserError('Appareil introuvable dans la bibliothèque grandMA2');
+      if (!lib || !files) throw new UserError('Appareil introuvable dans la bibliothèque grandMA2', 'fixture.ma2DeviceNotFound');
       // Library files: one per mode, merged into one profile (and into the existing one of the same fixture).
       const warnings: string[] = [];
       const errors: string[] = [];
@@ -88,7 +88,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         return { imported: null, profileId: null, warnings, errors };
       }
       const id = profile.id;
-      if (BUILTIN_PROFILES.some((b) => b.id === id)) throw new UserError(`Profil « ${id} » : identifiant réservé à un profil intégré`);
+      if (BUILTIN_PROFILES.some((b) => b.id === id)) throw new UserError(`Profil « ${id} » : identifiant réservé à un profil intégré`, 'fixture.reservedBuiltinId', { id });
       const existing = app.userProfiles.find((x) => x.id === id) ?? app.project.profiles.find((x) => x.id === id);
       const merged = existing ? mergeProfileModes(existing, profile) : profile;
       await saveToLibrary(app, [merged]);
@@ -97,9 +97,9 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       return { imported: `${merged.manufacturer} ${merged.name}`, profileId: id, warnings, errors };
     }
     case 'ofl.manufacturers':
-      return oflManufacturers().catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`); });
+      return oflManufacturers().catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`, 'fixture.oflUnavailable', { reason: err.message }); });
     case 'ofl.fixtures':
-      return oflFixtureKeys(cmd.manufacturer).catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`); });
+      return oflFixtureKeys(cmd.manufacturer).catch((err: Error) => { throw new UserError(`Open Fixture Library inaccessible : ${err.message}`, 'fixture.oflUnavailable', { reason: err.message }); });
     case 'profile.importOfl': {
       let json: unknown;
       let manufacturer: string;
@@ -110,7 +110,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
           json = await oflFetchFixture(src.manufacturer, src.key);
           manufacturer = (await oflManufacturers().catch(() => [])).find((m) => m.key === src.manufacturer)?.name ?? src.manufacturer;
         } catch (err) {
-          throw new UserError(`Téléchargement impossible : ${(err as Error).message}`);
+          throw new UserError(`Téléchargement impossible : ${(err as Error).message}`, 'fixture.downloadFailed', { reason: (err as Error).message });
         }
         key = src.key;
       } else {
@@ -119,7 +119,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         try {
           json = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
-          throw new UserError(`Fichier OFL illisible : ${(err as Error).message}`);
+          throw new UserError(`Fichier OFL illisible : ${(err as Error).message}`, 'fixture.oflFileUnreadable', { reason: (err as Error).message });
         }
         manufacturer = cmd.source.manufacturerName;
         key = path.basename(file).replace(/.json$/i, '');
@@ -145,7 +145,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
     }
     case 'profile.export': {
       const profiles = cmd.ids ? app.userProfiles.filter((p) => cmd.ids!.includes(p.id)) : app.userProfiles;
-      if (!profiles.length) throw new UserError('Aucun profil à exporter');
+      if (!profiles.length) throw new UserError('Aucun profil à exporter', 'fixture.noProfilesToExport');
       const base = (profiles.length === 1 ? `${profiles[0]!.manufacturer} ${profiles[0]!.name}` : 'profils').replace(/[\\/:*?"<>|]/gu, '_');
       const file = cmd.path ?? (await app.opts.dialogs.saveProfiles?.(`${base}.json`)) ?? null;
       if (!file) return { path: null, count: 0 };
@@ -155,7 +155,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
     }
     case 'profile.save': {
       const profile = cmd.profile;
-      if (BUILTIN_PROFILES.some((b) => b.id === profile.id)) throw new UserError(`Profil « ${profile.id} » : identifiant réservé à un profil intégré`);
+      if (BUILTIN_PROFILES.some((b) => b.id === profile.id)) throw new UserError(`Profil « ${profile.id} » : identifiant réservé à un profil intégré`, 'fixture.reservedBuiltinId', { id: profile.id });
       await saveToLibrary(app, [profile]);
       app.mutate((d) => { d.profiles = [...d.profiles.filter((x) => x.id !== profile.id), profile]; });
       app.logger.info('Profils', `Profil enregistré : ${profile.manufacturer} ${profile.name} (${profile.modes.length} mode(s))`);
@@ -163,9 +163,9 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
     }
     case 'fixture.add': {
       const profile = app.index.lib.get(cmd.profileId);
-      if (!profile) throw new UserError('Profil inconnu');
+      if (!profile) throw new UserError('Profil inconnu', 'fixture.profileUnknown');
       const count = channelCount(profile, cmd.mode);
-      if (!count) throw new UserError(`Mode « ${cmd.mode} » inconnu pour ce profil`);
+      if (!count) throw new UserError(`Mode « ${cmd.mode} » inconnu pour ce profil`, 'fixture.modeUnknown', { mode: cmd.mode });
       const ids: string[] = [];
       const existingNames = new Set(app.project.patch.map((f) => f.name));
       app.mutate((d) => {
@@ -174,7 +174,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
         let n = 1;
         for (let i = 0; i < cmd.count; i++) {
           const addr = cmd.address !== null && i === 0 ? cmd.address : findFreeAddress(app.index.lib, d.patch, cmd.universe, count, next);
-          if (addr === undefined || addr + count - 1 > 512) throw new UserError(`Plus de place dans l’univers ${cmd.universe} pour ${count} canaux (projecteur ${i + 1}/${cmd.count})`);
+          if (addr === undefined || addr + count - 1 > 512) throw new UserError(`Plus de place dans l’univers ${cmd.universe} pour ${count} canaux (projecteur ${i + 1}/${cmd.count})`, 'fixture.universeCapacityExceeded', { universe: cmd.universe, channels: count, fixtureIndex: i + 1, fixtureCount: cmd.count });
           while (existingNames.has(`${cmd.namePrefix} ${n}`)) n++;
           const name = `${cmd.namePrefix} ${n}`;
           existingNames.add(name);
@@ -189,7 +189,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
           next = addr + count;
         }
         const overlaps = validatePatch(app.index.lib, d.patch).filter((iss) => iss.kind === 'overlap' && iss.fixtureIds.some((x) => ids.includes(x)));
-        if (overlaps.length) throw new UserError(overlaps[0]!.message);
+        if (overlaps.length) throw new UserError(overlaps[0]!.message, 'fixture.validationFailed', { details: overlaps[0]!.message });
       });
       app.logger.info('Patch', `${ids.length} × ${profile.name} ajouté(s) (univers ${cmd.universe})`);
       return { ids };
@@ -197,13 +197,13 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
     case 'fixture.update':
       (SCENE_FIELDS.some((k) => cmd.patch[k] !== undefined) ? app.sceneMutate.bind(app) : app.mutate.bind(app))((d) => {
         const f = d.patch.find((x) => x.id === cmd.id);
-        if (!f) throw new UserError('Projecteur introuvable');
+        if (!f) throw new UserError('Projecteur introuvable', 'fixture.notFound');
         Object.assign(f, Object.fromEntries(Object.entries(cmd.patch).filter(([, v]) => v !== undefined)));
-        if (f.trussId && !d.visualizer.trusses.some((t) => t.id === f.trussId)) throw new UserError('Structure introuvable');
+        if (f.trussId && !d.visualizer.trusses.some((t) => t.id === f.trussId)) throw new UserError('Structure introuvable', 'fixture.structureNotFound');
         const profile = app.index.lib.get(f.profileId);
-        if (!profile || !profile.modes.some((m) => m.name === f.mode)) throw new UserError('Profil ou mode invalide');
+        if (!profile || !profile.modes.some((m) => m.name === f.mode)) throw new UserError('Profil ou mode invalide', 'fixture.profileOrModeInvalid');
         const issues = validatePatch(app.index.lib, d.patch).filter((i) => i.fixtureIds.includes(f.id));
-        if (issues.length) throw new UserError(issues[0]!.message);
+        if (issues.length) throw new UserError(issues[0]!.message, 'fixture.validationFailed', { details: issues[0]!.message });
       });
       return ok;
     case 'fixture.remove': {
@@ -221,8 +221,8 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       app.sceneMutate((d) => {
         for (const p of cmd.placements) {
           const f = d.patch.find((x) => x.id === p.id);
-          if (!f) throw new UserError('Projecteur introuvable');
-          if (p.trussId && !d.visualizer.trusses.some((t) => t.id === p.trussId)) throw new UserError('Structure introuvable');
+          if (!f) throw new UserError('Projecteur introuvable', 'fixture.notFound');
+          if (p.trussId && !d.visualizer.trusses.some((t) => t.id === p.trussId)) throw new UserError('Structure introuvable', 'fixture.structureNotFound');
           Object.assign(f, { position: p.position, height: p.height, trussId: p.trussId }, p.mount ? { mount: p.mount } : {}, p.rotation !== undefined ? { rotation: p.rotation } : {});
         }
       });
@@ -235,7 +235,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
           if (!src) continue;
           const profile = app.index.lib.get(src.profileId)!;
           const addr = findFreeAddress(app.index.lib, d.patch, src.universe, channelCount(profile, src.mode), src.address);
-          if (addr === undefined) throw new UserError(`Plus de place dans l’univers ${src.universe}`);
+          if (addr === undefined) throw new UserError(`Plus de place dans l’univers ${src.universe}`, 'fixture.universeNoCapacity', { universe: src.universe });
           const nid = randomUUID();
           out.push(nid);
           d.patch.push({ ...structuredClone(src), id: nid, name: `${src.name} (copie)`.slice(0, 80), address: addr, position: { x: src.position.x + 0.5, y: src.position.y } });
@@ -249,7 +249,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       if (!file) return { path: null };
       if (cmd.format === 'csv') await fs.writeFile(file, patchSheetCsv(app.project), 'utf8');
       else {
-        if (!app.opts.renderPdf) throw new UserError('Export PDF indisponible ici : exportez en CSV.');
+        if (!app.opts.renderPdf) throw new UserError('Export PDF indisponible ici : exportez en CSV.', 'fixture.pdfExportUnavailable');
         await fs.writeFile(file, await app.opts.renderPdf(patchSheetHtml(app.project)));
       }
       app.logger.info('Patch', `Feuille de patch exportée : ${path.basename(file)}`);
@@ -259,7 +259,7 @@ export async function handleFixtures(app: AppService, cmd: CommandIn<'profile' |
       const base = `${app.project.meta.name} - plan d'installation`.replace(/[\\/:*?"<>|]/gu, '_');
       const file = cmd.path ?? (await app.opts.dialogs.savePatchPlan?.(`${base}.pdf`)) ?? null;
       if (!file) return { path: null };
-      if (!app.opts.renderPdf) throw new UserError('Export PDF indisponible ici : le plan d’installation nécessite le moteur de rendu.');
+      if (!app.opts.renderPdf) throw new UserError('Export PDF indisponible ici : le plan d’installation nécessite le moteur de rendu.', 'fixture.installPlanPdfUnavailable');
       await fs.writeFile(file, await app.opts.renderPdf(installPlanHtml(app.project, app.settings.outputs)));
       app.logger.info('Patch', `Plan d’installation exporté : ${path.basename(file)}`);
       return { path: file };
