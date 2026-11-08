@@ -1,5 +1,6 @@
 import { UserError, type AppService } from '../core/app/AppService';
 import { commandSchema } from '../shared/commands';
+import type { CoreMessage } from '../shared/i18n';
 
 /*
  * The trust boundary between the renderer and the services, kept free of Electron so it is unit-tested:
@@ -12,11 +13,11 @@ export function isTrustedSender(url: string, devUrl: string | undefined): boolea
   return url.startsWith('file://');
 }
 
-export type IpcReply = { ok: true; data: unknown } | { ok: false; error: string };
+export type IpcReply = { ok: true; data: unknown } | { ok: false; error: string; message?: CoreMessage };
 
 /** One `luma:cmd` call: refused origin, invalid command (3 issues at most), user error shown as is, internal error logged. */
 export async function handleCommand(service: Pick<AppService, 'execute' | 'logger'>, raw: unknown, senderUrl: string, devUrl: string | undefined): Promise<IpcReply> {
-  if (!isTrustedSender(senderUrl, devUrl)) return { ok: false, error: 'Origine non autorisée' };
+  if (!isTrustedSender(senderUrl, devUrl)) return { ok: false, error: 'Origine non autorisée', message: { key: 'error.unauthorizedOrigin' } };
   const parsed = commandSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: `Commande invalide : ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.')} ${i.message}`).join(' ; ')}` };
   try {
@@ -24,7 +25,7 @@ export async function handleCommand(service: Pick<AppService, 'execute' | 'logge
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!(err instanceof UserError)) service.logger.error('IPC', `${parsed.data.type} : ${message}`);
-    return { ok: false, error: message };
+    return { ok: false, error: message, ...(err instanceof UserError && err.messageKey ? { message: { key: err.messageKey, ...(err.messageVars ? { vars: err.messageVars } : {}) } } : {}) };
   }
 }
 
