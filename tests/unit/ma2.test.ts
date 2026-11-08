@@ -132,7 +132,7 @@ describe('import grandMA2', () => {
     const r = convertMa2Fixture(xml);
     expect(r.errors).toEqual([]);
     expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual([
-      'shutter', 'colorWheel', 'colorTemperature', 'control', 'custom:vendor-attr-5',
+      'strobe', 'colorWheel', 'colorTemperature', 'control', 'custom:vendor-attr-5',
     ]);
     expect(r.warnings).toContain('Attribut MA2 « VENDOR_ATTR_5 » non reconnu, converti en canal générique');
   });
