@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OutputStatus } from '../../src/core/protocols/config';
-import { evaluateDashboardReadiness, summarizeReadiness } from '../../src/renderer/features/dashboardReadiness';
+import { classifyEngineHealth, evaluateDashboardReadiness, summarizeReadiness } from '../../src/renderer/features/dashboardReadiness';
 
 const output = (overrides: Partial<OutputStatus> = {}): OutputStatus => ({
   id: 'out-1',
@@ -75,5 +75,25 @@ describe('dashboard readiness', () => {
   it('warns about unsaved projects', () => {
     const checks = evaluateDashboardReadiness({ ...base, projectPath: null, projectDirty: true });
     expect(checks.find((check) => check.id === 'project')?.level).toBe('warning');
+  });
+});
+
+describe('engine health classification', () => {
+  it('keeps the state unknown before the first engine tick', () => {
+    expect(classifyEngineHealth(null)).toBe('unknown');
+    expect(classifyEngineHealth({ ticks: 0, load: 0, overruns: 0, errors: 0 })).toBe('unknown');
+  });
+
+  it('marks a low-load engine without overruns as ready', () => {
+    expect(classifyEngineHealth({ ticks: 100, load: 0.2, overruns: 0, errors: 0 })).toBe('ready');
+  });
+
+  it('warns on a high load or any scheduler overrun', () => {
+    expect(classifyEngineHealth({ ticks: 100, load: 0.85, overruns: 0, errors: 0 })).toBe('warning');
+    expect(classifyEngineHealth({ ticks: 100, load: 0.2, overruns: 1, errors: 0 })).toBe('warning');
+  });
+
+  it('blocks when an engine tick has thrown', () => {
+    expect(classifyEngineHealth({ ticks: 100, load: 0.2, overruns: 0, errors: 1 })).toBe('blocked');
   });
 });
