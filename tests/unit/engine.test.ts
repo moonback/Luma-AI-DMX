@@ -3,6 +3,7 @@ import { mergeSources } from '../../src/core/engine/merge';
 import { computeEffect, effectRate } from '../../src/core/engine/effects';
 import { ProjectIndex } from '../../src/core/engine/resolve';
 import { finalizeFixture, renderFixture } from '../../src/core/engine/render';
+import { TimelineTransport } from '../../src/core/engine/timeline';
 import type { ResolvedFixture } from '../../src/core/fixtures/profiles';
 import { effectSchema, type Effect } from '../../src/core/model/schemas';
 import { demoProject, makeEngine, run, u1 } from '../helpers';
@@ -276,6 +277,25 @@ describe('effets', () => {
 });
 
 describe('timeline', () => {
+  it('les effets synchronisés suivent le BPM de la timeline, pas celui du moteur', () => {
+    const p = demoProject();
+    const def = fx({ id: 'w', type: 'dimmerWave', params: { bpmSync: true, beatsPerCycle: 1, phaseSpread: 0.5 } as Effect['params'] });
+    p.effects = [def];
+    const events = [{ id: 'e', kind: 'effect' as const, start: 0, duration: 10, refId: 'w', cueIndex: 0, fade: 0, label: '', lane: 1 }];
+    p.timelines = [{ id: 'T', name: 'T', duration: 10, loop: false, bpm: 128, events }, { id: 'U', name: 'U', duration: 10, loop: false, events }];
+    const index = new ProjectIndex(p);
+    const targets = index.resolveTargets(def.targets);
+    const at = (id: string) => {
+      const tr = new TimelineTransport();
+      tr.play(id);
+      tr.seek(0.3);
+      return tr.evaluate(index.timelines.get(id), index, 120, 10).effects[0]!.values;
+    };
+    expect(at('T')).toEqual(computeEffect(index.effects.get('w')!, 0.3 * 128 / 60, targets));
+    expect(at('U')).toEqual(computeEffect(index.effects.get('w')!, 0.3 * 120 / 60, targets)); // no timeline BPM: engine BPM
+    expect(at('T')).not.toEqual(at('U'));
+  });
+
   it('déclenche les cues au passage de la tête de lecture et applique les scènes actives', () => {
     const p = demoProject();
     p.scenes = [{ id: 's', name: 'S', notes: '', origin: 'user', values: { par2: { green: 1 } } }];

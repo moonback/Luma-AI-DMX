@@ -464,7 +464,8 @@ export function compileShow(
     cut.push(...pieces.filter((p) => p.duration >= 0.05 && p.start >= 0));
   }
   cut.sort((a, b) => a.start - b.start || a.lane - b.lane);
-  const timeline: Timeline = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), duration: Math.max(1, Math.ceil(analysis.duration)), loop: false, events: cut };
+  // The effects run at the track's tempo, whatever the engine BPM (project default or live tracking).
+  const timeline: Timeline = { id: randomUUID(), name: `Show · ${short}`.slice(0, 80), duration: Math.max(1, Math.ceil(analysis.duration)), loop: false, bpm: Math.min(300, Math.max(20, analysis.bpm)), events: cut };
   
   // Follow trigger: a cue waits `wait` after the previous cue's fade, so the previous look holds until its step ends.
   cueSteps.sort((a, b) => a.t - b.t);

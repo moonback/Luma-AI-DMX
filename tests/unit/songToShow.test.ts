@@ -297,6 +297,7 @@ describe('Song-to-Show', () => {
     const index = new ProjectIndex(p);
     const plan = planLocally(analysis, 'en rouge et bleu', rigInfo(index, false));
     const c = compileShow(index, 'T', analysis, plan, { maxStrobeHz: 10, allowStrobe: false });
+    expect(c.timeline.bpm).toBe(analysis.bpm); // the show's effects run at the track's tempo, not the engine's
     const ci = analysis.sections.findIndex((s) => s.label === 'chorus');
     const v = c.scenes[ci]!.values.m!;
     expect(v['dimmer#1']).toBeGreaterThan(0);

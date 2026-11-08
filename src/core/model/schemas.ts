@@ -282,6 +282,8 @@ export const timelineSchema = z.object({
   name: nameSchema,
   duration: z.number().min(1).max(86400).default(120),
   loop: z.boolean().default(false),
+  /** Tempo of the timeline's BPM-synced effects (e.g. the analysed track); absent = the engine BPM. */
+  bpm: z.number().min(20).max(300).optional(),
   events: z.array(timelineEventSchema).max(5000),
 });
 export type Timeline = z.infer<typeof timelineSchema>;
