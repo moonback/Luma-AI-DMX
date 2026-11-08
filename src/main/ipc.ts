@@ -28,7 +28,7 @@ export async function handleCommand(service: Pick<AppService, 'execute' | 'logge
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!(err instanceof UserError)) service.logger.error('IPC', `${parsed.data.type} : ${message}`);
-    return { ok: false, error: message, ...(err instanceof UserError && err.messageKey ? { message: { key: err.messageKey, vars: err.messageVars } } : {}) };
+    return { ok: false, error: message, ...(err instanceof UserError && err.messageKey ? { message: { key: err.messageKey, ...(err.messageVars ? { vars: err.messageVars } : {}) } } : {}) };
   }
 }
 
