@@ -30,7 +30,7 @@ export function proposeIntelligentPlacements(
 ): IntelligentPlacementResult {
   const placements: IntelligentPlacement[] = [];
   const skipped: IntelligentPlacementResult['skipped'] = [];
-  const usable = trusses.filter((truss) => truss.shape !== 'totem' && truss.shape !== 'corner' && truss.shape !== 'tee' && truss.shape !== 'cross');
+  const usable = [...trusses];
   for (const fixture of fixtures) {
     if (fixture.trussId) { skipped.push({ id: fixture.id, reason: 'already-linked' }); continue; }
     const visualMount = fixture.visualRecognition?.mountGuess;
