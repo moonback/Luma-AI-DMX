@@ -361,7 +361,7 @@ export function SongStudioTimeline({
                   if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
                 }}
                 onPointerCancel={() => setDragEvent(null)}
-                onClick={(event) => { event.stopPropagation(); setSelectedEvent(i); }}
+                onClick={(event) => { event.stopPropagation(); setSelectedEvent(i); if (musicPlayer.hasAudio(track.hash)) musicPlayer.play(track, e.t); }}
                 style={{
                   position: 'absolute',
                   left,
@@ -386,7 +386,7 @@ export function SongStudioTimeline({
             <select aria-label={t('music.studio.eventType')} value={selectedMusicEvent.kind} onChange={(event) => onUpdateEvent(selectedEvent, { kind: event.target.value as 'impact' | 'riser' | 'silence' | 'vocal' })}>
               {(['impact', 'riser', 'silence', 'vocal'] as const).map((kind) => <option key={kind} value={kind}>{t(`music.event.${kind}`)}</option>)}
             </select>
-            <label className="small">{t('music.studio.duration')} <input aria-label={t('music.studio.duration')} type="number" min="0" max="600" step="0.05" value={selectedMusicEvent.duration} onChange={(event) => onUpdateEvent(selectedEvent, { duration: Math.max(0, Math.min(600, Number(event.target.value) || 0)) })} /></label>
+            <label className="small">{t('music.studio.duration')} <input aria-label={t('music.studio.duration')} type="number" min="0" max="600" step="0.05" defaultValue={selectedMusicEvent.duration} key={String(selectedEvent) + ':' + selectedMusicEvent.duration} onBlur={(event) => { const duration = Math.max(0, Math.min(600, Number(event.currentTarget.value) || 0)); if (duration !== selectedMusicEvent.duration) onUpdateEvent(selectedEvent, { duration }); }} /></label>
             <label className="small studio-snap"><input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} />{t('music.studio.snap')}</label>
             <button type="button" className="btn ghost sm" onClick={() => { onRemoveEvent(selectedEvent); setSelectedEvent(null); }}>{t('music.studio.removeEvent')}</button>
           </>}
