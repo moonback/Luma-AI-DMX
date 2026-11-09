@@ -266,7 +266,7 @@ function buildGrandstands(stage: StageGeometry): THREE.Group {
   const width = stage.width + 10;
   const tierDepth = 0.92;
   const tierHeight = 0.34;
-  const firstZ = 9.5;
+  const firstZ = 10.5;
   const stepMat = new THREE.MeshStandardMaterial({ color: 0x252b36, roughness: 0.82, metalness: 0.18 });
   const seatMat = new THREE.MeshStandardMaterial({ color: 0x111722, roughness: 0.68, metalness: 0.12 });
   const edgeMat = new THREE.MeshStandardMaterial({ color: 0x596273, roughness: 0.42, metalness: 0.72 });
@@ -349,11 +349,11 @@ export function buildEnvironment(
 
   // Audience floor, slightly lower and darker: in front of the stage, or all around in arena.
   const house = new THREE.Mesh(
-    stage.arena ? new THREE.PlaneGeometry(W + 20, D + 30) : new THREE.PlaneGeometry(W + 20, 16),
+    stage.arena ? new THREE.PlaneGeometry(W + 20, D + 30) : new THREE.PlaneGeometry(W + 20, stage.width >= 16 && stage.depth >= 12 ? 20 : 16),
     new THREE.MeshStandardMaterial({ color: 0x0c0e14, roughness: 1 }),
   );
   house.rotation.x = -Math.PI / 2;
-  house.position.set(0, -0.001, stage.arena ? -D / 2 : 8);
+  house.position.set(0, -0.001, stage.arena ? -D / 2 : stage.width >= 16 && stage.depth >= 12 ? 10 : 8);
   env.add(house);
   env.add(buildGrandstands(stage));
 
