@@ -35,7 +35,7 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
     { prefix: 'AUD_FRONT', label: 'Wash suspendus — public avant', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -3, height: 8, span: 0.9, color: '#34D399' },
     { prefix: 'AUD_REAR', label: 'Wash suspendus — public arrière', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -7, height: 8, span: 0.9, color: '#60A5FA' },
   ];
-  const decor = [
+  const decor: DemoSpec['decor'] = [
     { name: 'Plateau principal 20 × 12 m', kind: 'riser' as const, x: 0, y: 10, width: 20, depth: 12, height: 1 },
     { name: 'Mur LED panoramique', kind: 'backdrop' as const, x: 0, y: 17.7, width: 18, depth: 0.1, height: 6, color: '#101827', params: { style: 'panel' } },
     lineArray('Line array jardin', -10.8, 1, 8, 12, 1.5),
