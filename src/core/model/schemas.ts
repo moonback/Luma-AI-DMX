@@ -143,6 +143,14 @@ export const fixtureSchema = z.object({
   mountTilt: z.number().min(-90).max(90).optional(),
   /** Truss the fixture hangs from: it follows the truss when the truss moves. */
   trussId: idSchema.nullable().optional(),
+  /** Operator-confirmed visual identification; descriptive evidence only, never a DMX control parameter. */
+  visualRecognition: z.object({
+    label: z.string().trim().min(1).max(80),
+    description: z.string().max(500),
+    observedType: z.enum(FIXTURE_TYPES),
+    confidence: z.number().min(0).max(1),
+    verifiedAt: z.string().datetime(),
+  }).optional(),
   notes: z.string().max(500).default(''),
 });
 export type Fixture = z.infer<typeof fixtureSchema>;
