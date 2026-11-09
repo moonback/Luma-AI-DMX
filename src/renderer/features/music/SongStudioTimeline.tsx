@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lock, Maximize2, Minus, Plus, Volume2 } from 'lucide-react';
+import { Lock, Maximize2, Minus, Pencil, Plus, Volume2 } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { MusicTrack } from '../../../core/model/schemas';
 import { SECTION_NAMES } from '../../../core/music/analyze';
@@ -30,6 +30,16 @@ export function SongStudioTimeline({
   const [zoom, setZoom] = useState(1);
   const lanesRef = useRef<HTMLDivElement>(null);
   const minTimelineWidth = Math.max(1000, a.sections.length * 68) * zoom;
+  const playheadPx = pos === null ? 0 : Math.max(0, Math.min(minTimelineWidth, (pos / a.duration) * minTimelineWidth));
+
+  // Keep the playhead in view during playback without constantly recentering the operator's viewport.
+  useEffect(() => {
+    const viewport = lanesRef.current;
+    if (!playing || pos === null || !viewport) return;
+    const rightEdge = viewport.scrollLeft + viewport.clientWidth;
+    if (playheadPx > rightEdge - 72) viewport.scrollTo({ left: Math.max(0, playheadPx - viewport.clientWidth * 0.72), behavior: 'smooth' });
+    else if (playheadPx < viewport.scrollLeft + 24) viewport.scrollTo({ left: Math.max(0, playheadPx - 24), behavior: 'smooth' });
+  }, [playing, pos, playheadPx]);
 
   // Load waveform from musicPlayer if audio buffer is available
   useEffect(() => {
@@ -121,6 +131,11 @@ export function SongStudioTimeline({
 
   return (
     <div className="song-studio-timeline col" data-testid="song-studio-timeline">
+      <div className="studio-selection-toolbar">
+        <span className="studio-selection-label">{a.sections[selected] ? `${t('music.section')} ${selected + 1} · ${SECTION_NAMES[a.sections[selected]!.label]}` : t('music.studio.noSectionSelected')}</span>
+        <span className="studio-selection-time mono">{a.sections[selected] ? `${fmt(a.sections[selected]!.start)} – ${fmt(a.sections[selected]!.end)}` : ''}</span>
+        <button type="button" className="btn ghost sm" disabled={!a.sections[selected]} onClick={() => onOpenEditor(selected)} data-testid="studio-edit-selected"><Pencil size={12} />{t('music.studio.editSection')}</button>
+      </div>
       {/* Shared transport lives above the analysis; this header only explains the visual layer. */}
       <div className="studio-timeline-heading">
         <span className="studio-timeline-title">{t('music.studio.waveform')}</span>
@@ -151,7 +166,7 @@ export function SongStudioTimeline({
               position: 'absolute',
               top: 0,
               bottom: 0,
-              left: `${Math.min(minTimelineWidth, (pos / a.duration) * minTimelineWidth)}px`,
+              left: `${playheadPx}px`,
               width: 2,
               background: '#22d3ee',
               zIndex: 10,
@@ -187,6 +202,8 @@ export function SongStudioTimeline({
                 key={i}
                 type="button"
                 className={`studio-sec-block sec-btn ${isSel ? 'sel' : ''} ${isNow ? 'now' : ''}`}
+                aria-pressed={isSel}
+                aria-label={`${SECTION_NAMES[s.label]} · ${fmt(s.start)}–${fmt(s.end)}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect(i);
