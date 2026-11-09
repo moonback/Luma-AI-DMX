@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Music2, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Music2, Upload } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -20,6 +20,7 @@ import { TrackStep } from './music/TrackStep';
 import { IntentStep, loadHistory, NO_MOOD, remember } from './music/IntentStep';
 import { ShowStep as ShowScreen } from './music/ShowStep';
 import { PlayStep } from './music/PlayStep';
+import { fmt } from './music/names';
 
 const AUDIO_ACCEPT = 'audio/*,.wav,.mp3,.flac,.ogg,.m4a';
 
@@ -72,6 +73,7 @@ export function MusicPage() {
   const { playing, pos } = usePlayback();
   const playingId = playing?.trackId ?? null;
   const [trackId, setTrackId] = useState<string | null>(tracks[0]?.id ?? null);
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const track = tracks.find((tk) => tk.id === trackId) ?? tracks[0] ?? null;
   const progressStep = currentShowStep(track, playingId);
   // Screen shown: set from the track's progress when a track is opened, then the user moves freely between the steps.
@@ -218,8 +220,21 @@ export function MusicPage() {
       <input ref={file} type="file" accept={AUDIO_ACCEPT} style={{ display: 'none' }} data-testid="music-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
       <input ref={replaceFile} type="file" accept={AUDIO_ACCEPT} style={{ display: 'none' }} data-testid="music-replace-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && track) void importFile(f, track.id); }} />
       {generating && <GeneratingModal />}
-      <div className="music-layout">
-        <TrackLibrary tracks={tracks} selectedId={track?.id ?? null} playingId={playingId} importing={!!progress} onSelect={select} onImport={() => file.current?.click()} onRemove={remove} />
+      <div className="music-workspace-toolbar">
+        <div className="music-workspace-track">
+          <span className="music-workspace-icon"><Music2 size={16} /></span>
+          <span className="col" style={{ minWidth: 0, gap: 2 }}>
+            <b className="truncate">{track?.name ?? t('music.page.title')}</b>
+            <span className="small dim">{track ? t('music.library.meta', { bpm: Math.round(track.analysis.bpm), duration: fmt(track.analysis.duration) }) : t('music.emptyHint')}</span>
+          </span>
+        </div>
+        <button type="button" className="btn ghost sm music-library-toggle" onClick={() => setLibraryCollapsed((v) => !v)} aria-expanded={!libraryCollapsed} aria-controls="music-library-panel" data-testid="music-library-toggle">
+          {libraryCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          {t(libraryCollapsed ? 'music.library.show' : 'music.library.hide')}
+        </button>
+      </div>
+      <div className={`music-layout ${libraryCollapsed ? 'library-collapsed' : ''}`}>
+        {!libraryCollapsed && <div id="music-library-panel"><TrackLibrary tracks={tracks} selectedId={track?.id ?? null} playingId={playingId} importing={!!progress} onSelect={select} onImport={() => file.current?.click()} onRemove={remove} /></div>}
         <div className="music-main col gap-lg">
           <ShowStepper current={shown} progress={progressStep} onPick={pick} />
           {progress && (
