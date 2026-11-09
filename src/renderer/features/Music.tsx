@@ -207,11 +207,25 @@ export function MusicPage() {
       useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
   };
+  const moveSectionBoundary = async (index: number, time: number) => {
+    if (!track || busy) return;
+    if (!(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try {
+      const result = await act({ type: 'music.moveSectionBoundary', trackId: track.id, index, time });
+      if (result?.notices.length) setNotices(result.notices);
+      setSelected(index);
+    } catch (err) {
+      useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
   const openTimeline = () => useStore.getState().setPage('timeline');
   const pick = (s: ShowStep) => (track ? setView(s) : s === 'track' && file.current?.click());
   const shown: ShowStep = track ? view : 'track';
   const studio = track && (
-    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} pos={isPlaying ? pos : null} playing={isPlaying} />
+    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} pos={isPlaying ? pos : null} playing={isPlaying} />
   );
 
   return (
