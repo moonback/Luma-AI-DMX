@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { BookOpen, Check, Gift, ChevronLeft, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, Sparkles, X } from 'lucide-react';
+import { BookOpen, Check, Gift, ChevronLeft, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, Search, Sparkles, X } from 'lucide-react';
 import { useStore, confirmAction, type PageId } from '../store';
 import { act } from '../api';
 import { Modal } from '../components/ui';
@@ -62,33 +62,72 @@ function Welcome() {
 function DemoGallery() {
   const setHelp = useStore((s) => s.setHelp);
   const [filter, setFilter] = useState<string | null>(null);
-  const categories = [...new Set(DEMOS.map((d) => d.category))];
-  const shown = DEMOS.filter((d) => !filter || d.category === filter);
+  const [query, setQuery] = useState('');
+  const categories = [...new Set(DEMOS.map((d) => d.category))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const q = query.trim().toLocaleLowerCase('fr');
+  const matches = DEMOS.filter((d) => (!filter || d.category === filter)
+    && (!q || [d.name, d.venue, d.description, d.category].join(' ').toLocaleLowerCase('fr').includes(q)));
+  const featured = matches.filter((d) => d.rigs.some((r) => r.prefix === 'AUD_FRONT'));
+  const standard = matches.filter((d) => !d.rigs.some((r) => r.prefix === 'AUD_FRONT'));
   const close = () => { void finishOnboarding(); setHelp(null); };
+  const card = (d: typeof DEMOS[number]) => {
+    const fixtures = d.rigs.reduce((n, r) => n + r.count, 0);
+    const cues = d.cueLists.reduce((n, l) => n + l.cues.length, 0);
+    const universes = Math.max(1, ...d.rigs.map((r) => r.universe ?? 1));
+    const immersive = d.rigs.some((r) => r.prefix === 'AUD_FRONT');
+    return (
+      <article key={d.id} className="panel col" style={{ padding: 14, gap: 9 }} data-testid={`demo-${d.id}`}>
+        <div className="row between" style={{ flexWrap: 'wrap' }}>
+          <span className={immersive ? 'badge violet' : 'badge'}>{immersive ? 'Grande installation' : d.category}</span>
+          <span className="small dim">{fixtures} projecteurs · {universes} univers · {cues} cues</span>
+        </div>
+        <div>
+          <h3 style={{ margin: '2px 0 3px', fontSize: 15 }}>{d.name}</h3>
+          <div className="small muted">{d.venue}</div>
+        </div>
+        <p className="small" style={{ margin: 0, lineHeight: 1.45 }}>{d.description}</p>
+        <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>{d.highlights.map((h) => <li key={h}>{h}</li>)}</ul>
+        <div className="row between" style={{ marginTop: 'auto', alignItems: 'center' }}>
+          <span className="small dim">{d.rigs.length} groupes de projecteurs{d.timeline ? ' · timeline' : ''}</span>
+          <button className="btn primary sm" onClick={() => void openDemo(d.id).then((ok) => { if (ok) close(); })}>Ouvrir le projet <ChevronRight size={13} /></button>
+        </div>
+      </article>
+    );
+  };
   return (
-    <Modal title="Projets de démonstration" onClose={close} wide>
+    <Modal title="Galerie des installations de démonstration" onClose={close} wide>
       <div className="col gap-lg" data-testid="demo-gallery">
-        <p className="small muted" style={{ margin: 0 }}>{DEMOS.length} projets fictifs (lieux, artistes et événements inventés) construits avec les profils intégrés « Luma Demo ». Ouvrez-en un pour explorer patch, groupes, scènes, cues, effets et timeline, puis jouez-le en sortie virtuelle et dans la vue 3D.</p>
+        <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <p className="small muted" style={{ margin: 0 }}>{DEMOS.length} installations fictives prêtes à ouvrir : patch DMX, structures, projecteurs, scènes, effets, cues et timelines.</p>
+          <span className="badge violet">{featured.length} grand format affichés</span>
+        </div>
+        <label className="row start-search">
+          <Search size={14} className="dim" />
+          <input className="input grow" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un lieu, un style ou un projet…" aria-label="Rechercher un projet de démonstration" data-testid="demo-search" />
+        </label>
         <div className="chips">
-          <button className={`chip ${!filter ? 'on' : ''}`} onClick={() => setFilter(null)}>Tous ({DEMOS.length})</button>
-          {categories.map((c) => <button key={c} className={`chip ${filter === c ? 'on' : ''}`} onClick={() => setFilter(c)}>{c}</button>)}
+          <button className={`chip ${!filter ? 'on' : ''}`} onClick={() => setFilter(null)}>Toutes les catégories ({DEMOS.length})</button>
+          {categories.map((c) => <button key={c} className={`chip ${filter === c ? 'on' : ''}`} onClick={() => setFilter(filter === c ? null : c)}>{c} ({DEMOS.filter((d) => d.category === c).length})</button>)}
         </div>
-        <div className="grid g2" style={{ maxHeight: '60vh', overflow: 'auto' }}>
-          {shown.map((d) => {
-            const fixtures = d.rigs.reduce((n, r) => n + r.count, 0);
-            const cues = d.cueLists.reduce((n, l) => n + l.cues.length, 0);
-            return (
-              <div key={d.id} className="panel" style={{ padding: 12 }} data-testid={`demo-${d.id}`}>
-                <div className="row between"><span className="badge violet">{d.category}</span><span className="small dim">{fixtures} projecteurs · {cues} cues{d.timeline ? ' · timeline' : ''}</span></div>
-                <h3 style={{ margin: '8px 0 2px', fontSize: 15 }}>{d.name}</h3>
-                <div className="small muted">{d.venue}</div>
-                <p className="small" style={{ margin: '8px 0' }}>{d.description}</p>
-                <ul className="small muted" style={{ margin: '0 0 10px', paddingLeft: 18 }}>{d.highlights.map((h) => <li key={h}>{h}</li>)}</ul>
-                <button className="btn primary sm" onClick={() => void openDemo(d.id).then((ok) => { if (ok) close(); })}>Ouvrir</button>
-              </div>
-            );
-          })}
-        </div>
+        {featured.length > 0 && (
+          <section className="col" style={{ gap: 12 }} aria-label="Installations grand format">
+            <div className="row between">
+              <div><h3 style={{ margin: 0 }}>Installations grand format</h3><p className="small muted" style={{ margin: '3px 0 0' }}>Structures multi-ponts et projecteurs suspendus au-dessus du public.</p></div>
+              <span className="small dim">{featured.length} projets</span>
+            </div>
+            <div className="grid g2">{featured.map(card)}</div>
+          </section>
+        )}
+        {standard.length > 0 && (
+          <section className="col gap-md">
+            <div className="row between"><h3 style={{ margin: 0 }}>Autres projets de démonstration</h3><span className="small dim">{standard.length} projets</span></div>
+            {filter ? <div className="grid g2">{standard.map(card)}</div> : categories.map((category) => {
+              const items = standard.filter((d) => d.category === category);
+              return items.length ? <section key={category} className="col" style={{ gap: 8 }}><b className="small muted">{category} · {items.length}</b><div className="grid g2">{items.map(card)}</div></section> : null;
+            })}
+          </section>
+        )}
+        {!matches.length && <div className="panel small muted" style={{ padding: 20, textAlign: 'center' }}>Aucun projet ne correspond à cette recherche.</div>}
       </div>
     </Modal>
   );
