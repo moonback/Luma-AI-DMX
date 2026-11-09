@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lock, Play, Pause, Square, Volume2 } from 'lucide-react';
+import { Lock, Volume2 } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { MusicTrack } from '../../../core/model/schemas';
 import { SECTION_NAMES } from '../../../core/music/analyze';
@@ -112,57 +112,18 @@ export function SongStudioTimeline({
     }
   };
 
-  const handlePlayToggle = () => {
-    if (playing) {
-      musicPlayer.pause();
-    } else {
-      musicPlayer.play(track, pos ?? 0);
-    }
-  };
+
 
   const nowSec = pos === null ? -1 : a.sections.findIndex((s) => pos >= s.start && pos < s.end);
 
   return (
     <div className="song-studio-timeline col" data-testid="song-studio-timeline">
-      {/* Studio Bar Controls */}
-      <div
-        className="row"
-        style={{
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '6px 12px',
-          background: 'rgba(0,0,0,0.3)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        <div className="row" style={{ alignItems: 'center', gap: 10 }}>
-          <button
-            className={`btn sm icon ${playing ? 'on' : ''}`}
-            onClick={handlePlayToggle}
-            title={t(playing ? 'music.pause' : 'music.play')}
-          >
-            {playing ? <Pause size={13} /> : <Play size={13} />}
-          </button>
-          <button
-            className="btn ghost sm icon"
-            onClick={() => musicPlayer.stop()}
-            title={t('music.stopPlayer')}
-          >
-            <Square size={13} />
-          </button>
-          <span className="mono small bold" style={{ minWidth: 90 }}>
-            {fmt(pos ?? 0)} / {fmt(a.duration)}
-          </span>
-          <span className="badge">{a.bpm} BPM</span>
-          <span className="badge dim">{a.meter}/4</span>
-        </div>
-
-        <div className="row small dim" style={{ gap: 8 }}>
-          <span className="row" style={{ alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 10, height: 2, background: '#f59e0b', display: 'inline-block' }} />
-            {t('music.studio.waveform')}
-          </span>
-        </div>
+      {/* Shared transport lives above the analysis; this header only explains the visual layer. */}
+      <div className="studio-timeline-heading">
+        <span className="studio-timeline-title">{t('music.studio.waveform')}</span>
+        <span className="studio-timeline-legend"><i />{t('music.studio.energy')}</span>
+        <span className="badge">{a.bpm.toFixed(1)} BPM</span>
+        <span className="badge dim">{a.meter}/4</span>
       </div>
 
       {/* Multi-Track DAW Container */}
