@@ -132,8 +132,6 @@ export const frScreens = {
   'stagePanel.tabs': 'Panneau',
   'stagePanel.build': 'Construire',
   'stagePanel.selection': 'Sélection',
-  'stagePanel.wizard': 'Assistant de scène',
-  'stagePanel.wizardHint': 'Assistant : plateau, modèle, patch et équipement pas à pas',
   'stagePanel.close': 'Replier le panneau (la vue prend toute la place)',
   'stagePanel.rail': 'Ouvrir le panneau de la scène',
   'music.strip.title': '{label} · {from}–{to} · énergie {energy} % — clic : modifier',
