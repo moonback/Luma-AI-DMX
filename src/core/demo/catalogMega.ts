@@ -32,8 +32,8 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
     { prefix: 'BAR', label: 'Barres LED pixel', profile: 'demo-led-bar-4', mode: '14ch pixels', count: 6, universe: 1, y: 17, height: 0.3, span: 0.9, color: '#F472B6' },
     { prefix: 'BLIND', label: 'Blinders — face public', profile: 'demo-par-rgb', mode: '5ch DRGB+Strobe', count: 4, universe: 1, y: 0.5, height: 9, span: 0.75, color: '#FDE68A' },
     { prefix: 'STR', label: 'Strobes — ponts latéraux', profile: 'demo-strobe', mode: '2ch', count: 4, universe: 1, y: 8, height: 9, span: 0.8, color: '#FACC15' },
-    { prefix: 'AUD_FRONT', label: 'Wash suspendus — public avant', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -3, height: 8, span: 0.9, color: '#34D399' },
-    { prefix: 'AUD_REAR', label: 'Wash suspendus — public arrière', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -7, height: 8, span: 0.9, color: '#60A5FA' },
+    { prefix: 'AUD_FRONT', label: 'Wash suspendus — gradins avant', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -11, height: 8, span: 0.9, color: '#34D399' },
+    { prefix: 'AUD_REAR', label: 'Wash suspendus — gradins arrière', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -15, height: 8, span: 0.9, color: '#60A5FA' },
   ];
   const decor: DemoSpec['decor'] = [
     { name: 'Plateau principal 20 × 12 m', kind: 'riser' as const, x: 0, y: 10, width: 20, depth: 12, height: 1 },
