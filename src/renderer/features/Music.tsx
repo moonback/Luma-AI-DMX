@@ -207,6 +207,20 @@ export function MusicPage() {
       useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
   };
+  const addMusicEvent = async (time: number) => {
+    if (!track || busy || !(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try { await act({ type: 'music.addEvent', trackId: track.id, event: { t: time, duration: 0, kind: 'impact' } }); }
+    catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
+  };
+  const removeMusicEvent = async (index: number) => {
+    if (!track || busy || !(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try { await act({ type: 'music.removeEvent', trackId: track.id, index }); }
+    catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
+  };
   const moveSectionBoundary = async (index: number, time: number) => {
     if (!track || busy) return;
     if (!(await confirmOverwrite(track.id))) return;
@@ -225,7 +239,7 @@ export function MusicPage() {
   const pick = (s: ShowStep) => (track ? setView(s) : s === 'track' && file.current?.click());
   const shown: ShowStep = track ? view : 'track';
   const studio = track && (
-    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} pos={isPlaying ? pos : null} playing={isPlaying} />
+    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} onAddEvent={(time) => void addMusicEvent(time)} onRemoveEvent={(index) => void removeMusicEvent(index)} pos={isPlaying ? pos : null} playing={isPlaying} />
   );
 
   return (
