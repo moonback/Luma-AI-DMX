@@ -219,6 +219,14 @@ export function SongStudioTimeline({
                   e.stopPropagation();
                   onSelect(i);
                 }}
+                onKeyDown={(event) => {
+                  if (!event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') || i >= a.sections.length - 1) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (track.plan?.sections[i]?.locked || track.plan?.sections[i + 1]?.locked) return;
+                  const step = 60 / a.bpm;
+                  onMoveBoundary(i, Math.max(s.start + 1, Math.min(a.sections[i + 1]!.end - 1, s.end + (event.key === 'ArrowRight' ? step : -step))));
+                }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   onOpenEditor(i);
@@ -254,13 +262,7 @@ export function SongStudioTimeline({
                 </div>
                 {i < a.sections.length - 1 && (
                   <span
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label={t('music.studio.dragBoundary')}
-                    aria-valuemin={Math.ceil(s.start + 1)}
-                    aria-valuemax={Math.floor(a.sections[i + 1]!.end - 1)}
-                    aria-valuenow={Math.round(s.end)}
-                    tabIndex={track.plan?.sections[i]?.locked || track.plan?.sections[i + 1]?.locked ? -1 : 0}
+                    aria-hidden="true"
                     className={`studio-section-boundary ${dragBoundary?.index === i ? 'is-dragging' : ''}`}
                     title={t('music.studio.dragBoundary')}
                     onPointerDown={(event) => {
@@ -285,13 +287,7 @@ export function SongStudioTimeline({
                     }}
                     onPointerCancel={() => setDragBoundary(null)}
                     onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const step = 60 / a.bpm;
-                      onMoveBoundary(i, Math.max(s.start + 1, Math.min(a.sections[i + 1]!.end - 1, s.end + (event.key === 'ArrowRight' ? step : -step))));
-                    }}
+
                   />
                 )}
               </button>
