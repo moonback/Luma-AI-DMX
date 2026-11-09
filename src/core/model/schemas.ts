@@ -149,6 +149,9 @@ export const fixtureSchema = z.object({
     description: z.string().max(500),
     observedType: z.enum(FIXTURE_TYPES),
     confidence: z.number().min(0).max(1),
+    /** Visual mounting estimate and support label, retained only as operator-reviewed metadata. */
+    mountGuess: z.enum(['hanging', 'floor', 'wall', 'unknown']).optional(),
+    supportHint: z.string().max(120).optional(),
     verifiedAt: z.string().datetime(),
   }).optional(),
   notes: z.string().max(500).default(''),
