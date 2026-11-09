@@ -67,28 +67,19 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       const analysis = structuredClone(current.analysis);
       analysis.sections[cmd.index]!.end = cmd.time;
       analysis.sections[cmd.index + 1]!.start = cmd.time;
-      // Preflight compilation: invalid timing must never leave a half-updated project.
+      let result: ReturnType<typeof applyShow> | null = null;
       if (current.plan) {
-        compileShow(app.index, current.name, analysis, current.plan, {
-          maxStrobeHz: app.settings.engine.maxStrobeHz,
-          allowStrobe: app.settings.ai.allowStrobe,
-          phraseBars: app.settings.ai.phraseBars,
+        // applyShow validates and commits the new analysis plus all generated DMX objects in one project mutation.
+        result = applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      } else {
+        app.mutate((d) => {
+          const target = d.music.tracks.find((x) => x.id === cmd.trackId);
+          if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound');
+          target.analysis = analysis;
         });
       }
-      app.mutate((d) => {
-        const target = d.music.tracks.find((x) => x.id === cmd.trackId);
-        if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound');
-        target.analysis.sections[cmd.index]!.end = cmd.time;
-        target.analysis.sections[cmd.index + 1]!.start = cmd.time;
-      });
-      const updated = track(app, cmd.trackId);
-      if (!updated.plan) {
-        app.logger.info('Musique', `Limite des sections ${cmd.index + 1}/${cmd.index + 2} déplacée à ${cmd.time.toFixed(2)} s`);
-        return { timelineId: null, notices: [] };
-      }
-      const result = applyShow(app, updated, structuredClone(updated.plan), [], true);
       app.logger.info('Musique', `Structure temporelle ajustée : sections ${cmd.index + 1} et ${cmd.index + 2} (${cmd.time.toFixed(2)} s)`);
-      return { timelineId: result.timelineId, notices: result.notices };
+      return { timelineId: result?.timelineId ?? null, notices: result?.notices ?? [] };
     }
     case 'music.generate': {
       const t = track(app, cmd.trackId);
@@ -274,16 +265,17 @@ async function planSection(app: AppService, t: MusicTrack, plan: ShowPlan, index
 }
 
 /** Compiles the plan, replaces the track's previously generated objects and stores the plan. */
-export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[], preservePrevious = false) {
+export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[], preservePrevious = false, analysisOverride?: MusicTrack['analysis']) {
   // The plan may come back from a slow OpenRouter call: the track, or the whole project, can be gone by then.
   const cur = app.project.music.tracks.find((x) => x.id === t.id);
   if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué', 'music.trackChangedDuringGeneration');
   app.emit('progress', { op: 'music', step: 'compile' });
-  const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe, phraseBars: app.settings.ai.phraseBars });
-  const integrity = validateShowIntegrity(c, cur.analysis, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
+  const sourceAnalysis = analysisOverride ?? cur.analysis;
+  const c = compileShow(app.index, cur.name, sourceAnalysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe, phraseBars: app.settings.ai.phraseBars });
+  const integrity = validateShowIntegrity(c, sourceAnalysis, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
   for (const err of integrity.errors) app.logger.error('Musique', `[Intégrité] ${err}`);
   for (const warn of integrity.warnings) app.logger.warn('Musique', `[Intégrité] ${warn}`);
-  const quality = evaluateArtisticQuality(plan, cur.analysis);
+  const quality = evaluateArtisticQuality(plan, sourceAnalysis);
   app.logger.info('Musique', `[Qualité artistique] Score: ${quality.score}/100 (contraste: ${quality.metrics.contrast}%, variété: ${quality.metrics.variety}%, narration: ${quality.metrics.narrative}%, voix: ${quality.metrics.vocalClarity}%)`);
   if (app.engine.snapshot().timeline.timelineId === cur.created.timelineId) app.engine.timelineStop();
   app.mutate((d) => {
@@ -293,6 +285,7 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
     d.effects.push(...c.effects);
     d.timelines.push(c.timeline);
     d.cueLists.push(c.cueList);
+    if (analysisOverride) track.analysis = structuredClone(analysisOverride);
     if (!preservePrevious) track.previousPlan = track.plan; // so restoring twice swaps back (redo)
     track.plan = plan;
     track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id, cueListIds: [c.cueList.id] };
