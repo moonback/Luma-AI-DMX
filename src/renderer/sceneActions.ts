@@ -201,11 +201,11 @@ export async function intelligentlyPlaceFixtures(): Promise<void> {
     'Les positions proposées sont géométriques et indicatives. Vérifiez chaque accroche réelle : cette fonction ne calcule ni charges, ni efforts, ni sécurité de rigging.',
   ];
   if (!(await confirmAction({ title: 'Affectation intelligente aux ponts', message: lines.join('\n'), confirmLabel: `Affecter ${result.placements.length} projecteur(s)` }))) return;
-  const applied = await act({
+  const applied = await call({
     type: 'fixture.place',
     placements: result.placements.map((p) => ({ id: p.id, position: p.position, height: p.height, trussId: p.trussId })),
-  });
-  if (applied) toast(`${result.placements.length} projecteur(s) positionné(s)`, 'Affectation enregistrée en une étape. Ctrl+Z pour annuler.');
+  }).catch(() => null);
+  if (applied !== null) toast(`${result.placements.length} projecteur(s) positionné(s)`, 'Affectation enregistrée en une étape. Ctrl+Z pour annuler.');
 }
 
 /**
