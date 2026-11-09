@@ -37,6 +37,11 @@ const VISUAL_VARIANTS: Record<string, { stage: [number, number]; y: number[]; he
  'wedding-festival': { stage:[24,20], y:[2,11,17,5,-11,-15], height:[8,7,5,3,8,8], count:[6,8,12,6,6,6], span:[.85,.8,.9,.7,.9,.9], extra:[{name:'Scène DJ extérieure',kind:'dj-booth',x:0,y:15,width:3.5,depth:.8,height:1.05,color:'#111318',params:{decks:true,led:true}},{name:'Portique guinguette',kind:'arch',x:0,y:12,width:14,depth:.3,height:6,color:'#7C2D12',params:{style:'round',thickness:.3,leds:true}},{name:'Table mange-debout jardin',kind:'table',x:-8,y:-5,width:1,depth:1,height:1.1,color:'#6B4226'},{name:'Table mange-debout cour',kind:'table',x:8,y:-5,width:1,depth:1,height:1.1,color:'#6B4226'}] },
 };
 
+
+function layoutWidth(id: string): number { return VISUAL_VARIANTS[id]!.stage[0] * (id === 'fashion-gala' ? 0.66 : 0.72); }
+function layoutHeight(id: string): number { return id === 'wedding-palace' ? 3 : id === 'tv-awards' ? 6 : id === 'sports-opening' ? 9 : 5.5; }
+function layoutDepth(id: string): number { return VISUAL_VARIANTS[id]!.stage[1] - (id === 'fashion-gala' ? 1 : 1.5); }
+
 function makeMegaDemo(p: MegaPreset): DemoSpec {
   const [a, b, c] = p.colors;
   const variant = VISUAL_VARIANTS[p.id];
@@ -67,7 +72,7 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
     ...row(4, -7.5, 7.5, (x, i) => chair(`Rang latéral ${i + 1}`, x, -9, 0, '#30343B')),
   ];
   const variedRigs = rigs.map((r, i) => ({ ...r, y: variant.y[i] ?? r.y, height: variant.height[i] ?? r.height, count: variant.count[i] ?? r.count, span: variant.span[i] ?? r.span, ...(p.id === 'fashion-gala' && r.prefix === 'SPOT' ? { alongDepth: true } : {}) }));
-  const variedDecor = [...decor, ...variant.extra];
+  const variedDecor = [...decor.filter((item) => !['Plateau principal 20 × 12 m', 'Mur LED panoramique'].includes(item.name)), ...variant.extra];
   const looks: DemoSpec['looks'] = [
     { name: 'Accueil', parts: [{ rigs: ['AUD_FRONT', 'AUD_REAR'], colors: [a], level: 0.25 }, { rigs: ['WASH'], colors: [C.warm], level: 0.2 }, { rigs: ['PAR'], colors: [b], level: 0.25 }] },
     { name: 'Ouverture', parts: [{ rigs: ['SPOT'], colors: [C.white], level: 0.8, tilt: 0.55 }, { rigs: ['AUD_FRONT', 'AUD_REAR'], colors: [a, b], level: 0.45 }, { rigs: ['BAR'], colors: [a], level: 0.5 }] },
@@ -98,7 +103,10 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
     description: p.description,
     highlights: ['Structures aluminium multi-ponts et projecteurs suspendus', 'Moteurs de levage, chaînes, accroches et clamps visibles', 'Gradins 8 rangées avec spectateurs 3D assis et debout', 'Deux lignes de wash croisées au-dessus des gradins, 2 univers DMX et 6 cues'],
     bpm: p.bpm, stage: variant.stage, rigs: variedRigs, decor: variedDecor,
-    screens: [screen('Mur LED principal', 0, 17.6, 18, 6, 1.2, '#111827')],
+    screens: [screen(
+      p.id === 'fashion-gala' ? 'Écran fond runway' : p.id === 'tv-awards' ? 'Écran plateau broadcast' : p.id === 'wedding-palace' ? 'Écran discret réception' : 'Mur vidéo principal',
+      0, layoutDepth(p.id), layoutWidth(p.id), layoutHeight(p.id), 1.2, '#111827',
+    )],
     looks, effects, cueLists,
     timeline: { name: 'Ouverture grand format', duration: 72, events: [
       { at: 0, dur: 24, look: 'Accueil', fade: 8 },
