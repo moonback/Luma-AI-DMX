@@ -1,4 +1,5 @@
 import { DEMOS } from '../../src/core/demo/catalog';
+import { MEGA_DEMOS } from '../../src/core/demo/catalogMega';
 import { buildDemo } from '../../src/core/demo/projects';
 import { validatePatch } from '../../src/core/fixtures/patch';
 import { ProjectIndex } from '../../src/core/engine/resolve';
@@ -44,6 +45,18 @@ describe('projets de démonstration', () => {
     for (const f of p.patch) if (f.height >= 3) expect(trusses.has(f.trussId!)).toBe(true);
     // Deterministic: the same demo always yields the same patch.
     expect(buildDemo(id).patch).toEqual(p.patch);
+  });
+
+  it('ajoute dix installations grand format avec des projecteurs suspendus au-dessus du public', () => {
+    expect(MEGA_DEMOS).toHaveLength(10);
+    for (const d of MEGA_DEMOS) {
+      const p = buildDemo(d.id);
+      const audience = p.patch.filter((f) => f.tags.includes('aud_front') || f.tags.includes('aud_rear'));
+      expect(audience).toHaveLength(12);
+      expect(audience.every((f) => f.position.y < 0 && f.height >= 3 && !!f.trussId && f.universe === 2)).toBe(true);
+      expect(p.show.universes).toBe(2);
+      expect(p.visualizer.trusses.length).toBeGreaterThanOrEqual(6);
+    }
   });
 
   it('le festival utilise 2 univers', () => {
