@@ -115,7 +115,7 @@ export function buildInstallationMap(
 
   const mapped: InstallationFixture[] = fixtures.map((fixture) => {
     const candidate = locatedById.get(fixture.id);
-    const validCamera = candidate
+    const validCamera = candidate !== undefined
       && candidate.position.every(finite)
       && finite(candidate.uncertainty)
       && candidate.uncertainty >= 0
