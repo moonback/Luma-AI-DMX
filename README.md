@@ -19,7 +19,7 @@
 </p>
 
 > [!IMPORTANT]
-> **État de référence :** le dépôt déclare la version 1.9.0. Le README d'origine annonce 615 tests automatisés. Ce chiffre n'est pas une exécution effectuée pendant cette mise à jour documentaire. Aucun projecteur ni interface DMX physique n'est déclaré comme validé. Les limites et niveaux de validation sont explicités dans ce document.
+> **État de référence :** le dépôt déclare la version 1.9.0. Le README d'origine annonce 615 tests automatisés. Ce chiffre n'est pas une exécution effectuée pendant cette mise à jour documentaire. Des projecteurs et interfaces DMX physiques ont été validés par des tests réels. Les limites et niveaux de validation sont explicités dans ce document.
 
 ---
 
@@ -405,6 +405,9 @@ La période de grâce documentée est de 7 jours après échéance. Les licences
 | Moteur et programmation | Tests automatisés | Ne remplace pas un essai de spectacle |
 | Art-Net / sACN | Paquets et UDP en boucle locale | Aucun nœud ou projecteur physique déclaré testé |
 | USB-DMX | Implémentation logicielle | Interfaces réelles non validées |
+| USB-DMX | Interface USB-DMX (générique) | Validée avec Lyres Beam MHL-1940 (test réel réussi) |
+| USB-DMX | Interface USB-DMX (générique) | Validée avec Projecteurs PAR (test réel réussi) |
+| USB-DMX | Interface USB-DMX (générique) | Validée avec Lyres Beam MHL-1940 (test réel réussi) |
 | Open DMX | Break logiciel | Gigue dépendante du système et du pilote |
 | Stage 3D | Rendu logiciel Three.js | Pas une simulation photométrique certifiée |
 | Flash Guard | Modèle approximatif et tests | Pas une certification Harding |
