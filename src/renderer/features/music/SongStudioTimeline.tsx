@@ -12,6 +12,8 @@ interface Props {
   onSelect: (index: number) => void;
   onOpenEditor: (index: number) => void;
   onMoveBoundary: (index: number, time: number) => void;
+  onAddEvent: (time: number) => void;
+  onRemoveEvent: (index: number) => void;
   pos: number | null;
   playing: boolean;
 }
@@ -22,6 +24,8 @@ export function SongStudioTimeline({
   onSelect,
   onOpenEditor,
   onMoveBoundary,
+  onAddEvent,
+  onRemoveEvent,
   pos,
   playing,
 }: Props) {
@@ -30,6 +34,7 @@ export function SongStudioTimeline({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [waveform, setWaveform] = useState<number[] | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
   const [dragBoundary, setDragBoundary] = useState<{ index: number; time: number } | null>(null);
   const lanesRef = useRef<HTMLDivElement>(null);
   const minTimelineWidth = Math.max(1000, a.sections.length * 68) * zoom;
@@ -298,7 +303,11 @@ export function SongStudioTimeline({
         {/* Track 3: Events & Impacts */}
         <div
           className="studio-lane lane-events"
-          style={{ height: 20, background: 'rgba(0,0,0,0.4)', position: 'relative' }}
+          style={{ height: 28, background: 'rgba(0,0,0,0.4)', position: 'relative' }}
+          tabIndex={0}
+          aria-label={t('music.studio.eventsLane')}
+          onDoubleClick={(event) => { if ((event.target as HTMLElement).closest('button')) return; const rect = event.currentTarget.getBoundingClientRect(); onAddEvent(Math.max(0, Math.min(a.duration, ((event.clientX - rect.left) / rect.width) * a.duration))); }}
+          onKeyDown={(event) => { if ((event.key === 'Delete' || event.key === 'Backspace') && selectedEvent !== null) { event.preventDefault(); onRemoveEvent(selectedEvent); setSelectedEvent(null); } }}
         >
           {a.events.map((e, i) => {
             if (e.kind === 'silence') return null;
@@ -309,11 +318,12 @@ export function SongStudioTimeline({
               <button
                 key={i}
                 type="button"
-                className={`studio-event-marker studio-event-${e.kind}`}
+                className={`studio-event-marker studio-event-${e.kind} ${selectedEvent === i ? 'is-selected' : ''}`}
                 title={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)}`}
                 aria-label={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)} · ${t('music.studio.seekToEvent')}`}
                 onClick={(event) => {
                   event.stopPropagation();
+                  setSelectedEvent(i);
                   if (musicPlayer.hasAudio(track.hash)) musicPlayer.play(track, e.t);
                 }}
                 style={{
