@@ -420,7 +420,7 @@ export function Fixtures() {
                             style={{ cursor: 'pointer' }}
                           />
                         </td>
-                        <td>{issueIds.has(rf.fixture.id) && <span title="Conflit" style={{ color: '#ef4444' }}>⚠ </span>}{rf.fixture.name}</td>
+                        <td>{issueIds.has(rf.fixture.id) && <span title="Conflit" style={{ color: '#ef4444' }}>⚠ </span>}{rf.fixture.name}{rf.fixture.visualRecognition && <span className="badge" title={rf.fixture.visualRecognition.description}>visuel ✓</span>}</td>
                         <td>{rf.profile.name} {rf.profile.fictional && <span className="badge" title="Profil de démonstration fictif">fictif</span>}</td>
                         <td className="muted">{rf.fixture.mode}</td>
                         <td className="mono">{rf.fixture.universe}</td>
