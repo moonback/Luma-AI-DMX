@@ -338,7 +338,7 @@ export function CameraLocate({ onClose }: { onClose: () => void }) {
                     <td className="mono">{l.position[0].toFixed(2)} / {l.position[1].toFixed(2)} / {l.position[2].toFixed(2)} <span className="dim">{sideOf(l.position[0])}</span>{l.method === 'triangulated' && <span className="badge cyan" style={{ marginLeft: 4 }}>{l.views} vues</span>}</td>
                     <td className="mono" style={d > 1 ? { color: '#fcd34d' } : undefined}>{d.toFixed(2)} m</td>
                     <td className="mono dim">± {(l.uncertainty * 100).toFixed(0)} cm</td>
-                    <td>{mapped?.mount ?? 'inconnu'}{mapped?.supportId ? ` · ${mapped.supportId}` : ''}<div className="small dim">qualité géométrique indicative : {Math.round((mapped?.positionQuality ?? 0) * 100)} %</div></td>
+                    <td>{mapped?.mount ?? 'inconnu'}{mapped?.supportId ? ` · ${mapped.supportId}` : ''}<div className="small dim">qualité géométrique indicative : {Math.round((mapped?.positionQuality ?? 0) * 100)} %</div>{mapped?.visualRecognition && <div className="small" title={mapped.visualRecognition.description}>Reconnu : {mapped.visualRecognition.label} ({Math.round(mapped.visualRecognition.confidence * 100)} %)</div>}</td>
                   </tr>
                 );
               })}
