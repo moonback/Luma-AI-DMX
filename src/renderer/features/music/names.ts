@@ -7,6 +7,6 @@ export const LABEL_COLOR: Record<SectionLabel, string> = {
 export const EFFECT_NAMES = { none: '—', wave: 'Vague', pulse: 'Pulsation', chase: 'Chase', rainbow: 'Arc-en-ciel', strobe: 'Strobe', colorChase: 'Chase couleur', dimmerWave: 'Vague de dimmer', pulseSlow: 'Pulsation lente', chaseSlow: 'Chase lent', flicker: 'Clignotement', snap: 'Clic', glow: 'Lumière douce', gradient: 'Dégradé' } as const;
 export const MOVE_NAMES = { none: 'fixe', slow: 'lent', sweep: 'balayage', fast: 'rapide', fan: 'éventail', ballyhoo: 'ballyhoo', circle: 'cercle', figure8: 'figure 8', pan: 'balayage horizontal', tilt: 'balayage vertical', random: 'aléatoire', pendulum: 'pendule', zigzag: 'zigzag' } as const;
 export const EXTRA_NAMES = { ramp: 'montée progressive', blinder: 'blinder', breathe: 'zoom qui respire', bassFollow: 'suit les basses', colorFollow: 'couleur suit la brillance' } as const;
-export const EVENT_STYLE = { impact: ['Impact', '#fde047'], riser: ['Montée', '#22d3ee'], silence: ['Silence', '#64748b'], vocal: ['Voix', '#f472b6'] } as const;
+export const EVENT_STYLE = { impact: ['Impact', '#fde047'], riser: ['Montée', '#22d3ee'], silence: ['Silence', '#64748b'], vocal: ['Voix', '#f472b6'], marker: ['Marqueur', '#a78bfa'] } as const;
 export const BEAM_NAMES = { open: '', gobo: 'gobo', prism: 'gobo + prisme', frost: 'frost' } as const;
 export const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;

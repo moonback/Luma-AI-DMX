@@ -6,7 +6,7 @@ import { act } from '../api';
 import { Empty, PageHead, Panel } from '../components/ui';
 import { musicPlayer } from '../musicPlayer';
 import { suggestIntents } from '../../core/music/suggest';
-import type { MusicTrack } from '../../core/model/schemas';
+import type { MusicTrack, SongAnalysis } from '../../core/model/schemas';
 import { SectionEditor } from './music/SectionEditor';
 import { SongStudioTimeline } from './music/SongStudioTimeline';
 import { VariantCompareModal } from './music/VariantCompareModal';
@@ -83,6 +83,19 @@ export function MusicPage() {
   const [history, setHistory] = useState(loadHistory);
   const [mood, setMood] = useState(NO_MOOD);
   const [busy, setBusy] = useState(false);
+  const musicHistory = useRef(new Map<string, { undo: SongAnalysis[]; redo: SongAnalysis[] }>());
+  const historyFor = (id: string) => {
+    let history = musicHistory.current.get(id);
+    if (!history) { history = { undo: [], redo: [] }; musicHistory.current.set(id, history); }
+    return history;
+  };
+  const rememberMusicEdit = (snapshot: SongAnalysis) => {
+    if (!track) return;
+    const history = historyFor(track.id);
+    history.undo.push(structuredClone(snapshot));
+    if (history.undo.length > 100) history.undo.shift();
+    history.redo = [];
+  };
   const [generating, setGenerating] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
@@ -207,32 +220,46 @@ export function MusicPage() {
       useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
   };
-  const addMusicEvent = async (time: number) => {
+  const addMusicEvent = async (time: number, kind: 'impact' | 'riser' | 'silence' | 'vocal' | 'marker' = 'impact') => {
     if (!track || busy || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
-    try { await act({ type: 'music.addEvent', trackId: track.id, event: { t: time, duration: 0, kind: 'impact' } }); }
+    try { rememberMusicEdit(track.analysis); await act({ type: 'music.addEvent', trackId: track.id, event: { t: time, duration: 0, kind, ...(kind === 'marker' ? { name: t('music.studio.customMarker'), color: '#a78bfa', category: 'cue' } : {}) } }); }
     catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
     finally { setBusy(false); }
   };
-  const updateMusicEvent = async (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' }) => {
+  const updateMusicEvent = async (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' | 'marker'; name?: string; color?: string; category?: string }) => {
     if (!track || busy || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
-    try { await act({ type: 'music.updateEvent', trackId: track.id, index, patch }); }
+    try { rememberMusicEdit(track.analysis); await act({ type: 'music.updateEvent', trackId: track.id, index, patch }); }
     catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
     finally { setBusy(false); }
   };
   const undoMusicEdit = async () => {
-    const result = await act({ type: 'project.undo' });
-    if (result?.label) useStore.getState().toast({ kind: 'success', title: t('music.studio.undo'), detail: result.label });
+    if (!track || busy) return;
+    const history = historyFor(track.id);
+    const previous = history.undo.pop();
+    if (!previous) return;
+    history.redo.push(structuredClone(track.analysis));
+    setBusy(true);
+    try { await act({ type: 'music.restoreAnalysis', trackId: track.id, analysis: previous }); }
+    catch (err) { history.undo.push(previous); history.redo.pop(); useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
   };
   const redoMusicEdit = async () => {
-    const result = await act({ type: 'project.redo' });
-    if (result?.label) useStore.getState().toast({ kind: 'success', title: t('music.studio.redo'), detail: result.label });
+    if (!track || busy) return;
+    const history = historyFor(track.id);
+    const next = history.redo.pop();
+    if (!next) return;
+    history.undo.push(structuredClone(track.analysis));
+    setBusy(true);
+    try { await act({ type: 'music.restoreAnalysis', trackId: track.id, analysis: next }); }
+    catch (err) { history.redo.push(next); history.undo.pop(); useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
   };
   const removeMusicEvent = async (index: number) => {
     if (!track || busy || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
-    try { await act({ type: 'music.removeEvent', trackId: track.id, index }); }
+    try { rememberMusicEdit(track.analysis); await act({ type: 'music.removeEvent', trackId: track.id, index }); }
     catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
     finally { setBusy(false); }
   };
@@ -241,6 +268,7 @@ export function MusicPage() {
     if (!(await confirmOverwrite(track.id))) return;
     setBusy(true);
     try {
+      rememberMusicEdit(track.analysis);
       const result = await act({ type: 'music.moveSectionBoundary', trackId: track.id, index, time });
       if (result?.notices.length) setNotices(result.notices);
       setSelected(index);
@@ -254,7 +282,7 @@ export function MusicPage() {
   const pick = (s: ShowStep) => (track ? setView(s) : s === 'track' && file.current?.click());
   const shown: ShowStep = track ? view : 'track';
   const studio = track && (
-    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} onAddEvent={(time) => void addMusicEvent(time)} onRemoveEvent={(index) => void removeMusicEvent(index)} onUpdateEvent={(index, patch) => void updateMusicEvent(index, patch)} onUndo={() => void undoMusicEdit()} onRedo={() => void redoMusicEdit()} pos={isPlaying ? pos : null} playing={isPlaying} />
+    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} onAddEvent={(time, kind) => void addMusicEvent(time, kind)} onRemoveEvent={(index) => void removeMusicEvent(index)} onUpdateEvent={(index, patch) => void updateMusicEvent(index, patch)} onUndo={() => void undoMusicEdit()} onRedo={() => void redoMusicEdit()} pos={isPlaying ? pos : null} playing={isPlaying} />
   );
 
   return (

@@ -12,9 +12,9 @@ interface Props {
   onSelect: (index: number) => void;
   onOpenEditor: (index: number) => void;
   onMoveBoundary: (index: number, time: number) => void;
-  onAddEvent: (time: number) => void;
+  onAddEvent: (time: number, kind?: 'impact' | 'riser' | 'silence' | 'vocal' | 'marker') => void;
   onRemoveEvent: (index: number) => void;
-  onUpdateEvent: (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' }) => void;
+  onUpdateEvent: (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' | 'marker'; name?: string; color?: string; category?: string }) => void;
   onUndo: () => void;
   onRedo: () => void;
   pos: number | null;
@@ -337,8 +337,8 @@ export function SongStudioTimeline({
                 key={i}
                 type="button"
                 className={`studio-event-marker studio-event-${e.kind} ${selectedEvent === i ? 'is-selected' : ''}`}
-                title={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)}`}
-                aria-label={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)} · ${t('music.studio.seekToEvent')}`}
+                title={e.kind === 'marker' ? `${e.name ?? t('music.studio.customMarker')} · ${fmt(e.t)}` : `${t(`music.event.${e.kind}`)} · ${fmt(e.t)}`}
+                aria-label={e.kind === 'marker' ? `${e.name ?? t('music.studio.customMarker')} · ${fmt(e.t)}` : `${t(`music.event.${e.kind}`)} · ${fmt(e.t)} · ${t('music.studio.seekToEvent')}`}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   if (event.button !== 0) return;
@@ -368,7 +368,7 @@ export function SongStudioTimeline({
                   width,
                   top: 3,
                   bottom: 3,
-                  background: EVENT_STYLE[e.kind][1],
+                  background: e.kind === 'marker' ? (e.color ?? '#a78bfa') : EVENT_STYLE[e.kind][1],
                   borderRadius: 2,
                   border: 0,
                   padding: 0,
@@ -381,11 +381,17 @@ export function SongStudioTimeline({
           })}
         </div>
         <div className="studio-event-inspector" onClick={(event) => event.stopPropagation()}>
+          <button type="button" className="btn ghost sm" onClick={() => onAddEvent(pos ?? a.sections[selected]?.start ?? 0, 'marker')}>{t('music.studio.addMarker')}</button>
           <span className="small dim">{selectedMusicEvent ? `${t('music.studio.selectedEvent')} · ${fmt(selectedMusicEvent.t)}` : t('music.studio.noEvent')}</span>
           {selectedMusicEvent && selectedEvent !== null && <>
-            <select aria-label={t('music.studio.eventType')} value={selectedMusicEvent.kind} onChange={(event) => onUpdateEvent(selectedEvent, { kind: event.target.value as 'impact' | 'riser' | 'silence' | 'vocal' })}>
-              {(['impact', 'riser', 'silence', 'vocal'] as const).map((kind) => <option key={kind} value={kind}>{t(`music.event.${kind}`)}</option>)}
+            <select aria-label={t('music.studio.eventType')} value={selectedMusicEvent.kind} onChange={(event) => onUpdateEvent(selectedEvent, { kind: event.target.value as 'impact' | 'riser' | 'silence' | 'vocal' | 'marker' })}>
+              {(['impact', 'riser', 'silence', 'vocal', 'marker'] as const).map((kind) => <option key={kind} value={kind}>{kind === 'marker' ? t('music.studio.customMarker') : t(`music.event.${kind}`)}</option>)}
             </select>
+            {selectedMusicEvent.kind === 'marker' && <>
+              <label className="small">{t('music.studio.markerName')} <input aria-label={t('music.studio.markerName')} type="text" maxLength={64} defaultValue={selectedMusicEvent.name ?? ''} key={String(selectedEvent) + ':' + selectedMusicEvent.name} onBlur={(event) => { const name = event.currentTarget.value.trim() || t('music.studio.customMarker'); if (name !== selectedMusicEvent.name) onUpdateEvent(selectedEvent, { name }); }} /></label>
+              <label className="small">{t('music.studio.markerCategory')} <select value={selectedMusicEvent.category ?? 'cue'} onChange={(event) => onUpdateEvent(selectedEvent, { category: event.target.value })}><option value="cue">{t('music.studio.categoryCue')}</option><option value="transition">{t('music.studio.categoryTransition')}</option><option value="note">{t('music.studio.categoryNote')}</option><option value="effect">{t('music.studio.categoryEffect')}</option><option value="other">{t('music.studio.categoryOther')}</option></select></label>
+              <label className="small">{t('music.studio.markerColor')} <input aria-label={t('music.studio.markerColor')} type="color" value={selectedMusicEvent.color ?? '#a78bfa'} onChange={(event) => onUpdateEvent(selectedEvent, { color: event.target.value })} /></label>
+            </>}
             <label className="small">{t('music.studio.duration')} <input aria-label={t('music.studio.duration')} type="number" min="0" max="600" step="0.05" defaultValue={selectedMusicEvent.duration} key={String(selectedEvent) + ':' + selectedMusicEvent.duration} onBlur={(event) => { const duration = Math.max(0, Math.min(600, Number(event.currentTarget.value) || 0)); if (duration !== selectedMusicEvent.duration) onUpdateEvent(selectedEvent, { duration }); }} /></label>
             <label className="small studio-snap"><input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} />{t('music.studio.snap')}</label>
             <button type="button" className="btn ghost sm" onClick={() => { onRemoveEvent(selectedEvent); setSelectedEvent(null); }}>{t('music.studio.removeEvent')}</button>
