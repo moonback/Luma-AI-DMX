@@ -1506,3 +1506,11 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   .studio-zoom-controls { margin-left: 0; }
   .studio-timeline-legend { display: none; }
 }
+
+.studio-selection-toolbar { display:flex; align-items:center; gap:9px; min-width:0; padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:var(--panel-2); }
+.studio-selection-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:650; color:var(--text); }
+.studio-selection-time { flex:none; font-size:10px; color:var(--text-3); }
+.studio-selection-toolbar .btn { margin-left:auto; flex:none; }
+.studio-sec-block[aria-pressed="true"] { box-shadow:inset 0 0 0 2px var(--cyan), inset 0 -3px 0 var(--cyan); }
+.studio-sec-block:focus-visible { z-index:3; outline:2px solid var(--text); outline-offset:-3px; }
+@media (max-width:620px) { .studio-selection-toolbar { flex-wrap:wrap; } .studio-selection-time { margin-left:auto; } .studio-selection-toolbar .btn { margin-left:0; } }
