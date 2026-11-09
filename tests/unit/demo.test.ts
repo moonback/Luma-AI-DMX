@@ -54,9 +54,20 @@ describe('projets de démonstration', () => {
       const audience = p.patch.filter((f) => f.tags.includes('aud_front') || f.tags.includes('aud_rear'));
       expect(audience).toHaveLength(12);
       expect(audience.every((f) => f.position.y < 0 && f.height >= 3 && !!f.trussId && f.universe === 2)).toBe(true);
+      expect(audience.filter((f) => f.tags.includes('aud_rear')).every((f) => f.rotation === 180)).toBe(true);
       expect(p.show.universes).toBe(2);
       expect(p.visualizer.trusses.length).toBeGreaterThanOrEqual(6);
     }
+  });
+
+  it('les dix démos grand format ont des implantations visuelles distinctes', () => {
+    const projects = MEGA_DEMOS.map((d) => buildDemo(d.id));
+    const stageFootprints = projects.map((p) => `${p.visualizer.stageWidth}x${p.visualizer.stageDepth}`);
+    expect(new Set(stageFootprints).size).toBe(10);
+    const fixtureSignatures = projects.map((p) => p.patch.map((f) => `${f.tags[0]}:${f.position.x},${f.position.y},${f.height}`).sort().join('|'));
+    expect(new Set(fixtureSignatures).size).toBe(10);
+    const scenicSignatures = projects.map((p) => p.visualizer.props.map((prop) => `${prop.kind}:${prop.name}`).sort().join('|'));
+    expect(new Set(scenicSignatures).size).toBe(10);
   });
 
   it('le festival utilise 2 univers', () => {

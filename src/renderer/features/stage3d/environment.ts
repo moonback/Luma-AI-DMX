@@ -33,11 +33,29 @@ function boxTruss(length: number, mat: THREE.Material, lattice: THREE.Material, 
   const w = 0.29;
   const chord = new THREE.CylinderGeometry(0.024, 0.024, length, 8);
   chord.rotateZ(Math.PI / 2);
-  if (section === 'triangle') return triTruss(g, length, chord, mat, lattice);
-  for (const [y, z] of [[w / 2, w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [-w / 2, -w / 2]] as const) {
+  if (section === 'triangle') {
+    triTruss(g, length, chord, mat, lattice);
+    // Three end sleeves on each triangular section.
+    for (const [y, z] of TRIANGLE) for (const x of [-length / 2 + 0.055, length / 2 - 0.055]) {
+      const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.11, 8), mat);
+      sleeve.rotation.z = Math.PI / 2;
+      sleeve.position.set(x, y, z);
+      g.add(sleeve);
+    }
+    return g;
+  }
+  const nodes: readonly (readonly [number, number])[] = [[w / 2, w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [-w / 2, -w / 2]];
+  for (const [y, z] of nodes) {
     const m = new THREE.Mesh(chord, mat);
     m.position.set(0, y, z);
     g.add(m);
+  }
+  // End sleeves and connector collars on every chord make the aluminium sections read as modular truss pieces.
+  for (const [y, z] of nodes) for (const x of [-length / 2 + 0.055, length / 2 - 0.055]) {
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.11, 8), mat);
+    sleeve.rotation.z = Math.PI / 2;
+    sleeve.position.set(x, y, z);
+    g.add(sleeve);
   }
   // Zig-zag lattice on the four faces (cheap line segments).
   const pts: number[] = [];
@@ -136,14 +154,41 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
       const foot = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.03, 0.7), mat);
       foot.position.set(local.x, 0.015 - t.height, local.z);
       g.add(foot);
-    } else {
-      // Chain hoist: motor body and chain up to the grid.
-      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 3, 6), mat);
-      chain.position.set(local.x, 1.7, local.z);
+    } else if (t.support === 'hung') {
+      // Visible hoist package: motor housing, chain, upper suspension plate and a lower shackle.
+      const steel = new THREE.MeshStandardMaterial({ color: 0x687386, metalness: 0.82, roughness: 0.28 });
+      const motorMat = new THREE.MeshStandardMaterial({ color: 0x202936, metalness: 0.58, roughness: 0.42 });
+      const chainLength = Math.max(0.6, Math.min(2.8, 12.5 - t.height - 0.75));
+      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, chainLength, 8), steel);
+      chain.position.set(local.x, 0.82 + chainLength / 2, local.z);
       g.add(chain);
-      const motor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.32, 0.22), mat);
-      motor.position.set(local.x, 0.45, local.z);
+      // Alternating oval links keep the suspension visibly distinct from a plain steel rod.
+      const linkCount = Math.max(3, Math.floor(chainLength / 0.18));
+      for (let i = 0; i < linkCount; i++) {
+        const link = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0055, 4, 8), steel);
+        link.position.set(local.x, 0.82 + 0.09 + i * (chainLength / linkCount), local.z);
+        link.rotation.y = i % 2 ? Math.PI / 2 : 0;
+        g.add(link);
+      }
+
+      const motor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.3), motorMat);
+      motor.position.set(local.x, 0.43, local.z);
       g.add(motor);
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.34, 12), steel);
+      drum.rotation.z = Math.PI / 2;
+      drum.position.set(local.x, 0.48, local.z + 0.015);
+      g.add(drum);
+      const lowerHook = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.014, 6, 14, Math.PI * 1.65), steel);
+      lowerHook.rotation.set(Math.PI / 2, 0, Math.PI * 0.15);
+      lowerHook.position.set(local.x, 0.19, local.z);
+      g.add(lowerHook);
+      const topPlate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.055, 0.38), steel);
+      topPlate.position.set(local.x, 0.82 + chainLength, local.z);
+      g.add(topPlate);
+      const topEye = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.016, 6, 14), steel);
+      topEye.rotation.x = Math.PI / 2;
+      topEye.position.set(local.x, 0.88 + chainLength, local.z);
+      g.add(topEye);
     }
   }
   g.traverse((o) => { o.userData.trussId = t.id; });
@@ -239,6 +284,46 @@ function buildProp(p: StageProp, selected: boolean): THREE.Group {
   return g;
 }
 
+/** Tiered temporary grandstands for large-format demo venues. Geometry is deliberately generic and non-structural. */
+function buildGrandstands(stage: StageGeometry): THREE.Group {
+  const stands = new THREE.Group();
+  if (stage.arena || stage.width < 16 || stage.depth < 12) return stands;
+
+  const width = stage.width + 10;
+  const tierDepth = 0.92;
+  const tierHeight = 0.34;
+  const firstZ = 10.5;
+
+  for (let row = 0; row < 8; row++) {
+    const z = firstZ + row * tierDepth;
+    const base = 0.35 + row * tierHeight;
+    const step = new THREE.Mesh(new THREE.BoxGeometry(width, tierHeight, tierDepth), new THREE.MeshStandardMaterial({ color: 0x252b36, roughness: 0.82, metalness: 0.18 }));
+    step.position.set(0, base - tierHeight / 2, z);
+    step.castShadow = true;
+    step.receiveShadow = true;
+    stands.add(step);
+
+    // Continuous seat deck and a raised backrest: spectators are instanced on the same tier in crowd.ts.
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(width, 0.075, 0.42), new THREE.MeshStandardMaterial({ color: 0x111722, roughness: 0.68, metalness: 0.12 }));
+    seat.position.set(0, base + 0.43, z - 0.12);
+    seat.castShadow = true;
+    seat.receiveShadow = true;
+    stands.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(width, 0.48, 0.075), new THREE.MeshStandardMaterial({ color: 0x111722, roughness: 0.68, metalness: 0.12 }));
+    back.position.set(0, base + 0.68, z + 0.13);
+    back.castShadow = true;
+    stands.add(back);
+
+    // Aluminium aisle-edge posts and a continuous handrail make the tier profile legible in wide shots.
+    for (const x of [-width / 2 + 0.08, width / 2 - 0.08]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.82, 8), new THREE.MeshStandardMaterial({ color: 0x596273, roughness: 0.42, metalness: 0.72 }));
+      post.position.set(x, base + 0.41, z + 0.28);
+      stands.add(post);
+    }
+  }
+  return stands;
+}
+
 export function buildEnvironment(
   stage: StageGeometry,
   markers: readonly StageMarker[] = [],
@@ -287,12 +372,13 @@ export function buildEnvironment(
 
   // Audience floor, slightly lower and darker: in front of the stage, or all around in arena.
   const house = new THREE.Mesh(
-    stage.arena ? new THREE.PlaneGeometry(W + 20, D + 30) : new THREE.PlaneGeometry(W + 20, 16),
+    stage.arena ? new THREE.PlaneGeometry(W + 20, D + 30) : new THREE.PlaneGeometry(W + 20, stage.width >= 16 && stage.depth >= 12 ? 20 : 16),
     new THREE.MeshStandardMaterial({ color: 0x0c0e14, roughness: 1 }),
   );
   house.rotation.x = -Math.PI / 2;
-  house.position.set(0, -0.001, stage.arena ? -D / 2 : 8);
+  house.position.set(0, -0.001, stage.arena ? -D / 2 : stage.width >= 16 && stage.depth >= 12 ? 10 : 8);
   env.add(house);
+  env.add(buildGrandstands(stage));
 
   if (stage.wall !== false && !stage.arena) {
     // Cyclorama: matte light-grey surface so beams hitting it read clearly.

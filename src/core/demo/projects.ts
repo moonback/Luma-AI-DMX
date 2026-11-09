@@ -60,7 +60,7 @@ function build(spec: DemoSpec): Project {
         : { x: (t - 0.5) * W * (rig.span ?? 0.9), y: rig.y };
       const id = pid(`${rig.prefix}-${i + 1}`);
       ids.push(id);
-      p.patch.push({ id, name: `${rig.label} ${i + 1}`, profileId: rig.profile, mode: rig.mode, universe: u, address, tags: [rig.prefix.toLowerCase()], position: { x: Math.round(position.x * 10) / 10, y: Math.round(position.y * 10) / 10 }, rotation: 0, height: rig.height, notes: '', ...(trussId ? { trussId } : {}) });
+      p.patch.push({ id, name: `${rig.label} ${i + 1}`, profileId: rig.profile, mode: rig.mode, universe: u, address, tags: [rig.prefix.toLowerCase()], position: { x: Math.round(position.x * 10) / 10, y: Math.round(position.y * 10) / 10 }, rotation: rig.rotation ?? 0, height: rig.height, notes: '', ...(trussId ? { trussId } : {}) });
     }
     rigIds.set(rig.prefix, ids);
     p.groups.push({ id: pid(`g-${rig.prefix}`), name: rig.label, color: rig.color, fixtureIds: ids });

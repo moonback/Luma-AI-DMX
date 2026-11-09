@@ -163,6 +163,38 @@ export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
   const s = mountSign(f.mount);
   const root = new THREE.Group();
   root.rotation.order = 'YXZ'; // matches beamDirection(): Ry(yaw)·Rx(mount tilt)
+  if (f.mount === 'hanging' && f.trussId) {
+    // Compact half-coupler / omega bracket and safety bond between the fixture and its truss.
+    const rigging = new THREE.Group();
+    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa4b4, metalness: 0.9, roughness: 0.24 });
+    const darkSteel = new THREE.MeshStandardMaterial({ color: 0x303846, metalness: 0.72, roughness: 0.32 });
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.045, 0.22), darkSteel);
+    plate.position.y = 0.085;
+    rigging.add(plate);
+    for (const x of [-0.095, 0.095]) {
+      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.13, 8), steel);
+      bolt.position.set(x, 0.17, 0);
+      rigging.add(bolt);
+      const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.025, 8), darkSteel);
+      nut.position.set(x, 0.11, 0);
+      rigging.add(nut);
+    }
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.035, 0.08), steel);
+    bridge.position.set(0, 0.235, 0);
+    rigging.add(bridge);
+    const bond = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.009, 6, 14), steel);
+    bond.rotation.x = Math.PI / 2;
+    bond.position.set(0.14, 0.22, -0.04);
+    rigging.add(bond);
+    const safetyPath = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.12, 0.24, -0.04),
+      new THREE.Vector3(0.2, 0.29, -0.08),
+      new THREE.Vector3(0.25, 0.2, -0.12),
+      new THREE.Vector3(0.18, 0.07, -0.14),
+    ]);
+    rigging.add(new THREE.Mesh(new THREE.TubeGeometry(safetyPath, 12, 0.006, 5, false), darkSteel));
+    root.add(rigging);
+  }
   const yoke = new THREE.Group();
   const head = new THREE.Group();
   root.add(yoke);

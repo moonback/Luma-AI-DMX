@@ -333,7 +333,7 @@ export function Stage3D({ values, groupFilter, inspector = true }: { values?: Fi
     const avg = (k: 'x' | 'y' | 'height') => sel.reduce((s, f) => s + f[k], 0) / sel.length;
     api.current?.frame({ x: avg('x'), y: avg('y'), height: avg('height') });
   };
-  // View shortcuts (no modifier, not while typing): 1–5 cameras, F frame, R orbit, I solo, H presentation.
+  // View shortcuts (no modifier, not while typing): 1–6 cameras, F frame, R orbit, I solo, H presentation.
   const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
   keys.current = (e) => {
     const el = e.target as HTMLElement;
