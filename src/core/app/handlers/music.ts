@@ -86,7 +86,7 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
         app.logger.info('Musique', `Limite des sections ${cmd.index + 1}/${cmd.index + 2} déplacée à ${cmd.time.toFixed(2)} s`);
         return { timelineId: null, notices: [] };
       }
-      const result = applyShow(app, updated, structuredClone(updated.plan), []);
+      const result = applyShow(app, updated, structuredClone(updated.plan), [], true);
       app.logger.info('Musique', `Structure temporelle ajustée : sections ${cmd.index + 1} et ${cmd.index + 2} (${cmd.time.toFixed(2)} s)`);
       return { timelineId: result.timelineId, notices: result.notices };
     }
@@ -274,7 +274,7 @@ async function planSection(app: AppService, t: MusicTrack, plan: ShowPlan, index
 }
 
 /** Compiles the plan, replaces the track's previously generated objects and stores the plan. */
-export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[]) {
+export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[], preservePrevious = false) {
   // The plan may come back from a slow OpenRouter call: the track, or the whole project, can be gone by then.
   const cur = app.project.music.tracks.find((x) => x.id === t.id);
   if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué', 'music.trackChangedDuringGeneration');
@@ -293,7 +293,7 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
     d.effects.push(...c.effects);
     d.timelines.push(c.timeline);
     d.cueLists.push(c.cueList);
-    track.previousPlan = track.plan; // so restoring twice swaps back (redo)
+    if (!preservePrevious) track.previousPlan = track.plan; // so restoring twice swaps back (redo)
     track.plan = plan;
     track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id, cueListIds: [c.cueList.id] };
     track.created.fingerprint = generatedFingerprint(d, track.created);
