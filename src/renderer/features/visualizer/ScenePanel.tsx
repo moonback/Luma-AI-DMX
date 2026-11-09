@@ -13,7 +13,7 @@ import { LibraryHome, LibraryTiles, fold } from './libraryTiles';
 import { SceneAssistant } from './SceneAssistant';
 import { SCENE_LABEL, canAdd, type SceneKind } from '../../../core/visualizer/sceneEdit';
 import { EQUIPMENT } from '../../../core/visualizer/equipment';
-import { LIBRARY_MIME, addSceneElement, equipRig, unhangRig } from '../../sceneActions';
+import { LIBRARY_MIME, addSceneElement, equipRig, intelligentlyPlaceFixtures, unhangRig } from '../../sceneActions';
 export { LibraryGlyph, fold } from './libraryTiles';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate, type SceneTemplateId } from '../../../core/visualizer/templates';
 import { channelCount } from '../../../core/fixtures/profiles';
@@ -277,6 +277,16 @@ function EquipButton({ vis }: { vis: Vis }) {
         >
           <Wand2 size={13} />
           <span>{equipLabel}</span>
+        </button>
+        <button
+          type="button"
+          className="btn sm build-equip-btn"
+          onClick={() => void intelligentlyPlaceFixtures()}
+          data-testid="equip-intelligent"
+          title="Associer les projecteurs non affectés aux ponts selon les supports reconnus et leur proximité géométrique. Une confirmation est demandée."
+        >
+          <Sparkles size={13} />
+          <span>Affectation intelligente</span>
         </button>
         {hungCount > 0 && (
           <button
