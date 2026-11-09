@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Ajouté
+- Reconstruction de scène multi-vues depuis 2 à 6 photos d'une même installation : fusion des angles, déduplication demandée des structures, estimation d'un plan commun et confirmation avant remplacement du plan 3D. Les dimensions restent indicatives ; un avertissement signale les projecteurs encore liés aux anciens ponts.
 - Reconnaissance visuelle des installations lumière : analyse de 1 à 6 photos via un modèle vision OpenRouter, détection des boîtiers, classification, repères visuels et propositions de correspondance avec le patch DMX ; validation manuelle obligatoire et conservation de l'identification confirmée dans le projet. La localisation 3D reste séparée et repose sur Camera Locate calibré.
 - Cartographie d'installation : consolidation des positions mesurées ou issues du patch, incertitude géométrique, nombre de vues, zones, montage, structures associées, diagnostics et identifications visuelles confirmées.
 - Console Simplifiée : clic simple sur une machine pour ouvrir directement ses réglages ; mode de sélection multiple explicite et activable, avec sélection par plage et commandes de sélection dédiées.
