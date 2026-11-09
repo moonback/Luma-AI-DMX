@@ -84,6 +84,7 @@ export interface InstallationMap {
     patchOnly: number;
     withIssues: number;
     unknownMount: number;
+    visuallyRecognized: number;
   };
 }
 
@@ -92,8 +93,7 @@ const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 
 function mountOf(f: InstallationFixtureInput): { mount: InstallationMount; inferred: boolean } {
   if (f.mount && f.mount !== 'auto') return { mount: f.mount, inferred: false };
-  // The legacy project convention treats fixtures below 1 m as floor-mounted.
-  // Above that threshold the physical support is unknown unless explicitly stored.
+  // Preserve the project schema's legacy convention: auto/absent means floor below 1 m, hanging otherwise.
   if (f.height < 1) return { mount: 'floor', inferred: true };
   return { mount: 'hanging', inferred: true };
 }
@@ -187,6 +187,7 @@ export function buildInstallationMap(
       patchOnly: mapped.length - triangulated - estimatedFromHeight,
       withIssues: mapped.filter((f) => f.issues.length > 0).length,
       unknownMount: mapped.filter((f) => f.mount === 'unknown').length,
+      visuallyRecognized: mapped.filter((f) => !!f.visualRecognition).length,
     },
   };
 }
