@@ -85,33 +85,30 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       const current = track(app, cmd.trackId);
       if (!current.analysis.events[cmd.index]) throw new UserError('Événement musical introuvable', 'music.eventNotFound');
       const patch = Object.fromEntries(Object.entries(cmd.patch).filter(([, value]) => value !== undefined));
-      if (patch.t !== undefined && patch.t > current.analysis.duration) throw new UserError('L’événement dépasse la durée du morceau', 'music.eventOutOfRange');
-      app.mutate((d) => {
-        const target = d.music.tracks.find((x) => x.id === cmd.trackId);
-        if (!target?.analysis.events[cmd.index]) throw new UserError('Événement musical introuvable', 'music.eventNotFound');
-        target.analysis.events[cmd.index] = { ...target.analysis.events[cmd.index]!, ...patch, ...(cmd.patch.confidence === null ? { confidence: undefined } : {}) };
-      });
+      if (cmd.patch.t !== undefined && cmd.patch.t > current.analysis.duration) throw new UserError('L’événement dépasse la durée du morceau', 'music.eventOutOfRange');
+      const analysis = structuredClone(current.analysis);
+      analysis.events[cmd.index] = { ...analysis.events[cmd.index]!, ...patch, ...(cmd.patch.confidence === null ? { confidence: undefined } : {}) };
+      if (current.plan) applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      else app.mutate((d) => { const target = d.music.tracks.find((x) => x.id === cmd.trackId); if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound'); target.analysis = analysis; });
       return ok;
     }
     case 'music.addEvent': {
       const current = track(app, cmd.trackId);
       if (cmd.event.t > current.analysis.duration || current.analysis.events.length >= 2000) throw new UserError('Position invalide ou limite de 2 000 événements atteinte', 'music.eventOutOfRange');
-      app.mutate((d) => {
-        const target = d.music.tracks.find((x) => x.id === cmd.trackId);
-        if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound');
-        target.analysis.events.push(cmd.event);
-        target.analysis.events.sort((a, b) => a.t - b.t);
-      });
+      const analysis = structuredClone(current.analysis);
+      analysis.events.push(cmd.event);
+      analysis.events.sort((a, b) => a.t - b.t);
+      if (current.plan) applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      else app.mutate((d) => { const target = d.music.tracks.find((x) => x.id === cmd.trackId); if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound'); target.analysis = analysis; });
       return ok;
     }
     case 'music.removeEvent': {
       const current = track(app, cmd.trackId);
       if (!current.analysis.events[cmd.index]) throw new UserError('Événement musical introuvable', 'music.eventNotFound');
-      app.mutate((d) => {
-        const target = d.music.tracks.find((x) => x.id === cmd.trackId);
-        if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound');
-        target.analysis.events.splice(cmd.index, 1);
-      });
+      const analysis = structuredClone(current.analysis);
+      analysis.events.splice(cmd.index, 1);
+      if (current.plan) applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      else app.mutate((d) => { const target = d.music.tracks.find((x) => x.id === cmd.trackId); if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound'); target.analysis = analysis; });
       return ok;
     }
     case 'music.generate': {
