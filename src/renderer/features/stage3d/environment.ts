@@ -167,7 +167,7 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
       for (let i = 0; i < linkCount; i++) {
         const link = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0055, 4, 8), steel);
         link.position.set(local.x, 0.82 + 0.09 + i * (chainLength / linkCount), local.z);
-        link.rotation.set(Math.PI / 2, i % 2 ? 0 : Math.PI / 2, 0);
+        link.rotation.y = i % 2 ? Math.PI / 2 : 0;
         g.add(link);
       }
 
