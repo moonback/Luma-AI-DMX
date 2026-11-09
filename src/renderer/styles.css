@@ -1488,3 +1488,6 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   .studio-timeline-heading { flex-wrap: wrap; }
   .studio-timeline-legend { margin-left: 0; }
 }
+
+.studio-lanes-container { min-width: 0; overflow-x: auto !important; overflow-y: hidden; scrollbar-width: thin; }
+.studio-lane { min-width: var(--timeline-min-width, 100%); }
