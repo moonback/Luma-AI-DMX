@@ -6,6 +6,7 @@ import { confirmAction, useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
 import { hangHeight, nearestOnTruss, snapToTrusses, snapTrussEnds, type P2 } from '../core/visualizer/truss';
+import { proposeIntelligentPlacements } from '../core/visualizer/intelligentPlacement';
 import { MAX_UNIVERSES, type Fixture, type Project, type StageProp, type Truss } from '../core/model/schemas';
 import { assembly as assemblyOf, buildAssembly, withAssembly, type AssemblyId } from '../core/visualizer/assemblies';
 import { ProfileLibrary, channelCount } from '../core/fixtures/profiles';
@@ -175,6 +176,36 @@ export function equipRig(model: readonly VisualFixture[], targetTrussId?: string
     .map((p) => ({ ...p, ...(['floor', 'wall'].includes(explicit.get(p.id) ?? 'auto') ? { mount: 'hanging' as const } : {}) }));
   if (!placements.length) { toast('Rien à accrocher', 'Aucun projecteur suspendu ou sélectionné.'); return; }
   void act({ type: 'fixture.place', placements }).then((r) => r !== undefined && toast(`${placements.length} projecteur(s) accroché(s)`, 'Ctrl+Z pour annuler'));
+}
+
+/**
+ * Suggests and applies conservative fixture-to-truss assignments from reviewed support labels and current geometry.
+ * One confirmation and one undoable fixture.place command; existing links and floor/wall fixtures are preserved.
+ */
+export async function intelligentlyPlaceFixtures(): Promise<void> {
+  const v = vis();
+  const fixtures = useStore.getState().project?.project.patch ?? [];
+  if (!v?.trusses.length || !fixtures.length) return;
+  const result = proposeIntelligentPlacements(fixtures, v.trusses);
+  if (!result.placements.length) {
+    toast('Aucune affectation fiable', `${result.skipped.filter((item) => item.reason === 'already-linked').length} déjà liés · ${result.skipped.filter((item) => item.reason === 'floor-or-wall').length} au sol/mur · ${result.skipped.filter((item) => item.reason === 'ambiguous').length} ambigus · ${result.skipped.filter((item) => item.reason === 'no-match').length} sans structure proche.`);
+    return;
+  }
+  const lines = [
+    `${result.placements.length} projecteur(s) peuvent être associés à un pont.`,
+    '',
+    ...result.placements.slice(0, 14).map((p) => `• ${fixtures.find((f) => f.id === p.id)?.name ?? p.id} → ${p.trussName} (${p.reason === 'support-name' ? 'indice visuel' : 'proximité'} · ${Math.round(p.confidence * 100)} %)`),
+    ...(result.placements.length > 14 ? [`… et ${result.placements.length - 14} autre(s).`] : []),
+    '',
+    `${result.skipped.length} projecteur(s) seront laissés inchangés (déjà liés, au sol/mur, ambigus ou trop éloignés).`,
+    'Les positions proposées sont géométriques et indicatives. Vérifiez chaque accroche réelle : cette fonction ne calcule ni charges, ni efforts, ni sécurité de rigging.',
+  ];
+  if (!(await confirmAction({ title: 'Affectation intelligente aux ponts', message: lines.join('\n'), confirmLabel: `Affecter ${result.placements.length} projecteur(s)` }))) return;
+  const applied = await act({
+    type: 'fixture.place',
+    placements: result.placements.map((p) => ({ id: p.id, position: p.position, height: p.height, trussId: p.trussId })),
+  });
+  if (applied) toast(`${result.placements.length} projecteur(s) positionné(s)`, 'Affectation enregistrée en une étape. Ctrl+Z pour annuler.');
 }
 
 /**
