@@ -33,11 +33,21 @@ function boxTruss(length: number, mat: THREE.Material, lattice: THREE.Material, 
   const w = 0.29;
   const chord = new THREE.CylinderGeometry(0.024, 0.024, length, 8);
   chord.rotateZ(Math.PI / 2);
-  if (section === 'triangle') return triTruss(g, length, chord, mat, lattice);
-  for (const [y, z] of [[w / 2, w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [-w / 2, -w / 2]] as const) {
+  const nodes: readonly (readonly [number, number])[] = section === 'triangle'
+    ? TRIANGLE
+    : [[w / 2, w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [-w / 2, -w / 2]];
+  if (section === 'triangle') triTruss(g, length, chord, mat, lattice);
+  else for (const [y, z] of nodes) {
     const m = new THREE.Mesh(chord, mat);
     m.position.set(0, y, z);
     g.add(m);
+  }
+  // End sleeves and connector collars on every chord make the aluminium sections read as modular truss pieces.
+  for (const [y, z] of nodes) for (const x of [-length / 2 + 0.055, length / 2 - 0.055]) {
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.11, 8), mat);
+    sleeve.rotation.z = Math.PI / 2;
+    sleeve.position.set(x, y, z);
+    g.add(sleeve);
   }
   // Zig-zag lattice on the four faces (cheap line segments).
   const pts: number[] = [];
