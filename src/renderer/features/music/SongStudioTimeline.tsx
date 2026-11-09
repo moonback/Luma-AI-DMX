@@ -37,8 +37,8 @@ export function SongStudioTimeline({
     const viewport = lanesRef.current;
     if (!playing || pos === null || !viewport) return;
     const rightEdge = viewport.scrollLeft + viewport.clientWidth;
-    if (playheadPx > rightEdge - 72) viewport.scrollTo({ left: Math.max(0, playheadPx - viewport.clientWidth * 0.72), behavior: 'smooth' });
-    else if (playheadPx < viewport.scrollLeft + 24) viewport.scrollTo({ left: Math.max(0, playheadPx - 24), behavior: 'smooth' });
+    if (playheadPx > rightEdge - 72) viewport.scrollTo({ left: Math.max(0, playheadPx - viewport.clientWidth * 0.72), behavior: 'auto' });
+    else if (playheadPx < viewport.scrollLeft + 24) viewport.scrollTo({ left: Math.max(0, playheadPx - 24), behavior: 'auto' });
   }, [playing, pos, playheadPx]);
 
   // Load waveform from musicPlayer if audio buffer is available
@@ -132,7 +132,7 @@ export function SongStudioTimeline({
   return (
     <div className="song-studio-timeline col" data-testid="song-studio-timeline">
       <div className="studio-selection-toolbar">
-        <span className="studio-selection-label">{a.sections[selected] ? `${t('music.section')} ${selected + 1} · ${SECTION_NAMES[a.sections[selected]!.label]}` : t('music.studio.noSectionSelected')}</span>
+        <span className="studio-selection-label">{a.sections[selected] ? `${t('music.studio.section')} ${selected + 1} · ${SECTION_NAMES[a.sections[selected]!.label]}` : t('music.studio.noSectionSelected')}</span>
         <span className="studio-selection-time mono">{a.sections[selected] ? `${fmt(a.sections[selected]!.start)} – ${fmt(a.sections[selected]!.end)}` : ''}</span>
         <button type="button" className="btn ghost sm" disabled={!a.sections[selected]} onClick={() => onOpenEditor(selected)} data-testid="studio-edit-selected"><Pencil size={12} />{t('music.studio.editSection')}</button>
       </div>
