@@ -24,6 +24,8 @@ export interface DemoRig {
   span?: number;
   /** Fixtures laid out along the depth (runway) instead of across. */
   alongDepth?: boolean;
+  /** Fixture aiming yaw in degrees (e.g. 180 to throw beams back towards the stage). */
+  rotation?: number;
   color: string;
 }
 /** Set piece: a StageProp without id; elevation, rotation and colour are optional (helpers in `./decor`). */
