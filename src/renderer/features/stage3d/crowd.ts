@@ -28,7 +28,7 @@ export function seatedCrowdSpots(stage: StageGeometry): SeatedSpot[] {
   const spacing = 0.82;
   const out: SeatedSpot[] = [];
   for (let row = 0; row < rows; row++) {
-    const z = 9.5 + row * 0.92 - 0.12;
+    const z = 10.5 + row * 0.92 - 0.12;
     const height = 0.35 + row * 0.34;
     for (let x = x0 + 0.35; x <= x1 - 0.2; x += spacing) {
       out.push({ x: x + (rnd() - 0.5) * 0.12, z: z + (rnd() - 0.5) * 0.08, height, scale: 0.82 + rnd() * 0.12, phase: rnd() });
@@ -52,7 +52,7 @@ export function crowdSpots(stage: StageGeometry): CrowdSpot[] {
   const { width: W, depth: D } = stage;
   const area = stage.arena
     ? { x0: -W / 2 - 9, x1: W / 2 + 9, z0: -D - 9, z1: 9 }
-    : { x0: -W / 2 - 8, x1: W / 2 + 8, z0: PIT, z1: HAS_GRANDSTANDS(stage) ? 8.6 : 14 };
+    : { x0: -W / 2 - 8, x1: W / 2 + 8, z0: PIT, z1: HAS_GRANDSTANDS(stage) ? 9.6 : 14 };
   const spacing = Math.max(0.8, Math.sqrt(((area.x1 - area.x0) * (area.z1 - area.z0)) / MAX_PEOPLE));
   const onStage = (x: number, z: number) =>
     (Math.abs(x) < W / 2 + PIT && z > -D - PIT && z < PIT) ||
