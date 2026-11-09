@@ -397,9 +397,13 @@ export const songAnalysisSchema = z.object({
   /** `vocal`: stretch where a voice is detected (presence in 300 Hz–3 kHz + harmonic stability). */
   events: z.array(z.object({
     t: seconds,
-    kind: z.enum(['impact', 'riser', 'silence', 'vocal']),
+    kind: z.enum(['impact', 'riser', 'silence', 'vocal', 'marker']),
     duration: z.number().min(0).max(600),
     confidence: unitSchema.optional(),
+    /** Operator-authored marker metadata; ignored by the DMX compiler. */
+    name: z.string().trim().min(1).max(64).optional(),
+    color: hexColorSchema.optional(),
+    category: z.string().trim().min(1).max(32).optional(),
   })).max(2000),
   /** Detected tempo changes (t in seconds, from/to in BPM). */
   tempoChanges: z.array(tempoChangeSchema).max(100).optional().default([]),
