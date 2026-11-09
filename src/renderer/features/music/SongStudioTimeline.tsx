@@ -151,7 +151,7 @@ export function SongStudioTimeline({
               position: 'absolute',
               top: 0,
               bottom: 0,
-              left: `${Math.min(100, (pos / a.duration) * 100)}%`,
+              left: `${Math.min(minTimelineWidth, (pos / a.duration) * minTimelineWidth)}px`,
               width: 2,
               background: '#22d3ee',
               zIndex: 10,
