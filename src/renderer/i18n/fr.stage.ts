@@ -15,6 +15,7 @@ export const frStage = {
   'select.removeFixturesTitle': 'Supprimer les projecteurs',
   'select.removeFixturesMessage': '{n} projecteur(s) seront retirés du patch, des groupes, scènes et effets.\nCtrl+Z (historique du projet) pour annuler.',
   'build.back': 'Retour aux catégories',
+  'build.tabHome': 'Rechercher',
   'build.collapse': 'Replier le panneau Construire',
   'build.expand': 'Ouvrir le panneau Construire',
   'build.cat.point': 'Machine',

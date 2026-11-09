@@ -43,7 +43,6 @@ const nav3d = async () => { await nav('visualizer'); await page.getByTestId('sta
 /** Opens the scene panel unless it already is (it stays open while the page does not change). */
 const openScenePanel = async () => {
   if (!(await page.getByTestId('stage-settings').isVisible())) await page.getByTestId('stage-settings-toggle').click();
-  if (await page.getByTestId('build-back').isVisible()) await page.getByTestId('build-back').click();
 };
 /** Opens a Construire category (point, structure, decor, performer, screen) in the left panel. */
 const openCategory = async (cat: string) => { await openScenePanel(); await page.getByTestId(`build-cat-${cat}`).click(); };

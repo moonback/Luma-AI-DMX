@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, ArrowLeft, Boxes, Cable, Guitar, Speaker, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, Music2, PanelLeftClose, Presentation, Radio, Redo2, Shapes, Sparkles, Theater, Undo2, Unplug, UserRound, Wand2 } from 'lucide-react';
+import { Armchair, Boxes, Cable, Guitar, Speaker, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, Music2, PanelLeftClose, Presentation, Radio, Redo2, Search, Shapes, Sparkles, Theater, Undo2, Unplug, UserRound, Wand2 } from 'lucide-react';
 import type { EquipDistributionMode } from '../../../core/visualizer/sceneEdit';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
@@ -104,11 +104,10 @@ function TemplatePicker({ vis }: { vis: Vis }) {
 /** Left column of the Stage page: title card, the Construire categories (always listed) and the catalogue of the active one. */
 export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) {
   const tr = useT();
-  const [cat, setCat] = useState<BuildCat | null>(null);
-  const [catsOpen, setCatsOpen] = useState(true);
+  const [tab, setTab] = useState<'home' | BuildCat>('home');
   const [stageOpen, setStageOpen] = useState(false);
   const [stageTab, setStageTab] = useState<'dimensions' | 'templates'>('dimensions');
-  const current = CATS.find((c) => c.id === cat);
+  const current = tab === 'home' ? null : (CATS.find((c) => c.id === tab) ?? null);
   return (
     <aside className="stage-side build-side" aria-label={tr('build.title')}>
       <div className="stage-card stage-title-card">
@@ -183,44 +182,44 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
           </div>
         </div>
         <EquipButton vis={vis} />
-        <button className="stage-card-head" aria-expanded={catsOpen} onClick={() => setCatsOpen(!catsOpen)}>
-          <Shapes size={15} className="stage-accent" /><h2 className="grow">{tr('build.title')}</h2><ChevronUp size={15} className={catsOpen ? '' : 'flip'} />
-        </button>
-        <div className="stage-card-body">
-          {catsOpen && (
-            <div style={current ? { display: 'none' } : undefined}>
-            <LibraryHome>
-            <nav
-              className="build-cats"
-              aria-label={tr('build.categories')}
-              style={current ? { display: 'none' } : undefined}
+        <div className="build-tabs-head">
+          <Shapes size={14} className="stage-accent" />
+          <span className="build-tabs-title">{tr('build.title')}</span>
+        </div>
+        <nav className="build-tabs" role="tablist" aria-label={tr('build.categories')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'home'}
+            className={`build-tab ${tab === 'home' ? 'on' : ''}`}
+            onClick={() => setTab('home')}
+            data-testid="build-cat-home"
+            title={tr('equip.searchAria')}
+          >
+            <span className="build-tab-icon"><Search size={18} /></span>
+            <span className="build-tab-label">{tr('build.tabHome')}</span>
+          </button>
+          {CATS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === c.id}
+              className={`build-tab ${tab === c.id ? 'on' : ''}`}
+              onClick={() => setTab(c.id)}
+              data-testid={`build-cat-${c.id}`}
+              title={tr(`build.cat.${c.id}.desc` as MessageKey)}
             >
-              {CATS.map((c) => (
-                <button
-                  key={c.id}
-                  className={`build-cat ${cat === c.id ? 'on' : ''}`}
-                  aria-pressed={cat === c.id}
-                  onClick={() => setCat(c.id)}
-                  data-testid={`build-cat-${c.id}`}
-                >
-                  <span className="build-cat-icon">{c.icon}</span>
-                  <span className="build-cat-text">
-                    <b>{tr(`build.cat.${c.id}` as MessageKey)}</b>
-                    <span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span>
-                  </span>
-                </button>
-              ))}
-            </nav>
-            </LibraryHome>
-            </div>
-          )}
-          {current && (
-            <Catalogue
-              key={current.id}
-              cat={current}
-              vis={vis}
-              onBack={() => setCat(null)}
-            />
+              <span className="build-tab-icon">{c.icon}</span>
+              <span className="build-tab-label">{tr(`build.cat.${c.id}` as MessageKey)}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="stage-card-body">
+          {current ? (
+            <Catalogue key={current.id} cat={current} vis={vis} />
+          ) : (
+            <div className="build-home-wrap"><LibraryHome /></div>
           )}
         </div>
       </div>
@@ -437,16 +436,12 @@ function StageDimensionsBar({ vis, open, onToggle }: { vis: Vis; open: boolean; 
 }
 
 /** Catalogue of the active category: search, (type filter), tiles, then what of that kind is already on stage. */
-function Catalogue({ cat, vis, onBack }: { cat: (typeof CATS)[number]; vis: Vis; onBack: () => void }) {
+function Catalogue({ cat, vis }: { cat: (typeof CATS)[number]; vis: Vis }) {
   const tr = useT();
   const [query, setQuery] = useState('');
   const title = tr(`build.cat.${cat.id}` as MessageKey);
   return (
     <section className="build-catalogue" data-testid={`catalogue-${cat.id}`} aria-label={tr('build.active')}>
-      <button className="stage-back-btn" type="button" onClick={onBack} data-testid="build-back" title={tr('build.back')}>
-        <ArrowLeft size={16} />
-        <span>{tr('build.back')}</span>
-      </button>
       <div className="build-active-head">
         <span className="build-active-icon">{cat.icon}</span>
         <span className="build-cat-text"><b>{title}</b><span>{tr('build.activeSub', { cat: title.toLowerCase() })}</span></span>
