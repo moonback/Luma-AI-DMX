@@ -26,6 +26,7 @@ import type { TestPatternKind } from '../core/engine/testPattern';
 import type { OpenRouterModel } from '../core/ai/providers/openrouter';
 import type { PhotoScene } from '../core/ai/sceneFromPhoto';
 import type { PhotoProfile } from '../core/ai/profileFromPhoto';
+import type { FixtureRecognitionResult } from '../core/ai/fixtureRecognition';
 import type { StorageReport } from '../core/app/storage';
 import type { LicenseStatus } from '../core/license/license';
 import type { AiUsageDay } from '../core/ai/usage';
@@ -55,6 +56,13 @@ const fixturePatchSchema = z.object({
   mountTilt: z.number().min(-90).max(90).optional(),
   /** null detaches the fixture from its truss. */
   trussId: idSchema.nullable().optional(),
+  visualRecognition: z.object({
+    label: z.string().trim().min(1).max(80),
+    description: z.string().max(500),
+    observedType: z.enum(['par', 'moving-head-spot', 'moving-head-wash', 'strobe', 'dimmer', 'led-bar', 'other']),
+    confidence: z.number().min(0).max(1),
+    verifiedAt: z.string().datetime(),
+  }).optional(),
 });
 
 export const commandSchema = z.discriminatedUnion('type', [
@@ -271,8 +279,12 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ai.listModels'), refresh: z.boolean().default(false) }),
   /** Photo of a real stage (downscaled JPEG/PNG data URL) → trusses, set pieces and screens, for review before applying. */
   z.object({ type: z.literal('ai.sceneFromPhoto'), image: photoSchema }),
+  /** Two to six views of the same venue → one deduplicated stage layout, reviewed before applying. */
+  z.object({ type: z.literal('ai.sceneFromPhotos'), images: z.array(photoSchema).min(2).max(6) }),
   /** Photos of a manual's DMX chart (consecutive pages) → fixture profile, for review before `profile.save`. */
   z.object({ type: z.literal('ai.profileFromPhoto'), images: z.array(photoSchema).min(1).max(4) }),
+  /** Venue photos → visual fixture detections and suggested links to existing patch fixtures; operator confirmation required. */
+  z.object({ type: z.literal('ai.recognizeFixtures'), images: z.array(photoSchema).min(1).max(6) }),
   z.object({ type: z.literal('ai.setKey'), key: z.string().trim().min(10).max(500).nullable() }),
   /** Gemini API key of the voice assistant (encrypted in the OS keychain, never sent to the renderer). */
   z.object({ type: z.literal('ai.voiceKey'), key: z.string().trim().min(10).max(500).nullable() }),
@@ -510,7 +522,9 @@ export interface CommandResults {
   'ai.voiceKey': Void;
   'ai.voiceToken': { token: string; model: string };
   'ai.sceneFromPhoto': PhotoScene & { model: string; notices: string[] };
+  'ai.sceneFromPhotos': PhotoScene & { model: string; notices: string[]; imageCount: number };
   'ai.profileFromPhoto': PhotoProfile & { model: string; notices: string[] };
+  'ai.recognizeFixtures': FixtureRecognitionResult & { model: string; notices: string[] };
   'audio.features': Void;
   'audio.config': Void;
   'audio.armDrop': Void;

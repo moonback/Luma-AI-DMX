@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Armchair, ArrowLeft, Boxes, Cable, Guitar, Speaker, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, Music2, PanelLeftClose, Presentation, Radio, Redo2, Shapes, Sparkles, Theater, Undo2, Unplug, UserRound, Wand2 } from 'lucide-react';
+import { Armchair, Boxes, Cable, Guitar, Speaker, Camera, ChevronUp, Crosshair, Layers, LayoutTemplate, Lightbulb, MapPin, Monitor, Music2, PanelLeftClose, Presentation, Radio, Redo2, Search, Shapes, Sparkles, Theater, Undo2, Unplug, UserRound, Wand2 } from 'lucide-react';
 import type { EquipDistributionMode } from '../../../core/visualizer/sceneEdit';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
-import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
+import { PHOTO_MAX_PX, sceneFromPhoto, sceneFromPhotos } from '../../sceneActions';
 import { t, useT, type MessageKey } from '../../i18n';
 import { useResolved } from '../../components/ui';
 import { buildVisualModel } from '../../../core/visualizer/model';
 import { setScreenVideo } from '../../screenMedia';
 import { LIBRARY, type LibraryGroup, type LibraryItem } from '../../../core/visualizer/library';
 import { LibraryHome, LibraryTiles, fold } from './libraryTiles';
-import { SceneAssistant } from './SceneAssistant';
 import { SCENE_LABEL, canAdd, type SceneKind } from '../../../core/visualizer/sceneEdit';
 import { EQUIPMENT } from '../../../core/visualizer/equipment';
-import { LIBRARY_MIME, addSceneElement, equipRig, unhangRig } from '../../sceneActions';
+import { LIBRARY_MIME, addSceneElement, equipRig, intelligentlyPlaceFixtures, unhangRig } from '../../sceneActions';
 export { LibraryGlyph, fold } from './libraryTiles';
 import { SCENE_TEMPLATES, hasSceneContent, sceneTemplate, type SceneTemplateId } from '../../../core/visualizer/templates';
 import { channelCount } from '../../../core/fixtures/profiles';
@@ -105,11 +104,10 @@ function TemplatePicker({ vis }: { vis: Vis }) {
 /** Left column of the Stage page: title card, the Construire categories (always listed) and the catalogue of the active one. */
 export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) {
   const tr = useT();
-  const [cat, setCat] = useState<BuildCat | null>(null);
-  const [catsOpen, setCatsOpen] = useState(true);
+  const [tab, setTab] = useState<'home' | BuildCat>('home');
   const [stageOpen, setStageOpen] = useState(false);
   const [stageTab, setStageTab] = useState<'dimensions' | 'templates'>('dimensions');
-  const current = CATS.find((c) => c.id === cat);
+  const current = tab === 'home' ? null : (CATS.find((c) => c.id === tab) ?? null);
   return (
     <aside className="stage-side build-side" aria-label={tr('build.title')}>
       <div className="stage-card stage-title-card">
@@ -124,10 +122,6 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
         </div>
       </div>
       <div className="stage-card build-card" data-testid="stage-settings">
-        <button className="stage-card-head" aria-expanded={catsOpen} onClick={() => setCatsOpen(!catsOpen)}>
-          <Shapes size={15} className="stage-accent" /><h2 className="grow">{tr('build.title')}</h2><ChevronUp size={15} className={catsOpen ? '' : 'flip'} />
-        </button>
-        <EquipButton vis={vis} />
         <StageDimensionsBar vis={vis} open={stageOpen} onToggle={() => setStageOpen(!stageOpen)} />
         <div
           className="build-stage-expanded"
@@ -170,44 +164,62 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
                 if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
               }} />
             </label>
+            <label className="btn sm build-photo-btn" title="Fusionner plusieurs vues de la même installation pour reconstruire une scène 3D cohérente" data-testid="scene-from-photos">
+              <Layers size={13} />
+              <span>Reconstruire multi-vues</span>
+              <input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(e) => {
+                const files = [...(e.target.files ?? [])].slice(0, 6);
+                e.target.value = '';
+                if (files.length < 2) {
+                  useStore.getState().toast({ kind: 'warn', title: 'Deux photos minimum', detail: 'Sélectionnez au moins deux vues de la même installation.' });
+                  return;
+                }
+                Promise.all(files.map((file) => shrinkImage(file, PHOTO_MAX_PX)))
+                  .then((images) => sceneFromPhotos(vis, images))
+                  .catch((err: Error) => useStore.getState().toast({ kind: 'error', title: 'Photos illisibles', detail: err.message }));
+              }} />
+            </label>
           </div>
         </div>
-        <div className="stage-card-body">
-          {catsOpen && !current && <SceneAssistant />}
-          {catsOpen && (
-            <div style={current ? { display: 'none' } : undefined}>
-            <LibraryHome>
-            <nav
-              className="build-cats"
-              aria-label={tr('build.categories')}
-              style={current ? { display: 'none' } : undefined}
+        <EquipButton vis={vis} />
+        <div className="build-tabs-head">
+          <Shapes size={14} className="stage-accent" />
+          <span className="build-tabs-title">{tr('build.title')}</span>
+        </div>
+        <nav className="build-tabs" role="tablist" aria-label={tr('build.categories')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'home'}
+            className={`build-tab ${tab === 'home' ? 'on' : ''}`}
+            onClick={() => setTab('home')}
+            data-testid="build-cat-home"
+            title={tr('equip.searchAria')}
+          >
+            <span className="build-tab-icon"><Search size={18} /></span>
+            <span className="build-tab-label">{tr('build.tabHome')}</span>
+          </button>
+          {CATS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === c.id}
+              className={`build-tab ${tab === c.id ? 'on' : ''}`}
+              onClick={() => setTab(c.id)}
+              data-testid={`build-cat-${c.id}`}
+              title={tr(`build.cat.${c.id}.desc` as MessageKey)}
             >
-              {CATS.map((c) => (
-                <button
-                  key={c.id}
-                  className={`build-cat ${cat === c.id ? 'on' : ''}`}
-                  aria-pressed={cat === c.id}
-                  onClick={() => setCat(c.id)}
-                  data-testid={`build-cat-${c.id}`}
-                >
-                  <span className="build-cat-icon">{c.icon}</span>
-                  <span className="build-cat-text">
-                    <b>{tr(`build.cat.${c.id}` as MessageKey)}</b>
-                    <span>{tr(`build.cat.${c.id}.desc` as MessageKey)}</span>
-                  </span>
-                </button>
-              ))}
-            </nav>
-            </LibraryHome>
-            </div>
-          )}
-          {current && (
-            <Catalogue
-              key={current.id}
-              cat={current}
-              vis={vis}
-              onBack={() => setCat(null)}
-            />
+              <span className="build-tab-icon">{c.icon}</span>
+              <span className="build-tab-label">{tr(`build.cat.${c.id}` as MessageKey)}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="stage-card-body">
+          {current ? (
+            <Catalogue key={current.id} cat={current} vis={vis} />
+          ) : (
+            <div className="build-home-wrap"><LibraryHome /></div>
           )}
         </div>
       </div>
@@ -224,6 +236,7 @@ function EquipButton({ vis }: { vis: Vis }) {
   const selection = useStore((s) => s.selection);
   const sceneSel = useStore((s) => s.sceneSel);
   const selectedTruss = sceneSel?.kind === 'truss' ? vis.trusses.find((t) => t.id === sceneSel.id) : null;
+  const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<EquipDistributionMode>('standard');
   const [autoRotate, setAutoRotate] = useState(true);
   const [margin, setMargin] = useState(0);
@@ -247,8 +260,42 @@ function EquipButton({ vis }: { vis: Vis }) {
   }
 
   return (
-    <div className="build-equip-bar">
-      <div className="build-equip-row">
+    <div className={`build-equip-bar ${open ? 'on' : ''}`} data-testid="build-equip-bar">
+      <div className="build-equip-head">
+        <button
+          type="button"
+          className="build-equip-head-btn"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          data-testid="equip-toggle"
+          title={open ? 'Replier les réglages d’équipement' : 'Déplier les réglages d’équipement'}
+        >
+          <span className="build-equip-head-icon"><Wand2 size={13} /></span>
+          <span className="build-equip-head-text">
+            <b>{selectedTruss ? `Équiper « ${selectedTruss.name} »` : 'Équiper les structures'}</b>
+            <span>{hungCount > 0 ? `${hungCount} projecteur(s) accroché(s)` : 'Répartir les projecteurs sur les ponts'}</span>
+          </span>
+          <ChevronUp size={15} className={`build-equip-chevron ${open ? '' : 'flip'}`} />
+        </button>
+        {hungCount > 0 && (
+          <button
+            type="button"
+            className="build-equip-unhang"
+            onClick={() => unhangRig(targetTrussId)}
+            data-testid="unhang"
+            title={
+              selectedTruss
+                ? `Décrocher les ${hungCount} projecteur(s) de « ${selectedTruss.name} » (Ctrl+Z pour annuler)`
+                : `Décrocher tous les projecteurs des structures (${hungCount}) (Ctrl+Z pour annuler)`
+            }
+          >
+            <Unplug size={13} />
+            <span>Décrocher</span>
+          </button>
+        )}
+      </div>
+      <div className="build-equip-body" style={open ? undefined : { display: 'none' }}>
+      <div className="build-equip-actions">
         <button
           type="button"
           className="btn sm primary build-equip-btn"
@@ -263,62 +310,63 @@ function EquipButton({ vis }: { vis: Vis }) {
           <Wand2 size={13} />
           <span>{equipLabel}</span>
         </button>
-        {hungCount > 0 && (
-          <button
-            type="button"
-            className="btn sm ghost icon build-unhang-btn"
-            onClick={() => unhangRig(targetTrussId)}
-            data-testid="unhang"
-            title={
-              selectedTruss
-                ? `Décrocher les ${hungCount} projecteur(s) de « ${selectedTruss.name} » (Ctrl+Z pour annuler)`
-                : `Décrocher tous les projecteurs des structures (${hungCount}) (Ctrl+Z pour annuler)`
-            }
-          >
-            <Unplug size={14} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="btn sm build-equip-btn"
+          onClick={() => void intelligentlyPlaceFixtures()}
+          data-testid="equip-intelligent"
+          title="Associer les projecteurs non affectés aux ponts selon les supports reconnus et leur proximité géométrique. Une confirmation est demandée."
+        >
+          <Sparkles size={13} />
+          <span>Affectation intelligente</span>
+        </button>
       </div>
       {showModeToggle && (
-        <div className="build-equip-modes" role="group" aria-label={tr('equip.distrib')}>
-          {DISTRIB_MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`build-equip-mode-btn ${mode === m ? 'on' : ''}`}
-              onClick={() => setMode(m)}
-              title={tr(`equip.distrib.${m}.title`)}
-              aria-pressed={mode === m}
-              data-testid={`equip-mode-${m}`}
-            >
-              {tr(`equip.distrib.${m}`)}
-            </button>
-          ))}
+        <div className="build-equip-field">
+          <span className="build-equip-field-label">{tr('equip.distrib')}</span>
+          <div className="build-equip-modes" role="group" aria-label={tr('equip.distrib')}>
+            {DISTRIB_MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`build-equip-mode-btn ${mode === m ? 'on' : ''}`}
+                onClick={() => setMode(m)}
+                title={tr(`equip.distrib.${m}.title`)}
+                aria-pressed={mode === m}
+                data-testid={`equip-mode-${m}`}
+              >
+                {tr(`equip.distrib.${m}`)}
+              </button>
+            ))}
+          </div>
         </div>
       )}
-      <label className="build-equip-autorotate" title={tr('equip.autoRotateTitle')}>
-        <input
-          type="checkbox"
-          checked={autoRotate}
-          onChange={(e) => setAutoRotate(e.target.checked)}
-          data-testid="equip-autorotate"
-        />
-        <span>{tr('equip.autoRotate')}</span>
-      </label>
-      <div className="build-equip-margin-row" title={tr('equip.marginTitle')}>
-        <span className="build-equip-margin-label">{tr('equip.margin')}</span>
-        <input
-          type="range"
-          min={0}
-          max={1.5}
-          step={0.1}
-          value={margin}
-          onChange={(e) => setMargin(parseFloat(e.target.value))}
-          className="build-equip-margin-slider"
-          aria-label={tr('equip.marginAria')}
-          data-testid="equip-margin"
-        />
-        <span className="build-equip-margin-val">{margin === 0 ? 'Aucune' : `${margin.toFixed(1)} m`}</span>
+      <div className="build-equip-options">
+        <label className="build-equip-autorotate" title={tr('equip.autoRotateTitle')}>
+          <input
+            type="checkbox"
+            checked={autoRotate}
+            onChange={(e) => setAutoRotate(e.target.checked)}
+            data-testid="equip-autorotate"
+          />
+          <span>{tr('equip.autoRotate')}</span>
+        </label>
+        <div className="build-equip-margin-row" title={tr('equip.marginTitle')}>
+          <span className="build-equip-margin-label">{tr('equip.margin')}</span>
+          <input
+            type="range"
+            min={0}
+            max={1.5}
+            step={0.1}
+            value={margin}
+            onChange={(e) => setMargin(parseFloat(e.target.value))}
+            className="build-equip-margin-slider"
+            aria-label={tr('equip.marginAria')}
+            data-testid="equip-margin"
+          />
+          <span className="build-equip-margin-val">{margin === 0 ? 'Aucune' : `${margin.toFixed(1)} m`}</span>
+        </div>
+      </div>
       </div>
     </div>
   );
@@ -388,16 +436,12 @@ function StageDimensionsBar({ vis, open, onToggle }: { vis: Vis; open: boolean; 
 }
 
 /** Catalogue of the active category: search, (type filter), tiles, then what of that kind is already on stage. */
-function Catalogue({ cat, vis, onBack }: { cat: (typeof CATS)[number]; vis: Vis; onBack: () => void }) {
+function Catalogue({ cat, vis }: { cat: (typeof CATS)[number]; vis: Vis }) {
   const tr = useT();
   const [query, setQuery] = useState('');
   const title = tr(`build.cat.${cat.id}` as MessageKey);
   return (
     <section className="build-catalogue" data-testid={`catalogue-${cat.id}`} aria-label={tr('build.active')}>
-      <button className="stage-back-btn" type="button" onClick={onBack} data-testid="build-back" title={tr('build.back')}>
-        <ArrowLeft size={16} />
-        <span>{tr('build.back')}</span>
-      </button>
       <div className="build-active-head">
         <span className="build-active-icon">{cat.icon}</span>
         <span className="build-cat-text"><b>{title}</b><span>{tr('build.activeSub', { cat: title.toLowerCase() })}</span></span>

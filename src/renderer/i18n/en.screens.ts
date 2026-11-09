@@ -134,8 +134,6 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'stagePanel.tabs': 'Panel',
   'stagePanel.build': 'Build',
   'stagePanel.selection': 'Selection',
-  'stagePanel.wizard': 'Stage wizard',
-  'stagePanel.wizardHint': 'Wizard: deck, template, patch and equipment step by step',
   'stagePanel.close': 'Collapse the panel (the view takes all the room)',
   'stagePanel.rail': 'Open the stage panel',
   'music.strip.title': '{label} · {from}–{to} · energy {energy} % — click: edit',

@@ -128,7 +128,7 @@ const resolve = (id: string): ReactNode => {
 };
 
 /** Whole-library search (instant, accent-insensitive, tags included) with favourites and recent items when empty. */
-export function LibraryHome({ children }: { children: ReactNode }) {
+export function LibraryHome({ children }: { children?: ReactNode }) {
   const tr = useT();
   const [query, setQuery] = useState('');
   const { fav, recent } = useLibraryPrefs();

@@ -60,20 +60,26 @@ const project = () => svc.getProject();
 const click = async (id: string) => rtlAct(async () => { fireEvent.click(screen.getByTestId(id)); });
 
 describe('Construire', () => {
-  it('présente exactement les huit catégories, chacune ouvre son catalogue et revient à la liste', async () => {
+  it('présente un onglet de recherche puis les huit catégories, chacune ouvre son catalogue', async () => {
     render(<Visualizer />);
-    const cats = within(screen.getByRole('navigation', { name: 'Catégories' })).getAllByRole('button');
+    const tabs = within(screen.getByRole('tablist', { name: 'Catégories' })).getAllByRole('tab');
     const ids = ['point', 'structure', 'sound', 'backline', 'decor', 'performer', 'screen', 'accessory'];
-    expect(cats.map((b) => b.dataset.testid)).toEqual(ids.map((id) => `build-cat-${id}`));
+    expect(tabs.map((b) => b.dataset.testid)).toEqual(['build-cat-home', ...ids.map((id) => `build-cat-${id}`)]);
+    // Home tab is selected by default and shows the whole-library search.
+    expect(screen.getByTestId('build-cat-home').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('lib-search-all')).toBeTruthy();
     for (const id of ids) {
       await click(`build-cat-${id}`);
       expect(screen.getByTestId(`catalogue-${id}`)).toBeTruthy();
-      expect(screen.getByTestId(`build-cat-${id}`).getAttribute('aria-pressed')).toBe('true');
-      expect(cats.filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
-      await click('build-back');
-      expect(screen.queryByTestId(`catalogue-${id}`)).toBeNull();
-      expect(screen.getByTestId('shape-rect')).toBeTruthy();
+      expect(screen.getByTestId(`build-cat-${id}`).getAttribute('aria-selected')).toBe('true');
+      expect(tabs.filter((b) => b.getAttribute('aria-selected') === 'true')).toHaveLength(1);
+      // Switching category replaces the catalogue (no back button).
+      expect(screen.queryByTestId('lib-search-all')).toBeNull();
     }
+    // The search tab returns to the whole-library search.
+    await click('build-cat-home');
+    expect(screen.getByTestId('lib-search-all')).toBeTruthy();
+    expect(screen.queryByTestId('catalogue-accessory')).toBeNull();
   });
 
   it('le catalogue Point liste les profils réels de la bibliothèque et la recherche filtre', async () => {

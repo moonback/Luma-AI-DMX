@@ -7,8 +7,9 @@ import { pruneTransientEffects } from '../../ai/transient';
 import { ProjectIndex } from '../../engine/resolve';
 import type { Project } from '../../model/schemas';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
-import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
+import { sceneFromPhotoWithOpenRouter, sceneFromPhotosWithOpenRouter } from '../../ai/sceneFromPhoto';
 import { profileFromPhotoWithOpenRouter } from '../../ai/profileFromPhoto';
+import { recognizeFixturesFromPhotos, type RecognitionCandidate } from '../../ai/fixtureRecognition';
 import { GEMINI_KEY, OPENROUTER_KEY, UserError } from '../shared';
 import { voiceToken } from './aiVoice';
 import { createHash, randomUUID } from 'node:crypto';
@@ -64,7 +65,9 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       if (cmd.refresh) app.modelCache = null;
       return openRouterModels(app);
     case 'ai.sceneFromPhoto': return sceneFromPhoto(app, cmd.image);
+    case 'ai.sceneFromPhotos': return sceneFromPhotos(app, cmd.images);
     case 'ai.profileFromPhoto': return profileFromPhoto(app, cmd.images);
+    case 'ai.recognizeFixtures': return recognizeFixtures(app, cmd.images);
     case 'ai.setKey':
       app.opts.secrets.set(OPENROUTER_KEY, cmd.key);
       app.logger.info('IA', cmd.key ? 'Clé API enregistrée (stockage chiffré du système)' : 'Clé API supprimée');
@@ -300,11 +303,35 @@ async function sceneFromPhoto(app: AppService, image: string) {
   return r;
 }
 
+/** Multi-view venue reconstruction → one deduplicated stage layout; still requires operator confirmation in the renderer. */
+async function sceneFromPhotos(app: AppService, images: string[]) {
+  const r = await withVision(app, (opts) => sceneFromPhotosWithOpenRouter(images, opts, randomUUID));
+  app.logger.info('IA', `Scène multi-vues : ${images.length} photos, ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
+  return r;
+}
+
 /** Photo(s) of a manual's DMX chart → fixture profile; nothing is saved here, the renderer shows it for review first. */
 async function profileFromPhoto(app: AppService, images: string[]) {
   const r = await withVision(app, (opts) => profileFromPhotoWithOpenRouter(images, opts));
   if (!r.profile) throw new UserError(`Aucun tableau de canaux DMX lu sur la photo : ${r.summary}`, 'ai.photoNoDmxChannels', { summary: r.summary });
   app.logger.info('IA', `Profil depuis photo : ${r.profile.manufacturer} ${r.profile.name}, ${r.profile.modes.length} mode(s)`);
+  return r;
+}
+
+/** Venue photo(s) → visual fixture inventory. Suggestions are returned for operator review; the patch is never changed here. */
+async function recognizeFixtures(app: AppService, images: string[]) {
+  const candidates: RecognitionCandidate[] = [...app.index.fixtures.values()].map((rf) => ({
+    fixtureId: rf.fixture.id,
+    name: rf.fixture.name,
+    manufacturer: rf.profile.manufacturer,
+    model: rf.profile.name,
+    type: rf.profile.type,
+    universe: rf.fixture.universe,
+    address: rf.fixture.address,
+    ...(rf.profile.physical.dimensions ? { dimensions: rf.profile.physical.dimensions } : {}),
+  }));
+  const r = await withVision(app, (opts) => recognizeFixturesFromPhotos(images, candidates, opts));
+  app.logger.info('IA', `Reconnaissance visuelle : ${r.observations.length} appareil(s) détecté(s), ${r.observations.filter((o) => o.suggestedFixtureId).length} correspondance(s) proposée(s) sur ${images.length} photo(s)`);
   return r;
 }
 

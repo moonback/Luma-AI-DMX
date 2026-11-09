@@ -6,6 +6,7 @@ import { useStore } from '../../src/renderer/store';
 import { commandSchema, type Command, type CommandInput } from '../../src/shared/commands';
 import type { AppService } from '../../src/core/app/AppService';
 import { makeService } from '../helpers';
+import { addEquipmentFromText } from '../../src/renderer/sceneActions';
 
 /** Equipment library of the Stage page against a real headless AppService (same validated commands as the app). */
 let svc: AppService;
@@ -110,18 +111,18 @@ describe('bibliothèque d’équipements', () => {
     expect(vis().props[0]!.params).toBeUndefined();
   });
 
-  it('assistant : aperçu des ajouts et des ambiguïtés, rien sans confirmation, puis une étape annulable', async () => {
+  it('ajout par description (addEquipmentFromText) : aperçu des ajouts et des ambiguïtés, rien sans confirmation, puis une étape annulable', async () => {
     render(<Visualizer />);
     const text = 'Ajoute deux line arrays de chaque côté de la scène, une batterie au centre arrière, deux amplificateurs de guitare, une harpe et un grand écran LED derrière les musiciens.';
-    fireEvent.change(screen.getByTestId('scene-assistant-text'), { target: { value: text } });
-    fireEvent.click(screen.getByTestId('scene-assistant-run'));
+    // addEquipmentFromText is the equipment-add path the former Stage assistant triggered; it stays reachable via describeScene from the Dashboard.
+    void addEquipmentFromText(text);
     const refused = await answer(false);
     expect(refused.message).toMatch(/2 × Line array 8 modules \(jardin et cour, suspendu/u);
     expect(refused.message).toMatch(/Batterie \(fond de scène\)/u);
     expect(refused.message).toMatch(/Indisponible.*harpe/u);
     expect(sent.filter((c) => c.type === 'project.update')).toHaveLength(0);
 
-    fireEvent.click(screen.getByTestId('scene-assistant-run'));
+    void addEquipmentFromText(text);
     await answer(true);
     await waitFor(() => expect(vis().props.length).toBe(5));
     expect(vis().screens).toHaveLength(1);

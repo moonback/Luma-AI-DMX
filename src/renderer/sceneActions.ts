@@ -6,6 +6,7 @@ import { confirmAction, useStore } from './store';
 import { setScreenVideo } from './screenMedia';
 import type { VisualFixture } from '../core/visualizer/model';
 import { hangHeight, nearestOnTruss, snapToTrusses, snapTrussEnds, type P2 } from '../core/visualizer/truss';
+import { proposeIntelligentPlacements } from '../core/visualizer/intelligentPlacement';
 import { MAX_UNIVERSES, type Fixture, type Project, type StageProp, type Truss } from '../core/model/schemas';
 import { assembly as assemblyOf, buildAssembly, withAssembly, type AssemblyId } from '../core/visualizer/assemblies';
 import { ProfileLibrary, channelCount } from '../core/fixtures/profiles';
@@ -178,6 +179,36 @@ export function equipRig(model: readonly VisualFixture[], targetTrussId?: string
 }
 
 /**
+ * Suggests and applies conservative fixture-to-truss assignments from reviewed support labels and current geometry.
+ * One confirmation and one undoable fixture.place command; existing links and floor/wall fixtures are preserved.
+ */
+export async function intelligentlyPlaceFixtures(): Promise<void> {
+  const v = vis();
+  const fixtures = useStore.getState().project?.project.patch ?? [];
+  if (!v?.trusses.length || !fixtures.length) return;
+  const result = proposeIntelligentPlacements(fixtures, v.trusses);
+  if (!result.placements.length) {
+    toast('Aucune affectation fiable', `${result.skipped.filter((item) => item.reason === 'already-linked').length} déjà liés · ${result.skipped.filter((item) => item.reason === 'floor-or-wall').length} au sol/mur · ${result.skipped.filter((item) => item.reason === 'ambiguous').length} ambigus · ${result.skipped.filter((item) => item.reason === 'no-match').length} sans structure proche.`);
+    return;
+  }
+  const lines = [
+    `${result.placements.length} projecteur(s) peuvent être associés à un pont.`,
+    '',
+    ...result.placements.slice(0, 14).map((p) => `• ${fixtures.find((f) => f.id === p.id)?.name ?? p.id} → ${p.trussName} (${p.reason === 'support-name' ? 'indice visuel' : 'proximité'} · ${Math.round(p.confidence * 100)} %)`),
+    ...(result.placements.length > 14 ? [`… et ${result.placements.length - 14} autre(s).`] : []),
+    '',
+    `${result.skipped.length} projecteur(s) seront laissés inchangés (déjà liés, au sol/mur, ambigus ou trop éloignés).`,
+    'Les positions proposées sont géométriques et indicatives. Vérifiez chaque accroche réelle : cette fonction ne calcule ni charges, ni efforts, ni sécurité de rigging.',
+  ];
+  if (!(await confirmAction({ title: 'Affectation intelligente aux ponts', message: lines.join('\n'), confirmLabel: `Affecter ${result.placements.length} projecteur(s)` }))) return;
+  const applied = await call({
+    type: 'fixture.place',
+    placements: result.placements.map((p) => ({ id: p.id, position: p.position, height: p.height, trussId: p.trussId })),
+  }).catch(() => null);
+  if (applied !== null) toast(`${result.placements.length} projecteur(s) positionné(s)`, 'Affectation enregistrée en une étape. Ctrl+Z pour annuler.');
+}
+
+/**
  * Detaches fixtures from trusses (all trusses or targetTrussId); one undoable step.
  */
 export function unhangRig(targetTrussId?: string): void {
@@ -260,6 +291,37 @@ export async function sceneFromPhoto(v: Project['visualizer'], image: string): P
   for (const sc of v.screens) setScreenVideo(sc.id, null);
   const ok = await act({ type: 'project.update', visualizer: { stageWidth: r.stageWidth, stageDepth: r.stageDepth, trusses: r.trusses, props: r.props, screens: r.screens } });
   if (ok) toast(t('photo.done'), [found, ...r.notices].join(' · '));
+}
+
+
+/** Multi-view photos → one shared stage reconstruction, deduplicated by the vision model and reviewed before applying. */
+export async function sceneFromPhotos(v: Project['visualizer'], images: string[]): Promise<void> {
+  if (images.length < 2 || images.length > 6) {
+    toast('Nombre de photos invalide', 'Sélectionnez entre 2 et 6 vues de la même installation.', 'error');
+    return;
+  }
+  toast('Analyse multi-vues en cours', `Fusion de ${images.length} photos pour reconstruire une seule scène 3D…`);
+  const r = await call({ type: 'ai.sceneFromPhotos', images }).catch(() => null);
+  if (!r) return;
+  const found = `${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`;
+  if (!r.trusses.length && !r.props.length && !r.screens.length) {
+    toast('Aucun élément reconnu', r.summary, 'error');
+    return;
+  }
+  const linkedFixtures = useStore.getState().project?.project.patch.filter((fixture) => !!fixture.trussId).length ?? 0;
+  const lines = [
+    r.summary,
+    '',
+    `Analyse de ${r.imageCount} vues · ${found}`,
+    'Les dimensions et coordonnées sont des estimations visuelles, pas des mesures.',
+    ...(r.dropped ? [`${r.dropped} élément(s) écarté(s) car invalides.`] : []),
+    ...(v.trusses.length || v.props.length || v.screens.length ? ['', 'La validation remplacera les structures, décors et écrans actuellement présents.'] : []),
+    ...(linkedFixtures ? [`Attention : ${linkedFixtures} projecteur(s) sont actuellement accrochés à un pont existant. Vérifiez leurs associations après remplacement du plan.`] : []),
+  ];
+  if (!(await confirmAction({ title: 'Valider la reconstruction multi-vues', message: lines.join('\n'), confirmLabel: 'Appliquer la scène' }))) return;
+  for (const sc of v.screens) setScreenVideo(sc.id, null);
+  const ok = await act({ type: 'project.update', visualizer: { stageWidth: r.stageWidth, stageDepth: r.stageDepth, trusses: r.trusses, props: r.props, screens: r.screens } });
+  if (ok) toast('Scène reconstruite', `${found} · ${r.notices.join(' · ')}`);
 }
 
 /**
