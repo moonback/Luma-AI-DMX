@@ -54,6 +54,7 @@ describe('projets de démonstration', () => {
       const audience = p.patch.filter((f) => f.tags.includes('aud_front') || f.tags.includes('aud_rear'));
       expect(audience).toHaveLength(12);
       expect(audience.every((f) => f.position.y < 0 && f.height >= 3 && !!f.trussId && f.universe === 2)).toBe(true);
+      expect(audience.filter((f) => f.tags.includes('aud_rear')).every((f) => f.rotation === 180)).toBe(true);
       expect(p.show.universes).toBe(2);
       expect(p.visualizer.trusses.length).toBeGreaterThanOrEqual(6);
     }
