@@ -211,7 +211,7 @@ export function MusicPage() {
   const pick = (s: ShowStep) => (track ? setView(s) : s === 'track' && file.current?.click());
   const shown: ShowStep = track ? view : 'track';
   const studio = track && (
-    <SongStudioTimeline track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} onOpenEditor={setEditing} pos={isPlaying ? pos : null} playing={isPlaying} />
+    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} pos={isPlaying ? pos : null} playing={isPlaying} />
   );
 
   return (
