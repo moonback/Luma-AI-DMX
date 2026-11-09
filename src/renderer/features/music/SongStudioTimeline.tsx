@@ -14,6 +14,9 @@ interface Props {
   onMoveBoundary: (index: number, time: number) => void;
   onAddEvent: (time: number) => void;
   onRemoveEvent: (index: number) => void;
+  onUpdateEvent: (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' }) => void;
+  onUndo: () => void;
+  onRedo: () => void;
   pos: number | null;
   playing: boolean;
 }
@@ -26,6 +29,9 @@ export function SongStudioTimeline({
   onMoveBoundary,
   onAddEvent,
   onRemoveEvent,
+  onUpdateEvent,
+  onUndo,
+  onRedo,
   pos,
   playing,
 }: Props) {
@@ -36,6 +42,8 @@ export function SongStudioTimeline({
   const [zoom, setZoom] = useState(1);
   const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
   const [dragBoundary, setDragBoundary] = useState<{ index: number; time: number } | null>(null);
+  const [dragEvent, setDragEvent] = useState<{ index: number; time: number } | null>(null);
+  const [snapEnabled, setSnapEnabled] = useState(true);
   const lanesRef = useRef<HTMLDivElement>(null);
   const minTimelineWidth = Math.max(1000, a.sections.length * 68) * zoom;
   const playheadPx = pos === null ? 0 : Math.max(0, Math.min(minTimelineWidth, (pos / a.duration) * minTimelineWidth));
@@ -136,6 +144,14 @@ export function SongStudioTimeline({
 
 
   const nowSec = pos === null ? -1 : a.sections.findIndex((s) => pos >= s.start && pos < s.end);
+  const snapTime = (time: number) => {
+    if (!snapEnabled) return time;
+    const candidates = [...a.downbeats, ...a.beats];
+    let nearest = time, distance = Infinity;
+    for (const beat of candidates) { const d = Math.abs(beat - time); if (d < distance) { distance = d; nearest = beat; } }
+    return distance <= Math.min(0.18, 30 / a.bpm) ? nearest : time;
+  };
+  const selectedMusicEvent = selectedEvent === null ? null : a.events[selectedEvent] ?? null;
   const timeAtClientX = (clientX: number) => {
     const viewport = lanesRef.current;
     if (!viewport) return 0;
@@ -149,6 +165,8 @@ export function SongStudioTimeline({
       <div className="studio-selection-toolbar">
         <span className="studio-selection-label">{a.sections[selected] ? `${t('music.studio.section')} ${selected + 1} · ${SECTION_NAMES[a.sections[selected]!.label]}` : t('music.studio.noSectionSelected')}</span>
         <span className="studio-selection-time mono">{a.sections[selected] ? `${fmt(a.sections[selected]!.start)} – ${fmt(a.sections[selected]!.end)}` : ''}</span>
+        <button type="button" className="btn ghost sm" onClick={onUndo} title={t('music.studio.undo')}>{t('music.studio.undo')}</button>
+        <button type="button" className="btn ghost sm" onClick={onRedo} title={t('music.studio.redo')}>{t('music.studio.redo')}</button>
         <button type="button" className="btn ghost sm" disabled={!a.sections[selected]} onClick={() => onOpenEditor(selected)} data-testid="studio-edit-selected"><Pencil size={12} />{t('music.studio.editSection')}</button>
       </div>
       {/* Shared transport lives above the analysis; this header only explains the visual layer. */}
@@ -174,6 +192,7 @@ export function SongStudioTimeline({
         data-testid="studio-timeline-scroll"
       >
         {dragBoundary && <div className="studio-boundary-preview" style={{ left: (dragBoundary.time / a.duration) * minTimelineWidth }} aria-hidden="true" />}
+        {dragEvent && <div className="studio-event-preview" style={{ left: (dragEvent.time / a.duration) * minTimelineWidth }} aria-hidden="true" />}
         {/* Playhead */}
         {pos !== null && (
           <div
@@ -310,7 +329,6 @@ export function SongStudioTimeline({
           onKeyDown={(event) => { if ((event.key === 'Delete' || event.key === 'Backspace') && selectedEvent !== null) { event.preventDefault(); onRemoveEvent(selectedEvent); setSelectedEvent(null); } }}
         >
           {a.events.map((e, i) => {
-            if (e.kind === 'silence') return null;
             const left = `${(e.t / a.duration) * 100}%`;
             const width = e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : '4px';
 
@@ -321,11 +339,29 @@ export function SongStudioTimeline({
                 className={`studio-event-marker studio-event-${e.kind} ${selectedEvent === i ? 'is-selected' : ''}`}
                 title={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)}`}
                 aria-label={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)} · ${t('music.studio.seekToEvent')}`}
-                onClick={(event) => {
+                onPointerDown={(event) => {
                   event.stopPropagation();
+                  if (event.button !== 0) return;
+                  event.currentTarget.setPointerCapture(event.pointerId);
                   setSelectedEvent(i);
-                  if (musicPlayer.hasAudio(track.hash)) musicPlayer.play(track, e.t);
+                  setDragEvent({ index: i, time: e.t });
                 }}
+                onPointerMove={(event) => {
+                  if (dragEvent?.index !== i) return;
+                  event.stopPropagation();
+                  setDragEvent({ index: i, time: snapTime(timeAtClientX(event.clientX)) });
+                }}
+                onPointerUp={(event) => {
+                  event.stopPropagation();
+                  if (dragEvent?.index === i) {
+                    const time = snapTime(timeAtClientX(event.clientX));
+                    setDragEvent(null);
+                    if (Math.abs(time - e.t) > 0.015) onUpdateEvent(i, { t: time });
+                  }
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+                onPointerCancel={() => setDragEvent(null)}
+                onClick={(event) => { event.stopPropagation(); setSelectedEvent(i); }}
                 style={{
                   position: 'absolute',
                   left,
@@ -336,11 +372,24 @@ export function SongStudioTimeline({
                   borderRadius: 2,
                   border: 0,
                   padding: 0,
-                  cursor: 'pointer',
+                  cursor: 'grab',
+                  touchAction: 'none',
+                  opacity: dragEvent?.index === i ? 0.45 : undefined,
                 }}
               />
             );
           })}
+        </div>
+        <div className="studio-event-inspector" onClick={(event) => event.stopPropagation()}>
+          <span className="small dim">{selectedMusicEvent ? `${t('music.studio.selectedEvent')} · ${fmt(selectedMusicEvent.t)}` : t('music.studio.noEvent')}</span>
+          {selectedMusicEvent && selectedEvent !== null && <>
+            <select aria-label={t('music.studio.eventType')} value={selectedMusicEvent.kind} onChange={(event) => onUpdateEvent(selectedEvent, { kind: event.target.value as 'impact' | 'riser' | 'silence' | 'vocal' })}>
+              {(['impact', 'riser', 'silence', 'vocal'] as const).map((kind) => <option key={kind} value={kind}>{t(`music.event.${kind}`)}</option>)}
+            </select>
+            <label className="small">{t('music.studio.duration')} <input aria-label={t('music.studio.duration')} type="number" min="0" max="600" step="0.05" value={selectedMusicEvent.duration} onChange={(event) => onUpdateEvent(selectedEvent, { duration: Math.max(0, Math.min(600, Number(event.target.value) || 0)) })} /></label>
+            <label className="small studio-snap"><input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} />{t('music.studio.snap')}</label>
+            <button type="button" className="btn ghost sm" onClick={() => { onRemoveEvent(selectedEvent); setSelectedEvent(null); }}>{t('music.studio.removeEvent')}</button>
+          </>}
         </div>
 
         {/* Track 4: Lighting Layers & Movements */}
