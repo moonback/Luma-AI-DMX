@@ -309,7 +309,7 @@ function buildGrandstands(stage: StageGeometry): THREE.Group {
     seat.castShadow = true;
     seat.receiveShadow = true;
     stands.add(seat);
-    const back = new THREE.Mesh(new THREE.BoxGeometry(width, 0.48, 0.075), seatMat.clone());
+    const back = new THREE.Mesh(new THREE.BoxGeometry(width, 0.48, 0.075), new THREE.MeshStandardMaterial({ color: 0x111722, roughness: 0.68, metalness: 0.12 }));
     back.position.set(0, base + 0.68, z + 0.13);
     back.castShadow = true;
     stands.add(back);
