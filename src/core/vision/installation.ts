@@ -22,6 +22,13 @@ export interface InstallationFixtureInput {
   height: number;
   mount?: 'auto' | 'hanging' | 'floor' | 'wall';
   trussId?: string | null;
+  visualRecognition?: {
+    label: string;
+    description: string;
+    observedType: string;
+    confidence: number;
+    verifiedAt: string;
+  };
 }
 
 export interface InstallationLocatedInput {
@@ -54,6 +61,7 @@ export interface InstallationFixture {
   mountIsInferred: boolean;
   supportId: string | null;
   zone: 'stage-left' | 'centre' | 'stage-right';
+  visualRecognition?: InstallationFixtureInput['visualRecognition'];
   issues: InstallationIssueInput[];
 }
 
@@ -87,7 +95,7 @@ function mountOf(f: InstallationFixtureInput): { mount: InstallationMount; infer
   // The legacy project convention treats fixtures below 1 m as floor-mounted.
   // Above that threshold the physical support is unknown unless explicitly stored.
   if (f.height < 1) return { mount: 'floor', inferred: true };
-  return { mount: 'unknown', inferred: false };
+  return { mount: 'hanging', inferred: true };
 }
 
 function zoneOf(x: number): InstallationFixture['zone'] {
@@ -150,6 +158,7 @@ export function buildInstallationMap(
       mountIsInferred: mounting.inferred,
       supportId: fixture.trussId || null,
       zone: zoneOf(position.x),
+      ...(fixture.visualRecognition ? { visualRecognition: fixture.visualRecognition } : {}),
       issues: issuesById.get(fixture.id) ?? [],
     };
   });
