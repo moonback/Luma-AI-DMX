@@ -7,6 +7,7 @@ import { Webcam, grayToDataUrl, photoToGray, videoDevices } from '../vision/capt
 import { calibrate, stageCorners, type Calibration, type Vec2 } from '../../core/vision/geometry';
 import type { Gray } from '../../core/vision/image';
 import { analyzePatch, crossCheckRdm, decodeSequence, sequenceDuration, sideOf, solvePositions, type Detection, type Located, type PatchFixture, type PatchIssue, type Sequence } from '../../core/vision/locate';
+import { buildInstallationMap } from '../../core/vision/installation';
 import type { OutputConfig } from '../../core/protocols/config';
 
 interface CapturedView {
@@ -186,6 +187,31 @@ export function CameraLocate({ onClose }: { onClose: () => void }) {
     return { solved, located, issues: analyzePatch(patch, solved, located) };
   }, [views, step, patch, heightMode, truss]);
 
+  const installation = useMemo(() => {
+    if (!result) return null;
+    return buildInstallationMap(
+      fixtures.map((rf) => ({
+        id: rf.fixture.id,
+        name: rf.fixture.name,
+        manufacturer: rf.profile.manufacturer,
+        model: rf.profile.name,
+        universe: rf.fixture.universe,
+        address: rf.fixture.address,
+        channels: rf.mode.channels.length,
+        position: rf.fixture.position,
+        height: rf.fixture.height,
+        mount: rf.fixture.mount,
+        trussId: rf.fixture.trussId,
+      })),
+      result.located,
+      result.issues,
+    );
+  }, [fixtures, result]);
+  const installationById = useMemo(
+    () => new Map(installation?.fixtures.map((f) => [f.id, f]) ?? []),
+    [installation],
+  );
+
   const apply = async () => {
     if (!result) return;
     const updates = result.located.filter((l) => !skip.has(l.fixtureId)).map((l: Located) => ({
@@ -286,18 +312,22 @@ export function CameraLocate({ onClose }: { onClose: () => void }) {
       {step === 'results' && result && (
         <div className="col gap-lg">
           <FrameView img={views[views.length - 1]!.images[1]!} gain={1} clicks={[]} detections={result.solved[result.solved.length - 1]!.detections} names={names} />
-          <div className="small" data-testid="locate-summary">{result.located.length}/{fixtures.length} projecteurs localisés · {result.solved.reduce((n, s) => n + s.detections.length, 0)} taches détectées</div>
+          <div className="small" data-testid="locate-summary">
+            {result.located.length}/{fixtures.length} projecteurs localisés · {result.solved.reduce((n, s) => n + s.detections.length, 0)} taches détectées
+            {installation && <> · Cartographie : {installation.summary.triangulated} triangulés, {installation.summary.estimatedFromHeight} estimés, {installation.summary.patchOnly} non mesurés</>}
+          </div>
           {(result.issues.length > 0 || rdmIssues.length > 0) && (
             <div className="panel" style={{ padding: 10 }} data-testid="locate-issues">
               {[...result.issues, ...rdmIssues].map((i, k) => <div key={k} className="small">{ISSUE_ICON[i.kind]} {i.message}</div>)}
             </div>
           )}
           <table className="table small" data-testid="locate-table">
-            <thead><tr><th /><th>Projecteur</th><th>Adresse</th><th>Patch (x / y / h)</th><th>Mesuré</th><th>Écart</th><th>Incertitude</th></tr></thead>
+            <thead><tr><th /><th>Projecteur</th><th>Adresse</th><th>Patch (x / y / h)</th><th>Mesuré</th><th>Écart</th><th>Incertitude</th><th>Montage / qualité</th></tr></thead>
             <tbody>
               {result.located.map((l) => {
                 const f = patch.find((x) => x.id === l.fixtureId)!;
                 const d = Math.hypot(l.position[0] - f.position.x, l.position[1] - f.position.y);
+                const mapped = installationById.get(l.fixtureId);
                 return (
                   <tr key={l.fixtureId}>
                     <td><input type="checkbox" checked={!skip.has(l.fixtureId)} onChange={() => setSkip((s) => { const n = new Set(s); if (n.has(l.fixtureId)) n.delete(l.fixtureId); else n.add(l.fixtureId); return n; })} /></td>
@@ -307,6 +337,7 @@ export function CameraLocate({ onClose }: { onClose: () => void }) {
                     <td className="mono">{l.position[0].toFixed(2)} / {l.position[1].toFixed(2)} / {l.position[2].toFixed(2)} <span className="dim">{sideOf(l.position[0])}</span>{l.method === 'triangulated' && <span className="badge cyan" style={{ marginLeft: 4 }}>{l.views} vues</span>}</td>
                     <td className="mono" style={d > 1 ? { color: '#fcd34d' } : undefined}>{d.toFixed(2)} m</td>
                     <td className="mono dim">± {(l.uncertainty * 100).toFixed(0)} cm</td>
+                    <td>{mapped?.mount ?? 'inconnu'}{mapped?.supportId ? ` · ${mapped.supportId}` : ''}<div className="small dim">qualité géométrique indicative : {Math.round((mapped?.positionQuality ?? 0) * 100)} %</div></td>
                   </tr>
                 );
               })}
