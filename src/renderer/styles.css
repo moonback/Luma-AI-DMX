@@ -395,6 +395,9 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .chip { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text-2); cursor: pointer; font-size: 12px; }
 .chip:hover { color: var(--text); border-color: var(--border-strong); }
 .chip.on { color: var(--text); border-color: var(--violet); background: var(--violet-soft); }
+.chip.ai { display: inline-flex; align-items: center; gap: 4px; color: var(--text); border-color: var(--violet); background: var(--violet-soft); }
+.chip.ai svg, .music-preset-label.ai svg { color: var(--violet); }
+.music-preset-label.ai { display: inline-flex; align-items: center; gap: 4px; color: var(--violet); }
 .chip.danger { border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; }
 span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default; }
 .chip-link { background: none; border: 0; padding: 0 2px; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; }

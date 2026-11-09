@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { cieToHex, convertGdtf, dmx8 } from '../../src/core/fixtures/gdtf';
+import { cieToHex, convertGdtf, dmx8, GDTF_ATTR } from '../../src/core/fixtures/gdtf';
+import { buildAttributeCoverageReport } from '../../src/core/fixtures/attributeCoverage';
 import { writeZip } from '../../src/core/util/zip';
 import { makeService } from '../helpers';
 
@@ -112,6 +113,143 @@ describe('import GDTF', () => {
     expect(r.warnings.join(' ')).toMatch(/DMX break 2/);
   });
 
+  it('utilise MainAttribute et OriginalAttribute comme références sémantiques de repli', () => {
+    const xml = `<GDTF><FixtureType Name="Legacy metadata" Manufacturer="Acme">
+      <AttributeDefinitions>
+        <FeatureGroups><FeatureGroup Name="Beam"><Feature Name="Beam"/></FeatureGroup></FeatureGroups>
+        <Attributes>
+          <Attribute Name="VendorShutter" Feature="Beam.Beam" PhysicalUnit="Frequency">
+            <SubPhysicalUnit Type="DutyCycle" PhysicalUnit="Percent" PhysicalFrom="10" PhysicalTo="90"/>
+          </Attribute>
+          <Attribute Name="VendorShutterMode" MainAttribute="Shutter1" Feature="Beam.Beam"/>
+        </Attributes>
+      </AttributeDefinitions>
+      <DMXModes><DMXMode Name="Metadata"><DMXChannels>
+        <DMXChannel Offset="1" Geometry="Beam"><LogicalChannel Attribute="VendorShutter">
+          <ChannelFunction Attribute="VendorShutter" OriginalAttribute="Shutter1Strobe" Name="Vendor effect" DMXFrom="0/1" PhysicalFrom="2" PhysicalTo="18"/>
+        </LogicalChannel></DMXChannel>
+        <DMXChannel Offset="2" Geometry="Beam"><LogicalChannel Attribute="VendorShutterMode">
+          <ChannelFunction Attribute="VendorShutterMode" Name="Vendor shutter mode" DMXFrom="0/1"/>
+        </LogicalChannel></DMXChannel>
+      </DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual(['strobe', 'shutter']);
+  });
+
+  it('utilise les FeatureGroups et Feature officiels pour classifier les attributs fabricants', () => {
+    const xml = `<GDTF><FixtureType Name="Feature fixture" Manufacturer="Acme">
+      <AttributeDefinitions>
+        <FeatureGroups>
+          <FeatureGroup Name="Beam" Pretty="Faisceau">
+            <Feature Name="Focus"/>
+            <Feature Name="Iris"/>
+          </FeatureGroup>
+          <FeatureGroup Name="Color" Pretty="Couleur">
+            <Feature Name="ColorMix"/>
+          </FeatureGroup>
+        </FeatureGroups>
+        <Attributes>
+          <Attribute Name="VendorFocus" Pretty="Mise au point" Feature="Beam.Focus"/>
+          <Attribute Name="VendorIris" Feature="Beam.Iris"/>
+          <Attribute Name="VendorColorMix" Feature="Color.ColorMix"/>
+          <Attribute Name="VendorUnlinked" Pretty="Auxiliary"/>
+        </Attributes>
+      </AttributeDefinitions>
+      <DMXModes><DMXMode Name="Semantic"><DMXChannels>
+        <DMXChannel Offset="1" Geometry="Beam"><LogicalChannel Attribute="VendorFocus"><ChannelFunction Attribute="VendorFocus" Name="Fine adjustment" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+        <DMXChannel Offset="2" Geometry="Beam"><LogicalChannel Attribute="VendorIris"><ChannelFunction Attribute="VendorIris" Name="Aperture" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+        <DMXChannel Offset="3" Geometry="Beam"><LogicalChannel Attribute="VendorColorMix"><ChannelFunction Attribute="VendorColorMix" Name="Auxiliary mix" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+        <DMXChannel Offset="4" Geometry="Beam"><LogicalChannel Attribute="VendorUnlinked"><ChannelFunction Attribute="VendorUnlinked" Name="Auxiliary function" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+      </DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual([
+      'focus', 'iris', 'custom:vendorcolormix', 'custom:vendorunlinked',
+    ]);
+  });
+
+  it('résout les attributs GDTF propriétaires à partir des noms de fonctions, sans deviner une famille ambiguë', () => {
+    const xml = `<GDTF><FixtureType Name="Vendor fixture" Manufacturer="Acme"><DMXModes><DMXMode Name="Semantic"><DMXChannels>
+      <DMXChannel Offset="1" Geometry="Beam"><LogicalChannel Attribute="VendorBeam"><ChannelFunction Attribute="VendorStrobe" Name="Electronic Strobe" DMXFrom="0/1" PhysicalFrom="1" PhysicalTo="20"/></LogicalChannel></DMXChannel>
+      <DMXChannel Offset="2" Geometry="Beam"><LogicalChannel Attribute="VendorColor"><ChannelFunction Attribute="VendorColorWheel" Name="Color Wheel" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+      <DMXChannel Offset="3" Geometry="Beam"><LogicalChannel Attribute="VendorUnknown"><ChannelFunction Attribute="VendorUnknown" Name="Auxiliary Function" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+    </DMXChannels></DMXMode></DMXModes></FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((c) => c.attribute)).toEqual([
+      'strobe', 'colorWheel', 'custom:vendorunknown',
+    ]);
+  });
+
+  it('couvre les variantes additives, soustractives et indirectes CMY du standard GDTF', () => {
+    const attrs = [
+      'ColorAdd_C', 'ColorAdd_M', 'ColorAdd_Y',
+      'ColorSub_R', 'ColorSub_G', 'ColorSub_B',
+      'ColorRGB_Cyan', 'ColorRGB_Magenta', 'ColorRGB_Yellow',
+      'StrobeRate',
+    ];
+    const channels = attrs.map((attribute, index) =>
+      `<DMXChannel Offset="${index + 1}" Geometry="Beam"><LogicalChannel Attribute="${attribute}"><ChannelFunction Attribute="${attribute}" Name="${attribute}" DMXFrom="0/1"/></LogicalChannel></DMXChannel>`
+    ).join('');
+    const xml = `<GDTF><FixtureType Name="GDTF color coverage" Manufacturer="Acme">
+      <DMXModes><DMXMode Name="Coverage"><DMXChannels>${channels}</DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((channel) => channel.attribute)).toEqual([
+      'cyan', 'magenta', 'yellow',
+      'red', 'green', 'blue',
+      'cyan', 'magenta', 'yellow',
+      'strobe',
+    ]);
+  });
+
+  it('reconnaît les attributs GDTF standards de vitesse, reset et ventilation', () => {
+    const attrs = [
+      'ColorAdd_GY', 'ColorMixMSpeed', 'ColorWheelSelectMSpeed', 'Effects1Rate',
+      'IntensityMSpeed', 'GoboWheel1MSpeed', 'IrisMSpeed', 'Prism1MSpeed',
+      'FocusMSpeed', 'Frost1MSpeed', 'ZoomMSpeed', 'FrameMSpeed', 'GlobalMSpeed',
+      'DimmerReset', 'ShutterReset', 'BeamReset', 'ColorMixReset', 'ColorWheelReset',
+      'FocusReset', 'FrameReset', 'GoboWheelReset', 'IntensityReset', 'IrisReset',
+      'PositionReset', 'PanReset', 'TiltReset', 'ZoomReset', 'CTBReset', 'CTOReset',
+      'CTCReset', 'AnimationSystemReset', 'FixtureCalibrationReset',
+      'Fan1', 'Fog1', 'Haze1', 'Blower1', 'ZoomMode',
+    ];
+    const channels = attrs.map((attribute, index) =>
+      `<DMXChannel Offset="${index + 1}" Geometry="Beam"><LogicalChannel Attribute="${attribute}"><ChannelFunction Attribute="${attribute}" Name="${attribute}" DMXFrom="0/1"/></LogicalChannel></DMXChannel>`
+    ).join('');
+    const xml = `<GDTF><FixtureType Name="GDTF standard coverage" Manufacturer="Acme">
+      <DMXModes><DMXMode Name="Coverage"><DMXChannels>${channels}</DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((channel) => channel.attribute)).toEqual([
+      'lime', 'macroSpeed', 'macroSpeed', 'macroSpeed',
+      'macroSpeed', 'macroSpeed', 'macroSpeed', 'macroSpeed',
+      'macroSpeed', 'macroSpeed', 'macroSpeed', 'macroSpeed', 'speed',
+      ...Array(19).fill('control'),
+      'fan', 'fog', 'fog', 'fan', 'zoomMode',
+    ]);
+  });
+
+  it('conserve les fonctions GDTF sans équivalent natif plutôt que de les assimiler', () => {
+    const attrs = ['Tint', 'HSB_Hue', 'CIE_X', 'BeamShaper', 'Blade1A', 'Gobo1WheelSpin'];
+    const channels = attrs.map((attribute, index) =>
+      `<DMXChannel Offset="${index + 1}" Geometry="Beam"><LogicalChannel Attribute="${attribute}"><ChannelFunction Attribute="${attribute}" Name="${attribute}" DMXFrom="0/1"/></LogicalChannel></DMXChannel>`
+    ).join('');
+    const xml = `<GDTF><FixtureType Name="Custom preservation" Manufacturer="Acme">
+      <DMXModes><DMXMode Name="Custom"><DMXChannels>${channels}</DMXChannels></DMXMode></DMXModes>
+    </FixtureType></GDTF>`;
+    const r = convertGdtf(gdtf(xml));
+    expect(r.errors).toEqual([]);
+    expect(r.profile!.modes[0]!.channels.map((channel) => channel.attribute)).toEqual([
+      'custom:tint', 'custom:hsb-hue', 'custom:cie-x', 'custom:beamshaper', 'custom:blade1a', 'custom:gobo1wheelspin',
+    ]);
+  });
+
   it('barre LED : géométries répétées → cellules', () => {
     const r = convertGdtf(gdtf(BAR));
     expect(r.errors).toEqual([]);
@@ -136,5 +274,25 @@ describe('import GDTF', () => {
     expect(r.imported).toEqual(['Test Spot 300']);
     expect(svc.getProject().profiles.find((p) => p.id === 'gdtf-acme-s300')!.modes).toHaveLength(2);
     await svc.dispose();
+  });
+});
+
+
+describe('GDTF functional attribute coverage', () => {
+  it('classifies every direct GDTF mapping against the real Luma vocabulary and engine consumers', () => {
+    const report = buildAttributeCoverageReport(GDTF_ATTR);
+    expect(report.totalMappings).toBe(Object.keys(GDTF_ATTR).length);
+    expect(report.unsupported).toBe(0);
+    expect(report.native + report.generic + report.unsupported).toBe(report.totalMappings);
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'Dimmer')).toMatchObject({ support: 'native', lumaAttribute: 'dimmer' });
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'Color1')).toMatchObject({ support: 'native', lumaAttribute: 'colorWheel' });
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'GlobalMSpeed')).toMatchObject({ support: 'generic', lumaAttribute: 'speed' });
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'Fog1')).toMatchObject({ support: 'generic', lumaAttribute: 'fog' });
+  });
+
+  it('flags mappings outside the built-in model instead of silently calling them supported', () => {
+    const report = buildAttributeCoverageReport({ UnknownFixtureAttribute: 'notARealAttribute', Dimmer: 'dimmer' });
+    expect(report.unsupported).toBe(1);
+    expect(report.entries.find((entry) => entry.gdtfAttribute === 'UnknownFixtureAttribute')).toMatchObject({ support: 'unsupported', attributeClass: 'unknown' });
   });
 });

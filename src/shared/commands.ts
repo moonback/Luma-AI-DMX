@@ -224,7 +224,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   /** Back to the plan before the last change (calling it again swaps back). */
   z.object({ type: z.literal('music.restorePrevious'), trackId: idSchema }),
   /** Intention suggestions for a track: with OpenRouter when configured, else from the measured sound. */
-  z.object({ type: z.literal('music.suggestIntents'), trackId: idSchema, intent: z.string().max(500).default('') }),
+  z.object({ type: z.literal('music.suggestIntents'), trackId: idSchema }),
   /** True when the track's generated show was edited by hand since it was compiled (regenerating would discard it). */
   z.object({ type: z.literal('music.generatedEdited'), trackId: idSchema }),
   empty('timeline.stop'),

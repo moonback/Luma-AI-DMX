@@ -1,0 +1,17 @@
+[
+  {
+    "id": "56ee5fb1-b022-4fde-898b-07348f92cbfa",
+    "content": "Projet comporte 37 module(s) critique(s) (haute centralité). Toute modification → analyser l'impact AVANT (knowledge_impact_analyze).",
+    "category": "decision",
+    "tags": [
+      "auto-enrich",
+      "critical-modules",
+      "hard-rule"
+    ],
+    "createdAt": "2026-11-08T22:55:32.306Z",
+    "updatedAt": "2026-11-08T22:55:32.306Z",
+    "confidence": 0.9,
+    "usageCount": 0,
+    "isStructural": true
+  }
+]

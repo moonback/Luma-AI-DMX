@@ -269,6 +269,8 @@ export interface OpenRouterOptions {
   onUsage?: (u: AiUsage) => void;
   /** Previous exchanges of the conversation, sent between the system prompt and the request. */
   history?: { role: 'user' | 'assistant'; content: string }[];
+  /** Answer length cap (default 8000 tokens). */
+  maxTokens?: number;
 }
 
 export interface ProviderResult {
@@ -310,7 +312,7 @@ export async function completeJson(system: string, user: string | unknown[], sch
   const caps = opts.capabilities;
   const body: Record<string, unknown> = {
     model: opts.model,
-    max_tokens: 8000,
+    max_tokens: opts.maxTokens ?? 8000,
     temperature: 0.3,
     usage: { include: true },
     messages: [
@@ -536,11 +538,15 @@ ${JSON.stringify(SUGGEST_JSON_SCHEMA)}
 Rules:
 - 3 to 5 suggestions, in French, 2 to 6 words each, written with the vocabulary of these examples: "couplets sobres", "refrains explosifs", "couleurs froides", "couleurs chaudes", "strobe sur les drops", "lumières sur les basses", "beaucoup de mouvement", "ambiance calme".
 - Each suggestion must follow from THIS song's measured structure (energy contrast between verses and peaks, repeats, bass, density, brightness, key), not a generic style.
-- Do not repeat what the operator already wrote, and do not ask for strobe unless the song has a drop.`;
+- Do not ask for strobe unless the song has a drop.`;
 
-/** Intention suggestions for one song, from its structure only. Throws when the answer has no usable suggestion. */
-export async function suggestIntentsWithOpenRouter(intent: string, structure: string, opts: OpenRouterOptions): Promise<{ suggestions: string[]; model: string; notices: string[] }> {
-  const r = await completeJson(SUGGEST_SYSTEM, `Operator intent already written: ${intent || '(none)'}\n\n${structure}`, 'intent_suggestions', SUGGEST_JSON_SCHEMA, opts);
+/**
+ * Intention suggestions for one song, from its structure only (not the typed intent; the page hides those already
+ * written). Five short phrases: light reasoning and a short answer cap keep it fast. Throws when the answer has no
+ * usable suggestion.
+ */
+export async function suggestIntentsWithOpenRouter(structure: string, opts: OpenRouterOptions): Promise<{ suggestions: string[]; model: string; notices: string[] }> {
+  const r = await completeJson(SUGGEST_SYSTEM, structure, 'intent_suggestions', SUGGEST_JSON_SCHEMA, { ...opts, effort: 'low', maxTokens: 1500 });
   const parsed = z.object({ suggestions: z.array(z.string()) }).safeParse(r.json);
   if (!parsed.success) throw new OpenRouterError('Suggestions IA non conformes', null);
   const suggestions = [...new Set(parsed.data.suggestions.map((s) => s.trim().slice(0, 120)).filter(Boolean))].slice(0, 5);

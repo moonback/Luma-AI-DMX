@@ -26,6 +26,8 @@ export const enMusic: Record<keyof typeof frMusic, string> = {
   'music.library.status.playing': 'Playing',
   'music.library.none': 'No track matches.',
   'music.styles': 'Styles',
+  'music.suggestions.fromAi': 'AI suggestions:',
+  'music.suggestions.aiChipHint': 'Proposed by the AI: add to the intent',
   'music.replace': 'Replace file',
   'music.replaceHint': 'Imports another audio file in place of this track (the intent typed is kept, the show must be generated again)',
   'music.show.none': 'No show yet',

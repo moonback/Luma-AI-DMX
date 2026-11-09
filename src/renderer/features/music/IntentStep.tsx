@@ -1,4 +1,4 @@
-import { ArrowLeft, Wand2 } from 'lucide-react';
+import { ArrowLeft, Sparkles, Wand2 } from 'lucide-react';
 import type { Mood, MusicTrack } from '../../../core/model/schemas';
 import { Panel } from '../../components/ui';
 import { useT } from '../../i18n';
@@ -33,7 +33,7 @@ export function remember(intent: string): string[] {
 /** Step 2 « Intention »: describe the show (text, suggestions, styles, history, mood), then generate it. */
 export function IntentStep(p: {
   track: MusicTrack; intent: string; onIntent: (v: string | ((v: string) => string)) => void; mood: Mood; onMood: (m: Mood) => void;
-  history: string[]; suggestions: string[]; aiOn: boolean; suggesting: boolean; onSuggestAi: () => void;
+  history: string[]; suggestions: string[]; fromAi: boolean; aiOn: boolean; suggesting: boolean; onSuggestAi: () => void;
   busy: boolean; phraseBars: number; onPhraseBars: (n: number) => void; onGenerate: () => void; onBack: () => void;
 }) {
   const t = useT();
@@ -45,9 +45,11 @@ export function IntentStep(p: {
         <div className="music-presets-block">
           {(p.aiOn || p.suggestions.length > 0) && (
             <div className="music-preset-row" data-testid="music-intent-suggestions">
-              <span className="music-preset-label">{t('music.suggestions')}</span>
+              <span className={`music-preset-label ${p.fromAi ? 'ai' : ''}`}>{p.fromAi && <Sparkles size={12} />}{t(p.fromAi ? 'music.suggestions.fromAi' : 'music.suggestions')}</span>
               <div className="chips">
-                {p.suggestions.map((text) => <button key={text} className="chip" title={t('music.suggestions.hint')} onClick={() => append(text)}>{text}</button>)}
+                {p.suggestions.map((text) => p.fromAi
+                  ? <button key={text} className="chip ai" title={t('music.suggestions.aiChipHint')} onClick={() => append(text)} data-testid="music-ai-suggestion"><Sparkles size={11} />{text}</button>
+                  : <button key={text} className="chip" title={t('music.suggestions.hint')} onClick={() => append(text)}>{text}</button>)}
                 {p.aiOn && (
                   <button className="chip" data-testid="music-intent-suggest-ai" disabled={p.suggesting || p.busy} title={t('music.suggestions.aiHint')} onClick={p.onSuggestAi}>
                     {p.suggesting ? t('music.suggestions.aiBusy') : t('music.suggestions.ai')}

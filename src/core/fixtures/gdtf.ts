@@ -2,6 +2,7 @@ import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import type { Channel, ChannelRange, FixtureMode, FixtureProfile, FixtureType } from '../model/schemas';
 import { dedupeRanges, slug } from './ofl';
 import { validateProfile } from './profiles';
+import { resolveMa2SemanticAttribute } from './ma2AttributeResolver';
 import { readZip, ZipError } from '../util/zip';
 
 /**
@@ -18,7 +19,7 @@ export interface GdtfConversion {
 }
 
 type Node = Record<string, unknown>;
-const ARRAYS = new Set(['DMXMode', 'DMXChannel', 'LogicalChannel', 'ChannelFunction', 'ChannelSet', 'Wheel', 'Slot', 'Geometry', 'Axis', 'Beam', 'GeometryReference', 'FilterBeam', 'Display']);
+const ARRAYS = new Set(['DMXMode', 'DMXChannel', 'LogicalChannel', 'ChannelFunction', 'ChannelSet', 'Wheel', 'Slot', 'Geometry', 'Axis', 'Beam', 'GeometryReference', 'FilterBeam', 'Display', 'FeatureGroup', 'Feature', 'Attribute', 'SubPhysicalUnit']);
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '', parseAttributeValue: false, parseTagValue: false, isArray: (name, _path, _leaf, isAttribute) => !isAttribute && ARRAYS.has(name) });
 const node = (v: unknown): Node => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Node) : {});
 const arr = (n: Node, key: string): Node[] => (Array.isArray(n[key]) ? (n[key] as unknown[]).map(node) : []);
@@ -47,29 +48,98 @@ function dmx16(raw: string | undefined): number | undefined {
 }
 
 /** GDTF attribute → Luma attribute. */
-const GDTF_ATTR: Record<string, string> = {
+export const GDTF_ATTR: Readonly<Record<string, string>> = {
   Dimmer: 'dimmer', Pan: 'pan', Tilt: 'tilt', PositionMSpeed: 'panTiltSpeed', PanTiltMode: 'panTiltMode',
-  Shutter1: 'shutter', Shutter1Strobe: 'strobe', StrobeFrequency: 'strobe', StrobeDuration: 'strobe',
-  ColorAdd_R: 'red', ColorAdd_G: 'green', ColorAdd_B: 'blue', ColorAdd_W: 'white', ColorAdd_WW: 'warmWhite', ColorAdd_CW: 'coldWhite',
-  ColorAdd_A: 'amber', ColorAdd_RY: 'amber', ColorAdd_UV: 'uv', ColorAdd_L: 'lime', ColorAdd_I: 'indigo',
+  Shutter1: 'shutter', Shutter1Strobe: 'strobe', StrobeFrequency: 'strobe', StrobeDuration: 'strobe', StrobeRate: 'strobe',
+  ColorAdd_R: 'red', ColorAdd_G: 'green', ColorAdd_B: 'blue', ColorAdd_C: 'cyan', ColorAdd_M: 'magenta', ColorAdd_Y: 'yellow',
+  ColorAdd_W: 'white', ColorAdd_WW: 'warmWhite', ColorAdd_CW: 'coldWhite',
+  ColorAdd_A: 'amber', ColorAdd_RY: 'amber', ColorAdd_UV: 'uv', ColorAdd_L: 'lime', ColorAdd_GY: 'lime', ColorAdd_I: 'indigo',
   ColorRGB_Red: 'red', ColorRGB_Green: 'green', ColorRGB_Blue: 'blue', ColorRGB_White: 'white',
-  ColorSub_C: 'cyan', ColorSub_M: 'magenta', ColorSub_Y: 'yellow', CTO: 'cto', CTC: 'colorTemperature', CTB: 'colorTemperature',
-  Color1: 'colorWheel', ColorMacro1: 'colorMacro', ColorMixMSpeed: 'colorMacroFade',
+  ColorSub_R: 'red', ColorSub_G: 'green', ColorSub_B: 'blue', ColorSub_C: 'cyan', ColorSub_M: 'magenta', ColorSub_Y: 'yellow',
+  ColorRGB_Cyan: 'cyan', ColorRGB_Magenta: 'magenta', ColorRGB_Yellow: 'yellow',
+  CTO: 'cto', CTC: 'colorTemperature', CTB: 'colorTemperature',
+  Color1: 'colorWheel', ColorMacro1: 'colorMacro', ColorMixMSpeed: 'macroSpeed', ColorWheelSelectMSpeed: 'macroSpeed',
   Gobo1: 'gobo', Gobo1Pos: 'goboRotation', Gobo1PosRotate: 'goboRotation', Gobo2: 'gobo2', Gobo2Pos: 'gobo2Rotation', Gobo2PosRotate: 'gobo2Rotation',
-  Prism1: 'prism', Prism1Pos: 'prismIndex', Prism1PosRotate: 'prismRotation', Frost1: 'frost', Iris: 'iris', Focus1: 'focus', Zoom: 'zoom', ZoomModeSpot: 'zoomMode',
-  Effects1: 'effectWheel', Control1: 'control', ResetAll: 'control', LampControl: 'control', FixtureGlobalReset: 'control', Function: 'control',
-  Fans: 'fan', Fog: 'fog', Haze: 'fog', DimmerCurve: 'dimmerCurve', EffectsSync: 'macroSpeed', Macro: 'macro', GlobalMSpeed: 'speed',
+  Prism1: 'prism', Prism1Pos: 'prismIndex', Prism1PosRotate: 'prismRotation', Frost1: 'frost', Iris: 'iris', Focus1: 'focus', Zoom: 'zoom', ZoomMode: 'zoomMode', ZoomModeSpot: 'zoomMode',
+  Effects1: 'effectWheel', Effects1Rate: 'macroSpeed', Control1: 'control', ResetAll: 'control', LampControl: 'control', FixtureGlobalReset: 'control', Function: 'control',
+  DimmerReset: 'control', ShutterReset: 'control', BeamReset: 'control', ColorMixReset: 'control', ColorWheelReset: 'control',
+  FocusReset: 'control', FrameReset: 'control', GoboWheelReset: 'control', IntensityReset: 'control', IrisReset: 'control',
+  PositionReset: 'control', PanReset: 'control', TiltReset: 'control', ZoomReset: 'control', CTBReset: 'control', CTOReset: 'control',
+  CTCReset: 'control', AnimationSystemReset: 'control', FixtureCalibrationReset: 'control',
+  IntensityMSpeed: 'macroSpeed', GoboWheel1MSpeed: 'macroSpeed', IrisMSpeed: 'macroSpeed', Prism1MSpeed: 'macroSpeed',
+  FocusMSpeed: 'macroSpeed', Frost1MSpeed: 'macroSpeed', ZoomMSpeed: 'macroSpeed', FrameMSpeed: 'macroSpeed',
+  Fans: 'fan', Fan1: 'fan', Fog: 'fog', Fog1: 'fog', Haze: 'fog', Haze1: 'fog', Blower1: 'fan',
+  DimmerCurve: 'dimmerCurve', Macro: 'macro', GlobalMSpeed: 'speed',
 };
 const CONTINUOUS = new Set(['dimmer', 'pan', 'tilt', 'zoom', 'focus', 'iris', 'panTiltSpeed', 'red', 'green', 'blue', 'white', 'amber', 'uv', 'warmWhite', 'coldWhite', 'lime', 'indigo', 'cyan', 'magenta', 'yellow', 'cto', 'colorTemperature']);
-/** A channel's Luma attribute: from its logical channel, or a known function inside it (strobe-only channels…). */
-function lumaAttribute(lc: Node): string | null {
-  const a = str(lc, 'Attribute') ?? '';
-  if (GDTF_ATTR[a]) return GDTF_ATTR[a]!;
-  for (const f of arr(lc, 'ChannelFunction')) {
-    const fa = str(f, 'Attribute') ?? '';
-    if (/^Shutter\dStrobe/u.test(fa)) return 'strobe';
+interface GdtfAttributeMetadata {
+  feature?: string;
+  mainAttribute?: string;
+  physicalUnit?: string;
+  subPhysicalUnits: string[];
+}
+
+/** Resolve official GDTF Attribute metadata and Node references relative to AttributeDefinitions. */
+function gdtfAttributeMetadata(fixtureType: Node): Map<string, GdtfAttributeMetadata> {
+  const definitions = node(fixtureType.AttributeDefinitions);
+  const groups = arr(node(definitions.FeatureGroups), 'FeatureGroup');
+  const features = new Map<string, string>();
+  for (const group of groups) {
+    const groupName = str(group, 'Name') ?? '';
+    for (const feature of arr(group, 'Feature')) {
+      const featureName = str(feature, 'Name') ?? '';
+      if (groupName && featureName) features.set(`${groupName}.${featureName}`, [groupName, str(group, 'Pretty'), featureName].filter(Boolean).join(' '));
+    }
   }
-  return null;
+  const byAttribute = new Map<string, GdtfAttributeMetadata>();
+  for (const attribute of arr(node(definitions.Attributes), 'Attribute')) {
+    const name = str(attribute, 'Name');
+    if (!name) continue;
+    const featureRef = str(attribute, 'Feature');
+    const feature = featureRef ? features.get(featureRef) : undefined;
+    const subPhysicalUnits = arr(attribute, 'SubPhysicalUnit')
+      .map((unit) => str(unit, 'Type'))
+      .filter((value): value is string => Boolean(value));
+    byAttribute.set(name, {
+      ...(feature ? { feature: [feature, str(attribute, 'Pretty')].filter(Boolean).join(' ') } : {}),
+      ...(str(attribute, 'MainAttribute') ? { mainAttribute: str(attribute, 'MainAttribute') } : {}),
+      ...(str(attribute, 'PhysicalUnit') ? { physicalUnit: str(attribute, 'PhysicalUnit') } : {}),
+      subPhysicalUnits,
+    });
+  }
+  return byAttribute;
+}
+
+/** A channel's Luma attribute: direct mappings first, then official GDTF semantics. */
+function lumaAttribute(lc: Node, attributeMetadata: Map<string, GdtfAttributeMetadata>): string | null {
+  const a = str(lc, 'Attribute') ?? '';
+  const logicalMetadata = attributeMetadata.get(a);
+  if (GDTF_ATTR[a]) return GDTF_ATTR[a]!;
+  const functions = arr(lc, 'ChannelFunction');
+  for (const f of functions) {
+    const fa = str(f, 'Attribute') ?? '';
+    const original = str(f, 'OriginalAttribute') ?? '';
+    const functionMetadata = attributeMetadata.get(fa) ?? attributeMetadata.get(original);
+    if (GDTF_ATTR[fa]) return GDTF_ATTR[fa]!;
+    if (GDTF_ATTR[original]) return GDTF_ATTR[original]!;
+    if (functionMetadata?.mainAttribute && GDTF_ATTR[functionMetadata.mainAttribute]) return GDTF_ATTR[functionMetadata.mainAttribute]!;
+    if (/^Shutter\dStrobe/u.test(fa) || /^Shutter\dStrobe/u.test(original)) return 'strobe';
+    const resolved = resolveMa2SemanticAttribute({
+      attribute: a,
+      subattribute: fa || original,
+      feature: functionMetadata?.feature ?? logicalMetadata?.feature,
+      preset: [functionMetadata?.physicalUnit, ...(functionMetadata?.subPhysicalUnits ?? [])].filter(Boolean).join(' '),
+      names: [str(f, 'Name'), str(lc, 'Name'), a, fa, original, functionMetadata?.mainAttribute],
+    });
+    if (resolved) return resolved;
+  }
+  if (logicalMetadata?.mainAttribute && GDTF_ATTR[logicalMetadata.mainAttribute]) return GDTF_ATTR[logicalMetadata.mainAttribute]!;
+  return resolveMa2SemanticAttribute({
+    attribute: a,
+    feature: logicalMetadata?.feature,
+    preset: [logicalMetadata?.physicalUnit, ...(logicalMetadata?.subPhysicalUnits ?? [])].filter(Boolean).join(' '),
+    names: [str(lc, 'Name'), a, logicalMetadata?.mainAttribute],
+  });
 }
 
 /** CIE 1931 xyY (« 0.64,0.33,21.3 ») → sRGB hex, brightness normalised. */
@@ -179,6 +249,7 @@ export function convertGdtf(file: Uint8Array): GdtfConversion {
   const fx = node(ft);
   if (!str(fx, 'Name')) return fail('description.xml sans <GDTF><FixtureType>');
   const wheels = arr(node(fx.Wheels), 'Wheel');
+  const attributeMetadata = gdtfAttributeMetadata(fx);
   const geo = [...geometries(node(fx.Geometries))];
   const dmxModes = arr(node(fx.DMXModes), 'DMXMode');
   if (!dmxModes.length) return fail('Aucun mode DMX (<DMXModes>) dans le fichier');
@@ -193,7 +264,7 @@ export function convertGdtf(file: Uint8Array): GdtfConversion {
     // Repeated geometries (pixels, cells): a Luma attribute met on several geometries is split into cells.
     const geomsByAttr = new Map<string, string[]>();
     for (const ch of chans) {
-      const a = lumaAttribute(arr(ch, 'LogicalChannel')[0] ?? {});
+      const a = lumaAttribute(arr(ch, 'LogicalChannel')[0] ?? {}, attributeMetadata);
       const g = str(ch, 'Geometry') ?? '';
       if (!a) continue;
       const list = geomsByAttr.get(a) ?? [];
@@ -226,7 +297,7 @@ export function convertGdtf(file: Uint8Array): GdtfConversion {
       const geomName = str(ch, 'Geometry') ?? '';
       const cellIdx = repeated.indexOf(geomName);
       const cell = cellIdx >= 0 ? cellIdx + 1 : undefined;
-      let attr = lumaAttribute(lc);
+      let attr = lumaAttribute(lc, attributeMetadata);
       const key = (a: string) => (cell ? `${a}#${cell}` : a);
       if (!attr) warnings.push(`Attribut GDTF « ${gAttr} » non reconnu, converti en canal générique`);
       else if (used.has(key(attr))) { warnings.push(`${modeName} · « ${gAttr} » duplique ${key(attr)}, converti en canal générique`); attr = null; }

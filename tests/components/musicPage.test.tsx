@@ -83,6 +83,22 @@ describe('page Song to Show en quatre écrans', () => {
     expect(screen.getByText('Aucun morceau ne correspond.')).toBeInTheDocument();
   });
 
+  it('suggestions : les locales tout de suite, remplacées par celles de l’IA, demandées sans l’intention tapée', async () => {
+    useStore.setState({ runtime: { ...useStore.getState().runtime, ai: { provider: 'openrouter' } } as never });
+    const invoke = (window as unknown as { luma: { invoke: (c: { type: string }) => Promise<unknown> } }).luma.invoke;
+    (window as unknown as { luma: { invoke: unknown } }).luma.invoke = async (cmd: { type: string }) =>
+      cmd.type === 'music.suggestIntents' ? (sent.push(cmd), { ok: true, data: { suggestions: ['lumières sur les basses', 'couleurs pastel'], provider: 'openrouter', model: 'm', notices: [] } }) : invoke(cmd);
+    render(<MusicPage />);
+    const chips = () => Array.from(screen.getByTestId('music-intent-suggestions').querySelectorAll('button.chip:not([data-testid])')).map((b) => b.textContent);
+    expect(chips()).toContain('couplets sobres'); // local, from the measured sound
+    fireEvent.click(screen.getByTestId('music-intent-suggest-ai'));
+    // The AI ones replace them, marked as such (own label, own chips).
+    await waitFor(() => expect(screen.getAllByTestId('music-ai-suggestion').map((b) => b.textContent)).toEqual(['lumières sur les basses', 'couleurs pastel']));
+    expect(chips()).toEqual([]);
+    expect(screen.getByText('Suggestions de l’IA :')).toBeInTheDocument();
+    expect(sent.find((c) => c.type === 'music.suggestIntents')).toEqual({ type: 'music.suggestIntents', trackId: 'a' });
+  });
+
   it('remplace le fichier d’un morceau : le nouveau est ajouté, l’ancien retiré', async () => {
     player.load = vi.fn(async () => ({ name: 'nouveau.wav', hash: 'c'.repeat(64), analysis: analysis(110) }));
     render(<MusicPage />);
