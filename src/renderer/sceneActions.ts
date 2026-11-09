@@ -262,6 +262,35 @@ export async function sceneFromPhoto(v: Project['visualizer'], image: string): P
   if (ok) toast(t('photo.done'), [found, ...r.notices].join(' · '));
 }
 
+
+/** Multi-view photos → one shared stage reconstruction, deduplicated by the vision model and reviewed before applying. */
+export async function sceneFromPhotos(v: Project['visualizer'], images: string[]): Promise<void> {
+  if (images.length < 2 || images.length > 6) {
+    toast('Nombre de photos invalide', 'Sélectionnez entre 2 et 6 vues de la même installation.', 'error');
+    return;
+  }
+  toast('Analyse multi-vues en cours', `Fusion de ${images.length} photos pour reconstruire une seule scène 3D…`);
+  const r = await call({ type: 'ai.sceneFromPhotos', images }).catch(() => null);
+  if (!r) return;
+  const found = `${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`;
+  if (!r.trusses.length && !r.props.length && !r.screens.length) {
+    toast('Aucun élément reconnu', r.summary, 'error');
+    return;
+  }
+  const lines = [
+    r.summary,
+    '',
+    `Analyse de ${r.imageCount} vues · ${found}`,
+    'Les dimensions et coordonnées sont des estimations visuelles, pas des mesures.',
+    ...(r.dropped ? [`${r.dropped} élément(s) écarté(s) car invalides.`] : []),
+    ...(v.trusses.length || v.props.length || v.screens.length ? ['', 'La validation remplacera les structures, décors et écrans actuellement présents.'] : []),
+  ];
+  if (!(await confirmAction({ title: 'Valider la reconstruction multi-vues', message: lines.join('\n'), confirmLabel: 'Appliquer la scène' }))) return;
+  for (const sc of v.screens) setScreenVideo(sc.id, null);
+  const ok = await act({ type: 'project.update', visualizer: { stageWidth: r.stageWidth, stageDepth: r.stageDepth, trusses: r.trusses, props: r.props, screens: r.screens } });
+  if (ok) toast('Scène reconstruite', `${found} · ${r.notices.join(' · ')}`);
+}
+
 /**
  * Written description → whole stage: after confirmation, replaces the stage layout, patches the described fixtures
  * (first universe with room for each rig) and hangs them: "dessus" rigs on the totems, the others on the structures.
