@@ -277,21 +277,18 @@ function buildGrandstands(stage: StageGeometry): THREE.Group {
   const tierDepth = 0.92;
   const tierHeight = 0.34;
   const firstZ = 10.5;
-  const stepMat = new THREE.MeshStandardMaterial({ color: 0x252b36, roughness: 0.82, metalness: 0.18 });
-  const seatMat = new THREE.MeshStandardMaterial({ color: 0x111722, roughness: 0.68, metalness: 0.12 });
-  const edgeMat = new THREE.MeshStandardMaterial({ color: 0x596273, roughness: 0.42, metalness: 0.72 });
 
   for (let row = 0; row < 8; row++) {
     const z = firstZ + row * tierDepth;
     const base = 0.35 + row * tierHeight;
-    const step = new THREE.Mesh(new THREE.BoxGeometry(width, tierHeight, tierDepth), stepMat.clone());
+    const step = new THREE.Mesh(new THREE.BoxGeometry(width, tierHeight, tierDepth), new THREE.MeshStandardMaterial({ color: 0x252b36, roughness: 0.82, metalness: 0.18 }));
     step.position.set(0, base - tierHeight / 2, z);
     step.castShadow = true;
     step.receiveShadow = true;
     stands.add(step);
 
     // Continuous seat deck and a raised backrest: spectators are instanced on the same tier in crowd.ts.
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(width, 0.075, 0.42), seatMat.clone());
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(width, 0.075, 0.42), new THREE.MeshStandardMaterial({ color: 0x111722, roughness: 0.68, metalness: 0.12 }));
     seat.position.set(0, base + 0.43, z - 0.12);
     seat.castShadow = true;
     seat.receiveShadow = true;
@@ -303,7 +300,7 @@ function buildGrandstands(stage: StageGeometry): THREE.Group {
 
     // Aluminium aisle-edge posts and a continuous handrail make the tier profile legible in wide shots.
     for (const x of [-width / 2 + 0.08, width / 2 - 0.08]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.82, 8), edgeMat.clone());
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.82, 8), new THREE.MeshStandardMaterial({ color: 0x596273, roughness: 0.42, metalness: 0.72 }));
       post.position.set(x, base + 0.41, z + 0.28);
       stands.add(post);
     }
