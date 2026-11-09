@@ -279,6 +279,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ai.listModels'), refresh: z.boolean().default(false) }),
   /** Photo of a real stage (downscaled JPEG/PNG data URL) → trusses, set pieces and screens, for review before applying. */
   z.object({ type: z.literal('ai.sceneFromPhoto'), image: photoSchema }),
+  /** Two to six views of the same venue → one deduplicated stage layout, reviewed before applying. */
+  z.object({ type: z.literal('ai.sceneFromPhotos'), images: z.array(photoSchema).min(2).max(6) }),
   /** Photos of a manual's DMX chart (consecutive pages) → fixture profile, for review before `profile.save`. */
   z.object({ type: z.literal('ai.profileFromPhoto'), images: z.array(photoSchema).min(1).max(4) }),
   /** Venue photos → visual fixture detections and suggested links to existing patch fixtures; operator confirmation required. */
@@ -520,6 +522,7 @@ export interface CommandResults {
   'ai.voiceKey': Void;
   'ai.voiceToken': { token: string; model: string };
   'ai.sceneFromPhoto': PhotoScene & { model: string; notices: string[] };
+  'ai.sceneFromPhotos': PhotoScene & { model: string; notices: string[]; imageCount: number };
   'ai.profileFromPhoto': PhotoProfile & { model: string; notices: string[] };
   'ai.recognizeFixtures': FixtureRecognitionResult & { model: string; notices: string[] };
   'audio.features': Void;
