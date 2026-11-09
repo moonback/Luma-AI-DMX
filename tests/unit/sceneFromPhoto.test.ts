@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parsePhotoScene, sceneFromPhotoWithOpenRouter } from '../../src/core/ai/sceneFromPhoto';
+import { parsePhotoScene, sceneFromPhotoWithOpenRouter, sceneFromPhotosWithOpenRouter } from '../../src/core/ai/sceneFromPhoto';
 
 let n = 0;
 const id = () => `id-${++n}`;
@@ -35,5 +35,50 @@ describe('scène depuis une photo', () => {
     const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
     expect(body.messages[1].content[1]).toEqual({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } });
     expect(r.trusses).toHaveLength(1);
+  });
+});
+
+
+describe('reconstruction multi-vues', () => {
+  it('fusionne plusieurs photos dans une seule requête vision', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      model: 'v/vision',
+      choices: [{ message: { content: JSON.stringify({
+        summary: 'Pont avant et écran',
+        stageWidth: 12,
+        stageDepth: 8,
+        trusses: [{ name: 'Pont avant', shape: 'line', x: 0, y: -1, height: 5.5, length: 12, rotation: 0, support: 'towers' }],
+        props: [],
+        screens: [],
+      }) } }],
+    })));
+    const images = [
+      'data:image/jpeg;base64,AAAA',
+      'data:image/jpeg;base64,BBBB',
+      'data:image/jpeg;base64,CCCC',
+    ];
+    const result = await sceneFromPhotosWithOpenRouter(images, {
+      apiKey: 'sk-or-v1-x',
+      model: 'v/vision',
+      effort: 'low',
+      timeoutMs: 5000,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    }, id);
+    const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.messages[1].content.filter((part: { type: string }) => part.type === 'image_url')).toHaveLength(3);
+    expect(result.imageCount).toBe(3);
+    expect(result.trusses).toHaveLength(1);
+  });
+
+  it('refuse moins de deux photos avant tout appel réseau', async () => {
+    const fetchImpl = vi.fn();
+    await expect(sceneFromPhotosWithOpenRouter(['data:image/jpeg;base64,AAAA'], {
+      apiKey: 'sk-or-v1-x',
+      model: 'v/vision',
+      effort: 'low',
+      timeoutMs: 5000,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    }, id)).rejects.toThrow('entre 2 et 6 photos');
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
