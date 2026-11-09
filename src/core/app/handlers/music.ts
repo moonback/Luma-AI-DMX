@@ -86,7 +86,7 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       return applyShow(app, t, plan, notices);
     }
     case 'music.suggestIntents':
-      return suggestIntentsFor(app, track(app, cmd.trackId), cmd.intent.trim());
+      return suggestIntentsFor(app, track(app, cmd.trackId));
     case 'music.generatedEdited': {
       const c = track(app, cmd.trackId).created;
       return { edited: !!c.fingerprint && generatedFingerprint(app.project, c) !== c.fingerprint };
@@ -94,14 +94,12 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
   }
 }
 
-const cachedSuggestSchema = z.object({ suggestions: z.array(z.string().max(120)).max(5), model: z.string().max(150), notices: z.array(z.string()) });
-
-/** Intention suggestions for a track: with OpenRouter when configured (cached, validated), else from its measured sound. */
-async function suggestIntentsFor(app: AppService, t: MusicTrack, intent: string): Promise<{ suggestions: string[]; provider: 'local' | 'openrouter'; model: string | null; notices: string[] }> {
+/** Intention suggestions for a track: with OpenRouter when configured (validated, never cached: each click asks again), else from its measured sound. */
+async function suggestIntentsFor(app: AppService, t: MusicTrack): Promise<{ suggestions: string[]; provider: 'local' | 'openrouter'; model: string | null; notices: string[] }> {
   const notices: string[] = [];
   const structure = songStructure(t, rigInfo(app.index, app.settings.ai.allowStrobe));
-  const r = await askOpenRouter(app, { kind: 'suggest', hash: t.hash, intent, structure }, cachedSuggestSchema, notices,
-    (o) => suggestIntentsWithOpenRouter(intent, structure, o));
+  const r = await askOpenRouter(app, { kind: 'suggest', hash: t.hash, structure }, null, notices,
+    (o) => suggestIntentsWithOpenRouter(structure, o));
   // OpenRouter enabled but unavailable (no key, error): no local suggestions stand in for the AI ones (notices say why).
   if (!r) return { suggestions: app.settings.ai.provider === 'openrouter' ? [] : suggestIntents(t.analysis), provider: 'local', model: null, notices };
   return { suggestions: r.suggestions, provider: 'openrouter', model: r.model, notices: r.notices };
@@ -159,9 +157,10 @@ const cachedSectionSchema = z.object({ section: showSectionPlanSchema, model: z.
 /**
  * One OpenRouter request through the response cache: the key covers the request (`parts`: song hash, intent, rig and
  * structure, variant…) plus the model and effort, so the same request is answered from disk, reproducibly and free.
+ * `schema` null: no cache (read nor write), every call goes to OpenRouter.
  * Returns null when OpenRouter is not configured (`notices` then says why, if it was selected).
  */
-async function askOpenRouter<T extends { notices: string[] }>(app: AppService, parts: Record<string, unknown>, schema: z.ZodType<T>, notices: string[], call: (o: OpenRouterOptions) => Promise<T>): Promise<T | null> {
+async function askOpenRouter<T extends { notices: string[] }>(app: AppService, parts: Record<string, unknown>, schema: z.ZodType<T> | null, notices: string[], call: (o: OpenRouterOptions) => Promise<T>): Promise<T | null> {
   const ai = app.settings.ai;
   const apiKey = app.opts.secrets.get(OPENROUTER_KEY);
   if (ai.provider !== 'openrouter' || !apiKey) {
@@ -171,7 +170,7 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
   const model = ai.model || DEFAULT_OPENROUTER_MODEL;
   const cache = new ResponseCache(path.join(app.opts.dataDir, 'ai-cache'));
   const id = cache.key({ ...parts, model, effort: ai.effort });
-  const hit = await cache.get(id, schema);
+  const hit = schema && (await cache.get(id, schema));
   if (hit) {
     app.emit('progress', { op: 'music', step: 'cache' });
     return { ...hit, notices: ['Réponse IA reprise du cache (même demande, aucun nouvel appel).', ...hit.notices] };
@@ -185,7 +184,7 @@ async function askOpenRouter<T extends { notices: string[] }>(app: AppService, p
     const caps = (await openRouterModels(app).catch(() => [] as OpenRouterModel[])).find((m) => m.id === model);
     const r = await call({ apiKey, model, effort: ai.effort, timeoutMs: ai.timeoutSec * 1000, capabilities: caps, signal: abort.signal, onUsage: recordUsage(app) });
     app.aiLastError = null;
-    await cache.set(id, r).catch((err: unknown) => app.logger.warn('Musique', `Cache IA non enregistré : ${err instanceof Error ? err.message : String(err)}`));
+    if (schema) await cache.set(id, r).catch((err: unknown) => app.logger.warn('Musique', `Cache IA non enregistré : ${err instanceof Error ? err.message : String(err)}`));
     return r;
   } catch (err) {
     if (abort.signal.aborted) throw new UserError('Génération annulée : rien n’a été appliqué', 'music.generationCancelled');

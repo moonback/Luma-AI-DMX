@@ -37,9 +37,14 @@ describe('suggestIntents', () => {
   it('suggestions IA : réponse dédoublonnée, limitée à 5, et refusée si vide', async () => {
     const answer = (suggestions: unknown) => new Response(JSON.stringify({ model: 'm/x', choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ suggestions }) } }] }), { status: 200 });
     const opts = (fetchImpl: typeof fetch) => ({ apiKey: 'k', model: 'm/x', effort: 'low' as const, timeoutMs: 1000, fetchImpl });
-    const many = await suggestIntentsWithOpenRouter('', 'structure', opts((async () => answer(['couplets sobres', 'couplets sobres', 'refrains explosifs', 'couleurs froides', 'strobe sur les drops', 'ambiance calme', 'beaucoup de mouvement'])) as unknown as typeof fetch));
+    const many = await suggestIntentsWithOpenRouter('structure', opts((async () => answer(['couplets sobres', 'couplets sobres', 'refrains explosifs', 'couleurs froides', 'strobe sur les drops', 'ambiance calme', 'beaucoup de mouvement'])) as unknown as typeof fetch));
     expect(many.suggestions).toEqual(['couplets sobres', 'refrains explosifs', 'couleurs froides', 'strobe sur les drops', 'ambiance calme']);
-    await expect(suggestIntentsWithOpenRouter('', 'structure', opts((async () => answer(['  '])) as unknown as typeof fetch))).rejects.toThrow(/exploitable/);
+    await expect(suggestIntentsWithOpenRouter('structure', opts((async () => answer(['  '])) as unknown as typeof fetch))).rejects.toThrow(/exploitable/);
+    // Short request: low reasoning and a small answer cap, whatever the effort set for the show.
+    let body: unknown = null;
+    const spy = (async (_u: string, init: { body: string }) => { body = JSON.parse(init.body); return answer(['ambiance calme']); }) as unknown as typeof fetch;
+    await suggestIntentsWithOpenRouter('structure', { ...opts(spy), effort: 'high', capabilities: { structuredOutputs: false, jsonMode: false, reasoning: true } });
+    expect(body).toMatchObject({ max_tokens: 1500, reasoning: { effort: 'low' } });
   });
 
   it('chaque consigne est comprise par parseIntent comme le texte tapé à la main', () => {

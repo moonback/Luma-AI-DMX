@@ -90,13 +90,12 @@ export function MusicPage() {
   const replaceFile = useRef<HTMLInputElement>(null);
   const isPlaying = !!track && playingId === track.id;
   const nowIdx = isPlaying ? track.analysis.sections.findIndex((s) => pos >= s.start && pos < s.end) : -1;
-  const [aiSuggestions, setAiSuggestions] = useState<{ trackId: string; items: string[]; provider: 'local' | 'openrouter' } | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<{ trackId: string; items: string[] } | null>(null);
   const [suggesting, setSuggesting] = useState(false);
-  // With OpenRouter enabled, only the AI suggestions are shown; the local ones appear only without it.
   const aiOn = useStore((s) => s.runtime?.ai.provider === 'openrouter');
-  const localSuggestions = track && !aiOn ? suggestIntents(track.analysis).filter((s) => !intent.includes(s)) : [];
-  const aiList = aiSuggestions && aiSuggestions.trackId === track?.id ? aiSuggestions.items.filter((s) => !intent.includes(s)) : [];
-  const suggestions = aiOn ? aiList : localSuggestions;
+  // The local suggestions (instant, from the measured sound) show until the AI ones for this track arrive.
+  const fromAi = aiSuggestions && aiSuggestions.trackId === track?.id ? aiSuggestions.items : null;
+  const suggestions = track ? (fromAi ?? suggestIntents(track.analysis)).filter((s) => !intent.includes(s)) : [];
   const planIntent = track?.plan?.intent ?? '';
   useEffect(() => { if (planIntent) setIntent(planIntent); }, [track?.id, planIntent]);
   const planMood = track?.plan?.mood;
@@ -155,21 +154,23 @@ export function MusicPage() {
       setView('show');
     }
   };
-  const requestSuggestions = async (id: string, text: string) => {
+  const requestSuggestions = async (id: string) => {
     setSuggesting(true);
-    const r = await act({ type: 'music.suggestIntents', trackId: id, intent: text });
+    const r = await act({ type: 'music.suggestIntents', trackId: id });
     setSuggesting(false);
     if (r) {
-      setAiSuggestions({ trackId: id, items: r.provider === 'openrouter' ? r.suggestions : [], provider: r.provider });
+      // AI unavailable: keep the local suggestions on screen (the notices say why).
+      if (r.provider === 'openrouter') setAiSuggestions({ trackId: id, items: r.suggestions });
       setNotices(r.notices);
     }
   };
-  // Automatic suggestions when the setting is on: as soon as a track is analysed or opened on this page.
+  // Automatic suggestions when the setting is on: fetched as soon as a track is imported or opened (Morceau screen),
+  // so they are ready on « Intention ».
   useEffect(() => {
     if (!track) return;
     let cancelled = false;
     void act({ type: 'settings.get' }).then((s) => {
-      if (!cancelled && s?.ai.autoSuggestIntents && s.ai.provider === 'openrouter') void requestSuggestions(track.id, track.plan?.intent ?? '');
+      if (!cancelled && s?.ai.autoSuggestIntents && s.ai.provider === 'openrouter') void requestSuggestions(track.id);
     });
     return () => { cancelled = true; };
   }, [track?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per track, not on every render
@@ -226,8 +227,8 @@ export function MusicPage() {
               {notices.map((n, i) => <div key={i} className="small music-notice">{n}</div>)}
               {shown === 'track' && <TrackStep track={track} studio={studio} replacing={!!progress} onReplace={() => replaceFile.current?.click()} onRemove={remove} onNext={() => setView('intent')} />}
               {shown === 'intent' && (
-                <IntentStep track={track} intent={intent} onIntent={setIntent} mood={mood} onMood={setMood} history={history} suggestions={suggestions} aiOn={aiOn}
-                  suggesting={suggesting} onSuggestAi={() => void requestSuggestions(track.id, intent)} busy={busy} phraseBars={phraseBars} onPhraseBars={(n) => void savePhraseBars(n)}
+                <IntentStep track={track} intent={intent} onIntent={setIntent} mood={mood} onMood={setMood} history={history} suggestions={suggestions} fromAi={!!fromAi} aiOn={aiOn}
+                  suggesting={suggesting} onSuggestAi={() => void requestSuggestions(track.id)} busy={busy} phraseBars={phraseBars} onPhraseBars={(n) => void savePhraseBars(n)}
                   onGenerate={() => void generate(false)} onBack={() => setView('track')} />
               )}
               {shown === 'show' && (

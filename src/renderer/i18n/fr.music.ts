@@ -24,6 +24,8 @@ export const frMusic = {
   'music.library.status.playing': 'En lecture',
   'music.library.none': 'Aucun morceau ne correspond.',
   'music.styles': 'Styles',
+  'music.suggestions.fromAi': 'Suggestions de l’IA :',
+  'music.suggestions.aiChipHint': 'Proposée par l’IA : ajouter à l’intention',
   'music.replace': 'Remplacer le fichier',
   'music.replaceHint': 'Importe un autre fichier audio à la place de ce morceau (l’intention saisie est gardée, le show est à régénérer)',
   'music.show.none': 'Pas encore de show',
