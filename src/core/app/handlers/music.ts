@@ -111,6 +111,17 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
       else app.mutate((d) => { const target = d.music.tracks.find((x) => x.id === cmd.trackId); if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound'); target.analysis = analysis; });
       return ok;
     }
+    case 'music.restoreAnalysis': {
+      const current = track(app, cmd.trackId);
+      if (cmd.analysis.duration !== current.analysis.duration) throw new UserError('La durée de l’analyse ne correspond pas au morceau', 'music.analysisDurationMismatch');
+      if (current.plan) applyShow(app, current, structuredClone(current.plan), [], true, structuredClone(cmd.analysis));
+      else app.mutate((d) => {
+        const target = d.music.tracks.find((x) => x.id === cmd.trackId);
+        if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound');
+        target.analysis = structuredClone(cmd.analysis);
+      });
+      return ok;
+    }
     case 'music.generate': {
       const t = track(app, cmd.trackId);
       const variant = cmd.nextVariant ? (t.plan?.variant ?? 0) + 1 : t.plan?.variant ?? 0;
