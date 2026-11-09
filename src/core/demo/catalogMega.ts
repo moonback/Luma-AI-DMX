@@ -23,8 +23,23 @@ const PRESETS: MegaPreset[] = [
   { id: 'wedding-festival', name: 'SUMMER CELEBRATION — réception XXL', venue: 'Domaine des Lumières (800 invités)', show: 'Summer Celebration', category: 'Événementiel', description: 'Grande réception extérieure, piste de danse, portiques lumière, projecteurs au-dessus des invités et scène DJ.', bpm: 124, colors: [C.orange, C.pink, C.violet], audience: 'Dancefloor public', stageLook: 'Sunset', finale: 'All together' },
 ];
 
+
+const VISUAL_VARIANTS: Record<string, { stage: [number, number]; y: number[]; height: number[]; count: number[]; span: number[]; extra: DemoSpec['decor'] }> = {
+ 'arena-tour': { stage:[30,20], y:[3,16,19,8,-15,-22], height:[13,12,2,10,10,10], count:[12,12,16,10,6,6], span:[.94,.88,.9,.8,.9,.9], extra:[{name:'Portique touring monumental',kind:'arch',x:0,y:18,width:25,depth:.3,height:10,color:'#263449',params:{style:'square',thickness:.3,leds:true}},{name:'Podium latéral jardin',kind:'riser',x:-12,y:4,width:3,depth:3,height:1.2},{name:'Podium latéral cour',kind:'riser',x:12,y:4,width:3,depth:3,height:1.2}] },
+ 'festival-mainstage': { stage:[26,16], y:[3,-1,14,8,-11,-15], height:[11,12,9,11,8,8], count:[8,10,12,8,6,6], span:[.72,.95,.9,.85,.9,.9], extra:[{name:'Backwall festival',kind:'backdrop',x:0,y:15,width:22,depth:.1,height:7,color:'#172033'},{name:'Tour delay jardin',kind:'line-array',x:-12,y:-7,width:1.1,depth:.5,height:2.2,elevation:4,params:{modules:6,splay:3,bumper:true,flown:true}},{name:'Tour delay cour',kind:'line-array',x:12,y:-7,width:1.1,depth:.5,height:2.2,elevation:4,params:{modules:6,splay:3,bumper:true,flown:true}}] },
+ 'wedding-palace': { stage:[20,18], y:[0,8,16,8,-11,-15], height:[5,6,.4,6,8,8], count:[4,8,16,4,6,6], span:[.7,.75,.95,.45,.9,.9], extra:[{name:'Arche florale',kind:'arch',x:0,y:13,width:6,depth:.3,height:4,color:'#E8DCC8',params:{style:'round',thickness:.3,leds:true}},{name:'Table invités jardin',kind:'table',x:-6,y:9,width:2.2,depth:2.2,height:.75,color:'#F4EBDD'},{name:'Table invités cour',kind:'table',x:6,y:9,width:2.2,depth:2.2,height:.75,color:'#F4EBDD'}] },
+ 'club-megastructure': { stage:[18,14], y:[4,1,7,0,-11,-15], height:[8,5,8,3,8,8], count:[10,8,8,10,6,6], span:[.85,.9,.9,.9,.9,.9], extra:[{name:'Tunnel LED immersif',kind:'arch',x:0,y:5,width:14,depth:.3,height:6,color:'#4C1D95',params:{style:'square',thickness:.3,leds:true}},{name:'Hazer tunnel jardin',kind:'fog-machine',x:-6,y:5,width:.6,depth:.3,height:.25,params:{style:'haze'}},{name:'Hazer tunnel cour',kind:'fog-machine',x:6,y:5,width:.6,depth:.3,height:.25,params:{style:'haze'}}] },
+ 'sports-opening': { stage:[32,24], y:[2,11,20,4,-11,-15], height:[16,14,12,.3,8,8], count:[8,16,16,8,6,6], span:[.95,.95,.9,.85,.9,.9], extra:[{name:'Écran géant stade',kind:'backdrop',x:0,y:22,width:18,depth:.1,height:9,color:'#14213D'},{name:'Podium poursuite jardin',kind:'riser',x:-13,y:2,width:2.5,depth:2.5,height:1.5},{name:'Podium poursuite cour',kind:'riser',x:13,y:2,width:2.5,depth:2.5,height:1.5}] },
+ 'tv-awards': { stage:[22,14], y:[3,12,-1,8,-11,-15], height:[7,8,6,5,8,8], count:[6,8,10,8,6,6], span:[.85,.9,.9,.75,.9,.9], extra:[{name:'Arche caméra jardin',kind:'arch',x:-6,y:8,width:5,depth:.3,height:5,color:'#263A63',params:{style:'square',thickness:.3,leds:true}},{name:'Arche caméra cour',kind:'arch',x:6,y:8,width:5,depth:.3,height:5,color:'#263A63',params:{style:'square',thickness:.3,leds:true}},{name:'Cyclorama studio',kind:'backdrop',x:0,y:13,width:18,depth:.1,height:6,color:'#172554'}] },
+ 'symphonic-show': { stage:[24,18], y:[4,14,9,17,-11,-15], height:[9,10,8,.3,8,8], count:[8,12,10,0,6,6], span:[.8,.9,.85,.8,.9,.9], extra:[{name:'Piano à queue soliste',kind:'piano',x:-5,y:6,width:1.55,depth:2.1,height:1,color:'#0B0B0E',params:{style:'grand',open:true}},{name:'Pupitre orchestre jardin',kind:'music-stand',x:-7,y:9,width:.5,depth:.4,height:1.2},{name:'Pupitre orchestre centre',kind:'music-stand',x:0,y:9,width:.5,depth:.4,height:1.2},{name:'Pupitre orchestre cour',kind:'music-stand',x:7,y:9,width:.5,depth:.4,height:1.2}] },
+ 'electro-dome': { stage:[28,22], y:[5,16,19,10,-11,-15], height:[14,12,11,10,8,8], count:[12,12,6,12,6,6], span:[.9,.9,.9,.8,.9,.9], extra:[{name:'Portique radial simulé',kind:'arch',x:0,y:12,width:20,depth:.3,height:10,color:'#164E63',params:{style:'round',thickness:.3,leds:true}},{name:'Écran LED courbe',kind:'backdrop',x:0,y:18,width:22,depth:.1,height:7,color:'#082F49'}] },
+ 'fashion-gala': { stage:[18,26], y:[-1,8,23,17,-11,-15], height:[8,7,6,.3,8,8], count:[10,8,8,0,6,6], span:[.45,.9,.9,.8,.9,.9], extra:[{name:'Podium catwalk longitudinal',kind:'riser',x:0,y:7,width:3.5,depth:22,height:.8},{name:'Fond photo créateurs',kind:'backdrop',x:0,y:24,width:12,depth:.1,height:5,color:'#111111'},{name:'Premier rang couture jardin',kind:'chair',x:-5,y:-3,width:.45,depth:.5,height:.9,color:'#171717'},{name:'Premier rang couture cour',kind:'chair',x:5,y:-3,width:.45,depth:.5,height:.9,color:'#171717'}] },
+ 'wedding-festival': { stage:[24,20], y:[2,11,17,5,-11,-15], height:[8,7,5,3,8,8], count:[6,8,12,6,6,6], span:[.85,.8,.9,.7,.9,.9], extra:[{name:'Scène DJ extérieure',kind:'dj-booth',x:0,y:15,width:3.5,depth:.8,height:1.05,color:'#111318',params:{decks:true,led:true}},{name:'Portique guinguette',kind:'arch',x:0,y:12,width:14,depth:.3,height:6,color:'#7C2D12',params:{style:'round',thickness:.3,leds:true}},{name:'Table mange-debout jardin',kind:'table',x:-8,y:-5,width:1,depth:1,height:1.1,color:'#6B4226'},{name:'Table mange-debout cour',kind:'table',x:8,y:-5,width:1,depth:1,height:1.1,color:'#6B4226'}] },
+};
+
 function makeMegaDemo(p: MegaPreset): DemoSpec {
   const [a, b, c] = p.colors;
+  const variant = VISUAL_VARIANTS[p.id];
   const rigs: DemoSpec['rigs'] = [
     { prefix: 'SPOT', label: 'Lyres spot — pont avant', profile: 'demo-spot', mode: '13ch étendu', count: 8, universe: 1, y: 2, height: 9, span: 0.9, color: '#8B5CF6' },
     { prefix: 'WASH', label: 'Lyres wash — pont arrière', profile: 'demo-wash', mode: '13ch', count: 8, universe: 1, y: 13, height: 9, span: 0.9, color: '#F59E0B' },
@@ -51,6 +66,8 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
     ...row(8, -8.5, 8.5, (x, i) => chair(`Public arrière ${i + 1}`, x, -6.2, 0, '#30343B')),
     ...row(4, -7.5, 7.5, (x, i) => chair(`Rang latéral ${i + 1}`, x, -9, 0, '#30343B')),
   ];
+  const variedRigs = rigs.map((r, i) => ({ ...r, y: variant.y[i] ?? r.y, height: variant.height[i] ?? r.height, count: variant.count[i] ?? r.count, span: variant.span[i] ?? r.span })).filter((r) => r.count > 0);
+  const variedDecor = [...decor, ...variant.extra];
   const looks: DemoSpec['looks'] = [
     { name: 'Accueil', parts: [{ rigs: ['AUD_FRONT', 'AUD_REAR'], colors: [a], level: 0.25 }, { rigs: ['WASH'], colors: [C.warm], level: 0.2 }, { rigs: ['PAR'], colors: [b], level: 0.25 }] },
     { name: 'Ouverture', parts: [{ rigs: ['SPOT'], colors: [C.white], level: 0.8, tilt: 0.55 }, { rigs: ['AUD_FRONT', 'AUD_REAR'], colors: [a, b], level: 0.45 }, { rigs: ['BAR'], colors: [a], level: 0.5 }] },
@@ -80,7 +97,7 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
     id: p.id, name: p.name, venue: p.venue, show: p.show, category: p.category,
     description: p.description,
     highlights: ['Structures aluminium multi-ponts et projecteurs suspendus', 'Moteurs de levage, chaînes, accroches et clamps visibles', 'Gradins 8 rangées avec spectateurs 3D assis et debout', 'Deux lignes de wash croisées au-dessus des gradins, 2 univers DMX et 6 cues'],
-    bpm: p.bpm, stage: [22, 19], rigs, decor,
+    bpm: p.bpm, stage: variant.stage, rigs: variedRigs, decor: variedDecor,
     screens: [screen('Mur LED principal', 0, 17.6, 18, 6, 1.2, '#111827')],
     looks, effects, cueLists,
     timeline: { name: 'Ouverture grand format', duration: 72, events: [
