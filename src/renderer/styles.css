@@ -1533,3 +1533,5 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
   position:absolute; z-index:12; top:0; bottom:0; width:2px;
   background:var(--cyan); box-shadow:0 0 8px var(--cyan); pointer-events:none;
 }
+
+.studio-event-marker.is-selected { outline: 2px solid var(--cyan); outline-offset: 2px; filter: brightness(1.35); }
