@@ -3,8 +3,8 @@
  *
  * Converts the existing DMX patch and camera localisation results into a stable,
  * UI-independent representation for the 2D/3D installation map. It deliberately
- * distinguishes measured positions from patch fallbacks and never guesses a
- * hanging/wall mount when the project does not contain that information.
+ * distinguishes measured positions from patch fallbacks and preserves the
+ * project's legacy auto-mount convention while marking inferred mount types.
  */
 
 export type InstallationMount = 'hanging' | 'floor' | 'wall' | 'unknown';
