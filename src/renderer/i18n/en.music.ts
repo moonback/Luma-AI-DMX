@@ -21,6 +21,8 @@ export const enMusic: Record<keyof typeof frMusic, string> = {
   'music.studio.zoomOut': 'Zoom out timeline',
   'music.studio.zoomReset': 'Reset timeline zoom',
   'music.studio.seekToEvent': 'Play from this event',
+  'music.studio.noSectionSelected': 'No section selected',
+  'music.studio.editSection': 'Edit section',
   'music.studio.energy': 'Music energy',
   'music.library.filter': 'Filter tracks…',
   'music.library.sort': 'Sort tracks',
