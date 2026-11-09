@@ -33,7 +33,7 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
     { prefix: 'BLIND', label: 'Blinders — face public', profile: 'demo-par-rgb', mode: '5ch DRGB+Strobe', count: 4, universe: 1, y: 0.5, height: 9, span: 0.75, color: '#FDE68A' },
     { prefix: 'STR', label: 'Strobes — ponts latéraux', profile: 'demo-strobe', mode: '2ch', count: 4, universe: 1, y: 8, height: 9, span: 0.8, color: '#FACC15' },
     { prefix: 'AUD_FRONT', label: 'Wash suspendus — gradins avant', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -11, height: 8, span: 0.9, color: '#34D399' },
-    { prefix: 'AUD_REAR', label: 'Wash suspendus — gradins arrière', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -15, height: 8, span: 0.9, color: '#60A5FA' },
+    { prefix: 'AUD_REAR', label: 'Wash suspendus — gradins arrière', profile: 'demo-wash', mode: '13ch', count: 6, universe: 2, y: -15, height: 8, span: 0.9, rotation: 180, color: '#60A5FA' },
   ];
   const decor: DemoSpec['decor'] = [
     { name: 'Plateau principal 20 × 12 m', kind: 'riser' as const, x: 0, y: 10, width: 20, depth: 12, height: 1 },
@@ -79,7 +79,7 @@ function makeMegaDemo(p: MegaPreset): DemoSpec {
   return {
     id: p.id, name: p.name, venue: p.venue, show: p.show, category: p.category,
     description: p.description,
-    highlights: ['Structures scéniques multi-ponts et projecteurs suspendus', 'Deux lignes de wash au-dessus du public', '2 univers DMX, groupes, scènes, effets et conduite de 6 cues', 'Décor, régie, sonorisation et public matérialisés en 3D'],
+    highlights: ['Structures aluminium multi-ponts et projecteurs suspendus', 'Moteurs de levage, chaînes, accroches et clamps visibles', 'Gradins 8 rangées avec spectateurs 3D assis et debout', 'Deux lignes de wash croisées au-dessus des gradins, 2 univers DMX et 6 cues'],
     bpm: p.bpm, stage: [22, 19], rigs, decor,
     screens: [screen('Mur LED principal', 0, 17.6, 18, 6, 1.2, '#111827')],
     looks, effects, cueLists,
