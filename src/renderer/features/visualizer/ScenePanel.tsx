@@ -3,7 +3,7 @@ import { Armchair, ArrowLeft, Boxes, Cable, Guitar, Speaker, Camera, ChevronUp, 
 import type { EquipDistributionMode } from '../../../core/visualizer/sceneEdit';
 import { confirmAction, useStore } from '../../store';
 import { act, newId } from '../../api';
-import { PHOTO_MAX_PX, sceneFromPhoto } from '../../sceneActions';
+import { PHOTO_MAX_PX, sceneFromPhoto, sceneFromPhotos } from '../../sceneActions';
 import { t, useT, type MessageKey } from '../../i18n';
 import { useResolved } from '../../components/ui';
 import { buildVisualModel } from '../../../core/visualizer/model';
@@ -168,6 +168,21 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
                 const file = e.target.files?.[0];
                 e.target.value = '';
                 if (file) shrinkImage(file, PHOTO_MAX_PX).then((img) => sceneFromPhoto(vis, img)).catch((err: Error) => useStore.getState().toast({ kind: 'error', title: t('photo.error'), detail: err.message }));
+              }} />
+            </label>
+            <label className="btn sm build-photo-btn" title="Fusionner plusieurs vues de la même installation pour reconstruire une scène 3D cohérente" data-testid="scene-from-photos">
+              <Layers size={13} />
+              <span>Reconstruire multi-vues</span>
+              <input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(e) => {
+                const files = [...(e.target.files ?? [])].slice(0, 6);
+                e.target.value = '';
+                if (files.length < 2) {
+                  useStore.getState().toast({ kind: 'warn', title: 'Deux photos minimum', detail: 'Sélectionnez au moins deux vues de la même installation.' });
+                  return;
+                }
+                Promise.all(files.map((file) => shrinkImage(file, PHOTO_MAX_PX)))
+                  .then((images) => sceneFromPhotos(vis, images))
+                  .catch((err: Error) => useStore.getState().toast({ kind: 'error', title: 'Photos illisibles', detail: err.message }));
               }} />
             </label>
           </div>
