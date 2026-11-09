@@ -186,6 +186,13 @@ export function buildRig(f: VisualFixture, scene: THREE.Scene): Rig {
     bond.rotation.x = Math.PI / 2;
     bond.position.set(0.14, 0.22, -0.04);
     rigging.add(bond);
+    const safetyPath = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.12, 0.24, -0.04),
+      new THREE.Vector3(0.2, 0.29, -0.08),
+      new THREE.Vector3(0.25, 0.2, -0.12),
+      new THREE.Vector3(0.18, 0.07, -0.14),
+    ]);
+    rigging.add(new THREE.Mesh(new THREE.TubeGeometry(safetyPath, 12, 0.006, 5, false), darkSteel));
     root.add(rigging);
   }
   const yoke = new THREE.Group();
