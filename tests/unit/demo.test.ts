@@ -60,6 +60,16 @@ describe('projets de démonstration', () => {
     }
   });
 
+  it('les dix démos grand format ont des implantations visuelles distinctes', () => {
+    const projects = MEGA_DEMOS.map((d) => buildDemo(d.id));
+    const stageFootprints = projects.map((p) => `${p.visualizer.stageWidth}x${p.visualizer.stageDepth}`);
+    expect(new Set(stageFootprints).size).toBe(10);
+    const fixtureSignatures = projects.map((p) => p.patch.map((f) => `${f.tags[0]}:${f.position.x},${f.position.y},${f.height}`).sort().join('|'));
+    expect(new Set(fixtureSignatures).size).toBe(10);
+    const scenicSignatures = projects.map((p) => p.visualizer.props.map((prop) => `${prop.kind}:${prop.name}`).sort().join('|'));
+    expect(new Set(scenicSignatures).size).toBe(10);
+  });
+
   it('le festival utilise 2 univers', () => {
     const p = buildDemo('festival');
     expect(p.show.universes).toBe(2);
