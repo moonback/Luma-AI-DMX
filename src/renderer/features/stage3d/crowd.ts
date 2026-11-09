@@ -86,7 +86,7 @@ export function buildCrowd(stage: StageGeometry): Crowd {
   const rnd = mulberry32(7);
   const c = new THREE.Color();
   // Dark clothes with a little variety, so beams read on them without the crowd stealing the show.
-  spots.forEach((_, i) => mesh.setColorAt(i, c.setHSL(rnd(), 0.1 + rnd() * 0.15, 0.06 + rnd() * 0.08, THREE.SRGBColorSpace)));
+  spots.forEach((_, i) => mesh.setColorAt(i, c.setHSL(rnd(), 0.1 + rnd() * 0.15, 0.12 + rnd() * 0.12, THREE.SRGBColorSpace)));
 
   const seatedSpots = seatedCrowdSpots(stage);
   const seatedMesh = new THREE.InstancedMesh(humanGeometry(true, 8), new THREE.MeshStandardMaterial({ roughness: 0.92 }), Math.max(1, seatedSpots.length));
@@ -94,7 +94,7 @@ export function buildCrowd(stage: StageGeometry): Crowd {
   seatedMesh.receiveShadow = true;
   seatedMesh.frustumCulled = false;
   const seatedRnd = mulberry32(19);
-  seatedSpots.forEach((_, i) => seatedMesh.setColorAt(i, c.setHSL(seatedRnd(), 0.12 + seatedRnd() * 0.16, 0.07 + seatedRnd() * 0.1, THREE.SRGBColorSpace)));
+  seatedSpots.forEach((_, i) => seatedMesh.setColorAt(i, c.setHSL(seatedRnd(), 0.12 + seatedRnd() * 0.16, 0.12 + seatedRnd() * 0.1, THREE.SRGBColorSpace)));
   seatedMesh.visible = seatedSpots.length > 0;
   return { mesh, spots, seatedMesh, seatedSpots, energy: 0 };
 }
@@ -114,7 +114,7 @@ export function updateCrowd(c: Crowd, time: number, audio: CrowdAudio, camera: T
     const hop = Math.abs(Math.sin(Math.PI * (beats + o.phase * 0.15))) * (0.03 + c.energy * 0.32);
     const sway = Math.sin(time * 1.3 + o.phase * 6.3) * (0.06 - c.energy * 0.04);
     p.set(o.x, hop, o.z);
-    q.setFromAxisAngle(up, sway + o.phase * 0.6 - 0.3); // facing the stage, a little turned
+    q.setFromAxisAngle(up, Math.PI + sway + o.phase * 0.6 - 0.3); // facing the stage, a little turned
     s.setScalar(hidden ? 0 : o.scale);
     c.mesh.setMatrixAt(i, m.compose(p, q, s));
   });
@@ -126,7 +126,7 @@ export function updateCrowd(c: Crowd, time: number, audio: CrowdAudio, camera: T
     const hidden = camera.y < 2.2 && Math.hypot(o.x - camera.x, o.z - camera.z) < CAMERA_CLEARANCE;
     const sway = Math.sin(time * 0.85 + o.phase * 6.3) * 0.035;
     seatedP.set(o.x, o.height, o.z);
-    seatedQ.setFromAxisAngle(up, sway + o.phase * 0.12 - 0.06);
+    seatedQ.setFromAxisAngle(up, Math.PI + sway + o.phase * 0.12 - 0.06);
     seatedS.setScalar(hidden ? 0 : o.scale);
     c.seatedMesh.setMatrixAt(i, seatedMatrix.compose(seatedP, seatedQ, seatedS));
   });
