@@ -55,6 +55,13 @@ const fixturePatchSchema = z.object({
   mountTilt: z.number().min(-90).max(90).optional(),
   /** null detaches the fixture from its truss. */
   trussId: idSchema.nullable().optional(),
+  visualRecognition: z.object({
+    label: z.string().trim().min(1).max(80),
+    description: z.string().max(500),
+    observedType: z.enum(['par', 'moving-head-spot', 'moving-head-wash', 'strobe', 'dimmer', 'led-bar', 'other']),
+    confidence: z.number().min(0).max(1),
+    verifiedAt: z.string().datetime(),
+  }).optional(),
 });
 
 export const commandSchema = z.discriminatedUnion('type', [
