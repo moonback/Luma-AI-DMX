@@ -213,8 +213,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('music.setSection'), trackId: idSchema, index: z.number().int().min(0).max(300), label: z.enum(SECTION_LABELS).optional(), locked: z.boolean().optional() }),
   /** Move the shared boundary between section `index` and `index + 1`; both sections remain contiguous. */
   z.object({ type: z.literal('music.moveSectionBoundary'), trackId: idSchema, index: z.number().int().min(0).max(298), time: z.number().min(0).max(86400) }),
-  z.object({ type: z.literal('music.updateEvent'), trackId: idSchema, index: z.number().int().min(0).max(1999), patch: z.object({ t: z.number().min(0).max(86400), duration: z.number().min(0).max(600), kind: z.enum(['impact', 'riser', 'silence', 'vocal']), confidence: unitSchema.nullable() }).partial() }),
-  z.object({ type: z.literal('music.addEvent'), trackId: idSchema, event: z.object({ t: z.number().min(0).max(86400), duration: z.number().min(0).max(600), kind: z.enum(['impact', 'riser', 'silence', 'vocal']), confidence: unitSchema.optional() }) }),
+  z.object({ type: z.literal('music.updateEvent'), trackId: idSchema, index: z.number().int().min(0).max(1999), patch: z.object({ t: z.number().min(0).max(86400), duration: z.number().min(0).max(600), kind: z.enum(['impact', 'riser', 'silence', 'vocal', 'marker']), confidence: unitSchema.nullable(), name: z.string().trim().min(1).max(64), color: hexColorSchema, category: z.string().trim().min(1).max(32) }).partial() }),
+  z.object({ type: z.literal('music.addEvent'), trackId: idSchema, event: z.object({ t: z.number().min(0).max(86400), duration: z.number().min(0).max(600), kind: z.enum(['impact', 'riser', 'silence', 'vocal', 'marker']), confidence: unitSchema.optional(), name: z.string().trim().min(1).max(64).optional(), color: hexColorSchema.optional(), category: z.string().trim().min(1).max(32).optional() }) }),
+  /** Restore a Song-to-Show analysis snapshot; generated DMX objects are recompiled atomically. */
+  z.object({ type: z.literal('music.restoreAnalysis'), trackId: idSchema, analysis: songAnalysisSchema }),
   z.object({ type: z.literal('music.removeEvent'), trackId: idSchema, index: z.number().int().min(0).max(1999) }),
   z.object({ type: z.literal('music.generate'), trackId: idSchema, intent: z.string().max(500), nextVariant: z.boolean().default(false), mood: moodSchema.optional() }),
   /** Hand edit of one section of the plan (only the fields given change). */
