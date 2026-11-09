@@ -140,6 +140,7 @@ export const frScreens = {
   'music.strip.locked': 'Section verrouillée',
   'music.event.impact': 'Impact',
   'music.event.riser': 'Montée',
+  'music.event.silence': 'Silence',
   'music.event.vocal': 'Voix',
   'music.event.legend': 'Repères détectés',
   'music.strip.now': 'En cours',

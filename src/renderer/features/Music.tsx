@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Music2, Upload } from 'lucide-react';
+import { Library, Music2, PanelLeftClose, Upload } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -73,7 +73,7 @@ export function MusicPage() {
   const { playing, pos } = usePlayback();
   const playingId = playing?.trackId ?? null;
   const [trackId, setTrackId] = useState<string | null>(tracks[0]?.id ?? null);
-  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  const [libraryCollapsed, setLibraryCollapsed] = useState(true);
   const track = tracks.find((tk) => tk.id === trackId) ?? tracks[0] ?? null;
   const progressStep = currentShowStep(track, playingId);
   // Screen shown: set from the track's progress when a track is opened, then the user moves freely between the steps.
@@ -271,9 +271,18 @@ export function MusicPage() {
             <span className="small dim">{track ? t('music.library.meta', { bpm: Math.round(track.analysis.bpm), duration: fmt(track.analysis.duration) }) : t('music.emptyHint')}</span>
           </span>
         </div>
-        <button type="button" className="btn ghost sm music-library-toggle" onClick={() => setLibraryCollapsed((v) => !v)} aria-expanded={!libraryCollapsed} aria-controls="music-library-panel" data-testid="music-library-toggle">
-          {libraryCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          {t(libraryCollapsed ? 'music.library.show' : 'music.library.hide')}
+        <button
+          type="button"
+          className={`btn sm music-library-toggle ${libraryCollapsed ? 'ghost' : 'on'}`}
+          onClick={() => setLibraryCollapsed((v) => !v)}
+          aria-expanded={!libraryCollapsed}
+          aria-controls="music-library-panel"
+          title={t(libraryCollapsed ? 'music.library.show' : 'music.library.hide')}
+          data-testid="music-library-toggle"
+        >
+          {libraryCollapsed ? <Library size={15} /> : <PanelLeftClose size={15} />}
+          <span className="music-library-toggle-label">{t(libraryCollapsed ? 'music.library.show' : 'music.library.hide')}</span>
+          {tracks.length > 0 && <span className="music-library-toggle-count">{tracks.length}</span>}
         </button>
       </div>
       <div className={`music-layout ${libraryCollapsed ? 'library-collapsed' : ''}`}>
