@@ -214,6 +214,21 @@ export function MusicPage() {
     catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
     finally { setBusy(false); }
   };
+  const updateMusicEvent = async (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' }) => {
+    if (!track || busy || !(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try { await act({ type: 'music.updateEvent', trackId: track.id, index, patch }); }
+    catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
+  };
+  const undoMusicEdit = async () => {
+    const result = await act({ type: 'project.undo' });
+    if (result?.label) useStore.getState().toast({ kind: 'success', title: t('music.studio.undo'), detail: result.label });
+  };
+  const redoMusicEdit = async () => {
+    const result = await act({ type: 'project.redo' });
+    if (result?.label) useStore.getState().toast({ kind: 'success', title: t('music.studio.redo'), detail: result.label });
+  };
   const removeMusicEvent = async (index: number) => {
     if (!track || busy || !(await confirmOverwrite(track.id))) return;
     setBusy(true);
@@ -239,7 +254,7 @@ export function MusicPage() {
   const pick = (s: ShowStep) => (track ? setView(s) : s === 'track' && file.current?.click());
   const shown: ShowStep = track ? view : 'track';
   const studio = track && (
-    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} onAddEvent={(time) => void addMusicEvent(time)} onRemoveEvent={(index) => void removeMusicEvent(index)} pos={isPlaying ? pos : null} playing={isPlaying} />
+    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} onAddEvent={(time) => void addMusicEvent(time)} onRemoveEvent={(index) => void removeMusicEvent(index)} onUpdateEvent={(index, patch) => void updateMusicEvent(index, patch)} onUndo={() => void undoMusicEdit()} onRedo={() => void redoMusicEdit()} pos={isPlaying ? pos : null} playing={isPlaying} />
   );
 
   return (
