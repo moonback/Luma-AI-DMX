@@ -146,7 +146,7 @@ export function SongStudioTimeline({
         {/* Playhead */}
         {pos !== null && (
           <div
-            className="studio-playhead"
+            className={`studio-playhead ${playing ? "is-playing" : ""}`}
             style={{
               position: 'absolute',
               top: 0,
