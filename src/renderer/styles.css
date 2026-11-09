@@ -1415,3 +1415,76 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .music-live-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius); background: var(--panel-2); }
 .music-live-card b { font-size: 22px; }
 .music-live-card.now { background: var(--panel); }
+
+
+/* Song to Show — studio workspace refinement */
+.music-workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(110deg, var(--panel-2), var(--panel));
+}
+.music-workspace-track { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.music-workspace-icon {
+  display: grid; place-items: center; flex: none;
+  width: 34px; height: 34px; border-radius: 9px;
+  color: var(--cyan); background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, transparent);
+}
+.music-library-toggle { flex: none; }
+.music-layout { grid-template-columns: minmax(220px, 250px) minmax(0, 1fr); gap: 12px; }
+.music-layout.library-collapsed { grid-template-columns: minmax(0, 1fr); }
+.music-layout > #music-library-panel { min-width: 0; }
+.music-library { top: 10px; max-height: calc(100vh - 170px); overflow: hidden; }
+.music-library-list { scrollbar-gutter: stable; }
+.music-library-open:focus-visible, .music-library-remove:focus-visible, .music-library-toggle:focus-visible {
+  outline: 2px solid var(--cyan); outline-offset: 2px;
+}
+.music-transport { min-height: 52px; padding: 9px 12px; gap: 12px; }
+.music-transport .mini-player-seek { accent-color: var(--cyan); cursor: pointer; }
+.music-indicators { display: flex; flex-wrap: wrap; gap: 7px; padding-bottom: 3px; }
+.music-indicator-pill {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 32px;
+  padding: 5px 9px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--panel-2);
+}
+.music-indicator-pill b { font-size: 12px; }
+.music-step-foot { padding-top: 10px; border-top: 1px solid var(--border); }
+.studio-timeline-heading {
+  display: flex; align-items: center; gap: 9px; min-height: 36px;
+  padding: 6px 11px; background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+.studio-timeline-title { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+.studio-timeline-legend { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11px; color: var(--text-3); }
+.studio-timeline-legend i { width: 12px; height: 2px; border-radius: 2px; background: #f59e0b; }
+.song-studio-timeline {
+  overflow: hidden; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--panel);
+}
+.studio-lanes-container { cursor: crosshair; }
+.lane-waveform { min-height: 78px; background: linear-gradient(180deg, rgba(34,211,238,.035), transparent); }
+.lane-sections { min-height: 50px; gap: 2px; padding: 4px; }
+.studio-sec-block { border-radius: 5px; transition: filter .15s ease, outline-color .15s ease; }
+.studio-sec-block:hover { filter: brightness(1.16); }
+.studio-sec-block.sel { outline: 2px solid var(--cyan); outline-offset: -2px; filter: brightness(1.16); }
+.studio-sec-block.now { box-shadow: inset 0 -3px 0 var(--cyan); }
+.lane-events { min-height: 23px; }
+.lane-layers { min-height: 30px; }
+@media (max-width: 900px) {
+  .music-layout, .music-layout.library-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .music-library { position: static; max-height: 260px; }
+}
+@media (max-width: 620px) {
+  .music-workspace-toolbar { align-items: flex-start; }
+  .music-indicator-pill { flex: 1 1 calc(50% - 7px); }
+  .music-transport { flex-wrap: wrap; }
+  .music-transport .grow { flex-basis: 100%; order: 5; }
+  .studio-timeline-heading { flex-wrap: wrap; }
+  .studio-timeline-legend { margin-left: 0; }
+}
