@@ -162,6 +162,14 @@ function buildTruss(t: Truss, selected: boolean): THREE.Group {
       const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, chainLength, 8), steel);
       chain.position.set(local.x, 0.82 + chainLength / 2, local.z);
       g.add(chain);
+      // Alternating oval links keep the suspension visibly distinct from a plain steel rod.
+      const linkCount = Math.max(3, Math.floor(chainLength / 0.18));
+      for (let i = 0; i < linkCount; i++) {
+        const link = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0055, 4, 8), steel);
+        link.position.set(local.x, 0.82 + 0.09 + i * (chainLength / linkCount), local.z);
+        link.rotation.set(Math.PI / 2, i % 2 ? 0 : Math.PI / 2, 0);
+        g.add(link);
+      }
 
       const motor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.38, 0.3), motorMat);
       motor.position.set(local.x, 0.43, local.z);
