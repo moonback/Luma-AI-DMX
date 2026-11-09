@@ -24,6 +24,7 @@ describe('buildInstallationMap', () => {
       mount: 'hanging',
     });
     expect(map.summary.patchOnly).toBe(1);
+    expect(map.summary.visuallyRecognized).toBe(0);
   });
 
   it('uses triangulated coordinates and records uncertainty and view count', () => {
