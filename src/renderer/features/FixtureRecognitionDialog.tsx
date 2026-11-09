@@ -69,6 +69,8 @@ export function FixtureRecognitionDialog({ onClose }: { onClose: () => void }) {
             description,
             observedType: observation.observedType,
             confidence: observation.matchConfidence,
+            mountGuess: observation.mountGuess,
+            supportHint: observation.supportHint,
             verifiedAt: new Date().toISOString(),
           },
         },
