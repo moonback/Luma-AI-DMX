@@ -277,6 +277,7 @@ export async function sceneFromPhotos(v: Project['visualizer'], images: string[]
     toast('Aucun élément reconnu', r.summary, 'error');
     return;
   }
+  const linkedFixtures = useStore.getState().project?.project.patch.filter((fixture) => !!fixture.trussId).length ?? 0;
   const lines = [
     r.summary,
     '',
@@ -284,6 +285,7 @@ export async function sceneFromPhotos(v: Project['visualizer'], images: string[]
     'Les dimensions et coordonnées sont des estimations visuelles, pas des mesures.',
     ...(r.dropped ? [`${r.dropped} élément(s) écarté(s) car invalides.`] : []),
     ...(v.trusses.length || v.props.length || v.screens.length ? ['', 'La validation remplacera les structures, décors et écrans actuellement présents.'] : []),
+    ...(linkedFixtures ? [`Attention : ${linkedFixtures} projecteur(s) sont actuellement accrochés à un pont existant. Vérifiez leurs associations après remplacement du plan.`] : []),
   ];
   if (!(await confirmAction({ title: 'Valider la reconstruction multi-vues', message: lines.join('\n'), confirmLabel: 'Appliquer la scène' }))) return;
   for (const sc of v.screens) setScreenVideo(sc.id, null);
