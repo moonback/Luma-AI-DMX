@@ -3,9 +3,9 @@ import type { StageGeometry } from '../../../core/visualizer/beam';
 
 /* Built-in cameras of the 3D view and small file helpers (captures, recordings). */
 
-export type ViewId = 'foh' | 'front' | 'top' | 'left' | 'right';
+export type ViewId = 'foh' | 'front' | 'top' | 'left' | 'right' | 'audience';
 export const VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'foh', label: 'Régie' }, { id: 'front', label: 'Face' }, { id: 'top', label: 'Dessus' }, { id: 'left', label: 'Jardin' }, { id: 'right', label: 'Cour' },
+  { id: 'foh', label: 'Régie' }, { id: 'front', label: 'Face' }, { id: 'top', label: 'Dessus' }, { id: 'left', label: 'Jardin' }, { id: 'right', label: 'Cour' }, { id: 'audience', label: 'Public' },
 ];
 
 export function viewPose(id: ViewId, st: StageGeometry): { pos: THREE.Vector3; target: THREE.Vector3 } {
@@ -20,6 +20,7 @@ export function viewPose(id: ViewId, st: StageGeometry): { pos: THREE.Vector3; t
     case 'top': return { pos: new THREE.Vector3(0, span * 1.6, target.z + 0.01), target: new THREE.Vector3(0, 0, target.z) };
     case 'left': return { pos: new THREE.Vector3(-span * 1.1, H * 0.6, target.z), target };
     case 'right': return { pos: new THREE.Vector3(span * 1.1, H * 0.6, target.z), target };
+    case 'audience': return { pos: new THREE.Vector3(0, 5, -Math.max(2, D * 0.2)), target: new THREE.Vector3(0, 1.8, 13) };
     default: return { pos: new THREE.Vector3(0, H * 0.75, front + span * 1.25), target };
   }
 }
