@@ -10,7 +10,6 @@ import { buildVisualModel } from '../../../core/visualizer/model';
 import { setScreenVideo } from '../../screenMedia';
 import { LIBRARY, type LibraryGroup, type LibraryItem } from '../../../core/visualizer/library';
 import { LibraryHome, LibraryTiles, fold } from './libraryTiles';
-import { SceneAssistant } from './SceneAssistant';
 import { SCENE_LABEL, canAdd, type SceneKind } from '../../../core/visualizer/sceneEdit';
 import { EQUIPMENT } from '../../../core/visualizer/equipment';
 import { LIBRARY_MIME, addSceneElement, equipRig, intelligentlyPlaceFixtures, unhangRig } from '../../sceneActions';
@@ -188,7 +187,6 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
           </div>
         </div>
         <div className="stage-card-body">
-          {catsOpen && !current && <SceneAssistant />}
           {catsOpen && (
             <div style={current ? { display: 'none' } : undefined}>
             <LibraryHome>
@@ -239,6 +237,7 @@ function EquipButton({ vis }: { vis: Vis }) {
   const selection = useStore((s) => s.selection);
   const sceneSel = useStore((s) => s.sceneSel);
   const selectedTruss = sceneSel?.kind === 'truss' ? vis.trusses.find((t) => t.id === sceneSel.id) : null;
+  const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<EquipDistributionMode>('standard');
   const [autoRotate, setAutoRotate] = useState(true);
   const [margin, setMargin] = useState(0);
@@ -262,8 +261,42 @@ function EquipButton({ vis }: { vis: Vis }) {
   }
 
   return (
-    <div className="build-equip-bar">
-      <div className="build-equip-row">
+    <div className={`build-equip-bar ${open ? 'on' : ''}`} data-testid="build-equip-bar">
+      <div className="build-equip-head">
+        <button
+          type="button"
+          className="build-equip-head-btn"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          data-testid="equip-toggle"
+          title={open ? 'Replier les réglages d’équipement' : 'Déplier les réglages d’équipement'}
+        >
+          <span className="build-equip-head-icon"><Wand2 size={13} /></span>
+          <span className="build-equip-head-text">
+            <b>{selectedTruss ? `Équiper « ${selectedTruss.name} »` : 'Équiper les structures'}</b>
+            <span>{hungCount > 0 ? `${hungCount} projecteur(s) accroché(s)` : 'Répartir les projecteurs sur les ponts'}</span>
+          </span>
+          <ChevronUp size={15} className={`build-equip-chevron ${open ? '' : 'flip'}`} />
+        </button>
+        {hungCount > 0 && (
+          <button
+            type="button"
+            className="build-equip-unhang"
+            onClick={() => unhangRig(targetTrussId)}
+            data-testid="unhang"
+            title={
+              selectedTruss
+                ? `Décrocher les ${hungCount} projecteur(s) de « ${selectedTruss.name} » (Ctrl+Z pour annuler)`
+                : `Décrocher tous les projecteurs des structures (${hungCount}) (Ctrl+Z pour annuler)`
+            }
+          >
+            <Unplug size={13} />
+            <span>Décrocher</span>
+          </button>
+        )}
+      </div>
+      <div className="build-equip-body" style={open ? undefined : { display: 'none' }}>
+      <div className="build-equip-actions">
         <button
           type="button"
           className="btn sm primary build-equip-btn"
@@ -288,62 +321,53 @@ function EquipButton({ vis }: { vis: Vis }) {
           <Sparkles size={13} />
           <span>Affectation intelligente</span>
         </button>
-        {hungCount > 0 && (
-          <button
-            type="button"
-            className="btn sm ghost icon build-unhang-btn"
-            onClick={() => unhangRig(targetTrussId)}
-            data-testid="unhang"
-            title={
-              selectedTruss
-                ? `Décrocher les ${hungCount} projecteur(s) de « ${selectedTruss.name} » (Ctrl+Z pour annuler)`
-                : `Décrocher tous les projecteurs des structures (${hungCount}) (Ctrl+Z pour annuler)`
-            }
-          >
-            <Unplug size={14} />
-          </button>
-        )}
       </div>
       {showModeToggle && (
-        <div className="build-equip-modes" role="group" aria-label={tr('equip.distrib')}>
-          {DISTRIB_MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`build-equip-mode-btn ${mode === m ? 'on' : ''}`}
-              onClick={() => setMode(m)}
-              title={tr(`equip.distrib.${m}.title`)}
-              aria-pressed={mode === m}
-              data-testid={`equip-mode-${m}`}
-            >
-              {tr(`equip.distrib.${m}`)}
-            </button>
-          ))}
+        <div className="build-equip-field">
+          <span className="build-equip-field-label">{tr('equip.distrib')}</span>
+          <div className="build-equip-modes" role="group" aria-label={tr('equip.distrib')}>
+            {DISTRIB_MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`build-equip-mode-btn ${mode === m ? 'on' : ''}`}
+                onClick={() => setMode(m)}
+                title={tr(`equip.distrib.${m}.title`)}
+                aria-pressed={mode === m}
+                data-testid={`equip-mode-${m}`}
+              >
+                {tr(`equip.distrib.${m}`)}
+              </button>
+            ))}
+          </div>
         </div>
       )}
-      <label className="build-equip-autorotate" title={tr('equip.autoRotateTitle')}>
-        <input
-          type="checkbox"
-          checked={autoRotate}
-          onChange={(e) => setAutoRotate(e.target.checked)}
-          data-testid="equip-autorotate"
-        />
-        <span>{tr('equip.autoRotate')}</span>
-      </label>
-      <div className="build-equip-margin-row" title={tr('equip.marginTitle')}>
-        <span className="build-equip-margin-label">{tr('equip.margin')}</span>
-        <input
-          type="range"
-          min={0}
-          max={1.5}
-          step={0.1}
-          value={margin}
-          onChange={(e) => setMargin(parseFloat(e.target.value))}
-          className="build-equip-margin-slider"
-          aria-label={tr('equip.marginAria')}
-          data-testid="equip-margin"
-        />
-        <span className="build-equip-margin-val">{margin === 0 ? 'Aucune' : `${margin.toFixed(1)} m`}</span>
+      <div className="build-equip-options">
+        <label className="build-equip-autorotate" title={tr('equip.autoRotateTitle')}>
+          <input
+            type="checkbox"
+            checked={autoRotate}
+            onChange={(e) => setAutoRotate(e.target.checked)}
+            data-testid="equip-autorotate"
+          />
+          <span>{tr('equip.autoRotate')}</span>
+        </label>
+        <div className="build-equip-margin-row" title={tr('equip.marginTitle')}>
+          <span className="build-equip-margin-label">{tr('equip.margin')}</span>
+          <input
+            type="range"
+            min={0}
+            max={1.5}
+            step={0.1}
+            value={margin}
+            onChange={(e) => setMargin(parseFloat(e.target.value))}
+            className="build-equip-margin-slider"
+            aria-label={tr('equip.marginAria')}
+            data-testid="equip-margin"
+          />
+          <span className="build-equip-margin-val">{margin === 0 ? 'Aucune' : `${margin.toFixed(1)} m`}</span>
+        </div>
+      </div>
       </div>
     </div>
   );
