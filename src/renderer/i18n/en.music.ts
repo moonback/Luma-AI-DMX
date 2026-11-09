@@ -22,6 +22,7 @@ export const enMusic: Record<keyof typeof frMusic, string> = {
   'music.studio.zoomReset': 'Reset timeline zoom',
   'music.studio.seekToEvent': 'Play from this event',
   'music.studio.section': 'Section',
+  'music.studio.eventsLane': 'Events lane — double-click to add an impact, select a marker then press Delete to remove it',
   'music.studio.dragBoundary': 'Move the boundary between these two sections',
   'music.edit.timingError': 'Unable to edit the musical structure',
   'music.studio.noSectionSelected': 'No section selected',
