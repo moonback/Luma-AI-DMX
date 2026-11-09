@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { BookOpen, Check, Gift, ChevronLeft, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, Sparkles, X } from 'lucide-react';
+import { BookOpen, Check, Gift, ChevronLeft, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, Search, Sparkles, X } from 'lucide-react';
 import { useStore, confirmAction, type PageId } from '../store';
 import { act } from '../api';
 import { Modal } from '../components/ui';
@@ -110,7 +110,7 @@ function DemoGallery() {
           {categories.map((c) => <button key={c} className={`chip ${filter === c ? 'on' : ''}`} onClick={() => setFilter(filter === c ? null : c)}>{c} ({DEMOS.filter((d) => d.category === c).length})</button>)}
         </div>
         {featured.length > 0 && (
-          <section className="col gap-md" aria-label="Installations grand format">
+          <section className="col" style={{ gap: 12 }} aria-label="Installations grand format">
             <div className="row between">
               <div><h3 style={{ margin: 0 }}>Installations grand format</h3><p className="small muted" style={{ margin: '3px 0 0' }}>Structures multi-ponts et projecteurs suspendus au-dessus du public.</p></div>
               <span className="small dim">{featured.length} projets</span>
@@ -123,7 +123,7 @@ function DemoGallery() {
             <div className="row between"><h3 style={{ margin: 0 }}>Autres projets de démonstration</h3><span className="small dim">{standard.length} projets</span></div>
             {filter ? <div className="grid g2">{standard.map(card)}</div> : categories.map((category) => {
               const items = standard.filter((d) => d.category === category);
-              return items.length ? <section key={category} className="col gap-sm"><b className="small muted">{category} · {items.length}</b><div className="grid g2">{items.map(card)}</div></section> : null;
+              return items.length ? <section key={category} className="col" style={{ gap: 8 }}><b className="small muted">{category} · {items.length}</b><div className="grid g2">{items.map(card)}</div></section> : null;
             })}
           </section>
         )}
