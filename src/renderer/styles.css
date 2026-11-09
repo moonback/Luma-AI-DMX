@@ -1514,3 +1514,22 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .studio-sec-block[aria-pressed="true"] { box-shadow:inset 0 0 0 2px var(--cyan), inset 0 -3px 0 var(--cyan); }
 .studio-sec-block:focus-visible { z-index:3; outline:2px solid var(--text); outline-offset:-3px; }
 @media (max-width:620px) { .studio-selection-toolbar { flex-wrap:wrap; } .studio-selection-time { margin-left:auto; } .studio-selection-toolbar .btn { margin-left:0; } }
+
+
+.studio-section-boundary {
+  position:absolute; z-index:5; top:0; right:-4px; bottom:0; width:9px;
+  padding:0; border:0; background:transparent; cursor:col-resize;
+  touch-action:none; opacity:.45;
+}
+.studio-section-boundary::after {
+  content:""; position:absolute; top:5px; bottom:5px; left:4px; width:2px;
+  border-radius:2px; background:rgba(255,255,255,.8);
+  box-shadow:0 0 5px rgba(34,211,238,.45);
+}
+.studio-section-boundary:hover, .studio-section-boundary:focus-visible { opacity:1; }
+.studio-section-boundary:focus-visible { outline:2px solid var(--cyan); outline-offset:-2px; }
+.studio-section-boundary.is-dragging::after { width:3px; background:var(--cyan); box-shadow:0 0 10px var(--cyan); }
+.studio-boundary-preview {
+  position:absolute; z-index:12; top:0; bottom:0; width:2px;
+  background:var(--cyan); box-shadow:0 0 8px var(--cyan); pointer-events:none;
+}
