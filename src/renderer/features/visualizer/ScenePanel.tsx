@@ -123,10 +123,6 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
         </div>
       </div>
       <div className="stage-card build-card" data-testid="stage-settings">
-        <button className="stage-card-head" aria-expanded={catsOpen} onClick={() => setCatsOpen(!catsOpen)}>
-          <Shapes size={15} className="stage-accent" /><h2 className="grow">{tr('build.title')}</h2><ChevronUp size={15} className={catsOpen ? '' : 'flip'} />
-        </button>
-        <EquipButton vis={vis} />
         <StageDimensionsBar vis={vis} open={stageOpen} onToggle={() => setStageOpen(!stageOpen)} />
         <div
           className="build-stage-expanded"
@@ -186,6 +182,10 @@ export function ScenePanel({ vis, modeLabel }: { vis: Vis; modeLabel: string }) 
             </label>
           </div>
         </div>
+        <EquipButton vis={vis} />
+        <button className="stage-card-head" aria-expanded={catsOpen} onClick={() => setCatsOpen(!catsOpen)}>
+          <Shapes size={15} className="stage-accent" /><h2 className="grow">{tr('build.title')}</h2><ChevronUp size={15} className={catsOpen ? '' : 'flip'} />
+        </button>
         <div className="stage-card-body">
           {catsOpen && (
             <div style={current ? { display: 'none' } : undefined}>
