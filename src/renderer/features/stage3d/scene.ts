@@ -432,7 +432,9 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       env.traverse((o) => { if (o instanceof THREE.Mesh) { o.receiveShadow = true; o.castShadow = !!(o.userData.trussId || o.userData.propId); } });
       fog = buildLowFog(st);
       scene.add(env, fog);
-      if (crowd) { scene.remove(crowd.mesh); disposeCrowd(crowd); } scene.add((crowd = buildCrowd(st)).mesh);
+      if (crowd) { scene.remove(crowd.mesh, crowd.seatedMesh); disposeCrowd(crowd); }
+      crowd = buildCrowd(st);
+      scene.add(crowd.mesh, crowd.seatedMesh);
       envKey = k;
       ambienceKey = ''; // the floor mirror follows the stage outline
     }
@@ -528,7 +530,11 @@ export function mountStage3D(el: HTMLDivElement, latest: { readonly current: Sta
       camera.lookAt(camera.position.clone().addScaledVector(dir, 10));
       anim = null;
     } else controls.update();
-    if (crowd) { crowd.mesh.visible = p.crowd; if (p.crowd) updateCrowd(crowd, (now - t0) / 1000, useStore.getState().runtime?.audio, camera.position); }
+    if (crowd) {
+      crowd.mesh.visible = p.crowd;
+      crowd.seatedMesh.visible = p.crowd && crowd.seatedSpots.length > 0;
+      if (p.crowd) updateCrowd(crowd, (now - t0) / 1000, useStore.getState().runtime?.audio, camera.position);
+    }
     if (bloom.enabled) composer.render();
     else renderer.render(scene, camera);
     if (wantCapture) {
