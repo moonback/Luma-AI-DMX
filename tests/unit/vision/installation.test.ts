@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildInstallationMap, type InstallationFixtureInput } from './installation';
+import { buildInstallationMap, type InstallationFixtureInput } from '../../../src/core/vision/installation';
 
 const fixture = (overrides: Partial<InstallationFixtureInput> = {}): InstallationFixtureInput => ({
   id: 'fx-1',
@@ -79,8 +79,22 @@ describe('buildInstallationMap', () => {
     expect(map.summary.withIssues).toBe(1);
   });
 
-  it('uses the legacy floor-height convention only as an inferred mount', () => {
-    const map = buildInstallationMap([fixture({ height: 0.4 })]);
-    expect(map.fixtures[0]).toMatchObject({ mount: 'floor', mountIsInferred: true });
+  it('uses the legacy mount convention for floor and hanging fixtures', () => {
+    const floor = buildInstallationMap([fixture({ height: 0.4 })]);
+    const hanging = buildInstallationMap([fixture({ height: 5 })]);
+    expect(floor.fixtures[0]).toMatchObject({ mount: 'floor', mountIsInferred: true });
+    expect(hanging.fixtures[0]).toMatchObject({ mount: 'hanging', mountIsInferred: true });
+  });
+
+  it('carries operator-confirmed visual identity into the installation map', () => {
+    const visualRecognition = {
+      label: 'Lyre spot',
+      description: 'Corps et lyre distinctifs',
+      observedType: 'moving-head-spot',
+      confidence: 0.82,
+      verifiedAt: '2026-11-09T10:00:00.000Z',
+    };
+    const map = buildInstallationMap([fixture({ visualRecognition })]);
+    expect(map.fixtures[0]!.visualRecognition).toEqual(visualRecognition);
   });
 });
