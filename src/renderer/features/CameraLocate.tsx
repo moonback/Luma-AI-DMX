@@ -202,6 +202,7 @@ export function CameraLocate({ onClose }: { onClose: () => void }) {
         height: rf.fixture.height,
         mount: rf.fixture.mount,
         trussId: rf.fixture.trussId,
+        visualRecognition: rf.fixture.visualRecognition,
       })),
       result.located,
       result.issues,
