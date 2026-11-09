@@ -21,7 +21,7 @@ describe('buildInstallationMap', () => {
       position: { x: -2, y: 3, z: 5 },
       positionSource: 'patch',
       positionQuality: 0,
-      mount: 'unknown',
+      mount: 'hanging',
     });
     expect(map.summary.patchOnly).toBe(1);
   });
