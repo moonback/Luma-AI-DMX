@@ -5,6 +5,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [Sem
 ## [Non publié]
 
 ### Ajouté
+- Reconnaissance visuelle des installations lumière : analyse de 1 à 6 photos via un modèle vision OpenRouter, détection des boîtiers, classification, repères visuels et propositions de correspondance avec le patch DMX ; validation manuelle obligatoire et conservation de l'identification confirmée dans le projet. La localisation 3D reste séparée et repose sur Camera Locate calibré.
+- Cartographie d'installation : consolidation des positions mesurées ou issues du patch, incertitude géométrique, nombre de vues, zones, montage, structures associées, diagnostics et identifications visuelles confirmées.
 - Console Simplifiée : clic simple sur une machine pour ouvrir directement ses réglages ; mode de sélection multiple explicite et activable, avec sélection par plage et commandes de sélection dédiées.
 - Personnalisation du Dashboard : affichage indépendant du guide de démarrage, des indicateurs matériel/spectacle/système, de la création de scène par texte, des actions rapides et des alertes depuis Réglages → Apparence.
 - Configurations d’espace de travail : profils nommés regroupant les espaces visibles, les composants de scène et les sections du Dashboard ; application instantanée par sélecteur, mise à jour/suppression, import et export JSON avec validation et limite de 30 profils.
