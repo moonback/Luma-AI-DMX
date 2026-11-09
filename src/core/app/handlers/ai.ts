@@ -7,7 +7,7 @@ import { pruneTransientEffects } from '../../ai/transient';
 import { ProjectIndex } from '../../engine/resolve';
 import type { Project } from '../../model/schemas';
 import { DEFAULT_OPENROUTER_MODEL, describeRig, listOpenRouterModels, proposeWithOpenRouter, type OpenRouterModel, type OpenRouterOptions } from '../../ai/providers/openrouter';
-import { sceneFromPhotoWithOpenRouter } from '../../ai/sceneFromPhoto';
+import { sceneFromPhotoWithOpenRouter, sceneFromPhotosWithOpenRouter } from '../../ai/sceneFromPhoto';
 import { profileFromPhotoWithOpenRouter } from '../../ai/profileFromPhoto';
 import { recognizeFixturesFromPhotos, type RecognitionCandidate } from '../../ai/fixtureRecognition';
 import { GEMINI_KEY, OPENROUTER_KEY, UserError } from '../shared';
@@ -65,6 +65,7 @@ export async function handleAi(app: AppService, cmd: CommandIn<'ai'>): Promise<u
       if (cmd.refresh) app.modelCache = null;
       return openRouterModels(app);
     case 'ai.sceneFromPhoto': return sceneFromPhoto(app, cmd.image);
+    case 'ai.sceneFromPhotos': return sceneFromPhotos(app, cmd.images);
     case 'ai.profileFromPhoto': return profileFromPhoto(app, cmd.images);
     case 'ai.recognizeFixtures': return recognizeFixtures(app, cmd.images);
     case 'ai.setKey':
@@ -299,6 +300,13 @@ export async function aiPropose(app: AppService, prompt: string, continueThread 
 async function sceneFromPhoto(app: AppService, image: string) {
   const r = await withVision(app, (opts) => sceneFromPhotoWithOpenRouter(image, opts, randomUUID));
   app.logger.info('IA', `Scène depuis photo : ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
+  return r;
+}
+
+/** Multi-view venue reconstruction → one deduplicated stage layout; still requires operator confirmation in the renderer. */
+async function sceneFromPhotos(app: AppService, images: string[]) {
+  const r = await withVision(app, (opts) => sceneFromPhotosWithOpenRouter(images, opts, randomUUID));
+  app.logger.info('IA', `Scène multi-vues : ${images.length} photos, ${r.trusses.length} structure(s), ${r.props.length} décor(s), ${r.screens.length} écran(s)`);
   return r;
 }
 
