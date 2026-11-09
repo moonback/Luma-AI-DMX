@@ -233,7 +233,7 @@ export function SongStudioTimeline({
                   flexDirection: 'column',
                   justifyContent: 'space-between',
                   cursor: 'pointer',
-                  overflow: 'hidden',
+                  overflow: 'visible',
                   position: 'relative',
                   textAlign: 'left',
                 }}
