@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lock, Volume2 } from 'lucide-react';
+import { Lock, Maximize2, Minus, Plus, Volume2 } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { MusicTrack } from '../../../core/model/schemas';
 import { SECTION_NAMES } from '../../../core/music/analyze';
@@ -27,6 +27,9 @@ export function SongStudioTimeline({
   const a = track.analysis;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [waveform, setWaveform] = useState<number[] | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const lanesRef = useRef<HTMLDivElement>(null);
+  const minTimelineWidth = Math.max(1000, a.sections.length * 68) * zoom;
 
   // Load waveform from musicPlayer if audio buffer is available
   useEffect(() => {
@@ -124,13 +127,21 @@ export function SongStudioTimeline({
         <span className="studio-timeline-legend"><i />{t('music.studio.energy')}</span>
         <span className="badge">{a.bpm.toFixed(1)} BPM</span>
         <span className="badge dim">{a.meter}/4</span>
+        <div className="studio-zoom-controls" role="group" aria-label={t('music.studio.zoom')}>
+          <button type="button" className="btn ghost sm icon" onClick={() => setZoom((v) => Math.max(1, Number((v - 0.5).toFixed(1))))} disabled={zoom <= 1} title={t('music.studio.zoomOut')} aria-label={t('music.studio.zoomOut')}><Minus size={13} /></button>
+          <span className="studio-zoom-value mono" aria-live="polite">{zoom.toFixed(1)}×</span>
+          <button type="button" className="btn ghost sm icon" onClick={() => setZoom((v) => Math.min(4, Number((v + 0.5).toFixed(1))))} disabled={zoom >= 4} title={t('music.studio.zoomIn')} aria-label={t('music.studio.zoomIn')}><Plus size={13} /></button>
+          <button type="button" className="btn ghost sm icon" onClick={() => { setZoom(1); if (lanesRef.current) lanesRef.current.scrollTo({ left: 0, behavior: 'smooth' }); }} disabled={zoom === 1 && !(lanesRef.current?.scrollLeft)} title={t('music.studio.zoomReset')} aria-label={t('music.studio.zoomReset')}><Maximize2 size={13} /></button>
+        </div>
       </div>
 
       {/* Multi-Track DAW Container */}
       <div
+        ref={lanesRef}
         className="studio-lanes-container"
-        style={{ position: 'relative', overflowX: 'auto', '--timeline-min-width': `${Math.max(1000, a.sections.length * 68)}px` } as React.CSSProperties}
+        style={{ position: 'relative', overflowX: 'auto', '--timeline-min-width': `${minTimelineWidth}px` } as React.CSSProperties}
         onClick={handleTimelineClick}
+        data-testid="studio-timeline-scroll"
       >
         {/* Playhead */}
         {pos !== null && (
@@ -229,10 +240,16 @@ export function SongStudioTimeline({
             const width = e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : '4px';
 
             return (
-              <div
+              <button
                 key={i}
-                className="studio-event-marker"
-                title={t(`music.event.${e.kind}`)}
+                type="button"
+                className={`studio-event-marker studio-event-${e.kind}`}
+                title={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)}`}
+                aria-label={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)} · ${t('music.studio.seekToEvent')}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (musicPlayer.hasAudio(track.hash)) musicPlayer.play(track, e.t);
+                }}
                 style={{
                   position: 'absolute',
                   left,
@@ -241,6 +258,9 @@ export function SongStudioTimeline({
                   bottom: 3,
                   background: EVENT_STYLE[e.kind][1],
                   borderRadius: 2,
+                  border: 0,
+                  padding: 0,
+                  cursor: 'pointer',
                 }}
               />
             );
