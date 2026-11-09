@@ -94,3 +94,22 @@ export async function sceneFromPhotoWithOpenRouter(image: string, opts: OpenRout
   const r = await visionJson(PHOTO_SYSTEM, 'Rebuild the structures of this stage.', [image], 'stage_from_photo', PHOTO_JSON_SCHEMA, opts);
   return { ...parsePhotoScene(r.json, id), model: r.model, notices: r.notices };
 }
+
+/**
+ * Multi-view reconstruction: one model call receives up to six views and returns one shared stage coordinate
+ * system. The model is instructed to deduplicate structures seen in multiple photos; dimensions remain estimates.
+ */
+const MULTI_PHOTO_SYSTEM = PHOTO_SYSTEM.replace(
+  'From ONE photo of a stage or event venue',
+  'From 2 to 6 photos of the SAME stage or event venue, taken from different viewpoints'
+).replace(
+  'Only include what you actually see; skip people, lights and fixtures.',
+  'Fuse all views into ONE shared stage coordinate system. Deduplicate the same physical truss, totem, screen or prop seen in multiple photos; do not create a second element just because it appears in another view. Use front/back/side views to resolve depth and relative placement when possible. If views conflict, choose the most direct view and keep dimensions conservative. Never claim photographic measurements are exact: all dimensions and coordinates are estimates. Only include structures supported by visible evidence; skip people, lights and fixtures.'
+);
+
+/** Reconstructs one shared stage layout from multiple venue photos. */
+export async function sceneFromPhotosWithOpenRouter(images: readonly string[], opts: OpenRouterOptions, id: () => string): Promise<PhotoScene & { model: string; notices: string[]; imageCount: number }> {
+  if (images.length < 2 || images.length > 6) throw new Error('Fournissez entre 2 et 6 photos de la même installation.');
+  const r = await visionJson(MULTI_PHOTO_SYSTEM, `Rebuild ONE consistent stage layout from these ${images.length} views of the same installation. Merge duplicate structures across views.`, images, 'stage_from_multiple_photos', PHOTO_JSON_SCHEMA, opts);
+  return { ...parsePhotoScene(r.json, id), model: r.model, notices: r.notices, imageCount: images.length };
+}
