@@ -211,6 +211,11 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('music.loadAudio'), hash: z.string().regex(/^[0-9a-f]{64}$/) }),
   z.object({ type: z.literal('music.removeTrack'), id: idSchema }),
   z.object({ type: z.literal('music.setSection'), trackId: idSchema, index: z.number().int().min(0).max(300), label: z.enum(SECTION_LABELS).optional(), locked: z.boolean().optional() }),
+  /** Move the shared boundary between section `index` and `index + 1`; both sections remain contiguous. */
+  z.object({ type: z.literal('music.moveSectionBoundary'), trackId: idSchema, index: z.number().int().min(0).max(298), time: z.number().min(0).max(86400) }),
+  z.object({ type: z.literal('music.updateEvent'), trackId: idSchema, index: z.number().int().min(0).max(1999), patch: z.object({ t: z.number().min(0).max(86400), duration: z.number().min(0).max(600), kind: z.enum(['impact', 'riser', 'silence', 'vocal']), confidence: unitSchema.nullable() }).partial() }),
+  z.object({ type: z.literal('music.addEvent'), trackId: idSchema, event: z.object({ t: z.number().min(0).max(86400), duration: z.number().min(0).max(600), kind: z.enum(['impact', 'riser', 'silence', 'vocal']), confidence: unitSchema.optional() }) }),
+  z.object({ type: z.literal('music.removeEvent'), trackId: idSchema, index: z.number().int().min(0).max(1999) }),
   z.object({ type: z.literal('music.generate'), trackId: idSchema, intent: z.string().max(500), nextVariant: z.boolean().default(false), mood: moodSchema.optional() }),
   /** Hand edit of one section of the plan (only the fields given change). */
   z.object({
@@ -462,6 +467,10 @@ export interface CommandResults {
   'music.loadAudio': Uint8Array | null;
   'music.removeTrack': Void;
   'music.setSection': Void;
+  'music.moveSectionBoundary': { timelineId: string | null; notices: string[] };
+  'music.updateEvent': Void;
+  'music.addEvent': Void;
+  'music.removeEvent': Void;
   'music.generate': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.regenerateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };
   'music.updateSection': { timelineId: string; notices: string[]; provider: 'local' | 'openrouter' };

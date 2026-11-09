@@ -142,6 +142,7 @@ export const enScreens: Record<keyof typeof frScreens, string> = {
   'music.strip.locked': 'Locked section',
   'music.event.impact': 'Impact',
   'music.event.riser': 'Riser',
+  'music.event.silence': 'Silence',
   'music.event.vocal': 'Vocals',
   'music.event.legend': 'Detected cues',
   'music.strip.now': 'Playing',

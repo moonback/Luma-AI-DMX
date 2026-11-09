@@ -53,6 +53,64 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
         if (cmd.locked !== undefined && p) p.locked = cmd.locked;
       });
       return ok;
+    case 'music.moveSectionBoundary': {
+      const current = track(app, cmd.trackId);
+      const left = current.analysis.sections[cmd.index];
+      const right = current.analysis.sections[cmd.index + 1];
+      if (!left || !right) throw new UserError('Limite entre sections introuvable', 'music.sectionBoundaryNotFound');
+      if (cmd.time < left.start + 1 || cmd.time > right.end - 1) {
+        throw new UserError('Chaque section doit conserver au moins une seconde', 'music.sectionBoundaryRange');
+      }
+      if (current.plan?.sections[cmd.index]?.locked || current.plan?.sections[cmd.index + 1]?.locked) {
+        throw new UserError('Déverrouillez les sections concernées avant de déplacer leur limite', 'music.sectionBoundaryLocked');
+      }
+      const analysis = structuredClone(current.analysis);
+      analysis.sections[cmd.index]!.end = cmd.time;
+      analysis.sections[cmd.index + 1]!.start = cmd.time;
+      let result: ReturnType<typeof applyShow> | null = null;
+      if (current.plan) {
+        // applyShow validates and commits the new analysis plus all generated DMX objects in one project mutation.
+        result = applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      } else {
+        app.mutate((d) => {
+          const target = d.music.tracks.find((x) => x.id === cmd.trackId);
+          if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound');
+          target.analysis = analysis;
+        });
+      }
+      app.logger.info('Musique', `Structure temporelle ajustée : sections ${cmd.index + 1} et ${cmd.index + 2} (${cmd.time.toFixed(2)} s)`);
+      return { timelineId: result?.timelineId ?? null, notices: result?.notices ?? [] };
+    }
+    case 'music.updateEvent': {
+      const current = track(app, cmd.trackId);
+      if (!current.analysis.events[cmd.index]) throw new UserError('Événement musical introuvable', 'music.eventNotFound');
+      const patch = Object.fromEntries(Object.entries(cmd.patch).filter(([, value]) => value !== undefined));
+      if (cmd.patch.t !== undefined && cmd.patch.t > current.analysis.duration) throw new UserError('L’événement dépasse la durée du morceau', 'music.eventOutOfRange');
+      const analysis = structuredClone(current.analysis);
+      analysis.events[cmd.index] = { ...analysis.events[cmd.index]!, ...patch, ...(cmd.patch.confidence === null ? { confidence: undefined } : {}) };
+      if (current.plan) applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      else app.mutate((d) => { const target = d.music.tracks.find((x) => x.id === cmd.trackId); if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound'); target.analysis = analysis; });
+      return ok;
+    }
+    case 'music.addEvent': {
+      const current = track(app, cmd.trackId);
+      if (cmd.event.t > current.analysis.duration || current.analysis.events.length >= 2000) throw new UserError('Position invalide ou limite de 2 000 événements atteinte', 'music.eventOutOfRange');
+      const analysis = structuredClone(current.analysis);
+      analysis.events.push(cmd.event);
+      analysis.events.sort((a, b) => a.t - b.t);
+      if (current.plan) applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      else app.mutate((d) => { const target = d.music.tracks.find((x) => x.id === cmd.trackId); if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound'); target.analysis = analysis; });
+      return ok;
+    }
+    case 'music.removeEvent': {
+      const current = track(app, cmd.trackId);
+      if (!current.analysis.events[cmd.index]) throw new UserError('Événement musical introuvable', 'music.eventNotFound');
+      const analysis = structuredClone(current.analysis);
+      analysis.events.splice(cmd.index, 1);
+      if (current.plan) applyShow(app, current, structuredClone(current.plan), [], true, analysis);
+      else app.mutate((d) => { const target = d.music.tracks.find((x) => x.id === cmd.trackId); if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound'); target.analysis = analysis; });
+      return ok;
+    }
     case 'music.generate': {
       const t = track(app, cmd.trackId);
       const variant = cmd.nextVariant ? (t.plan?.variant ?? 0) + 1 : t.plan?.variant ?? 0;
@@ -237,16 +295,17 @@ async function planSection(app: AppService, t: MusicTrack, plan: ShowPlan, index
 }
 
 /** Compiles the plan, replaces the track's previously generated objects and stores the plan. */
-export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[]) {
+export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notices: string[], preservePrevious = false, analysisOverride?: MusicTrack['analysis']) {
   // The plan may come back from a slow OpenRouter call: the track, or the whole project, can be gone by then.
   const cur = app.project.music.tracks.find((x) => x.id === t.id);
   if (!cur) throw new UserError('Morceau supprimé ou projet changé pendant la génération : rien n’a été appliqué', 'music.trackChangedDuringGeneration');
   app.emit('progress', { op: 'music', step: 'compile' });
-  const c = compileShow(app.index, cur.name, cur.analysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe, phraseBars: app.settings.ai.phraseBars });
-  const integrity = validateShowIntegrity(c, cur.analysis, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
+  const sourceAnalysis = analysisOverride ?? cur.analysis;
+  const c = compileShow(app.index, cur.name, sourceAnalysis, plan, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe, phraseBars: app.settings.ai.phraseBars });
+  const integrity = validateShowIntegrity(c, sourceAnalysis, { maxStrobeHz: app.settings.engine.maxStrobeHz, allowStrobe: app.settings.ai.allowStrobe });
   for (const err of integrity.errors) app.logger.error('Musique', `[Intégrité] ${err}`);
   for (const warn of integrity.warnings) app.logger.warn('Musique', `[Intégrité] ${warn}`);
-  const quality = evaluateArtisticQuality(plan, cur.analysis);
+  const quality = evaluateArtisticQuality(plan, sourceAnalysis);
   app.logger.info('Musique', `[Qualité artistique] Score: ${quality.score}/100 (contraste: ${quality.metrics.contrast}%, variété: ${quality.metrics.variety}%, narration: ${quality.metrics.narrative}%, voix: ${quality.metrics.vocalClarity}%)`);
   if (app.engine.snapshot().timeline.timelineId === cur.created.timelineId) app.engine.timelineStop();
   app.mutate((d) => {
@@ -256,7 +315,8 @@ export function applyShow(app: AppService, t: MusicTrack, plan: ShowPlan, notice
     d.effects.push(...c.effects);
     d.timelines.push(c.timeline);
     d.cueLists.push(c.cueList);
-    track.previousPlan = track.plan; // so restoring twice swaps back (redo)
+    if (analysisOverride) track.analysis = structuredClone(analysisOverride);
+    if (!preservePrevious) track.previousPlan = track.plan; // so restoring twice swaps back (redo)
     track.plan = plan;
     track.created = { sceneIds: c.scenes.map((s) => s.id), effectIds: c.effects.map((e) => e.id), timelineId: c.timeline.id, cueListIds: [c.cueList.id] };
     track.created.fingerprint = generatedFingerprint(d, track.created);

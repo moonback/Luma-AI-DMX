@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Music2, Upload } from 'lucide-react';
+import { Library, Music2, PanelLeftClose, Upload } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -20,6 +20,7 @@ import { TrackStep } from './music/TrackStep';
 import { IntentStep, loadHistory, NO_MOOD, remember } from './music/IntentStep';
 import { ShowStep as ShowScreen } from './music/ShowStep';
 import { PlayStep } from './music/PlayStep';
+import { fmt } from './music/names';
 
 const AUDIO_ACCEPT = 'audio/*,.wav,.mp3,.flac,.ogg,.m4a';
 
@@ -72,6 +73,7 @@ export function MusicPage() {
   const { playing, pos } = usePlayback();
   const playingId = playing?.trackId ?? null;
   const [trackId, setTrackId] = useState<string | null>(tracks[0]?.id ?? null);
+  const [libraryCollapsed, setLibraryCollapsed] = useState(true);
   const track = tracks.find((tk) => tk.id === trackId) ?? tracks[0] ?? null;
   const progressStep = currentShowStep(track, playingId);
   // Screen shown: set from the track's progress when a track is opened, then the user moves freely between the steps.
@@ -205,11 +207,54 @@ export function MusicPage() {
       useStore.getState().toast({ kind: 'error', title: t('music.playError'), detail: (err as Error).message });
     }
   };
+  const addMusicEvent = async (time: number) => {
+    if (!track || busy || !(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try { await act({ type: 'music.addEvent', trackId: track.id, event: { t: time, duration: 0, kind: 'impact' } }); }
+    catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
+  };
+  const updateMusicEvent = async (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' }) => {
+    if (!track || busy || !(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try { await act({ type: 'music.updateEvent', trackId: track.id, index, patch }); }
+    catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
+  };
+  const undoMusicEdit = async () => {
+    const result = await act({ type: 'project.undo' });
+    if (result?.label) useStore.getState().toast({ kind: 'success', title: t('music.studio.undo'), detail: result.label });
+  };
+  const redoMusicEdit = async () => {
+    const result = await act({ type: 'project.redo' });
+    if (result?.label) useStore.getState().toast({ kind: 'success', title: t('music.studio.redo'), detail: result.label });
+  };
+  const removeMusicEvent = async (index: number) => {
+    if (!track || busy || !(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try { await act({ type: 'music.removeEvent', trackId: track.id, index }); }
+    catch (err) { useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message }); }
+    finally { setBusy(false); }
+  };
+  const moveSectionBoundary = async (index: number, time: number) => {
+    if (!track || busy) return;
+    if (!(await confirmOverwrite(track.id))) return;
+    setBusy(true);
+    try {
+      const result = await act({ type: 'music.moveSectionBoundary', trackId: track.id, index, time });
+      if (result?.notices.length) setNotices(result.notices);
+      setSelected(index);
+    } catch (err) {
+      useStore.getState().toast({ kind: 'error', title: t('music.edit.timingError'), detail: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
   const openTimeline = () => useStore.getState().setPage('timeline');
   const pick = (s: ShowStep) => (track ? setView(s) : s === 'track' && file.current?.click());
   const shown: ShowStep = track ? view : 'track';
   const studio = track && (
-    <SongStudioTimeline track={track} selected={selected} onSelect={(i) => { setSelected(i); setEditing(i); }} onOpenEditor={setEditing} pos={isPlaying ? pos : null} playing={isPlaying} />
+    <SongStudioTimeline track={track} selected={selected} onSelect={setSelected} onOpenEditor={setEditing} onMoveBoundary={(index, time) => void moveSectionBoundary(index, time)} onAddEvent={(time) => void addMusicEvent(time)} onRemoveEvent={(index) => void removeMusicEvent(index)} onUpdateEvent={(index, patch) => void updateMusicEvent(index, patch)} onUndo={() => void undoMusicEdit()} onRedo={() => void redoMusicEdit()} pos={isPlaying ? pos : null} playing={isPlaying} />
   );
 
   return (
@@ -218,8 +263,30 @@ export function MusicPage() {
       <input ref={file} type="file" accept={AUDIO_ACCEPT} style={{ display: 'none' }} data-testid="music-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
       <input ref={replaceFile} type="file" accept={AUDIO_ACCEPT} style={{ display: 'none' }} data-testid="music-replace-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && track) void importFile(f, track.id); }} />
       {generating && <GeneratingModal />}
-      <div className="music-layout">
-        <TrackLibrary tracks={tracks} selectedId={track?.id ?? null} playingId={playingId} importing={!!progress} onSelect={select} onImport={() => file.current?.click()} onRemove={remove} />
+      <div className="music-workspace-toolbar">
+        <div className="music-workspace-track">
+          <span className="music-workspace-icon"><Music2 size={16} /></span>
+          <span className="col" style={{ minWidth: 0, gap: 2 }}>
+            <b className="truncate">{track?.name ?? t('music.page.title')}</b>
+            <span className="small dim">{track ? t('music.library.meta', { bpm: Math.round(track.analysis.bpm), duration: fmt(track.analysis.duration) }) : t('music.emptyHint')}</span>
+          </span>
+        </div>
+        <button
+          type="button"
+          className={`btn sm music-library-toggle ${libraryCollapsed ? 'ghost' : 'on'}`}
+          onClick={() => setLibraryCollapsed((v) => !v)}
+          aria-expanded={!libraryCollapsed}
+          aria-controls="music-library-panel"
+          title={t(libraryCollapsed ? 'music.library.show' : 'music.library.hide')}
+          data-testid="music-library-toggle"
+        >
+          {libraryCollapsed ? <Library size={15} /> : <PanelLeftClose size={15} />}
+          <span className="music-library-toggle-label">{t(libraryCollapsed ? 'music.library.show' : 'music.library.hide')}</span>
+          {tracks.length > 0 && <span className="music-library-toggle-count">{tracks.length}</span>}
+        </button>
+      </div>
+      <div className={`music-layout ${libraryCollapsed ? 'library-collapsed' : ''}`}>
+        {!libraryCollapsed && <div id="music-library-panel"><TrackLibrary tracks={tracks} selectedId={track?.id ?? null} playingId={playingId} importing={!!progress} onSelect={select} onImport={() => file.current?.click()} onRemove={remove} /></div>}
         <div className="music-main col gap-lg">
           <ShowStepper current={shown} progress={progressStep} onPick={pick} />
           {progress && (

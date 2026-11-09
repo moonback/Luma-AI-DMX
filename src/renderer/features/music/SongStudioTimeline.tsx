@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Lock, Play, Pause, Square, Volume2 } from 'lucide-react';
+import { Lock, Maximize2, Minus, Pencil, Plus, Volume2 } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { MusicTrack } from '../../../core/model/schemas';
 import { SECTION_NAMES } from '../../../core/music/analyze';
@@ -11,6 +11,12 @@ interface Props {
   selected: number;
   onSelect: (index: number) => void;
   onOpenEditor: (index: number) => void;
+  onMoveBoundary: (index: number, time: number) => void;
+  onAddEvent: (time: number) => void;
+  onRemoveEvent: (index: number) => void;
+  onUpdateEvent: (index: number, patch: { t?: number; duration?: number; kind?: 'impact' | 'riser' | 'silence' | 'vocal' }) => void;
+  onUndo: () => void;
+  onRedo: () => void;
   pos: number | null;
   playing: boolean;
 }
@@ -20,6 +26,12 @@ export function SongStudioTimeline({
   selected,
   onSelect,
   onOpenEditor,
+  onMoveBoundary,
+  onAddEvent,
+  onRemoveEvent,
+  onUpdateEvent,
+  onUndo,
+  onRedo,
   pos,
   playing,
 }: Props) {
@@ -27,6 +39,23 @@ export function SongStudioTimeline({
   const a = track.analysis;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [waveform, setWaveform] = useState<number[] | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
+  const [dragBoundary, setDragBoundary] = useState<{ index: number; time: number } | null>(null);
+  const [dragEvent, setDragEvent] = useState<{ index: number; time: number } | null>(null);
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const lanesRef = useRef<HTMLDivElement>(null);
+  const minTimelineWidth = Math.max(1000, a.sections.length * 68) * zoom;
+  const playheadPx = pos === null ? 0 : Math.max(0, Math.min(minTimelineWidth, (pos / a.duration) * minTimelineWidth));
+
+  // Keep the playhead in view during playback without constantly recentering the operator's viewport.
+  useEffect(() => {
+    const viewport = lanesRef.current;
+    if (!playing || pos === null || !viewport) return;
+    const rightEdge = viewport.scrollLeft + viewport.clientWidth;
+    if (playheadPx > rightEdge - 72) viewport.scrollTo({ left: Math.max(0, playheadPx - viewport.clientWidth * 0.72), behavior: 'auto' });
+    else if (playheadPx < viewport.scrollLeft + 24) viewport.scrollTo({ left: Math.max(0, playheadPx - 24), behavior: 'auto' });
+  }, [playing, pos, playheadPx]);
 
   // Load waveform from musicPlayer if audio buffer is available
   useEffect(() => {
@@ -105,81 +134,74 @@ export function SongStudioTimeline({
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left + e.currentTarget.scrollLeft) / e.currentTarget.scrollWidth));
     const seekTime = ratio * a.duration;
     if (musicPlayer.hasAudio(track.hash)) {
       musicPlayer.play(track, seekTime);
     }
   };
 
-  const handlePlayToggle = () => {
-    if (playing) {
-      musicPlayer.pause();
-    } else {
-      musicPlayer.play(track, pos ?? 0);
-    }
-  };
+
 
   const nowSec = pos === null ? -1 : a.sections.findIndex((s) => pos >= s.start && pos < s.end);
+  const snapTime = (time: number) => {
+    if (!snapEnabled) return time;
+    const candidates = [...a.downbeats, ...a.beats];
+    let nearest = time, distance = Infinity;
+    for (const beat of candidates) { const d = Math.abs(beat - time); if (d < distance) { distance = d; nearest = beat; } }
+    return distance <= Math.min(0.18, 30 / a.bpm) ? nearest : time;
+  };
+  const selectedMusicEvent = selectedEvent === null ? null : a.events[selectedEvent] ?? null;
+  const timeAtClientX = (clientX: number) => {
+    const viewport = lanesRef.current;
+    if (!viewport) return 0;
+    const rect = viewport.getBoundingClientRect();
+    const x = Math.max(0, Math.min(viewport.scrollWidth, clientX - rect.left + viewport.scrollLeft));
+    return Math.max(0, Math.min(a.duration, (x / Math.max(1, viewport.scrollWidth)) * a.duration));
+  };
 
   return (
     <div className="song-studio-timeline col" data-testid="song-studio-timeline">
-      {/* Studio Bar Controls */}
-      <div
-        className="row"
-        style={{
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '6px 12px',
-          background: 'rgba(0,0,0,0.3)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        <div className="row" style={{ alignItems: 'center', gap: 10 }}>
-          <button
-            className={`btn sm icon ${playing ? 'on' : ''}`}
-            onClick={handlePlayToggle}
-            title={t(playing ? 'music.pause' : 'music.play')}
-          >
-            {playing ? <Pause size={13} /> : <Play size={13} />}
-          </button>
-          <button
-            className="btn ghost sm icon"
-            onClick={() => musicPlayer.stop()}
-            title={t('music.stopPlayer')}
-          >
-            <Square size={13} />
-          </button>
-          <span className="mono small bold" style={{ minWidth: 90 }}>
-            {fmt(pos ?? 0)} / {fmt(a.duration)}
-          </span>
-          <span className="badge">{a.bpm} BPM</span>
-          <span className="badge dim">{a.meter}/4</span>
-        </div>
-
-        <div className="row small dim" style={{ gap: 8 }}>
-          <span className="row" style={{ alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 10, height: 2, background: '#f59e0b', display: 'inline-block' }} />
-            {t('music.studio.waveform')}
-          </span>
+      <div className="studio-selection-toolbar">
+        <span className="studio-selection-label">{a.sections[selected] ? `${t('music.studio.section')} ${selected + 1} · ${SECTION_NAMES[a.sections[selected]!.label]}` : t('music.studio.noSectionSelected')}</span>
+        <span className="studio-selection-time mono">{a.sections[selected] ? `${fmt(a.sections[selected]!.start)} – ${fmt(a.sections[selected]!.end)}` : ''}</span>
+        <button type="button" className="btn ghost sm" onClick={onUndo} title={t('music.studio.undo')}>{t('music.studio.undo')}</button>
+        <button type="button" className="btn ghost sm" onClick={onRedo} title={t('music.studio.redo')}>{t('music.studio.redo')}</button>
+        <button type="button" className="btn ghost sm" disabled={!a.sections[selected]} onClick={() => onOpenEditor(selected)} data-testid="studio-edit-selected"><Pencil size={12} />{t('music.studio.editSection')}</button>
+      </div>
+      {/* Shared transport lives above the analysis; this header only explains the visual layer. */}
+      <div className="studio-timeline-heading">
+        <span className="studio-timeline-title">{t('music.studio.waveform')}</span>
+        <span className="studio-timeline-legend"><i />{t('music.studio.energy')}</span>
+        <span className="badge">{a.bpm.toFixed(1)} BPM</span>
+        <span className="badge dim">{a.meter}/4</span>
+        <div className="studio-zoom-controls" role="group" aria-label={t('music.studio.zoom')}>
+          <button type="button" className="btn ghost sm icon" onClick={() => setZoom((v) => Math.max(1, Number((v - 0.5).toFixed(1))))} disabled={zoom <= 1} title={t('music.studio.zoomOut')} aria-label={t('music.studio.zoomOut')}><Minus size={13} /></button>
+          <span className="studio-zoom-value mono" aria-live="polite">{zoom.toFixed(1)}×</span>
+          <button type="button" className="btn ghost sm icon" onClick={() => setZoom((v) => Math.min(4, Number((v + 0.5).toFixed(1))))} disabled={zoom >= 4} title={t('music.studio.zoomIn')} aria-label={t('music.studio.zoomIn')}><Plus size={13} /></button>
+          <button type="button" className="btn ghost sm icon" onClick={() => { setZoom(1); if (lanesRef.current) lanesRef.current.scrollTo({ left: 0, behavior: 'smooth' }); }} disabled={zoom === 1 && !(lanesRef.current?.scrollLeft)} title={t('music.studio.zoomReset')} aria-label={t('music.studio.zoomReset')}><Maximize2 size={13} /></button>
         </div>
       </div>
 
       {/* Multi-Track DAW Container */}
       <div
+        ref={lanesRef}
         className="studio-lanes-container"
-        style={{ position: 'relative', overflowX: 'hidden' }}
+        style={{ position: 'relative', overflowX: 'auto', '--timeline-min-width': `${minTimelineWidth}px` } as React.CSSProperties}
         onClick={handleTimelineClick}
+        data-testid="studio-timeline-scroll"
       >
+        {dragBoundary && <div className="studio-boundary-preview" style={{ left: (dragBoundary.time / a.duration) * minTimelineWidth }} aria-hidden="true" />}
+        {dragEvent && <div className="studio-event-preview" style={{ left: (dragEvent.time / a.duration) * minTimelineWidth }} aria-hidden="true" />}
         {/* Playhead */}
         {pos !== null && (
           <div
-            className="studio-playhead"
+            className={`studio-playhead ${playing ? "is-playing" : ""}`}
             style={{
               position: 'absolute',
               top: 0,
               bottom: 0,
-              left: `${Math.min(100, (pos / a.duration) * 100)}%`,
+              left: `${playheadPx}px`,
               width: 2,
               background: '#22d3ee',
               zIndex: 10,
@@ -215,9 +237,19 @@ export function SongStudioTimeline({
                 key={i}
                 type="button"
                 className={`studio-sec-block sec-btn ${isSel ? 'sel' : ''} ${isNow ? 'now' : ''}`}
+                aria-pressed={isSel}
+                aria-label={`${SECTION_NAMES[s.label]} · ${fmt(s.start)}–${fmt(s.end)}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect(i);
+                }}
+                onKeyDown={(event) => {
+                  if (!event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') || i >= a.sections.length - 1) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (track.plan?.sections[i]?.locked || track.plan?.sections[i + 1]?.locked) return;
+                  const step = 60 / a.bpm;
+                  onMoveBoundary(i, Math.max(s.start + 1, Math.min(a.sections[i + 1]!.end - 1, s.end + (event.key === 'ArrowRight' ? step : -step))));
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
@@ -233,7 +265,7 @@ export function SongStudioTimeline({
                   flexDirection: 'column',
                   justifyContent: 'space-between',
                   cursor: 'pointer',
-                  overflow: 'hidden',
+                  overflow: 'visible',
                   position: 'relative',
                   textAlign: 'left',
                 }}
@@ -252,6 +284,36 @@ export function SongStudioTimeline({
                     </span>
                   )}
                 </div>
+                {i < a.sections.length - 1 && (
+                  <span
+                    aria-hidden="true"
+                    className={`studio-section-boundary ${dragBoundary?.index === i ? 'is-dragging' : ''}`}
+                    title={t('music.studio.dragBoundary')}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (track.plan?.sections[i]?.locked || track.plan?.sections[i + 1]?.locked) return;
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      setDragBoundary({ index: i, time: s.end });
+                    }}
+                    onPointerMove={(event) => {
+                      if (dragBoundary?.index === i) setDragBoundary({ index: i, time: timeAtClientX(event.clientX) });
+                    }}
+                    onPointerUp={(event) => {
+                      event.stopPropagation();
+                      if (dragBoundary?.index === i) {
+                        const rawTime = timeAtClientX(event.clientX);
+                        const time = Math.max(s.start + 1, Math.min(a.sections[i + 1]!.end - 1, rawTime));
+                        setDragBoundary(null);
+                        onMoveBoundary(i, time);
+                      }
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                    }}
+                    onPointerCancel={() => setDragBoundary(null)}
+                    onClick={(event) => event.stopPropagation()}
+
+                  />
+                )}
               </button>
             );
           })}
@@ -260,18 +322,46 @@ export function SongStudioTimeline({
         {/* Track 3: Events & Impacts */}
         <div
           className="studio-lane lane-events"
-          style={{ height: 20, background: 'rgba(0,0,0,0.4)', position: 'relative' }}
+          style={{ height: 28, background: 'rgba(0,0,0,0.4)', position: 'relative' }}
+          tabIndex={0}
+          aria-label={t('music.studio.eventsLane')}
+          onDoubleClick={(event) => { if ((event.target as HTMLElement).closest('button')) return; const rect = event.currentTarget.getBoundingClientRect(); onAddEvent(Math.max(0, Math.min(a.duration, ((event.clientX - rect.left) / rect.width) * a.duration))); }}
+          onKeyDown={(event) => { if ((event.key === 'Delete' || event.key === 'Backspace') && selectedEvent !== null) { event.preventDefault(); onRemoveEvent(selectedEvent); setSelectedEvent(null); } }}
         >
           {a.events.map((e, i) => {
-            if (e.kind === 'silence') return null;
             const left = `${(e.t / a.duration) * 100}%`;
             const width = e.duration > 0 ? `${(e.duration / a.duration) * 100}%` : '4px';
 
             return (
-              <div
+              <button
                 key={i}
-                className="studio-event-marker"
-                title={t(`music.event.${e.kind}`)}
+                type="button"
+                className={`studio-event-marker studio-event-${e.kind} ${selectedEvent === i ? 'is-selected' : ''}`}
+                title={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)}`}
+                aria-label={`${t(`music.event.${e.kind}`)} · ${fmt(e.t)} · ${t('music.studio.seekToEvent')}`}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  if (event.button !== 0) return;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setSelectedEvent(i);
+                  setDragEvent({ index: i, time: e.t });
+                }}
+                onPointerMove={(event) => {
+                  if (dragEvent?.index !== i) return;
+                  event.stopPropagation();
+                  setDragEvent({ index: i, time: snapTime(timeAtClientX(event.clientX)) });
+                }}
+                onPointerUp={(event) => {
+                  event.stopPropagation();
+                  if (dragEvent?.index === i) {
+                    const time = snapTime(timeAtClientX(event.clientX));
+                    setDragEvent(null);
+                    if (Math.abs(time - e.t) > 0.015) onUpdateEvent(i, { t: time });
+                  }
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+                onPointerCancel={() => setDragEvent(null)}
+                onClick={(event) => { event.stopPropagation(); setSelectedEvent(i); if (musicPlayer.hasAudio(track.hash)) musicPlayer.play(track, e.t); }}
                 style={{
                   position: 'absolute',
                   left,
@@ -280,10 +370,26 @@ export function SongStudioTimeline({
                   bottom: 3,
                   background: EVENT_STYLE[e.kind][1],
                   borderRadius: 2,
+                  border: 0,
+                  padding: 0,
+                  cursor: 'grab',
+                  touchAction: 'none',
+                  opacity: dragEvent?.index === i ? 0.45 : undefined,
                 }}
               />
             );
           })}
+        </div>
+        <div className="studio-event-inspector" onClick={(event) => event.stopPropagation()}>
+          <span className="small dim">{selectedMusicEvent ? `${t('music.studio.selectedEvent')} · ${fmt(selectedMusicEvent.t)}` : t('music.studio.noEvent')}</span>
+          {selectedMusicEvent && selectedEvent !== null && <>
+            <select aria-label={t('music.studio.eventType')} value={selectedMusicEvent.kind} onChange={(event) => onUpdateEvent(selectedEvent, { kind: event.target.value as 'impact' | 'riser' | 'silence' | 'vocal' })}>
+              {(['impact', 'riser', 'silence', 'vocal'] as const).map((kind) => <option key={kind} value={kind}>{t(`music.event.${kind}`)}</option>)}
+            </select>
+            <label className="small">{t('music.studio.duration')} <input aria-label={t('music.studio.duration')} type="number" min="0" max="600" step="0.05" defaultValue={selectedMusicEvent.duration} key={String(selectedEvent) + ':' + selectedMusicEvent.duration} onBlur={(event) => { const duration = Math.max(0, Math.min(600, Number(event.currentTarget.value) || 0)); if (duration !== selectedMusicEvent.duration) onUpdateEvent(selectedEvent, { duration }); }} /></label>
+            <label className="small studio-snap"><input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} />{t('music.studio.snap')}</label>
+            <button type="button" className="btn ghost sm" onClick={() => { onRemoveEvent(selectedEvent); setSelectedEvent(null); }}>{t('music.studio.removeEvent')}</button>
+          </>}
         </div>
 
         {/* Track 4: Lighting Layers & Movements */}
