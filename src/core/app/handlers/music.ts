@@ -53,6 +53,43 @@ export async function handleMusic(app: AppService, cmd: CommandIn<'music'>): Pro
         if (cmd.locked !== undefined && p) p.locked = cmd.locked;
       });
       return ok;
+    case 'music.moveSectionBoundary': {
+      const current = track(app, cmd.trackId);
+      const left = current.analysis.sections[cmd.index];
+      const right = current.analysis.sections[cmd.index + 1];
+      if (!left || !right) throw new UserError('Limite entre sections introuvable', 'music.sectionBoundaryNotFound');
+      if (cmd.time < left.start + 1 || cmd.time > right.end - 1) {
+        throw new UserError('Chaque section doit conserver au moins une seconde', 'music.sectionBoundaryRange');
+      }
+      if (current.plan?.sections[cmd.index]?.locked || current.plan?.sections[cmd.index + 1]?.locked) {
+        throw new UserError('Déverrouillez les sections concernées avant de déplacer leur limite', 'music.sectionBoundaryLocked');
+      }
+      const analysis = structuredClone(current.analysis);
+      analysis.sections[cmd.index]!.end = cmd.time;
+      analysis.sections[cmd.index + 1]!.start = cmd.time;
+      // Preflight compilation: invalid timing must never leave a half-updated project.
+      if (current.plan) {
+        compileShow(app.index, current.name, analysis, current.plan, {
+          maxStrobeHz: app.settings.engine.maxStrobeHz,
+          allowStrobe: app.settings.ai.allowStrobe,
+          phraseBars: app.settings.ai.phraseBars,
+        });
+      }
+      app.mutate((d) => {
+        const target = d.music.tracks.find((x) => x.id === cmd.trackId);
+        if (!target) throw new UserError('Morceau introuvable', 'music.trackNotFound');
+        target.analysis.sections[cmd.index]!.end = cmd.time;
+        target.analysis.sections[cmd.index + 1]!.start = cmd.time;
+      });
+      const updated = track(app, cmd.trackId);
+      if (!updated.plan) {
+        app.logger.info('Musique', `Limite des sections ${cmd.index + 1}/${cmd.index + 2} déplacée à ${cmd.time.toFixed(2)} s`);
+        return { timelineId: null, notices: [] };
+      }
+      const result = applyShow(app, updated, structuredClone(updated.plan), []);
+      app.logger.info('Musique', `Structure temporelle ajustée : sections ${cmd.index + 1} et ${cmd.index + 2} (${cmd.time.toFixed(2)} s)`);
+      return { timelineId: result.timelineId, notices: result.notices };
+    }
     case 'music.generate': {
       const t = track(app, cmd.trackId);
       const variant = cmd.nextVariant ? (t.plan?.variant ?? 0) + 1 : t.plan?.variant ?? 0;
