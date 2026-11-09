@@ -105,7 +105,7 @@ export function SongStudioTimeline({
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left + e.currentTarget.scrollLeft) / e.currentTarget.scrollWidth));
     const seekTime = ratio * a.duration;
     if (musicPlayer.hasAudio(track.hash)) {
       musicPlayer.play(track, seekTime);
@@ -129,7 +129,7 @@ export function SongStudioTimeline({
       {/* Multi-Track DAW Container */}
       <div
         className="studio-lanes-container"
-        style={{ position: 'relative', overflowX: 'hidden' }}
+        style={{ position: 'relative', overflowX: 'auto', '--timeline-min-width': `${Math.max(1000, a.sections.length * 68)}px` } as React.CSSProperties}
         onClick={handleTimelineClick}
       >
         {/* Playhead */}
