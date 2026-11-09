@@ -276,7 +276,8 @@ export function SongStudioTimeline({
                     onPointerUp={(event) => {
                       event.stopPropagation();
                       if (dragBoundary?.index === i) {
-                        const time = timeAtClientX(event.clientX);
+                        const rawTime = timeAtClientX(event.clientX);
+                        const time = Math.max(s.start + 1, Math.min(a.sections[i + 1]!.end - 1, rawTime));
                         setDragBoundary(null);
                         onMoveBoundary(i, time);
                       }
