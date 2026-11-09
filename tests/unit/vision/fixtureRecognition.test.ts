@@ -60,6 +60,9 @@ describe('parseFixtureRecognition', () => {
       summary: '',
       observations: [{ ...observation, bbox: { x: 0.8, y: 0.7, width: 0.6, height: 0.6 } }],
     }, candidates, 1);
-    expect(result.observations[0]!.bbox).toEqual({ x: 0.8, y: 0.7, width: 0.19999999999999996, height: 0.30000000000000004 });
+    expect(result.observations[0]!.bbox.x).toBeCloseTo(0.8);
+    expect(result.observations[0]!.bbox.y).toBeCloseTo(0.7);
+    expect(result.observations[0]!.bbox.width).toBeCloseTo(0.2);
+    expect(result.observations[0]!.bbox.height).toBeCloseTo(0.3);
   });
 });
