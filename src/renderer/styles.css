@@ -1491,3 +1491,18 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 
 .studio-lanes-container { min-width: 0; overflow-x: auto !important; overflow-y: hidden; scrollbar-width: thin; }
 .studio-lane { min-width: var(--timeline-min-width, 100%); }
+
+
+.studio-zoom-controls { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); }
+.studio-zoom-value { min-width: 34px; text-align: center; font-size: 10px; color: var(--text-2); }
+.studio-zoom-controls .btn { flex: none; }
+.studio-lanes-container { overscroll-behavior-x: contain; scroll-behavior: smooth; }
+.studio-lane { width: max(100%, var(--timeline-min-width, 100%)); min-width: var(--timeline-min-width, 100%); }
+.studio-event-marker { opacity: .88; transition: opacity var(--dur), transform var(--dur), box-shadow var(--dur); }
+.studio-event-marker:hover, .studio-event-marker:focus-visible { opacity: 1; transform: scaleY(1.35); box-shadow: 0 0 8px currentColor; z-index: 4; }
+.studio-event-marker:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (max-width: 720px) {
+  .studio-timeline-heading { gap: 6px; }
+  .studio-zoom-controls { margin-left: 0; }
+  .studio-timeline-legend { display: none; }
+}
