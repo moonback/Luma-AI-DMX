@@ -155,7 +155,7 @@ export function FixtureRecognitionDialog({ onClose }: { onClose: () => void }) {
                 <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
                   <div style={{ flex: '0 0 150px', minWidth: 0 }}>
                     <div style={{ position: 'relative' }}>
-                      <img src={images[observation.imageIndex]} alt="Zone détectée" style={{ width: '100%', display: 'block', borderRadius: 4 }} />
+                      <img src={images[observation.imageIndex]!} alt="Zone détectée" style={{ width: '100%', display: 'block', borderRadius: 4 }} />
                       <div style={{ position: 'absolute', left: `${observation.bbox.x * 100}%`, top: `${observation.bbox.y * 100}%`, width: `${observation.bbox.width * 100}%`, height: `${observation.bbox.height * 100}%`, border: '2px solid #34d399', boxSizing: 'border-box', pointerEvents: 'none' }} />
                     </div>
                     <span className="small muted">Photo {observation.imageIndex + 1}</span>
