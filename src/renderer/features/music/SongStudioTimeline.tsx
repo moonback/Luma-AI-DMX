@@ -11,6 +11,7 @@ interface Props {
   selected: number;
   onSelect: (index: number) => void;
   onOpenEditor: (index: number) => void;
+  onMoveBoundary: (index: number, time: number) => void;
   pos: number | null;
   playing: boolean;
 }
@@ -20,6 +21,7 @@ export function SongStudioTimeline({
   selected,
   onSelect,
   onOpenEditor,
+  onMoveBoundary,
   pos,
   playing,
 }: Props) {
@@ -28,6 +30,7 @@ export function SongStudioTimeline({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [waveform, setWaveform] = useState<number[] | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [dragBoundary, setDragBoundary] = useState<{ index: number; time: number } | null>(null);
   const lanesRef = useRef<HTMLDivElement>(null);
   const minTimelineWidth = Math.max(1000, a.sections.length * 68) * zoom;
   const playheadPx = pos === null ? 0 : Math.max(0, Math.min(minTimelineWidth, (pos / a.duration) * minTimelineWidth));
@@ -128,6 +131,13 @@ export function SongStudioTimeline({
 
 
   const nowSec = pos === null ? -1 : a.sections.findIndex((s) => pos >= s.start && pos < s.end);
+  const timeAtClientX = (clientX: number) => {
+    const viewport = lanesRef.current;
+    if (!viewport) return 0;
+    const rect = viewport.getBoundingClientRect();
+    const x = Math.max(0, Math.min(viewport.scrollWidth, clientX - rect.left + viewport.scrollLeft));
+    return Math.max(0, Math.min(a.duration, (x / Math.max(1, viewport.scrollWidth)) * a.duration));
+  };
 
   return (
     <div className="song-studio-timeline col" data-testid="song-studio-timeline">
@@ -158,6 +168,7 @@ export function SongStudioTimeline({
         onClick={handleTimelineClick}
         data-testid="studio-timeline-scroll"
       >
+        {dragBoundary && <div className="studio-boundary-preview" style={{ left: (dragBoundary.time / a.duration) * minTimelineWidth }} aria-hidden="true" />}
         {/* Playhead */}
         {pos !== null && (
           <div
@@ -241,6 +252,47 @@ export function SongStudioTimeline({
                     </span>
                   )}
                 </div>
+                {i < a.sections.length - 1 && (
+                  <span
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={t('music.studio.dragBoundary')}
+                    aria-valuemin={Math.ceil(s.start + 1)}
+                    aria-valuemax={Math.floor(a.sections[i + 1]!.end - 1)}
+                    aria-valuenow={Math.round(s.end)}
+                    tabIndex={track.plan?.sections[i]?.locked || track.plan?.sections[i + 1]?.locked ? -1 : 0}
+                    className={`studio-section-boundary ${dragBoundary?.index === i ? 'is-dragging' : ''}`}
+                    title={t('music.studio.dragBoundary')}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (track.plan?.sections[i]?.locked || track.plan?.sections[i + 1]?.locked) return;
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      setDragBoundary({ index: i, time: s.end });
+                    }}
+                    onPointerMove={(event) => {
+                      if (dragBoundary?.index === i) setDragBoundary({ index: i, time: timeAtClientX(event.clientX) });
+                    }}
+                    onPointerUp={(event) => {
+                      event.stopPropagation();
+                      if (dragBoundary?.index === i) {
+                        const time = timeAtClientX(event.clientX);
+                        setDragBoundary(null);
+                        onMoveBoundary(i, time);
+                      }
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                    }}
+                    onPointerCancel={() => setDragBoundary(null)}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const step = 60 / a.bpm;
+                      onMoveBoundary(i, Math.max(s.start + 1, Math.min(a.sections[i + 1]!.end - 1, s.end + (event.key === 'ArrowRight' ? step : -step))));
+                    }}
+                  />
+                )}
               </button>
             );
           })}
