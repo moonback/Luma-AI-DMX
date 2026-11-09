@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Music2, Upload } from 'lucide-react';
-import { useStore } from '../store';
+import { confirmAction, useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
 import { Empty, PageHead, Panel } from '../components/ui';
@@ -135,10 +135,18 @@ export function MusicPage() {
       setProgress(null);
     }
   };
-  const remove = () => {
-    if (!track) return;
-    if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === track.id) musicPlayer.stop();
-    void act({ type: 'music.removeTrack', id: track.id });
+  const remove = async (id = track?.id) => {
+    if (!id) return;
+    const target = tracks.find((tk) => tk.id === id);
+    const ok = await confirmAction({
+      title: t('music.remove.confirmTitle'),
+      message: t('music.remove.confirmMessage', { name: target?.name ?? '' }),
+      confirmLabel: t('music.remove.confirmLabel'),
+      danger: true,
+    });
+    if (!ok) return;
+    if ((musicPlayer.playing?.trackId ?? musicPlayer.paused?.trackId) === id) musicPlayer.stop();
+    void act({ type: 'music.removeTrack', id });
   };
   const generate = async (nextVariant: boolean) => {
     if (!track || !(await confirmOverwrite(track.id))) return;
@@ -211,7 +219,7 @@ export function MusicPage() {
       <input ref={replaceFile} type="file" accept={AUDIO_ACCEPT} style={{ display: 'none' }} data-testid="music-replace-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && track) void importFile(f, track.id); }} />
       {generating && <GeneratingModal />}
       <div className="music-layout">
-        <TrackLibrary tracks={tracks} selectedId={track?.id ?? null} playingId={playingId} importing={!!progress} onSelect={select} onImport={() => file.current?.click()} />
+        <TrackLibrary tracks={tracks} selectedId={track?.id ?? null} playingId={playingId} importing={!!progress} onSelect={select} onImport={() => file.current?.click()} onRemove={remove} />
         <div className="music-main col gap-lg">
           <ShowStepper current={shown} progress={progressStep} onPick={pick} />
           {progress && (

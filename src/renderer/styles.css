@@ -1397,9 +1397,13 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 @media (max-width: 900px) { .music-layout { grid-template-columns: minmax(0, 1fr); } }
 .music-library { position: sticky; top: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); max-height: calc(100vh - 140px); }
 .music-library-list { display: flex; flex-direction: column; gap: 4px; overflow: auto; min-height: 0; }
-.music-library-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px; text-align: left; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer; }
+.music-library-item { display: flex; align-items: center; gap: 4px; width: 100%; border: 1px solid transparent; border-radius: 8px; }
 .music-library-item:hover { background: var(--panel-2); }
 .music-library-item.on { background: var(--panel-2); border-color: var(--cyan); }
+.music-library-open { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 8px; text-align: left; color: inherit; background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.music-library-remove { flex: none; opacity: 0; margin-right: 4px; }
+.music-library-item:hover .music-library-remove, .music-library-item:focus-within .music-library-remove { opacity: 1; }
+.music-library-remove:hover { color: var(--danger, #f87171); }
 .music-library-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-main { min-width: 0; }
 .music-main > .show-stepper { margin: 0; }

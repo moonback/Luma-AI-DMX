@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Music2, Upload } from 'lucide-react';
+import { Music2, Trash2, Upload } from 'lucide-react';
 import type { MusicTrack } from '../../../core/model/schemas';
 import { useT } from '../../i18n';
 import { fmt } from './names';
@@ -22,9 +22,9 @@ export function libraryView<T extends Pick<MusicTrack, 'id' | 'name' | 'plan'> &
 }
 
 /** Library of the analysed tracks: always visible beside the four steps, with import, filter and sort. */
-export function TrackLibrary({ tracks, selectedId, playingId, importing, onSelect, onImport }: {
+export function TrackLibrary({ tracks, selectedId, playingId, importing, onSelect, onImport, onRemove }: {
   tracks: readonly MusicTrack[]; selectedId: string | null; playingId: string | null; importing: boolean;
-  onSelect: (id: string) => void; onImport: () => void;
+  onSelect: (id: string) => void; onImport: () => void; onRemove: (id: string) => void;
 }) {
   const t = useT();
   const [query, setQuery] = useState('');
@@ -48,14 +48,17 @@ export function TrackLibrary({ tracks, selectedId, playingId, importing, onSelec
         {shown.map((tk) => {
           const status = trackStatus(tk, playingId);
           return (
-            <button key={tk.id} role="listitem" className={`music-library-item ${tk.id === selectedId ? 'on' : ''}`} aria-current={tk.id === selectedId ? 'true' : undefined} onClick={() => onSelect(tk.id)} data-testid="music-library-item">
-              <Music2 size={14} className="dim" />
-              <span className="col grow" style={{ minWidth: 0, gap: 2 }}>
-                <span className="music-library-name" title={tk.name}>{tk.name}</span>
-                <span className="small dim">{t('music.library.meta', { bpm: Math.round(tk.analysis.bpm), duration: fmt(tk.analysis.duration) })}</span>
-              </span>
-              <span className={`badge sm ${status === 'playing' ? 'ok' : status === 'show' ? 'cyan' : ''}`}>{t(`music.library.status.${status}`)}</span>
-            </button>
+            <div key={tk.id} role="listitem" className={`music-library-item ${tk.id === selectedId ? 'on' : ''}`} data-testid="music-library-item">
+              <button type="button" className="music-library-open" aria-current={tk.id === selectedId ? 'true' : undefined} onClick={() => onSelect(tk.id)} data-testid="music-library-select">
+                <Music2 size={14} className="dim" />
+                <span className="col grow" style={{ minWidth: 0, gap: 2 }}>
+                  <span className="music-library-name" title={tk.name}>{tk.name}</span>
+                  <span className="small dim">{t('music.library.meta', { bpm: Math.round(tk.analysis.bpm), duration: fmt(tk.analysis.duration) })}</span>
+                </span>
+                <span className={`badge sm ${status === 'playing' ? 'ok' : status === 'show' ? 'cyan' : ''}`}>{t(`music.library.status.${status}`)}</span>
+              </button>
+              <button type="button" className="btn ghost sm icon music-library-remove" title={t('music.remove')} aria-label={t('music.library.remove', { name: tk.name })} onClick={() => onRemove(tk.id)} data-testid="music-library-remove"><Trash2 size={13} /></button>
+            </div>
           );
         })}
         {!!tracks.length && !shown.length && <p className="small dim">{t('music.library.none')}</p>}

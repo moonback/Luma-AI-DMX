@@ -48,7 +48,7 @@ export function TrackStep({ track, studio, replacing, onReplace, onRemove, onNex
       <div className="music-step-foot">
         <div className="row" style={{ gap: 6 }}>
           <button className="btn ghost sm" disabled={replacing} onClick={onReplace} title={t('music.replaceHint')} data-testid="music-replace"><FileAudio size={13} />{t('music.replace')}</button>
-          <button className="btn ghost sm" onClick={onRemove} data-testid="music-remove"><Trash2 size={13} />{t('music.remove')}</button>
+          <button className="btn ghost sm" onClick={() => onRemove()} data-testid="music-remove"><Trash2 size={13} />{t('music.remove')}</button>
         </div>
         <button className="btn primary" onClick={onNext} data-testid="music-next">{t('music.steps.toIntent')}<ArrowRight size={14} /></button>
       </div>
