@@ -20,6 +20,7 @@ export const frMusic = {
   'music.studio.zoomReset': 'Réinitialiser le zoom',
   'music.studio.seekToEvent': 'Lire à partir de cet événement',
   'music.studio.section': 'Section',
+  'music.studio.eventsLane': 'Piste des événements — double-cliquez pour ajouter un impact, sélectionnez un marqueur puis Suppr pour le retirer',
   'music.studio.dragBoundary': 'Déplacer la limite entre ces deux sections',
   'music.edit.timingError': 'Impossible de modifier la structure musicale',
   'music.studio.noSectionSelected': 'Aucune section sélectionnée',
