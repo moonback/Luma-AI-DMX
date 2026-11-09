@@ -19,6 +19,8 @@ export const frMusic = {
   'music.studio.zoomOut': 'Réduire la timeline',
   'music.studio.zoomReset': 'Réinitialiser le zoom',
   'music.studio.seekToEvent': 'Lire à partir de cet événement',
+  'music.studio.noSectionSelected': 'Aucune section sélectionnée',
+  'music.studio.editSection': 'Modifier la section',
   'music.studio.energy': 'Énergie musicale',
   'music.library.filter': 'Filtrer les morceaux…',
   'music.library.sort': 'Trier les morceaux',
