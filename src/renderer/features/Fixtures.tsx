@@ -9,6 +9,7 @@ import { findFreeAddress } from '../../core/fixtures/patch';
 import { attributeLabel } from '../../core/fixtures/attributes';
 import { CameraLocate } from './CameraLocate';
 import { ProfileFromPhotoDialog } from './ProfileFromPhoto';
+import { FixtureRecognitionDialog } from './FixtureRecognitionDialog';
 import type { FixtureProfile } from '../../core/model/schemas';
 
 function AddDialog({ onClose }: { onClose: () => void }) {
@@ -303,6 +304,7 @@ export function Fixtures() {
   const [ofl, setOfl] = useState(false);
   const [ma2Lib, setMa2Lib] = useState(false);
   const [fromPhoto, setFromPhoto] = useState(false);
+  const [recognizing, setRecognizing] = useState(false);
   const [universe, setUniverse] = useState<number | 'all'>('all');
   const issueIds = useMemo(() => new Set(ps.issues.flatMap((i) => i.fixtureIds)), [ps.issues]);
   const shown = fixtures.filter((rf) => {
@@ -348,6 +350,7 @@ export function Fixtures() {
         <button className="btn" onClick={() => setOfl(true)} title="Catalogue communautaire Open Fixture Library"><Upload size={15} />Open Fixture Library</button>
         <button className="btn" data-testid="fixture-share" onClick={() => void act({ type: 'profile.openFixtureShare' })} title={tr('fixtureShare.buttonTitle')}><Globe size={15} />{tr('fixtureShare.button')}</button>
         <button className="btn" data-testid="ma2lib-open" onClick={() => setMa2Lib(true)} title={tr('ma2lib.openTitle')}><Upload size={15} />{tr('ma2lib.open')}</button>
+        <button className="btn" data-testid="fixture-recognition-open" disabled={!ps.project.patch.length} onClick={() => setRecognizing(true)} title="Analyser les photos de l'installation et rapprocher les appareils du patch DMX"><Camera size={15} />Reconnaissance visuelle</button>
         <button className="btn" data-testid="profile-from-photo" onClick={() => setFromPhoto(true)} title={tr('pphoto.buttonTitle')}><Camera size={15} />{tr('pphoto.button')}</button>
         <button className="btn" data-testid="patch-sheet-pdf" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'pdf' })} title="Feuille de patch imprimable (A4 paysage), par univers"><FileDown size={15} />Patch PDF</button>
         <button className="btn" data-testid="patch-sheet-csv" disabled={!ps.project.patch.length} onClick={() => void act({ type: 'patch.exportSheet', format: 'csv' })} title="Feuille de patch pour tableur (CSV « ; », UTF-8)"><FileDown size={15} />CSV</button>
@@ -440,6 +443,7 @@ export function Fixtures() {
       {ofl && <OflDialog onClose={() => setOfl(false)} />}
       {ma2Lib && <Ma2LibDialog onClose={() => setMa2Lib(false)} />}
       {fromPhoto && <ProfileFromPhotoDialog onClose={() => setFromPhoto(false)} />}
+      {recognizing && <FixtureRecognitionDialog onClose={() => setRecognizing(false)} />}
     </div>
   );
 }
