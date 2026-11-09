@@ -381,7 +381,7 @@ export function SongStudioTimeline({
           })}
         </div>
         <div className="studio-event-inspector" onClick={(event) => event.stopPropagation()}>
-          <button type="button" className="btn ghost sm" onClick={() => onAddEvent(pos ?? 0, 'marker')}>{t('music.studio.addMarker')}</button>
+          <button type="button" className="btn ghost sm" onClick={() => onAddEvent(pos ?? a.sections[selected]?.start ?? 0, 'marker')}>{t('music.studio.addMarker')}</button>
           <span className="small dim">{selectedMusicEvent ? `${t('music.studio.selectedEvent')} · ${fmt(selectedMusicEvent.t)}` : t('music.studio.noEvent')}</span>
           {selectedMusicEvent && selectedEvent !== null && <>
             <select aria-label={t('music.studio.eventType')} value={selectedMusicEvent.kind} onChange={(event) => onUpdateEvent(selectedEvent, { kind: event.target.value as 'impact' | 'riser' | 'silence' | 'vocal' | 'marker' })}>
