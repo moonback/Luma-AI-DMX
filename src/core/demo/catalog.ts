@@ -3,6 +3,7 @@ import { row, barriers, lineArray, sub, monitor, drums, amp, guitar, keyboard, p
 import type { DemoProp, DemoScreen } from './decor';
 import { C } from './palette';
 import { MORE_DEMOS } from './catalogMore';
+import { MEGA_DEMOS } from './catalogMega';
 
 /**
  * Fictional demonstration projects, described as plain data (importable by the renderer for the gallery) and
@@ -547,4 +548,4 @@ const gala: DemoSpec = {
   notes: 'Démo : conduite simple, idéale pour une prise en main.',
 };
 
-export const DEMOS: DemoSpec[] = [club, pop, theatre, wedding, conference, jazz, festival, runway, gospel, gala, ...MORE_DEMOS];
+export const DEMOS: DemoSpec[] = [...MEGA_DEMOS, club, pop, theatre, wedding, conference, jazz, festival, runway, gospel, gala, ...MORE_DEMOS];
