@@ -18,11 +18,15 @@ export function applyAudioPreset(r: AudioReactions, preset: AudioPreset, groupId
   }[preset];
   return {
     ...r,
+    ...(preset === 'off' ? { beatChase: { ...r.beatChase, enabled: false }, beatPalette: { ...r.beatPalette, enabled: false } } : {}),
     bpmFollow: { ...r.bpmFollow, enabled: p.bpm },
     beatFlash: { ...r.beatFlash, ...on(p.flash !== null), decay: p.flash ?? r.beatFlash.decay },
     levelToIntensity: { ...r.levelToIntensity, ...on(p.level !== null), floor: p.level ?? r.levelToIntensity.floor },
     energyToColor: { ...r.energyToColor, ...on(p.color) },
     followers: {
+      ...r.followers,
+      // « Tout couper » also switches off the mid/high followers; the other presets leave them as the user set them.
+      ...(preset === 'off' ? { intensityFromMid: { ...r.followers.intensityFromMid, enabled: false }, intensityFromHigh: { ...r.followers.intensityFromHigh, enabled: false } } : {}),
       intensityFromBass: { ...r.followers.intensityFromBass, ...on(p.bass !== null), amount: p.bass ?? r.followers.intensityFromBass.amount },
       colorFromBrightness: { ...r.followers.colorFromBrightness, ...on(p.bright) },
       moveFromOnsets: { ...r.followers.moveFromOnsets, ...on(p.move !== null), amount: p.move ?? r.followers.moveFromOnsets.amount },

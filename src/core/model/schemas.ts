@@ -317,12 +317,37 @@ export const audioReactionsSchema = z.object({
       intensityFromBass: z.object({ enabled: z.boolean(), amount: unitSchema, targets: targetSchema }),
       colorFromBrightness: z.object({ enabled: z.boolean(), darkColor: hexColorSchema, brightColor: hexColorSchema, targets: targetSchema }),
       moveFromOnsets: z.object({ enabled: z.boolean(), amount: unitSchema, targets: targetSchema }),
+      /** Mid (150 Hz–4 kHz) and high (>4 kHz) band intensity followers; absent in older project files. */
+      intensityFromMid: z.object({ enabled: z.boolean(), amount: unitSchema, targets: targetSchema }).default({ enabled: false, amount: 0.6, targets: emptyTarget }),
+      intensityFromHigh: z.object({ enabled: z.boolean(), amount: unitSchema, targets: targetSchema }).default({ enabled: false, amount: 0.6, targets: emptyTarget }),
     })
     .default({
       intensityFromBass: { enabled: false, amount: 0.7, targets: { fixtureIds: [], groupIds: [] } },
       colorFromBrightness: { enabled: false, darkColor: '#FF3000', brightColor: '#00C8FF', targets: { fixtureIds: [], groupIds: [] } },
       moveFromOnsets: { enabled: false, amount: 0.5, targets: { fixtureIds: [], groupIds: [] } },
+      intensityFromMid: { enabled: false, amount: 0.6, targets: { fixtureIds: [], groupIds: [] } },
+      intensityFromHigh: { enabled: false, amount: 0.6, targets: { fixtureIds: [], groupIds: [] } },
     }),
+  /** Chase over groups (in the order listed), one step per tracked beat or bar. Needs a tracked tempo. */
+  beatChase: z
+    .object({
+      enabled: z.boolean(),
+      groupIds: z.array(idSchema).max(32),
+      every: z.enum(['beat', 'bar']),
+      direction: z.enum(['forward', 'backward', 'bounce', 'random']),
+      decay: z.number().min(0.02).max(2),
+    })
+    .default({ enabled: false, groupIds: [], every: 'beat', direction: 'forward', decay: 0.3 }),
+  /** Colour advancing through a palette on each tracked beat or bar (wins over the other colour reactions). */
+  beatPalette: z
+    .object({
+      enabled: z.boolean(),
+      colors: z.array(hexColorSchema).min(2).max(8),
+      every: z.enum(['beat', 'bar']),
+      fade: z.number().min(0).max(2),
+      targets: targetSchema,
+    })
+    .default({ enabled: false, colors: ['#FF0040', '#0080FF', '#FFC000'], every: 'bar', fade: 0.15, targets: { fixtureIds: [], groupIds: [] } }),
   /** Predicted drop/chorus -> GO on a cue list. Fires only while armed at runtime (never armed on load). */
   dropGo: z
     .object({ enabled: z.boolean(), cueListId: idSchema.nullable(), minConfidence: unitSchema, kinds: z.array(z.enum(['drop', 'chorus'])).min(1) })
@@ -339,7 +364,11 @@ export const DEFAULT_AUDIO_REACTIONS: AudioReactions = {
     intensityFromBass: { enabled: false, amount: 0.7, targets: emptyTarget },
     colorFromBrightness: { enabled: false, darkColor: '#FF3000', brightColor: '#00C8FF', targets: emptyTarget },
     moveFromOnsets: { enabled: false, amount: 0.5, targets: emptyTarget },
+    intensityFromMid: { enabled: false, amount: 0.6, targets: emptyTarget },
+    intensityFromHigh: { enabled: false, amount: 0.6, targets: emptyTarget },
   },
+  beatChase: { enabled: false, groupIds: [], every: 'beat', direction: 'forward', decay: 0.3 },
+  beatPalette: { enabled: false, colors: ['#FF0040', '#0080FF', '#FFC000'], every: 'bar', fade: 0.15, targets: emptyTarget },
   dropGo: { enabled: false, cueListId: null, minConfidence: 0.8, kinds: ['drop'] },
 };
 export const audioConfigSchema = z.object({
@@ -347,6 +376,8 @@ export const audioConfigSchema = z.object({
   smoothing: unitSchema.default(0.6),
   /** Onset strength relative to the adaptive threshold needed to count as a beat. */
   onsetThreshold: z.number().min(1).max(5).default(1.5),
+  /** Noise gate: input quieter than this level (0..1, after sensitivity) is treated as silence. 0 = off. */
+  gate: unitSchema.default(0),
   /** Expected tempo range (genre): the live tracker never reports a tempo outside it (octave errors). */
   bpmRange: z.object({ min: z.number().min(40).max(250), max: z.number().min(50).max(300) }).refine((r) => r.max >= r.min * 1.2, 'Plage de tempo trop étroite').default({ min: 70, max: 180 }),
   reactions: audioReactionsSchema.default(DEFAULT_AUDIO_REACTIONS),
@@ -506,7 +537,7 @@ export const projectSchema = z.object({
   cueLists: z.array(cueListSchema).default([]),
   effects: z.array(effectSchema).default([]),
   timelines: z.array(timelineSchema).default([]),
-  audio: audioConfigSchema.default({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, bpmRange: { min: 70, max: 180 }, reactions: DEFAULT_AUDIO_REACTIONS }),
+  audio: audioConfigSchema.default({ sensitivity: 1, smoothing: 0.6, onsetThreshold: 1.5, gate: 0, bpmRange: { min: 70, max: 180 }, reactions: DEFAULT_AUDIO_REACTIONS }),
   music: z.object({ tracks: z.array(musicTrackSchema).max(100).default([]) }).default({ tracks: [] }),
   visualizer: z
     .object({

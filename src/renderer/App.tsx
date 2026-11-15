@@ -298,7 +298,12 @@ async function offerRecovery(): Promise<void> {
     confirmLabel: t('recovery.restore'),
     danger: false,
   });
-  if (restore && (await act({ type: 'project.openRecovery', file: r.file }))?.opened) useStore.setState({ startScreen: null });
+  if (restore) {
+    if ((await act({ type: 'project.openRecovery', file: r.file }))?.opened) useStore.setState({ startScreen: null });
+  } else {
+    // Declined: drop the copy, otherwise the same offer comes back at every start-up.
+    await act({ type: 'project.discardRecovery', file: r.file });
+  }
 }
 
 export async function bootstrap(): Promise<void> {

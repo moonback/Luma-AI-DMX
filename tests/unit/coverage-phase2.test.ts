@@ -237,7 +237,7 @@ describe('réactions audio (LUMA-034)', () => {
     project.cueLists.push(list);
     engine.setIndex(new ProjectIndex(project));
     cfg.reactions.bpmFollow = { enabled: true, minConfidence: 0.5 };
-    audio.push(features({ bpm: 128, bpmConfidence: 0.9 }), 'track');
+    audio.push(features({ bpm: 128, bpmConfidence: 0.9 }), 'live');
     expect(engine.bpm).toBe(128);
     cfg.reactions.energyRiseGo = { enabled: true, cueListId: 'l1', ratio: 1.8 };
     audio.push(features({ energyRise: true }), 'live');
@@ -247,7 +247,7 @@ describe('réactions audio (LUMA-034)', () => {
     audio.armDrop(true);
     const prediction = { kind: 'drop' as const, confidence: 0.9, at: 2, inBeats: 4, source: 'track' as const };
     at(1000);
-    audio.push(features({ t: 1, prediction }), 'track'); // drop due 1 s later
+    audio.push(features({ t: 1, prediction }), 'live'); // drop due 1 s later
     expect(audio.status().dropFiresInMs).toBe(1000);
     at(2100);
     engine.tick(25);
@@ -256,11 +256,40 @@ describe('réactions audio (LUMA-034)', () => {
     // A withdrawn prediction long before its time cancels the GO.
     audio.armDrop(true);
     at(3000);
-    audio.push(features({ t: 3, prediction: { ...prediction, at: 6 } }), 'track');
+    audio.push(features({ t: 3, prediction: { ...prediction, at: 6 } }), 'live');
     at(3100);
-    audio.push(features({ t: 3.1, prediction: null }), 'track');
+    audio.push(features({ t: 3.1, prediction: null }), 'live');
     expect(audio.status().dropFiresInMs).toBeNull();
     audio.armDrop(false);
+  });
+
+  it('pendant Song to Show (source « track »), aucune réaction audio ne s’applique', () => {
+    const { engine, audio, cfg, at } = rig((c) => {
+      c.reactions.beatFlash.enabled = true;
+      c.reactions.levelToIntensity.enabled = true;
+      c.reactions.followers.moveFromOnsets.enabled = true;
+      c.reactions.bpmFollow = { enabled: true, minConfidence: 0.5 };
+    });
+    const list = cueListSchema.parse({ id: 'l1', name: 'L', cues: [{ id: 'c1', number: 1, name: 'A', sceneId: null, effectIds: [] }] });
+    const project = demoProject();
+    project.cueLists.push(list);
+    engine.setIndex(new ProjectIndex(project));
+    cfg.reactions.energyRiseGo = { enabled: true, cueListId: 'l1', ratio: 1.8 };
+    cfg.reactions.dropGo = { enabled: true, cueListId: 'l1', minConfidence: 0.8, kinds: ['drop'] };
+    audio.armDrop(true);
+    const bpmBefore = engine.bpm;
+    at(1000);
+    audio.push(features({ t: 1, onset: true, energyRise: true, bpm: 140, bpmConfidence: 0.9, prediction: { kind: 'drop', confidence: 1, at: 1.5, inBeats: 1, source: 'track' } }), 'track');
+    at(1600); // past the predicted drop (1.5 s), features still fresh
+    engine.tick(25);
+    expect(Object.values(engine.sources).some((s) => Object.values(s).some((v) => v.includes('Audio')))).toBe(false);
+    expect(engine.bpm).toBe(bpmBefore);
+    expect(engine.snapshot().playbacks.find((p) => p.cueListId === 'l1')).toBeUndefined();
+    expect(audio.status()).toMatchObject({ active: true, source: 'track' });
+    // Back to a live source: the reactions apply again.
+    audio.push(features({ t: 2, onset: true }), 'live');
+    engine.tick(25);
+    expect(engine.sources.par1?.dimmer).toMatch(/Audio/);
   });
 
   it('sans données fraîches, les contributions audio sont relâchées', () => {

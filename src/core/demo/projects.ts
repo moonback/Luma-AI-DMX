@@ -1,5 +1,5 @@
 import { createProject } from '../project/format';
-import { projectSchema, effectParamsSchema, type Project, type FixtureValues, type Truss } from '../model/schemas';
+import { MAX_UNIVERSES, projectSchema, effectParamsSchema, type Project, type FixtureValues, type Truss } from '../model/schemas';
 import { ProjectIndex } from '../engine/resolve';
 import { channelCount } from '../fixtures/profiles';
 import { colorCapability, colorCells, colorToAttributes } from '../fixtures/color';
@@ -47,12 +47,15 @@ function build(spec: DemoSpec): Project {
   };
   for (const rig of spec.rigs) {
     const trussId = trussFor(rig);
-    const u = rig.universe ?? 1;
+    let u = rig.universe ?? 1;
     const ch = channelCount(new ProjectIndex(p).lib.get(rig.profile)!, rig.mode);
     const ids: string[] = [];
     for (let i = 0; i < rig.count; i++) {
+      // A fixture never straddles two universes: when the requested one is full it moves to the next with room.
+      while ((next.get(u) ?? 1) + ch - 1 > 512) {
+        if (++u > MAX_UNIVERSES) throw new Error(`${spec.id} : plus de place dans les ${MAX_UNIVERSES} univers`);
+      }
       const address = next.get(u) ?? 1;
-      if (address + ch - 1 > 512) throw new Error(`${spec.id} : univers ${u} plein`);
       next.set(u, address + ch);
       const t = rig.count === 1 ? 0.5 : i / (rig.count - 1);
       const position = rig.alongDepth

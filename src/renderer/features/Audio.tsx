@@ -147,6 +147,7 @@ export function AudioPage() {
               <Field label="Sensibilité"><NumberInput value={cfg.sensitivity} min={0.1} max={10} step={0.1} onChange={(v) => save({ ...cfg, sensitivity: v })} /></Field>
               <Field label="Lissage (0–1)"><NumberInput value={cfg.smoothing} min={0} max={1} step={0.05} onChange={(v) => save({ ...cfg, smoothing: v })} /></Field>
               <Field label="Seuil d’attaque"><NumberInput value={cfg.onsetThreshold} min={1} max={5} step={0.1} onChange={(v) => save({ ...cfg, onsetThreshold: v })} /></Field>
+              <Field label={t('audio.gate')} hint={t('audio.gate.hint')}><NumberInput value={cfg.gate} min={0} max={1} step={0.01} onChange={(v) => save({ ...cfg, gate: v })} /></Field>
               <Field label="Tempo min (genre)" hint="Le suivi ne propose jamais de tempo hors de cette plage (évite les erreurs ×2)."><NumberInput value={cfg.bpmRange.min} min={40} max={250} onChange={(v) => v * 1.2 <= cfg.bpmRange.max && save({ ...cfg, bpmRange: { ...cfg.bpmRange, min: v } })} /></Field>
               <Field label="Tempo max (genre)"><NumberInput value={cfg.bpmRange.max} min={50} max={300} onChange={(v) => v >= cfg.bpmRange.min * 1.2 && save({ ...cfg, bpmRange: { ...cfg.bpmRange, max: v } })} /></Field>
             </div>
@@ -154,6 +155,7 @@ export function AudioPage() {
         </div>
         <Panel title="Réactions">
           <div className="col gap-lg">
+            {src === 'track' && <span className="badge warn" data-testid="audio-paused-song">{t('audio.pausedBySong')}</span>}
             <div className="col">
               <span className="small muted">{t('audio.presets')}</span>
               {groups.length ? (
@@ -174,6 +176,57 @@ export function AudioPage() {
               <TargetPicker value={r.beatFlash.targets} onChange={(t) => setR('beatFlash', { targets: t })} />
             </div>
             <div className="col">
+              <label className="check"><input type="checkbox" checked={r.beatChase.enabled} onChange={(e) => setR('beatChase', { enabled: e.target.checked })} />{t('audio.chase')}</label>
+              <div className="grid g3">
+                <Field label={t('audio.chase.every')}>
+                  <select className="select" value={r.beatChase.every} onChange={(e) => setR('beatChase', { every: e.target.value as 'beat' | 'bar' })}>
+                    <option value="beat">{t('audio.chase.beat')}</option>
+                    <option value="bar">{t('audio.chase.bar')}</option>
+                  </select>
+                </Field>
+                <Field label={t('audio.chase.direction')}>
+                  <select className="select" value={r.beatChase.direction} onChange={(e) => setR('beatChase', { direction: e.target.value as AudioConfig['reactions']['beatChase']['direction'] })}>
+                    <option value="forward">{t('audio.chase.forward')}</option>
+                    <option value="backward">{t('audio.chase.backward')}</option>
+                    <option value="bounce">{t('audio.chase.bounce')}</option>
+                    <option value="random">{t('audio.chase.random')}</option>
+                  </select>
+                </Field>
+                <Field label="Décroissance (s)"><NumberInput value={r.beatChase.decay} min={0.02} max={2} step={0.05} onChange={(v) => setR('beatChase', { decay: v })} /></Field>
+              </div>
+              {groups.length ? (
+                <div className="chips">
+                  {groups.map((g) => {
+                    const pos = r.beatChase.groupIds.indexOf(g.id);
+                    return <button key={g.id} className={`chip ${pos >= 0 ? 'on' : ''}`} onClick={() => setR('beatChase', { groupIds: pos >= 0 ? r.beatChase.groupIds.filter((x) => x !== g.id) : [...r.beatChase.groupIds, g.id] })}>{pos >= 0 ? `${pos + 1}. ` : ''}{g.name}</button>;
+                  })}
+                </div>
+              ) : <span className="small dim">{t('audio.presets.noGroups')}</span>}
+              <span className="small dim">{t('audio.chase.hint')}</span>
+            </div>
+            <div className="col">
+              <label className="check"><input type="checkbox" checked={r.beatPalette.enabled} onChange={(e) => setR('beatPalette', { enabled: e.target.checked })} />{t('audio.palette')}</label>
+              <div className="row wrap">
+                {r.beatPalette.colors.map((c, i) => (
+                  <span key={i} className="row" style={{ gap: 2 }}>
+                    <input type="color" value={c} onChange={(e) => setR('beatPalette', { colors: r.beatPalette.colors.map((x, j) => (j === i ? e.target.value.toUpperCase() : x)) })} />
+                    {r.beatPalette.colors.length > 2 && <button className="btn sm" aria-label={t('audio.palette.remove')} onClick={() => setR('beatPalette', { colors: r.beatPalette.colors.filter((_, j) => j !== i) })}>×</button>}
+                  </span>
+                ))}
+                {r.beatPalette.colors.length < 8 && <button className="btn sm" onClick={() => setR('beatPalette', { colors: [...r.beatPalette.colors, '#FFFFFF'] })}>{t('audio.palette.add')}</button>}
+              </div>
+              <div className="grid g2">
+                <Field label={t('audio.chase.every')}>
+                  <select className="select" value={r.beatPalette.every} onChange={(e) => setR('beatPalette', { every: e.target.value as 'beat' | 'bar' })}>
+                    <option value="beat">{t('audio.chase.beat')}</option>
+                    <option value="bar">{t('audio.chase.bar')}</option>
+                  </select>
+                </Field>
+                <Field label={t('audio.palette.fade')}><NumberInput value={r.beatPalette.fade} min={0} max={2} step={0.05} onChange={(v) => setR('beatPalette', { fade: v })} /></Field>
+              </div>
+              <TargetPicker value={r.beatPalette.targets} onChange={(tg) => setR('beatPalette', { targets: tg })} />
+            </div>
+            <div className="col">
               <label className="check"><input type="checkbox" checked={r.levelToIntensity.enabled} onChange={(e) => setR('levelToIntensity', { enabled: e.target.checked })} />Intensité modulée par l’énergie</label>
               <Field label="Plancher (0–1)"><NumberInput value={r.levelToIntensity.floor} min={0} max={1} step={0.05} onChange={(v) => setR('levelToIntensity', { floor: v })} /></Field>
               <TargetPicker value={r.levelToIntensity.targets} onChange={(t) => setR('levelToIntensity', { targets: t })} />
@@ -188,6 +241,12 @@ export function AudioPage() {
               <label className="check"><input type="checkbox" checked={r.followers.intensityFromBass.enabled} onChange={(e) => setFl('intensityFromBass', { enabled: e.target.checked })} />Intensité suivant les basses</label>
               <Field label="Profondeur (0–1)"><NumberInput value={r.followers.intensityFromBass.amount} min={0} max={1} step={0.05} onChange={(v) => setFl('intensityFromBass', { amount: v })} /></Field>
               <TargetPicker value={r.followers.intensityFromBass.targets} onChange={(t) => setFl('intensityFromBass', { targets: t })} />
+              <label className="check"><input type="checkbox" checked={r.followers.intensityFromMid.enabled} onChange={(e) => setFl('intensityFromMid', { enabled: e.target.checked })} />{t('audio.band.mid')}</label>
+              <Field label="Profondeur (0–1)"><NumberInput value={r.followers.intensityFromMid.amount} min={0} max={1} step={0.05} onChange={(v) => setFl('intensityFromMid', { amount: v })} /></Field>
+              <TargetPicker value={r.followers.intensityFromMid.targets} onChange={(tg) => setFl('intensityFromMid', { targets: tg })} />
+              <label className="check"><input type="checkbox" checked={r.followers.intensityFromHigh.enabled} onChange={(e) => setFl('intensityFromHigh', { enabled: e.target.checked })} />{t('audio.band.high')}</label>
+              <Field label="Profondeur (0–1)"><NumberInput value={r.followers.intensityFromHigh.amount} min={0} max={1} step={0.05} onChange={(v) => setFl('intensityFromHigh', { amount: v })} /></Field>
+              <TargetPicker value={r.followers.intensityFromHigh.targets} onChange={(tg) => setFl('intensityFromHigh', { targets: tg })} />
               <label className="check"><input type="checkbox" checked={r.followers.colorFromBrightness.enabled} onChange={(e) => setFl('colorFromBrightness', { enabled: e.target.checked })} />Couleur suivant la brillance du son</label>
               <div className="row"><input type="color" value={r.followers.colorFromBrightness.darkColor} onChange={(e) => setFl('colorFromBrightness', { darkColor: e.target.value.toUpperCase() })} /><span className="small muted">sourd → brillant</span><input type="color" value={r.followers.colorFromBrightness.brightColor} onChange={(e) => setFl('colorFromBrightness', { brightColor: e.target.value.toUpperCase() })} /></div>
               <TargetPicker value={r.followers.colorFromBrightness.targets} onChange={(t) => setFl('colorFromBrightness', { targets: t })} />

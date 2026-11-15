@@ -17,6 +17,8 @@ export interface AudioFrame {
   bass: number;
   /** mean high-band (≈ >4 kHz) magnitude, 0..1 (optional for older callers) */
   high?: number;
+  /** mean mid-band (≈ 150 Hz–4 kHz) magnitude, 0..1 (optional) */
+  mid?: number;
 }
 
 export interface AudioFeatures {
@@ -38,6 +40,9 @@ export interface AudioFeatures {
   bass: number;
   brightness: number;
   onsetDensity: number;
+  /** Smoothed mid and high band levels 0..1 (absent from older callers: treated as 0). */
+  mid?: number;
+  high?: number;
   /** Predicted drop / chorus (estimate), or null. */
   prediction: Prediction | null;
 }
@@ -47,6 +52,8 @@ export interface AnalyzerOptions {
   smoothing: number; // 0..1
   onsetThreshold: number; // multiple of the adaptive mean
   riseRatio: number;
+  /** Noise gate (0..1 on the level after sensitivity): quieter input is treated as silence. Default 0 = off. */
+  gate?: number;
   bpmRange?: { min: number; max: number };
 }
 
@@ -64,6 +71,7 @@ export class AudioAnalyzer {
   private bassS = 0;
   private brightS = 0;
   private highS = 0;
+  private midS = 0;
   readonly tempo: TempoTracker;
   readonly predictor = new DropPredictor();
   /** Input latency in seconds (sound → detection): beats and predictions are reported this much earlier. */
@@ -83,6 +91,15 @@ export class AudioAnalyzer {
     // A single non-finite sample (Web Audio graphs can emit NaN/Infinity) would poison the 8 s tempo window.
     const fin = (x: number | undefined) => (Number.isFinite(x) ? x! : 0);
     const f = { t: raw.t, rms: fin(raw.rms), bass: fin(raw.bass), high: fin(raw.high) };
+    let mid = fin(raw.mid);
+    // Noise gate: background noise must not feed the onsets, the tempo or the band followers.
+    const gate = this.opts.gate ?? 0;
+    if (gate > 0 && Math.min(1, f.rms * this.opts.sensitivity * 2) < gate) {
+      f.rms = 0;
+      f.bass = 0;
+      f.high = 0;
+      mid = 0;
+    }
     const dt = this.lastT === null ? 1 / 60 : Math.max(1e-3, f.t - this.lastT);
     this.lastT = f.t;
     const level = Math.min(1, f.rms * this.opts.sensitivity * 2);
@@ -100,6 +117,7 @@ export class AudioAnalyzer {
     const k = Math.min(1, dt / 0.15);
     this.bassS += (f.bass - this.bassS) * k;
     this.highS += (high - this.highS) * k;
+    this.midS += (mid - this.midS) * k;
     if (tempo.beat && tempo.bpm) this.predictor.onBeat({ t: f.t, bass: this.bassS, high: this.highS, level }, 60 / tempo.bpm);
     this.brightS += ((f.bass + high > 0.01 ? high / (f.bass + high) : this.brightS) - this.brightS) * Math.min(1, dt / 0.5);
     this.novelty.push({ t: f.t, v: nov });
@@ -133,6 +151,7 @@ export class AudioAnalyzer {
       bpm: tempo.bpm && Number.isFinite(tempo.bpm) ? tempo.bpm : null, bpmConfidence: bpmConf, energyRise,
       beat, barPosition, tempoLocked: tempo.locked,
       bass: Math.min(1, this.bassS), brightness: Math.min(1, this.brightS), onsetDensity: Math.min(1, recent / 4 / 8),
+      mid: Math.min(1, this.midS), high: Math.min(1, this.highS),
       prediction: prediction && lead > 0 ? { ...prediction, at: prediction.at - lead } : prediction,
     };
   }

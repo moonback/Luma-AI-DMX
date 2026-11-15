@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Project } from '../../model/schemas';
 import { createProject, ProjectLoadError } from '../../project/format';
 import { buildDemo } from '../../demo/projects';
-import { listRecovery, loadProjectFile, readAutosaveMeta, recoveryCandidates, saveProjectFile } from '../../project/store';
+import { autosaveMetaFile, listRecovery, loadProjectFile, readAutosaveMeta, recoveryCandidates, saveProjectFile } from '../../project/store';
 import { followTruss } from '../../visualizer/truss';
 import { UserError } from '../shared';
 import { addRecent, clearAutosave } from '../files';
@@ -47,6 +47,14 @@ export async function handleProject(app: AppService, cmd: CommandIn<'project' | 
         }
         throw err;
       }
+    }
+    case 'project.discardRecovery': {
+      // Only files inside the autosave folder may be deleted.
+      const file = path.resolve(cmd.file);
+      if (path.dirname(file) !== path.resolve(app.autosaveDir) || !file.endsWith('.luma.json')) throw new UserError('Fichier de récupération invalide');
+      await fs.rm(file, { force: true });
+      await fs.rm(autosaveMetaFile(file), { force: true });
+      return ok;
     }
     case 'project.save': {
       if (!app.projectPath) return app.handle({ type: 'project.saveAs' });

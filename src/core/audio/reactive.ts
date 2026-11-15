@@ -2,7 +2,7 @@ import type { AudioConfig, FixtureValues } from '../model/schemas';
 import { colorToAttributes } from '../fixtures/color';
 import type { Engine } from '../engine/Engine';
 import type { ProjectIndex } from '../engine/resolve';
-import { hexToRgb, lerp } from '../util/math';
+import { hexToRgb, lerp, mulberry32 } from '../util/math';
 import type { AudioFeatures } from './analyzer';
 import type { Prediction } from '../music/dropPredictor';
 
@@ -34,6 +34,27 @@ export function moveRadius(amount: number, energy: number, onsetDensity: number)
   return amount * 0.5 * Math.min(1, energy * 4) * (0.4 + 0.6 * Math.min(1, onsetDensity * 3));
 }
 
+export type ChaseDirection = 'forward' | 'backward' | 'bounce' | 'random';
+
+/** Next step of a chase over `n` groups. `sign` is the bounce direction (+1/-1); `rnd` is a 0..1 source. */
+export function nextChaseStep(idx: number, sign: 1 | -1, n: number, dir: ChaseDirection, rnd: () => number): { idx: number; sign: 1 | -1 } {
+  if (n <= 1) return { idx: 0, sign };
+  switch (dir) {
+    case 'forward': return { idx: (idx + 1) % n, sign };
+    case 'backward': return { idx: idx <= 0 ? n - 1 : idx - 1, sign };
+    case 'random': {
+      const j = Math.floor(rnd() * (n - 1)); // never the same group twice in a row
+      return { idx: j >= idx && idx >= 0 ? j + 1 : j, sign };
+    }
+    case 'bounce': {
+      let s = sign;
+      let next = idx + s;
+      if (next >= n || next < 0) { s = (s === 1 ? -1 : 1); next = idx + s; }
+      return { idx: Math.max(0, Math.min(n - 1, next)), sign: s };
+    }
+  }
+}
+
 /**
  * Applies the user-enabled audio reactions to the engine. Every reaction is opt-in and individually disabled
  * by default; with no fresh features (source stopped) all audio contributions are released.
@@ -48,6 +69,12 @@ export class AudioReactive {
   private dropArmed = false;
   private dropAt: number | null = null;
   private movePhase = 0;
+  private chaseIdx = -1;
+  private chaseSign: 1 | -1 = 1;
+  private chaseEnv = new Map<string, number>();
+  private chaseRng = mulberry32(0x1a2b3c);
+  private paletteIdx = -1;
+  private paletteRgb: { r: number; g: number; b: number } | null = null;
   /** Called when the armed drop GO fires (for logging). */
   onDropFired: ((cueListId: string) => void) | null = null;
   /** Called when fresh features stop arriving without `release()` (window throttled, device lost…). */
@@ -75,11 +102,25 @@ export class AudioReactive {
       if (r.beatFlash.enabled) this.flash = 1;
     }
     if (f.beat && f.barPosition === 0) this.engine.onDownbeat();
-    this.scheduleDrop(f);
-    if (f.energyRise) {
-      this.lastRiseAt = this.receivedAt;
-      if (r.energyRiseGo.enabled && r.energyRiseGo.cueListId) this.engine.cueGo(r.energyRiseGo.cueListId);
+    if (f.energyRise) this.lastRiseAt = this.receivedAt;
+    // Song to Show playback: the generated timeline drives the light, the Audio Reactive reactions stay out of it.
+    // The beat clock and band levels above are still fed (timeline effects synced to the music use them).
+    if (source === 'track') {
+      this.flash = 0;
+      this.dropAt = null;
+      return;
     }
+    const ch = r.beatChase;
+    const pal = r.beatPalette;
+    if (pal.enabled && f.beat && (pal.every === 'beat' || f.barPosition === 0)) this.paletteIdx = (this.paletteIdx + 1) % pal.colors.length;
+    if (ch.enabled && ch.groupIds.length && f.beat && (ch.every === 'beat' || f.barPosition === 0)) {
+      const step = nextChaseStep(this.chaseIdx, this.chaseSign, ch.groupIds.length, ch.direction, this.chaseRng);
+      this.chaseIdx = step.idx;
+      this.chaseSign = step.sign;
+      this.chaseEnv.set(ch.groupIds[step.idx]!, 1);
+    }
+    this.scheduleDrop(f);
+    if (f.energyRise && r.energyRiseGo.enabled && r.energyRiseGo.cueListId) this.engine.cueGo(r.energyRiseGo.cueListId);
     if (r.bpmFollow.enabled && f.bpm && f.bpmConfidence >= r.bpmFollow.minConfidence) {
       this.engine.bpm = f.bpm;
       this.engine.bpmSource = 'audio';
@@ -108,7 +149,7 @@ export class AudioReactive {
 
   private update(dtMs: number): void {
     const cfgDrop = this.getConfig().reactions.dropGo;
-    if (this.dropArmed && this.dropAt !== null && this.now() >= this.dropAt && cfgDrop.cueListId) {
+    if (this.dropArmed && this.dropAt !== null && this.now() >= this.dropAt && cfgDrop.cueListId && this.source !== 'track') {
       this.engine.cueGo(cfgDrop.cueListId);
       this.dropArmed = false; // one shot: re-arm explicitly for the next drop
       this.dropAt = null;
@@ -124,6 +165,16 @@ export class AudioReactive {
       this.source = this.features ? this.source : 'none';
       return;
     }
+    if (this.source === 'track') {
+      // Song to Show: no audio layer at all (see push()); a BPM taken from a previous live source goes back to manual.
+      this.engine.setExternal('audio', null);
+      if (this.engine.bpmSource === 'audio') this.engine.bpmSource = 'manual';
+      this.chaseEnv.clear();
+      this.chaseIdx = -1;
+      this.paletteIdx = -1;
+      this.paletteRgb = null;
+      return;
+    }
     const f = this.features!;
     const cfg = this.getConfig().reactions;
     const index = this.getIndex();
@@ -133,6 +184,17 @@ export class AudioReactive {
     if (cfg.beatFlash.enabled) {
       this.flash *= Math.exp(-dtMs / 1000 / cfg.beatFlash.decay);
       for (const rf of index.resolveTargets(cfg.beatFlash.targets)) (layer[rf.fixture.id] ??= {}).dimmer = this.flash;
+    }
+    if (cfg.beatChase.enabled && cfg.beatChase.groupIds.length) {
+      const k = Math.exp(-dtMs / 1000 / cfg.beatChase.decay);
+      for (const gid of cfg.beatChase.groupIds) {
+        const env = (this.chaseEnv.get(gid) ?? 0) * k;
+        this.chaseEnv.set(gid, env);
+        for (const rf of index.resolveTargets({ fixtureIds: [], groupIds: [gid] })) (layer[rf.fixture.id] ??= {}).dimmer = env;
+      }
+    } else if (this.chaseEnv.size) {
+      this.chaseEnv.clear();
+      this.chaseIdx = -1;
     }
     if (cfg.energyToColor.enabled) {
       const lo = hexToRgb(cfg.energyToColor.lowColor), hi = hexToRgb(cfg.energyToColor.highColor);
@@ -149,6 +211,12 @@ export class AudioReactive {
       const k = 1 - fl.intensityFromBass.amount + fl.intensityFromBass.amount * Math.min(1, f.bass * 1.4);
       for (const rf of index.resolveTargets(fl.intensityFromBass.targets)) scale[rf.fixture.id] = { dimmer: (scale[rf.fixture.id]?.dimmer ?? 1) * k };
     }
+    // Mid / high band intensity followers: the band means are low on real music, hence the larger gain.
+    for (const [cfgBand, level, gain] of [[fl.intensityFromMid, f.mid ?? 0, 2], [fl.intensityFromHigh, f.high ?? 0, 3]] as const) {
+      if (!cfgBand.enabled) continue;
+      const k = 1 - cfgBand.amount + cfgBand.amount * Math.min(1, level * gain);
+      for (const rf of index.resolveTargets(cfgBand.targets)) scale[rf.fixture.id] = { dimmer: (scale[rf.fixture.id]?.dimmer ?? 1) * k };
+    }
     if (fl.colorFromBrightness.enabled) {
       const lo = hexToRgb(fl.colorFromBrightness.darkColor), hi = hexToRgb(fl.colorFromBrightness.brightColor);
       const b = Math.min(1, f.brightness * 2);
@@ -163,6 +231,24 @@ export class AudioReactive {
         if (!rf.attributes.includes('pan') && !rf.attributes.includes('tilt')) continue;
         Object.assign((layer[rf.fixture.id] ??= {}), { pan: 0.5 + r * Math.cos(this.movePhase), tilt: 0.5 + r * Math.sin(this.movePhase) });
       }
+    }
+    // Intensity reactions drive the dimmer themselves: a fixture with nothing else lit turns on with the sound
+    // (a pure scale would leave it dark). The strongest audio contribution wins over the flash/chase value.
+    for (const [id, s] of Object.entries(scale)) {
+      const v = s.dimmer;
+      if (v !== undefined) (layer[id] ??= {}).dimmer = Math.max(layer[id]?.dimmer ?? 0, v);
+      delete scale[id];
+    }
+    const pal = cfg.beatPalette;
+    if (pal.enabled && this.paletteIdx >= 0) {
+      const to = hexToRgb(pal.colors[this.paletteIdx % pal.colors.length]!);
+      const cur = this.paletteRgb ?? to;
+      const a = pal.fade > 0 ? 1 - Math.exp(-dtMs / 1000 / pal.fade) : 1;
+      const rgb = (this.paletteRgb = { r: lerp(cur.r, to.r, a), g: lerp(cur.g, to.g, a), b: lerp(cur.b, to.b, a) });
+      for (const rf of index.resolveTargets(pal.targets)) Object.assign((layer[rf.fixture.id] ??= {}), colorToAttributes(rf, rgb));
+    } else {
+      this.paletteRgb = null;
+      if (!pal.enabled) this.paletteIdx = -1;
     }
     this.engine.setExternal('audio', {
       layer: Object.keys(layer).length ? { id: 'audio', label: 'Audio', kind: 'audio', priority: prio, order: 0, values: layer } : undefined,

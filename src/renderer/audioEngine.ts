@@ -76,7 +76,7 @@ class AudioEngine {
   }
 
   configure(cfg: AudioConfig): void {
-    this.analyzer.configure({ sensitivity: cfg.sensitivity, smoothing: cfg.smoothing, onsetThreshold: cfg.onsetThreshold, riseRatio: cfg.reactions.energyRiseGo.ratio, bpmRange: cfg.bpmRange });
+    this.analyzer.configure({ sensitivity: cfg.sensitivity, smoothing: cfg.smoothing, onsetThreshold: cfg.onsetThreshold, gate: cfg.gate, riseRatio: cfg.reactions.energyRiseGo.ratio, bpmRange: cfg.bpmRange });
   }
 
   /** Input latency (user setting, ms), compensated on the live input only: the player's own output is analysed before it plays. */
@@ -209,14 +209,16 @@ class AudioEngine {
     this.emit(null);
   }
 
-  private frame(t: number): { rms: number; bass: number; high: number } {
+  private frame(t: number): { rms: number; bass: number; high: number; mid: number } {
     if (this.source === 'simulated') {
       const beat = 60 / this.simBpm;
       const kick = Math.exp(-(t % beat) * 18);
       this.simSeed = (this.simSeed * 1664525 + 1013904223) >>> 0;
       const noise = this.simSeed / 4294967296;
       const hat = Math.exp(-((t * 2) % beat) * 40) * 0.5;
-      return { rms: 0.5 * (0.35 + 0.65 * kick) + noise * 0.02, bass: Math.min(1, 0.9 * kick + noise * 0.03), high: Math.min(1, hat + noise * 0.02) };
+      // Mid: a snare-like accent on the off-beat.
+      const snare = Math.exp(-(((t + beat / 2) % beat)) * 14) * 0.6;
+      return { rms: 0.5 * (0.35 + 0.65 * kick) + noise * 0.02, bass: Math.min(1, 0.9 * kick + noise * 0.03), high: Math.min(1, hat + noise * 0.02), mid: Math.min(1, snare + noise * 0.02) };
     }
     const a = this.analyser!;
     a.getFloatTimeDomainData(this.time);
@@ -228,6 +230,8 @@ class AudioEngine {
     let bass = 0;
     for (let i = 1; i <= n; i++) bass += this.freq[i] ?? 0;
     const h0 = Math.floor(4000 / binHz);
+    let mid = 0;
+    for (let i = n + 1; i < h0; i++) mid += this.freq[i] ?? 0;
     let high = 0;
     for (let i = h0; i < this.freq.length; i++) high += this.freq[i] ?? 0;
     const rms = Math.sqrt(sum / this.time.length);
@@ -236,7 +240,7 @@ class AudioEngine {
       this.agc = this.autoGain ? autoGainStep(this.agc, rms / this.input.gain.value) : { gain: 1, peak: 0 };
       this.input.gain.value = this.agc.gain;
     }
-    return { rms, bass: bass / n / 255, high: high / Math.max(1, this.freq.length - h0) / 255 };
+    return { rms, bass: bass / n / 255, high: high / Math.max(1, this.freq.length - h0) / 255, mid: mid / Math.max(1, h0 - n - 1) / 255 };
   }
 
   private loop = (): void => {

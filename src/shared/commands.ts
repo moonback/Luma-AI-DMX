@@ -104,6 +104,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   /** Autosaves newer than their saved file (offered at start-up after a crash). */
   empty('project.recoveryCandidates'),
   z.object({ type: z.literal('project.openRecovery'), file: z.string().min(1).max(1000) }),
+  /** The user declined a recovery copy: delete it so the offer does not come back at every start-up. */
+  z.object({ type: z.literal('project.discardRecovery'), file: z.string().min(1).max(1000) }),
   /** Opens one of the built-in fictional demonstration projects (unsaved copy). */
   z.object({ type: z.literal('project.openDemo'), id: z.string().min(1).max(40) }),
   z.object({ type: z.literal('onboarding.update'), completed: z.boolean().optional(), checklistHidden: z.boolean().optional() }),
@@ -299,6 +301,7 @@ export const commandSchema = z.discriminatedUnion('type', [
       onsetStrength: z.number(), bpm: z.number().min(20).max(300).nullable(), bpmConfidence: z.number().min(0).max(1), energyRise: z.boolean(),
       beat: z.boolean().default(false), barPosition: z.number().int().min(0).max(3).nullable().default(null), tempoLocked: z.boolean().default(false),
       bass: unitSchema.default(0), brightness: unitSchema.default(0), onsetDensity: unitSchema.default(0),
+      mid: unitSchema.default(0), high: unitSchema.default(0),
       prediction: z.object({ kind: z.enum(['drop', 'chorus']), confidence: unitSchema, at: z.number(), inBeats: z.number().min(0).max(64), source: z.enum(['live', 'track']) }).nullable().default(null),
     }),
   }),
@@ -419,6 +422,7 @@ export interface CommandResults {
   'project.listRecovery': RecoveryEntry[];
   'project.recoveryCandidates': RecoveryEntry[];
   'project.openRecovery': { opened: boolean; migratedFrom: number | null };
+  'project.discardRecovery': Void;
   'project.openDemo': Void;
   'onboarding.update': Void;
   'profile.import': { imported: string[]; errors: string[]; warnings: string[] };
