@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "description": "Index of manually annotated real-world tracks. Track files are added only after manual annotation and review.",
+  "target": {
+    "minimumTracks": 20,
+    "maximumTracks": 30,
+    "verifiedOnly": true
+  },
+  "tracks": []
+}
