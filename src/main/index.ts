@@ -2,7 +2,7 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, crashReporter, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, crashReporter, desktopCapturer, dialog, ipcMain, session, shell } from 'electron';
 import { AppService } from '../core/app/AppService';
 import type { AppEvents } from '../shared/commands';
 import { BRAND } from '../shared/brand';
@@ -304,6 +304,11 @@ app.whenReady().then(async () => {
   const allowed = new Set(['media', 'midi', 'midiSysex', 'fullscreen']);
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
+  // "Son du PC" audio source: loopback of the system output (what the speakers play). No picker; the video track is discarded by the renderer.
+  session.defaultSession.setDisplayMediaRequestHandler((req, cb) => {
+    if (!isTrusted(req.frame?.url ?? '', DEV_URL)) return cb({});
+    void desktopCapturer.getSources({ types: ['screen'] }).then((s) => cb(s[0] ? { video: s[0], audio: 'loopback' } : {}), () => cb({}));
+  });
 
   service = await createService();
 

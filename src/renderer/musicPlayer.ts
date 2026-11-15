@@ -141,7 +141,8 @@ class MusicPlayer {
     const s = this.source;
     this.source = null;
     try { s?.stop(); } catch { /* already stopped */ }
-    if (this.playing) audioEngine.stop();
+    // Back to the remembered real input (mic / system output) once the player's own track ends.
+    if (this.playing) { audioEngine.stop(); void audioEngine.restore(); }
     void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
     this.playing = null;

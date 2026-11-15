@@ -314,6 +314,7 @@ export async function bootstrap(): Promise<void> {
   const main = location.hash !== DETACHED_STAGE_HASH && location.hash !== DETACHED_CONSOLE_HASH;
   if (main) void externalControl.configure(settings.control);
   audioEngine.setLatency(settings.audio.latencyMs);
+  if (main) void audioEngine.restore();
   if (main) void offerRecovery();
   setDetachOnOpen(settings.general.detachStage3dOnStart && main, settings.general.detachConsoleOnStart && main);
   // Lu au démarrage seulement : le réglage s'applique au prochain redémarrage, pas à la session en cours.

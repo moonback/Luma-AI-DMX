@@ -1,4 +1,5 @@
 import { AudioAnalyzer, type AudioFeatures } from '../core/audio/analyzer';
+import { autoGainStep, type AutoGainState } from '../core/audio/autoGain';
 import { predictFromTrack } from '../core/music/dropPredictor';
 import type { SongSection } from '../core/model/schemas';
 import type { AudioConfig } from '../core/model/schemas';
@@ -13,6 +14,18 @@ type Listener = (f: AudioFeatures | null) => void;
 
 /** Analysis period (≈ 60 Hz, like the display refresh it replaces). */
 const FRAME_MS = 16;
+
+/** Per-machine memory (like the device choice): the last real input, restarted at launch, and the auto-gain switch. */
+const SOURCE_KEY = 'luma.audio.source';
+const AUTOGAIN_KEY = 'luma.audio.autoGain';
+type SavedSource = { kind: 'mic'; deviceId: string | null } | { kind: 'system' };
+
+function readStored(key: string): unknown {
+  try { return JSON.parse(localStorage.getItem(key) ?? 'null'); } catch { return null; }
+}
+function writeStored(key: string, value: unknown): void {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* not persisted */ }
+}
 
 class AudioEngine {
   source: 'none' | 'live' | 'simulated' | 'track' = 'none';
@@ -32,6 +45,33 @@ class AudioEngine {
   /** Known track played by the app's player: exact drop/chorus prediction from the analysis. */
   private track: { sections: SongSection[]; bpm: number; position: () => number } | null = null;
   private ownsContext = true;
+  /** Input gain in front of the analyser, driven by the automatic gain. */
+  private input: GainNode | null = null;
+  private agc: AutoGainState = { gain: 1, peak: 0 };
+  /** Normalises the input level (quiet mic or loud system output react alike). Per machine, on by default. */
+  autoGain = readStored(AUTOGAIN_KEY) !== false;
+  /** Which real input feeds the 'live' source. */
+  inputKind: SavedSource['kind'] | null = null;
+
+  setAutoGain(on: boolean): void {
+    this.autoGain = on;
+    writeStored(AUTOGAIN_KEY, on);
+  }
+
+  /** Latest spectrum (0–255 per bin, low to high) of a real input, null otherwise. Read-only: refreshed by the loop. */
+  spectrum(): Uint8Array | null {
+    return this.analyser ? this.freq : null;
+  }
+
+  /** Restarts the last real input chosen by the user (mic or system output), if nothing is playing. */
+  async restore(): Promise<void> {
+    const s = readStored(SOURCE_KEY) as SavedSource | null;
+    if (!s || this.source !== 'none') return;
+    if (s.kind === 'mic') return this.startLive(s.deviceId);
+    await this.startSystem();
+    // Screen capture can require a user gesture: retry on the first click anywhere.
+    if (this.source === 'none') window.addEventListener('pointerdown', () => { if (this.source === 'none') void this.startSystem(); }, { once: true });
+  }
 
   configure(cfg: AudioConfig): void {
     this.analyzer.configure({ sensitivity: cfg.sensitivity, smoothing: cfg.smoothing, onsetThreshold: cfg.onsetThreshold, riseRatio: cfg.reactions.energyRiseGo.ratio, bpmRange: cfg.bpmRange });
@@ -65,21 +105,53 @@ class AudioEngine {
   async startLive(deviceId: string | null): Promise<void> {
     this.stop();
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-      this.ctx = new AudioContext();
-      this.analyser = this.ctx.createAnalyser();
-      this.analyser.fftSize = 2048;
-      this.analyser.smoothingTimeConstant = 0;
-      this.ctx.createMediaStreamSource(this.stream).connect(this.analyser);
-      this.source = 'live';
-      this.setLatency(this.latencyMs);
-      this.error = null;
-      this.loop();
+      this.attach(await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } }), { kind: 'mic', deviceId });
     } catch (err) {
-      this.error = `Entrée audio indisponible : ${err instanceof Error ? err.message : String(err)}`;
-      this.source = 'none';
-      this.emit(null);
+      this.fail(err);
     }
+  }
+
+  /** System output ("what the speakers play"), captured as loopback by the main process' display-media handler. */
+  async startSystem(): Promise<void> {
+    this.stop();
+    try {
+      // Chromium only grants loopback audio alongside a video track: it is dropped right away.
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      stream.getVideoTracks().forEach((t) => { t.stop(); stream.removeTrack(t); });
+      if (!stream.getAudioTracks().length) throw new Error('aucune piste audio système (non pris en charge sur ce système)');
+      this.attach(stream, { kind: 'system' });
+    } catch (err) {
+      this.fail(err);
+    }
+  }
+
+  private attach(stream: MediaStream, saved: SavedSource): void {
+    this.stream = stream;
+    this.ctx = new AudioContext();
+    this.wire(this.ctx, this.ctx.createMediaStreamSource(this.stream));
+    this.source = 'live';
+    this.inputKind = saved.kind;
+    writeStored(SOURCE_KEY, saved);
+    this.setLatency(this.latencyMs);
+    this.error = null;
+    this.loop();
+  }
+
+  private fail(err: unknown): void {
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+    this.error = `Entrée audio indisponible : ${err instanceof Error ? err.message : String(err)}`;
+    this.source = 'none';
+    this.emit(null);
+  }
+
+  /** node → input gain → analyser. */
+  private wire(ctx: AudioContext, node: AudioNode): void {
+    this.input = ctx.createGain();
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 2048;
+    this.analyser.smoothingTimeConstant = 0;
+    node.connect(this.input).connect(this.analyser);
   }
 
   /**
@@ -90,10 +162,7 @@ class AudioEngine {
     this.stop();
     this.ctx = ctx;
     this.ownsContext = false;
-    this.analyser = ctx.createAnalyser();
-    this.analyser.fftSize = 2048;
-    this.analyser.smoothingTimeConstant = 0;
-    node.connect(this.analyser);
+    this.wire(ctx, node);
     this.track = track;
     this.source = 'track';
     this.error = null;
@@ -101,18 +170,24 @@ class AudioEngine {
   }
 
   startSimulated(bpm: number): void {
-    this.stop();
+    this.stop(true);
     this.simBpm = bpm;
     this.source = 'simulated';
     this.error = null;
     this.loop();
   }
 
-  stop(): void {
+  /** `forget`: the user stopped (or replaced) the real input on purpose, so it is not restarted next time. */
+  stop(forget = false): void {
+    if (forget) writeStored(SOURCE_KEY, null);
     clearTimeout(this.timer);
     this.stream?.getTracks().forEach((t) => t.stop());
     if (this.ownsContext) void this.ctx?.close().catch(() => undefined);
+    this.input?.disconnect();
     this.analyser?.disconnect();
+    this.input = null;
+    this.agc = { gain: 1, peak: 0 };
+    this.inputKind = null;
     this.ownsContext = true;
     this.track = null;
     this.stream = null;
@@ -146,7 +221,13 @@ class AudioEngine {
     const h0 = Math.floor(4000 / binHz);
     let high = 0;
     for (let i = h0; i < this.freq.length; i++) high += this.freq[i] ?? 0;
-    return { rms: Math.sqrt(sum / this.time.length), bass: bass / n / 255, high: high / Math.max(1, this.freq.length - h0) / 255 };
+    const rms = Math.sqrt(sum / this.time.length);
+    if (this.input) {
+      // Measured after the gain: divided back to the input level so the gain never chases itself.
+      this.agc = this.autoGain ? autoGainStep(this.agc, rms / this.input.gain.value) : { gain: 1, peak: 0 };
+      this.input.gain.value = this.agc.gain;
+    }
+    return { rms, bass: bass / n / 255, high: high / Math.max(1, this.freq.length - h0) / 255 };
   }
 
   private loop = (): void => {

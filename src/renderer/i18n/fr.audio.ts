@@ -1,0 +1,18 @@
+/** French catalogue of the Audio Reactive page additions, merged into fr.ts. */
+export const frAudio = {
+  'audio.system': 'Son du PC',
+  'audio.system.hint': 'Analyse le son joué par les enceintes de l’ordinateur (Spotify, navigateur…)',
+  'audio.state.system': 'son du PC',
+  'audio.autoGain': 'Gain automatique',
+  'audio.autoGain.hint': 'Normalise le niveau d’entrée : les lumières réagissent pareil que le son soit faible ou fort.',
+  'audio.remembered': 'Source mémorisée : relancée au prochain démarrage.',
+  'audio.spectrum': 'Spectre',
+  'audio.spectrum.none': 'Aucune entrée réelle',
+  'audio.presets': 'Préréglages',
+  'audio.presets.hint': 'Règle les réactions continues sur tous les groupes ; les GO de cues ne changent pas.',
+  'audio.presets.noGroups': 'Créez un groupe pour utiliser les préréglages',
+  'audio.preset.club': 'Club',
+  'audio.preset.concert': 'Concert',
+  'audio.preset.ambient': 'Ambiance',
+  'audio.preset.off': 'Tout couper',
+};

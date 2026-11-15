@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Crosshair, Mic, Radio, Square, Target as TargetIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Crosshair, Mic, Radio, Square, Target as TargetIcon, Volume2 } from 'lucide-react';
 import { useStore } from '../store';
 import { act } from '../api';
 import { Field, NumberInput, PageHead, Panel } from '../components/ui';
 import { audioEngine } from '../audioEngine';
+import { useT } from '../i18n';
+import { AUDIO_PRESETS, applyAudioPreset } from '../../core/audio/presets';
 import type { AudioFeatures } from '../../core/audio/analyzer';
 import type { AudioConfig, Target } from '../../core/model/schemas';
 
@@ -19,7 +21,53 @@ function TargetPicker({ value, onChange }: { value: Target; onChange: (t: Target
   );
 }
 
+/** Live spectrum of the real input, 32 log-spaced bars (display only, so requestAnimationFrame is fine). */
+function Spectrum() {
+  const t = useT();
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    const color = getComputedStyle(document.documentElement).getPropertyValue('--cyan').trim() || '#22d3ee';
+    let raf = 0;
+    let had = false;
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const c = ref.current;
+      const s = audioEngine.spectrum();
+      if (!!s !== had) setLive((had = !!s));
+      if (!c) return;
+      const w = Math.round(c.clientWidth * devicePixelRatio), h = Math.round(c.clientHeight * devicePixelRatio);
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+      const g = c.getContext('2d');
+      if (!g) return;
+      g.clearRect(0, 0, w, h);
+      if (!s) return;
+      g.fillStyle = color;
+      const N = 32;
+      for (let i = 0; i < N; i++) {
+        const a = Math.floor(s.length ** (i / N)), b = Math.max(a + 1, Math.floor(s.length ** ((i + 1) / N)));
+        let m = 0;
+        for (let k = a; k < b; k++) m = Math.max(m, s[k] ?? 0);
+        const bh = (m / 255) * h;
+        g.fillRect((i * w) / N + 1, h - bh, w / N - 2, bh);
+      }
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="ctl-row"><span className="lbl">{t('audio.spectrum')}</span>
+      <div style={{ flex: 1, position: 'relative' }}>
+        <canvas ref={ref} role="img" aria-label={t('audio.spectrum')} style={{ width: '100%', height: 56, display: 'block' }} />
+        {!live && <span className="small dim" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>{t('audio.spectrum.none')}</span>}
+      </div>
+    </div>
+  );
+}
+
 export function AudioPage() {
+  const t = useT();
+  const groups = useStore((s) => s.project!.project.groups);
   const cfg = useStore((s) => s.project!.project.audio);
   const cueLists = useStore((s) => s.project!.project.cueLists);
   const rt = useStore((s) => s.runtime);
@@ -54,20 +102,26 @@ export function AudioPage() {
                   <option value="">Entrée audio par défaut</option>
                   {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Entrée ${i + 1}`}</option>)}
                 </select>
-                <button className={`btn ${src === 'live' ? 'on' : ''}`} onClick={() => void audioEngine.startLive(deviceId || null).then(() => { force((x) => x + 1); void audioEngine.devices().then(setDevices); })}><Mic size={14} />Écouter</button>
+                <button className={`btn ${src === 'live' && audioEngine.inputKind === 'mic' ? 'on' : ''}`} onClick={() => void audioEngine.startLive(deviceId || null).then(() => { force((x) => x + 1); void audioEngine.devices().then(setDevices); })}><Mic size={14} />Écouter</button>
+                <button className={`btn ${audioEngine.inputKind === 'system' ? 'on' : ''}`} title={t('audio.system.hint')} onClick={() => void audioEngine.startSystem().then(() => force((x) => x + 1))}><Volume2 size={14} />{t('audio.system')}</button>
+              </div>
+              <div className="row">
+                <label className="check" title={t('audio.autoGain.hint')}><input type="checkbox" checked={audioEngine.autoGain} onChange={(e) => { audioEngine.setAutoGain(e.target.checked); force((x) => x + 1); }} />{t('audio.autoGain')}</label>
+                {src === 'live' && <span className="small dim">{t('audio.remembered')}</span>}
               </div>
               <div className="row">
                 <span className="small muted">Simulation</span>
                 <div style={{ width: 80 }} title="BPM de la piste simulée"><NumberInput value={simBpm} min={60} max={200} onChange={setSimBpm} /></div>
                 <button className={`btn ${src === 'simulated' ? 'on' : ''}`} onClick={() => { audioEngine.startSimulated(simBpm); force((x) => x + 1); }}><Radio size={14} />Simuler une piste</button>
-                <button className="btn" disabled={src === 'none'} onClick={() => { audioEngine.stop(); force((x) => x + 1); }}><Square size={14} />Arrêter</button>
+                <button className="btn" disabled={src === 'none'} onClick={() => { audioEngine.stop(true); force((x) => x + 1); }}><Square size={14} />Arrêter</button>
               </div>
               {audioEngine.error && <div className="small" style={{ color: '#fca5a5' }}>{audioEngine.error}</div>}
-              <div className="small muted">État : {src === 'none' ? 'aucune source' : src === 'simulated' ? <span className="badge warn">SIMULÉ — aucune entrée réelle</span> : src === 'track' ? <span className="badge cyan">morceau analysé (lecteur Musique)</span> : <span className="badge ok">entrée réelle</span>}</div>
+              <div className="small muted">État : {src === 'none' ? 'aucune source' : src === 'simulated' ? <span className="badge warn">SIMULÉ — aucune entrée réelle</span> : src === 'track' ? <span className="badge cyan">morceau analysé (lecteur Musique)</span> : audioEngine.inputKind === 'system' ? <span className="badge ok">{t('audio.state.system')}</span> : <span className="badge ok">entrée réelle</span>}</div>
             </div>
           </Panel>
           <Panel title="Mesures">
             <div className="col">
+              <Spectrum />
               <div className="ctl-row"><span className="lbl">Niveau (mesuré)</span><div className="meter"><div style={{ width: `${(f?.level ?? 0) * 100}%` }} /></div><span className="mono small">{f ? `${f.levelDb.toFixed(0)} dB` : '–'}</span></div>
               <div className="ctl-row"><span className="lbl">Énergie (lissée)</span><div className="meter"><div style={{ width: `${(f?.energy ?? 0) * 100}%` }} /></div><span className="mono small">{f ? f.energy.toFixed(2) : '–'}</span></div>
               <div className="ctl-row"><span className="lbl">Transitoires</span><span className={`led ${beatFlash ? 'ok' : ''}`} style={{ width: 14, height: 14 }} /><span className="mono small">{f ? f.onsetStrength.toFixed(1) : '–'}</span></div>
@@ -98,6 +152,15 @@ export function AudioPage() {
         </div>
         <Panel title="Réactions">
           <div className="col gap-lg">
+            <div className="col">
+              <span className="small muted">{t('audio.presets')}</span>
+              {groups.length ? (
+                <div className="chips">
+                  {AUDIO_PRESETS.map((p) => <button key={p} className="chip" onClick={() => save({ ...cfg, reactions: applyAudioPreset(r, p, groups.map((g) => g.id)) })}>{t(`audio.preset.${p}` as const)}</button>)}
+                </div>
+              ) : <span className="small dim">{t('audio.presets.noGroups')}</span>}
+              <span className="small dim">{t('audio.presets.hint')}</span>
+            </div>
             <div className="col">
               <label className="check"><input type="checkbox" checked={r.bpmFollow.enabled} onChange={(e) => setR('bpmFollow', { enabled: e.target.checked })} />Suivre le BPM estimé (effets synchronisés)</label>
               <Field label="Confiance minimale"><NumberInput value={r.bpmFollow.minConfidence} min={0} max={1} step={0.05} onChange={(v) => setR('bpmFollow', { minConfidence: v })} /></Field>

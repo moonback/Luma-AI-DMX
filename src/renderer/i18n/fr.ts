@@ -4,6 +4,7 @@ import { frEquip } from './fr.equip';
 import { frAi } from './fr.ai';
 import { frSettings } from './fr.settings';
 import { frMusic } from './fr.music';
+import { frAudio } from './fr.audio';
 
 /**
  * French catalogue: the reference language. Every key here must exist in the other catalogues (en.ts is typed against
@@ -394,6 +395,7 @@ export const fr = {
   ...frAi,
   ...frSettings,
   ...frMusic,
+  ...frAudio,
 } as const;
 
 export type MessageKey = keyof typeof fr;
