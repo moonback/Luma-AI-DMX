@@ -299,9 +299,9 @@ app.on('child-process-gone', (_e, details) => {
 app.whenReady().then(async () => {
   if (!primaryInstance) return;
   const splash = process.env.LUMA_E2E ? null : showSplash();
-  // Only the microphone (audio-reactive input, LTC), MIDI (controllers, MTC) and the HTML fullscreen of the detached
-  // 3D view (F11) may be requested by the renderer.
-  const allowed = new Set(['media', 'midi', 'midiSysex', 'fullscreen']);
+  // Only the microphone (audio-reactive input, LTC), the system-output loopback ("Son du PC", screen capture API),
+  // MIDI (controllers, MTC) and the HTML fullscreen of the detached 3D view (F11) may be requested by the renderer.
+  const allowed = new Set(['media', 'display-capture', 'midi', 'midiSysex', 'fullscreen']);
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
   // "Son du PC" audio source: loopback of the system output (what the speakers play). No picker; the video track is discarded by the renderer.

@@ -15,4 +15,7 @@ export const frAudio = {
   'audio.preset.concert': 'Concert',
   'audio.preset.ambient': 'Ambiance',
   'audio.preset.off': 'Tout couper',
+  'audio.move.held': 'Pan/tilt tenus par le programmeur : il prime sur l’audio, les lyres ne bougeront pas.',
+  'audio.move.release': 'Relâcher pan/tilt',
+  'audio.intensity.hint': 'Les réactions « intensité » modulent la lumière existante : sans projecteur allumé (programmeur, cue), utilisez le flash ou « Club ».',
 };

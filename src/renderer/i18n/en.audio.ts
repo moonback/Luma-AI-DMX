@@ -17,4 +17,7 @@ export const enAudio: Record<keyof typeof frAudio, string> = {
   'audio.preset.concert': 'Concert',
   'audio.preset.ambient': 'Ambient',
   'audio.preset.off': 'All off',
+  'audio.move.held': 'Pan/tilt held by the programmer: it wins over audio, the moving heads will not move.',
+  'audio.move.release': 'Release pan/tilt',
+  'audio.intensity.hint': '“Intensity” reactions modulate the existing light: with no fixture lit (programmer, cue), use the flash or “Club”.',
 };

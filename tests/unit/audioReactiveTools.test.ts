@@ -1,5 +1,6 @@
 import { autoGainStep, TARGET_RMS, type AutoGainState } from '../../src/core/audio/autoGain';
 import { applyAudioPreset } from '../../src/core/audio/presets';
+import { moveRadius } from '../../src/core/audio/reactive';
 import { audioReactionsSchema, DEFAULT_AUDIO_REACTIONS } from '../../src/core/model/schemas';
 
 function settle(inputRms: number, from: AutoGainState = { gain: 1, peak: 0 }, frames = 600): AutoGainState {
@@ -41,5 +42,15 @@ describe('préréglages audio', () => {
     const r = applyAudioPreset(applyAudioPreset(base, 'club', ['g1']), 'off', ['g1']);
     expect([r.bpmFollow, r.beatFlash, r.levelToIntensity, r.energyToColor, ...Object.values(r.followers)].some((x) => x.enabled)).toBe(false);
     expect(r.dropGo.enabled).toBe(true);
+  });
+});
+
+describe('mouvement des lyres sur la musique', () => {
+  it('donne un cercle bien visible sur une musique à 120 BPM (≈ 2 attaques/s)', () => {
+    expect(moveRadius(0.5, 0.4, 0.25)).toBeGreaterThan(0.15);
+  });
+  it('s’arrête dans le silence et reste dans la plage', () => {
+    expect(moveRadius(0.5, 0, 0.5)).toBe(0);
+    expect(moveRadius(1, 1, 1)).toBeLessThanOrEqual(0.5);
   });
 });

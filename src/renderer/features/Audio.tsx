@@ -88,6 +88,8 @@ export function AudioPage() {
   const setR = <K extends keyof AudioConfig['reactions']>(k: K, patch: Partial<AudioConfig['reactions'][K]>) => save({ ...cfg, reactions: { ...r, [k]: { ...r[k], ...patch } } });
   const src = audioEngine.source;
   const armed = rt?.audio.dropArmed ?? false;
+  // The programmer always wins (merge policy): pan/tilt touched by hand hide the audio movement.
+  const heldPanTilt = Object.values(rt?.programmer ?? {}).some((v) => 'pan' in v || 'tilt' in v);
   const setFl = <K extends keyof AudioConfig['reactions']['followers']>(k: K, patch: Partial<AudioConfig['reactions']['followers'][K]>) => save({ ...cfg, reactions: { ...r, followers: { ...r.followers, [k]: { ...r.followers[k], ...patch } } } });
 
   return (
@@ -160,6 +162,7 @@ export function AudioPage() {
                 </div>
               ) : <span className="small dim">{t('audio.presets.noGroups')}</span>}
               <span className="small dim">{t('audio.presets.hint')}</span>
+              <span className="small dim">{t('audio.intensity.hint')}</span>
             </div>
             <div className="col">
               <label className="check"><input type="checkbox" checked={r.bpmFollow.enabled} onChange={(e) => setR('bpmFollow', { enabled: e.target.checked })} />Suivre le BPM estimé (effets synchronisés)</label>
@@ -191,6 +194,9 @@ export function AudioPage() {
               <label className="check"><input type="checkbox" checked={r.followers.moveFromOnsets.enabled} onChange={(e) => setFl('moveFromOnsets', { enabled: e.target.checked })} />Mouvement suivant la densité d’attaques (lyres)</label>
               <Field label="Amplitude (0–1)"><NumberInput value={r.followers.moveFromOnsets.amount} min={0} max={1} step={0.05} onChange={(v) => setFl('moveFromOnsets', { amount: v })} /></Field>
               <TargetPicker value={r.followers.moveFromOnsets.targets} onChange={(t) => setFl('moveFromOnsets', { targets: t })} />
+              {r.followers.moveFromOnsets.enabled && heldPanTilt && (
+                <div className="row wrap"><span className="badge warn">{t('audio.move.held')}</span><button className="btn sm" onClick={() => void act({ type: 'programmer.release', attributes: ['pan', 'tilt'] })}>{t('audio.move.release')}</button></div>
+              )}
             </div>
             <div className="col">
               <label className="check"><input type="checkbox" checked={r.dropGo.enabled} onChange={(e) => setR('dropGo', { enabled: e.target.checked })} />GO sur drop / refrain prédit</label>

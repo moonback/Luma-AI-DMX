@@ -45,6 +45,8 @@ class AudioEngine {
   /** Known track played by the app's player: exact drop/chorus prediction from the analysis. */
   private track: { sections: SongSection[]; bpm: number; position: () => number } | null = null;
   private ownsContext = true;
+  /** Bumped by every stop(): an async start that resolves after another start/stop is discarded. */
+  private generation = 0;
   /** Input gain in front of the analyser, driven by the automatic gain. */
   private input: GainNode | null = null;
   private agc: AutoGainState = { gain: 1, peak: 0 };
@@ -104,28 +106,33 @@ class AudioEngine {
 
   async startLive(deviceId: string | null): Promise<void> {
     this.stop();
+    const gen = this.generation;
     try {
-      this.attach(await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } }), { kind: 'mic', deviceId });
+      this.attach(gen, await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } }), { kind: 'mic', deviceId });
     } catch (err) {
-      this.fail(err);
+      this.fail(gen, err);
     }
   }
 
   /** System output ("what the speakers play"), captured as loopback by the main process' display-media handler. */
   async startSystem(): Promise<void> {
     this.stop();
+    const gen = this.generation;
     try {
-      // Chromium only grants loopback audio alongside a video track: it is dropped right away.
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      // Chromium only grants loopback audio alongside a video track: it is dropped right away. Its voice processing
+      // (on by default) treats music as noise and fades it out, so it is switched off like on the mic.
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       stream.getVideoTracks().forEach((t) => { t.stop(); stream.removeTrack(t); });
       if (!stream.getAudioTracks().length) throw new Error('aucune piste audio système (non pris en charge sur ce système)');
-      this.attach(stream, { kind: 'system' });
+      this.attach(gen, stream, { kind: 'system' });
     } catch (err) {
-      this.fail(err);
+      this.fail(gen, err);
     }
   }
 
-  private attach(stream: MediaStream, saved: SavedSource): void {
+  private attach(gen: number, stream: MediaStream, saved: SavedSource): void {
+    // Another start (or a stop) happened while this one was waiting for the device: it wins.
+    if (gen !== this.generation) { stream.getTracks().forEach((t) => t.stop()); return; }
     this.stream = stream;
     this.ctx = new AudioContext();
     this.wire(this.ctx, this.ctx.createMediaStreamSource(this.stream));
@@ -137,7 +144,8 @@ class AudioEngine {
     this.loop();
   }
 
-  private fail(err: unknown): void {
+  private fail(gen: number, err: unknown): void {
+    if (gen !== this.generation) return;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     this.error = `Entrée audio indisponible : ${err instanceof Error ? err.message : String(err)}`;
@@ -180,6 +188,7 @@ class AudioEngine {
   /** `forget`: the user stopped (or replaced) the real input on purpose, so it is not restarted next time. */
   stop(forget = false): void {
     if (forget) writeStored(SOURCE_KEY, null);
+    this.generation++;
     clearTimeout(this.timer);
     this.stream?.getTracks().forEach((t) => t.stop());
     if (this.ownsContext) void this.ctx?.close().catch(() => undefined);

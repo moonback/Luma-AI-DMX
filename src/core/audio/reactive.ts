@@ -26,6 +26,15 @@ export interface AudioStatus {
 const STALE_MS = 1000;
 
 /**
+ * Movement radius (fraction of the pan/tilt range) of the onset follower. Typical music has 2–4 onsets/s, i.e. a
+ * density of 0.25–0.5: it is stretched so that it already gives a clearly visible circle, and any playing music
+ * keeps a base movement; silence (no energy) stops it.
+ */
+export function moveRadius(amount: number, energy: number, onsetDensity: number): number {
+  return amount * 0.5 * Math.min(1, energy * 4) * (0.4 + 0.6 * Math.min(1, onsetDensity * 3));
+}
+
+/**
  * Applies the user-enabled audio reactions to the engine. Every reaction is opt-in and individually disabled
  * by default; with no fresh features (source stopped) all audio contributions are released.
  */
@@ -149,7 +158,7 @@ export class AudioReactive {
     if (fl.moveFromOnsets.enabled) {
       // One circle per bar; the radius follows the onset density (busy music = wide movement).
       this.movePhase += (dtMs / 1000) * (this.engine.bpm / 60 / 4) * Math.PI * 2;
-      const r = fl.moveFromOnsets.amount * f.onsetDensity * 0.5;
+      const r = moveRadius(fl.moveFromOnsets.amount, f.energy, f.onsetDensity);
       for (const rf of index.resolveTargets(fl.moveFromOnsets.targets)) {
         if (!rf.attributes.includes('pan') && !rf.attributes.includes('tilt')) continue;
         Object.assign((layer[rf.fixture.id] ??= {}), { pan: 0.5 + r * Math.cos(this.movePhase), tilt: 0.5 + r * Math.sin(this.movePhase) });

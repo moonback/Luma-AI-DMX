@@ -59,7 +59,7 @@ export const componentVisibilitySchema = z.object({
     effects: z.boolean().default(true), quick: z.boolean().default(true), timeline: z.boolean().default(true),
     ai: z.boolean().default(true), visualizer: z.boolean().default(true), audio: z.boolean().default(true),
     music: z.boolean().default(true), output: z.boolean().default(true),
-  }).default({}),
+  }).prefault({}),
   stage2d: z.boolean().default(true),
   stage3d: z.boolean().default(true),
   stageBuildPanel: z.boolean().default(true),
@@ -75,7 +75,7 @@ export const componentVisibilitySchema = z.object({
     sceneFromText: z.boolean().default(true),
     quickActions: z.boolean().default(true),
     alerts: z.boolean().default(true),
-  }).default({}),
+  }).prefault({}),
 });
 export type ComponentVisibility = z.infer<typeof componentVisibilitySchema>;
 export const DEFAULT_COMPONENT_VISIBILITY: ComponentVisibility = componentVisibilitySchema.parse({});
@@ -125,12 +125,12 @@ export const settingsSchema = z.object({
       uiScale: z.number().min(0.8).max(1.4).default(1),
       language: z.enum(['fr', 'en']).default('fr'),
       /** Per-user workspace visibility, independent from the currently opened show. */
-      components: componentVisibilitySchema.default({}),
+      components: componentVisibilitySchema.prefault({}),
       /** Named visibility layouts, stored with user settings and portable as JSON. */
       workspaceProfiles: z.array(workspaceProfileSchema).max(30).default([]),
       activeWorkspaceProfileId: z.string().max(80).nullable().default(null),
     })
-    .default({ reducedMotion: false, uiScale: 1, language: 'fr', components: {} }),
+    .prefault({ reducedMotion: false, uiScale: 1, language: 'fr', components: {} }),
   engine: z
     .object({
       rateHz: z.number().int().min(10).max(44).default(40),
