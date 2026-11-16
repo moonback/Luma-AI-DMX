@@ -27,8 +27,10 @@ export interface RigInfo {
 const LABEL_ENERGY: Record<SectionLabel, number> = {
   intro: 1, verse: 2, prechorus: 3, build: 3, chorus: 4, drop: 5, break: 1, bridge: 2, outro: 1,
 };
-const WARM = ['#FFB000', '#FF4FA0', '#FF7000', '#FF2A00'];
-const COLD = ['#2040FF', '#8B00FF', '#00C8FF', '#00E5A0'];
+const WARM = ['#FFB000', '#FF4FA0', '#FF7000', '#FF2A00', '#FF8C00', '#FF6347', '#FFA07A', '#FFD700', '#FF4500', '#DC143C'];
+const COLD = ['#2040FF', '#8B00FF', '#00C8FF', '#00E5A0', '#00BFFF', '#1E90FF', '#4169E1', '#00FFFF', '#7B68EE', '#6495ED'];
+const NEUTRAL = ['#FFFFFF', '#F5F5F5', '#D3D3D3', '#A9A9A9', '#808080'];
+const PASTEL = ['#FFB6C1', '#FFC0CB', '#E6E6FA', '#B0E0E6', '#ADD8E6', '#90EE90', '#F0E68C', '#FFDAB9'];
 
 const clampE = (e: number) => Math.max(0, Math.min(5, Math.round(e)));
 const isPeak = (label: SectionLabel) => label === 'chorus' || label === 'drop';
@@ -65,28 +67,33 @@ function sectionPlan(
 ): ShowSectionPlan {
   const strat = ARTISTIC_STRATEGIES[variant % 5]?.name ?? 'balanced';
   const peak = label === 'chorus' || label === 'drop';
-  const alt = (variant + index) % 2 === 0;
+  // Use a more sophisticated alternation based on multiple factors for more variety
+  const alt1 = (variant + index) % 2 === 0;
+  const alt2 = (variant * 3 + index) % 2 === 0;
+  const alt3 = (variant + index * 2) % 2 === 0;
+  const alt4 = (variant * 2 + index * 3) % 2 === 0;
+  const sectionSeed = (variant * 7 + index * 11) % 100;
   const singer = rig.moving > 0 ? singerMarker(rig.markers ?? []) : null;
   const focus: ShowSectionPlan['focus'] = !singer ? null : peak ? 'audience' : energy <= 3 ? singer.id : null;
   const me = intent.moreMovement ? Math.min(5, energy + 1) : energy;
 
   let movement: ShowSectionPlan['movement'] = intent.noMovement || me <= 1 ? 'none'
     : strat === 'cinematic'
-      ? (me <= 2 ? 'slow' : me === 3 ? (alt ? 'slow' : 'sweep') : (alt ? 'sweep' : 'pendulum'))
+      ? (me <= 2 ? 'slow' : me === 3 ? (alt1 ? 'sweep' : 'slow') : (alt2 ? 'pendulum' : 'sweep'))
     : strat === 'choreographic'
-      ? (me <= 2 ? (alt ? 'circle' : 'slow') : me === 3 ? (alt ? 'figure8' : 'sweep') : (alt ? 'ballyhoo' : 'fan'))
+      ? (me <= 2 ? (alt1 ? 'circle' : 'slow') : me === 3 ? (alt2 ? 'sweep' : 'figure8') : (alt3 ? 'ballyhoo' : 'fan'))
     : strat === 'minimalist'
-      ? (me <= 3 ? 'none' : alt ? 'slow' : 'pan')
-    : me === 2 ? (alt ? 'slow' : 'circle')
-    : me === 3 ? (alt ? 'sweep' : 'figure8')
-    : me === 4 ? (alt ? 'fast' : 'fan')
-    : alt ? (perBeat >= 3 ? 'zigzag' : 'ballyhoo') : (perBeat >= 3 ? 'pendulum' : 'fast');
+      ? (me <= 3 ? 'none' : alt1 ? 'slow' : 'pan')
+    : me === 2 ? (alt1 ? 'circle' : 'slow')
+    : me === 3 ? (alt2 ? 'figure8' : 'sweep')
+    : me === 4 ? (alt3 ? 'fast' : 'fan')
+    : alt1 ? (perBeat >= 3 ? 'zigzag' : 'ballyhoo') : (perBeat >= 3 ? 'pendulum' : 'fast');
 
-  if (label === 'bridge' && me >= 3) movement = strat === 'cinematic' ? 'sweep' : strat === 'minimalist' ? 'pan' : alt ? 'pendulum' : 'zigzag';
-  if (label === 'build' && me >= 3) movement = strat === 'choreographic' ? 'fan' : strat === 'minimalist' ? 'slow' : alt ? 'figure8' : 'sweep';
-  if (label === 'intro' && me >= 2) movement = strat === 'cinematic' ? 'slow' : strat === 'minimalist' ? 'none' : 'circle';
-  if (label === 'outro' && me >= 2) movement = alt ? 'pan' : 'slow';
-  if (peak && me >= 4 && brightness >= 0.7) movement = strat === 'cinematic' ? 'sweep' : strat === 'minimalist' ? (alt ? 'slow' : 'pan') : alt ? 'ballyhoo' : 'random';
+  if (label === 'bridge' && me >= 3) movement = strat === 'cinematic' ? 'sweep' : strat === 'minimalist' ? 'pan' : alt2 ? 'pendulum' : 'zigzag';
+  if (label === 'build' && me >= 3) movement = strat === 'choreographic' ? 'fan' : strat === 'minimalist' ? 'slow' : alt2 ? 'figure8' : 'sweep';
+  if (label === 'intro' && me >= 2) movement = strat === 'cinematic' ? 'slow' : strat === 'minimalist' ? 'none' : alt1 ? 'circle' : 'slow';
+  if (label === 'outro' && me >= 2) movement = alt1 ? 'pan' : 'slow';
+  if (peak && me >= 4 && brightness >= 0.7) movement = strat === 'cinematic' ? 'sweep' : strat === 'minimalist' ? (alt1 ? 'pan' : 'slow') : alt2 ? 'ballyhoo' : 'random';
   // A sung section keeps the heads readable: no erratic movement over the voice (same rule as the quality report).
   if (hasVocals && (movement === 'ballyhoo' || movement === 'random')) movement = 'sweep';
   if (focus && focus !== 'audience') movement = 'none';
@@ -94,31 +101,31 @@ function sectionPlan(
   let effect: ShowSectionPlan['effect'] = 'none', effectBeats = 4;
 
   if (strat === 'minimalist') {
-    effect = energy >= 4 ? (alt ? 'pulse' : 'dimmerWave') : 'none';
+    effect = energy >= 4 ? (alt1 ? 'pulse' : 'dimmerWave') : 'none';
     effectBeats = 4;
   } else if (energy <= 2) {
-    effect = brightness >= 0.7 ? (alt ? 'dimmerWave' : 'glow') : 'wave';
+    effect = brightness >= 0.7 ? (alt2 ? 'dimmerWave' : 'glow') : 'wave';
     effectBeats = strat === 'cinematic' ? 12 : 8;
   } else if (energy === 3) {
     // Flicker is a strobe: only proposed when the strobe is allowed (else it would be swapped for a chase with a notice).
-    if (strat === 'rhythmic' || perBeat >= 2.5) { effect = alt ? 'pulse' : rig.allowStrobe ? 'flicker' : 'chase'; effectBeats = 2; }
-    else if (brightness >= 0.6) { effect = alt ? 'pulse' : 'dimmerWave'; effectBeats = 4; }
-    else { effect = alt ? 'pulse' : 'chase'; effectBeats = 2; }
+    if (strat === 'rhythmic' || perBeat >= 2.5) { effect = alt1 ? 'pulse' : rig.allowStrobe ? 'flicker' : 'chase'; effectBeats = 2; }
+    else if (brightness >= 0.6) { effect = alt2 ? 'pulse' : 'dimmerWave'; effectBeats = 4; }
+    else { effect = alt3 ? 'pulse' : 'chase'; effectBeats = 2; }
   } else if (energy === 4) {
-    if (strat === 'rhythmic') { effect = alt ? 'chase' : 'pulse'; effectBeats = 1; }
-    else if (brightness >= 0.7) { effect = alt ? 'gradient' : 'colorChase'; effectBeats = alt ? 8 : 4; }
-    else if (perBeat >= 3) { effect = alt ? 'chase' : 'pulse'; effectBeats = 1; }
-    else { effect = alt ? 'chase' : 'colorChase'; effectBeats = alt ? 1 : 4; }
+    if (strat === 'rhythmic') { effect = alt1 ? 'chase' : 'pulse'; effectBeats = 1; }
+    else if (brightness >= 0.7) { effect = alt2 ? 'gradient' : 'colorChase'; effectBeats = alt1 ? 8 : 4; }
+    else if (perBeat >= 3) { effect = alt2 ? 'chase' : 'pulse'; effectBeats = 1; }
+    else { effect = alt3 ? 'chase' : 'colorChase'; effectBeats = alt1 ? 1 : 4; }
   } else if (energy >= 5) {
-    if (brightness >= 0.7) { effect = alt ? 'gradient' : 'colorChase'; effectBeats = 2; }
-    else { effect = 'chase'; effectBeats = perBeat >= 3.5 ? 0.5 : 1; }
+    if (brightness >= 0.7) { effect = alt1 ? 'gradient' : 'colorChase'; effectBeats = 2; }
+    else { effect = alt2 ? 'strobe' : 'chase'; effectBeats = perBeat >= 3.5 ? 0.5 : 1; }
   }
 
   if (label === 'drop' && rig.allowStrobe && intent.strobe === 'want') effect = 'strobe';
-  if (label === 'bridge' && energy >= 2) { effect = alt ? 'rainbow' : 'gradient'; effectBeats = 16; }
-  if (label === 'build' && energy >= 3) { effect = alt ? 'pulseSlow' : 'chaseSlow'; effectBeats = 4; }
-  if (label === 'intro' && energy <= 2 && brightness >= 0.6) { effect = 'glow'; effectBeats = 8; }
-  if (label === 'outro' && energy <= 2) { effect = alt ? 'dimmerWave' : 'glow'; effectBeats = 8; }
+  if (label === 'bridge' && energy >= 2) { effect = alt2 ? 'rainbow' : 'gradient'; effectBeats = 16; }
+  if (label === 'build' && energy >= 3) { effect = alt1 ? 'pulseSlow' : 'chaseSlow'; effectBeats = 4; }
+  if (label === 'intro' && energy <= 2 && brightness >= 0.6) { effect = alt2 ? 'glow' : 'dimmerWave'; effectBeats = 8; }
+  if (label === 'outro' && energy <= 2) { effect = alt1 ? 'dimmerWave' : 'glow'; effectBeats = 8; }
 
   if (perBeat >= 3) effectBeats = Math.max(0.5, effectBeats / 2);
   else if (perBeat < 1) effectBeats = Math.min(16, effectBeats * 2);
@@ -138,9 +145,14 @@ function sectionPlan(
   if (intent.bassFollow ? energy >= 3 : label === 'drop' || (peak && bassShare >= 0.65)) extras.push('bassFollow');
   if (intent.colorFollow ? energy >= 1 && effect !== 'rainbow' : (label === 'break' || (energy <= 2 && brightness >= 0.6)) && energy >= 1) extras.push('colorFollow');
 
-  const selectedPalette = strat === 'minimalist' && energy <= 2
-    ? palette.slice(0, 1)
-    : peak ? palette.slice(0, 2) : palette.slice(0, energy >= 3 ? 2 : 1);
+  // Use more colors from the palette for more variety
+  // The number of colors depends on energy and strategy
+  const numColors = strat === 'minimalist' && energy <= 2 ? 1
+    : peak ? Math.min(4, palette.length)  // Use up to 4 colors for peaks
+    : energy >= 4 ? Math.min(3, palette.length)  // Use up to 3 colors for high energy
+    : energy >= 2 ? 2  // Use 2 colors for medium energy
+    : 1;  // Use 1 color for low energy
+  const selectedPalette = palette.slice(0, numColors);
 
   return {
     index, energy, beam,
@@ -194,7 +206,7 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     ? analysis.key.mode === 'major'
     : analysis.sections.reduce((s, x) => s + x.brightness, 0) / Math.max(1, analysis.sections.length) >= 0.5;
   const base = intent.colors.length ? intent.colors : intent.warmth === 'cold' || (!intent.warmth && !modeIsMajor) ? COLD : WARM;
-  const accent = (intent.warmth === 'cold' || (!intent.warmth && !modeIsMajor) ? WARM : COLD)[variant % 4]!;
+  const accent = (intent.warmth === 'cold' || (!intent.warmth && !modeIsMajor) ? WARM : COLD)[variant % 10]!;
   const byLabel = groupsBySection(intentText, rig.groups ?? []);
   const barSec = (analysis.meter ?? 4) * 60 / analysis.bpm;
   const strat = ARTISTIC_STRATEGIES[variant % 5] ?? ARTISTIC_STRATEGIES[0]!;
@@ -208,10 +220,47 @@ export function planLocally(analysis: SongAnalysis, intentText: string, rig: Rig
     let e = 0.6 * LABEL_ENERGY[label] + 0.4 * s.energy * 5 + intent.globalShift;
     if (label === 'verse' || label === 'intro' || label === 'outro') e += intent.verseShift;
     if (label === 'chorus' || label === 'drop') e += intent.peakShift + escalation(analysis, i);
-    const rot = (s.cluster + variant) % base.length;
-    const palette = [...base.slice(rot), ...base.slice(0, rot)];
-    if ((label === 'chorus' || label === 'drop') && !intent.colors.length) palette.splice(1, 0, accent);
-    const plan = sectionPlan(i, clampE(e), palette.slice(0, 4), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60), s.brightness, s.hasVocals);
+    
+    // Enhanced color palette selection with more variety
+    // Use section index, cluster, energy, and variant to create unique color combinations
+    const energy = clampE(e);
+    const isPeak = label === 'chorus' || label === 'drop';
+    
+    // For more variety, use different color selection strategies based on section type and variant
+    let palette: string[];
+    if (intent.colors.length) {
+      // User specified colors - use them but with rotation
+      const rot = (i + variant) % intent.colors.length;
+      palette = [...intent.colors.slice(rot), ...intent.colors.slice(0, rot)];
+    } else {
+      // Auto-generated palette with enhanced variety
+      const allColors = modeIsMajor ? [...WARM, ...PASTEL, ...NEUTRAL] : [...COLD, ...PASTEL, ...NEUTRAL];
+      const oppositeColors = !modeIsMajor ? [...WARM, ...PASTEL] : [...COLD, ...PASTEL];
+      
+      // Create unique seed for each section based on multiple factors
+      const sectionSeed = (i * 7 + s.cluster * 13 + variant * 17 + energy * 19) % allColors.length;
+      
+      // Select 6-8 colors from the full palette for more variety
+      const numColors = isPeak ? 8 : energy >= 3 ? 6 : 5;
+      palette = [];
+      for (let j = 0; j < numColors; j++) {
+        const idx = (sectionSeed + j * (i + 1) + variant * (j + 1)) % allColors.length;
+        palette.push(allColors[idx]);
+      }
+      
+      // Add accent color from opposite palette for contrast
+      const accentIdx = (variant + i * 3 + energy * 5) % oppositeColors.length;
+      const accentColor = oppositeColors[accentIdx];
+      
+      // Insert accent at different positions based on section type
+      if (isPeak && !intent.colors.length) {
+        palette.splice(Math.min(2, palette.length), 0, accentColor);
+      } else if (energy >= 3) {
+        palette.splice(Math.floor(palette.length / 2), 0, accentColor);
+      }
+    }
+    
+    const plan = sectionPlan(i, energy, palette.slice(0, isPeak ? 8 : 6), rig, intent, variant, label, (s.end - s.start) / barSec, s.bassShare, s.density / (analysis.bpm / 60), s.brightness, s.hasVocals);
     const out = { ...plan, groups: byLabel.get(label) ?? [] };
     return { ...out, why: explain(analysis, i, out, intent, rig, variant) };
   });

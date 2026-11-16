@@ -5,7 +5,7 @@ import { act } from '../api';
 import { Field, NumberInput, PageHead, Panel } from '../components/ui';
 import { audioEngine } from '../audioEngine';
 import { useT } from '../i18n';
-import { AUDIO_PRESETS, applyAudioPreset } from '../../core/audio/presets';
+import { AUDIO_PRESETS, applyAudioPreset, generateRandomAudioPreset } from '../../core/audio/presets';
 import type { AudioFeatures } from '../../core/audio/analyzer';
 import type { AudioConfig, Target } from '../../core/model/schemas';
 
@@ -161,6 +161,24 @@ export function AudioPage() {
               {groups.length ? (
                 <div className="chips">
                   {AUDIO_PRESETS.map((p) => <button key={p} className="chip" onClick={() => save({ ...cfg, reactions: applyAudioPreset(r, p, groups.map((g) => g.id)) })}>{t(`audio.preset.${p}` as const)}</button>)}
+                  <button key="random" className="chip" onClick={() => {
+                    const randomPreset = generateRandomAudioPreset();
+                    const targets = { fixtureIds: [], groupIds: groups.map((g) => g.id) };
+                    const on = (enabled: boolean) => ({ enabled, targets });
+                    save({ ...cfg, reactions: {
+                      ...r,
+                      bpmFollow: { ...r.bpmFollow, enabled: randomPreset.bpm },
+                      beatFlash: { ...r.beatFlash, ...on(randomPreset.flash !== null), decay: randomPreset.flash ?? r.beatFlash.decay },
+                      levelToIntensity: { ...r.levelToIntensity, ...on(randomPreset.level !== null), floor: randomPreset.level ?? r.levelToIntensity.floor },
+                      energyToColor: { ...r.energyToColor, ...on(randomPreset.color) },
+                      followers: {
+                        ...r.followers,
+                        intensityFromBass: { ...r.followers.intensityFromBass, ...on(randomPreset.bass !== null), amount: randomPreset.bass ?? r.followers.intensityFromBass.amount },
+                        colorFromBrightness: { ...r.followers.colorFromBrightness, ...on(randomPreset.bright) },
+                        moveFromOnsets: { ...r.followers.moveFromOnsets, ...on(randomPreset.move !== null), amount: randomPreset.move ?? r.followers.moveFromOnsets.amount },
+                      },
+                    } });
+                  }}>{t('audio.preset.random')}</button>
                 </div>
               ) : <span className="small dim">{t('audio.presets.noGroups')}</span>}
               <span className="small dim">{t('audio.presets.hint')}</span>
