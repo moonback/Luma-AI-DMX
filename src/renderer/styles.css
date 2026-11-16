@@ -341,6 +341,9 @@ input[type='color'] { width: 34px; height: 30px; padding: 0; border: 1px solid v
 .music-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; font-size: 11px; background: var(--panel-3); border: 1px solid var(--border); color: var(--text-2); }
 .music-tag.effect { color: #c4b5fd; background: var(--violet-soft); border-color: rgba(139, 92, 246, 0.35); font-weight: 550; }
 .music-actions-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.sec-pill-btn { transition: opacity .15s ease, filter .15s ease; }
+.sec-pill-btn:hover { filter: brightness(1.15); }
+.sec-pill-btn.sel { outline: 2px solid #fff; outline-offset: -2px; z-index: 1; }
 
 /* Bottom docked player bar */
 .mini-player {

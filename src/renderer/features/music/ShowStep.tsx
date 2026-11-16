@@ -13,7 +13,7 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
   onSelect: (i: number) => void; onEdit: (i: number) => void; onVariant: () => void; onRestore: () => void; onCompare: () => void; onOpenTimeline: () => void; onBack: () => void; onNext: () => void;
 }) {
   const t = useT();
-  const [viewMode, setViewMode] = useState<'split' | 'table' | 'timeline'>('split');
+  const [viewMode, setViewMode] = useState<'table' | 'timeline' | 'split'>('table');
   const [timelineExpanded, setTimelineExpanded] = useState(true);
   const plan = track.plan;
   if (!plan) {
@@ -37,16 +37,6 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
             <div className="music-view-tabs" role="tablist" aria-label={t('music.steps.show')}>
               <button
                 type="button"
-                className={`btn sm ${viewMode === 'split' ? 'accent' : 'ghost'}`}
-                onClick={() => setViewMode('split')}
-                title={t('music.view.split')}
-                data-testid="show-view-split"
-              >
-                <Columns2 size={13} />
-                <span className="hide-mobile">{t('music.view.split')}</span>
-              </button>
-              <button
-                type="button"
                 className={`btn sm ${viewMode === 'table' ? 'accent' : 'ghost'}`}
                 onClick={() => setViewMode('table')}
                 title={t('music.view.table')}
@@ -64,6 +54,16 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
               >
                 <Layers size={13} />
                 <span>{t('music.view.timeline')}</span>
+              </button>
+              <button
+                type="button"
+                className={`btn sm ${viewMode === 'split' ? 'accent' : 'ghost'}`}
+                onClick={() => setViewMode('split')}
+                title={t('music.view.split')}
+                data-testid="show-view-split"
+              >
+                <Columns2 size={13} />
+                <span className="hide-mobile">{t('music.view.split')}</span>
               </button>
             </div>
             <span className={`badge ${plan.provider === 'openrouter' ? 'violet' : ''}`}>
@@ -104,7 +104,38 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
       </Panel>
       {showTable && (
         <Panel title={t('music.sections')} flush>
-      <div className="music-table-wrap">
+          {!showStudio && (
+            <div className="music-compact-strip" data-testid="section-strip" style={{ display: 'flex', height: 34, background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid var(--border)' }}>
+              {track.analysis.sections.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className={`sec-pill-btn ${i === selected ? 'sel' : ''}`}
+                  style={{
+                    flex: `${s.end - s.start} 0 0`,
+                    background: LABEL_COLOR[s.label],
+                    border: 'none',
+                    borderRight: '1px solid rgba(0,0,0,0.3)',
+                    padding: '2px 6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    color: '#fff',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                  onClick={() => { setSelected(i); setEditing(i); }}
+                  title={`${SECTION_NAMES[s.label]} (${fmt(s.start)}–${fmt(s.end)})`}
+                >
+                  <span className="truncate">{SECTION_NAMES[s.label]}</span>
+                  {track.plan?.sections[i]?.locked && <Lock size={10} />}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="music-table-wrap">
         <table className="table small music-table" data-testid="music-sections">
           <thead>
             <tr>
