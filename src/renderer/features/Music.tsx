@@ -299,11 +299,6 @@ export function MusicPage() {
             <span className="small dim">{track ? t('music.library.meta', { bpm: Math.round(track.analysis.bpm), duration: fmt(track.analysis.duration) }) : t('music.emptyHint')}</span>
           </span>
         </div>
-        {track && (
-          <div className="music-workspace-player">
-            <Transport track={track} playing={isPlaying} pos={pos} onPlay={(from) => play(track, from)} />
-          </div>
-        )}
         <button
           type="button"
           className={`btn sm music-library-toggle ${libraryCollapsed ? 'ghost' : 'on'}`}
@@ -331,6 +326,9 @@ export function MusicPage() {
             <Empty icon={<Music2 size={32} />} title={t('music.empty')} action={<button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()}><Upload size={14} />{t('music.import')}</button>}>{t('music.emptyHint')}</Empty>
           ) : (
             <>
+              <div style={{ display: 'none' }} aria-hidden="true">
+                <Transport track={track} playing={isPlaying} pos={pos} onPlay={(from) => play(track, from)} />
+              </div>
               {notices.map((n, i) => <div key={i} className="small music-notice">{n}</div>)}
               {shown === 'track' && <TrackStep track={track} studio={studio} replacing={!!progress} onReplace={() => replaceFile.current?.click()} onRemove={remove} onNext={() => setView('intent')} />}
               {shown === 'intent' && (
