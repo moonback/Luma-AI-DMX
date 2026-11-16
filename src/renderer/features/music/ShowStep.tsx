@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { ArrowLeft, ArrowLeftRight, ArrowRight, ExternalLink, Lock, Pencil, Shuffle, Sparkles, Undo2, Wand2 } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, ChevronUp, Columns2, ExternalLink, Layers, Lock, Pencil, Shuffle, Sparkles, TableProperties, Undo2, Wand2 } from 'lucide-react';
 import type { Group, MusicTrack, StageMarker } from '../../../core/model/schemas';
 import { SECTION_NAMES } from '../../../core/music/analyze';
 import { Empty, Panel } from '../../components/ui';
@@ -13,6 +13,8 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
   onSelect: (i: number) => void; onEdit: (i: number) => void; onVariant: () => void; onRestore: () => void; onCompare: () => void; onOpenTimeline: () => void; onBack: () => void; onNext: () => void;
 }) {
   const t = useT();
+  const [viewMode, setViewMode] = useState<'split' | 'table' | 'timeline'>('split');
+  const [timelineExpanded, setTimelineExpanded] = useState(true);
   const plan = track.plan;
   if (!plan) {
     return (
@@ -23,13 +25,75 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
   }
   const setSelected = onSelect;
   const setEditing = onEdit;
+  const showStudio = viewMode === 'split' || viewMode === 'timeline';
+  const showTable = viewMode === 'split' || viewMode === 'table';
+
   return (
     <div className="col gap-lg">
-      <Panel title={t('music.steps.show')} actions={<span className={`badge ${plan.provider === 'openrouter' ? 'violet' : ''}`}>{plan.provider === 'openrouter' ? `OpenRouter · ${plan.model}` : t('music.localRules')} · {t('music.variantN', { n: plan.variant })}</span>}>
+      <Panel
+        title={t('music.steps.show')}
+        actions={
+          <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="music-view-tabs" role="tablist" aria-label={t('music.steps.show')}>
+              <button
+                type="button"
+                className={`btn sm ${viewMode === 'split' ? 'accent' : 'ghost'}`}
+                onClick={() => setViewMode('split')}
+                title={t('music.view.split')}
+                data-testid="show-view-split"
+              >
+                <Columns2 size={13} />
+                <span className="hide-mobile">{t('music.view.split')}</span>
+              </button>
+              <button
+                type="button"
+                className={`btn sm ${viewMode === 'table' ? 'accent' : 'ghost'}`}
+                onClick={() => setViewMode('table')}
+                title={t('music.view.table')}
+                data-testid="show-view-table"
+              >
+                <TableProperties size={13} />
+                <span>{t('music.view.table')}</span>
+              </button>
+              <button
+                type="button"
+                className={`btn sm ${viewMode === 'timeline' ? 'accent' : 'ghost'}`}
+                onClick={() => setViewMode('timeline')}
+                title={t('music.view.timeline')}
+                data-testid="show-view-timeline"
+              >
+                <Layers size={13} />
+                <span>{t('music.view.timeline')}</span>
+              </button>
+            </div>
+            <span className={`badge ${plan.provider === 'openrouter' ? 'violet' : ''}`}>
+              {plan.provider === 'openrouter' ? `OpenRouter · ${plan.model}` : t('music.localRules')} · {t('music.variantN', { n: plan.variant })}
+            </span>
+          </div>
+        }
+      >
         <div className="col" style={{ gap: 10 }}>
           <div className="row small" style={{ gap: 6 }} data-testid="music-plan-summary"><Sparkles size={13} style={{ color: '#22d3ee' }} /><span>{plan.summary}</span></div>
           <ArtisticQualityBadge plan={plan} analysis={track.analysis} />
-          {studio}
+          {showStudio && (
+            <div className="col" style={{ gap: 6 }}>
+              {viewMode === 'split' && (
+                <div className="row" style={{ justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    onClick={() => setTimelineExpanded((v) => !v)}
+                    aria-expanded={timelineExpanded}
+                    data-testid="toggle-studio-show"
+                  >
+                    {timelineExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    <span>{t(timelineExpanded ? 'music.studio.collapse' : 'music.studio.expand')}</span>
+                  </button>
+                </div>
+              )}
+              {timelineExpanded && studio}
+            </div>
+          )}
           <div className="row wrap" style={{ gap: 8 }}>
             <button className="btn" disabled={busy} onClick={onVariant} title={t('music.variantHint')} data-testid="music-variant"><Shuffle size={14} />{t('music.variant')}</button>
             <button className="btn" disabled={busy || !track.previousPlan} onClick={onRestore} title={t('music.restoreHint')} data-testid="music-restore"><Undo2 size={14} />{t('music.restore')}</button>
@@ -38,7 +102,8 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
           </div>
         </div>
       </Panel>
-      <Panel title={t('music.sections')} flush>
+      {showTable && (
+        <Panel title={t('music.sections')} flush>
       <div className="music-table-wrap">
         <table className="table small music-table" data-testid="music-sections">
           <thead>
@@ -100,6 +165,7 @@ export function ShowStep({ track, studio, groups, markers, selected, nowIdx, bus
         </table>
       </div>
       </Panel>
+      )}
       <div className="music-step-foot">
         <button className="btn ghost" onClick={onBack}><ArrowLeft size={14} />{t('music.steps.intent')}</button>
         <button className="btn primary" onClick={onNext} data-testid="music-to-play">{t('music.steps.toPlay')}<ArrowRight size={14} /></button>

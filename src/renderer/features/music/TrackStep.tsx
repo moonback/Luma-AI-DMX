@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Activity, ArrowRight, Clock, FileAudio, Layers, Music2, Sparkles, Trash2 } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Activity, ArrowRight, ChevronDown, ChevronUp, Clock, FileAudio, Layers, Music2, Sparkles, Trash2 } from 'lucide-react';
 import type { MusicTrack } from '../../../core/model/schemas';
 import { KEY_NAMES } from '../../../core/music/analyze';
 import { Panel } from '../../components/ui';
@@ -11,10 +11,28 @@ export function TrackStep({ track, studio, replacing, onReplace, onRemove, onNex
   track: MusicTrack; studio: ReactNode; replacing: boolean; onReplace: () => void; onRemove: () => void; onNext: () => void;
 }) {
   const t = useT();
+  const [studioOpen, setStudioOpen] = useState(true);
   const a = track.analysis;
   const count = (kind: string) => a.events.filter((e) => e.kind === kind);
   return (
-    <Panel title={track.name} actions={<span className="badge">{a.sections.length} {t('music.sections').toLowerCase()}</span>}>
+    <Panel
+      title={track.name}
+      actions={
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            onClick={() => setStudioOpen((v) => !v)}
+            aria-expanded={studioOpen}
+            data-testid="toggle-studio-track"
+          >
+            {studioOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            <span>{t(studioOpen ? 'music.studio.collapse' : 'music.studio.expand')}</span>
+          </button>
+          <span className="badge">{a.sections.length} {t('music.sections').toLowerCase()}</span>
+        </div>
+      }
+    >
       <div className="music-indicators" data-testid="music-summary">
         <div className="music-indicator-pill">
           <Activity size={13} style={{ color: '#22d3ee' }} />
@@ -44,7 +62,7 @@ export function TrackStep({ track, studio, replacing, onReplace, onRemove, onNex
           <span>{t('music.eventsSummary', { impacts: count('impact').length, risers: count('riser').length, vocal: Math.round(count('vocal').reduce((d, e) => d + e.duration, 0)) })}</span>
         </div>
       </div>
-      {studio}
+      {studioOpen && studio}
       <div className="music-step-foot">
         <div className="row" style={{ gap: 6 }}>
           <button className="btn ghost sm" disabled={replacing} onClick={onReplace} title={t('music.replaceHint')} data-testid="music-replace"><FileAudio size={13} />{t('music.replace')}</button>
