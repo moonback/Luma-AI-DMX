@@ -348,7 +348,7 @@ export async function completeJson(system: string, user: string | unknown[], sch
   if (!choice.message.content) throw new OpenRouterError('Réponse IA vide (refus ou filtre du modèle)', null);
   const model = parsed.data.model ?? opts.model;
   const notices: string[] = [];
-  if (opts.model === DEFAULT_OPENROUTER_MODEL || model !== opts.model) notices.push(`Réponse servie par ${model}`);
+  if (model !== opts.model) notices.push(`Modèle utilisé : ${model}`);
   if (!caps) notices.push('Capacités du modèle inconnues : format JSON demandé par consigne uniquement.');
   if (stats.attempts > 1) notices.push(`Réponse obtenue après ${stats.attempts} tentatives (incident passager du fournisseur).`);
   // Many models emit null for optional fields: drop them before validating.

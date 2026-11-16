@@ -1510,7 +1510,63 @@ span.chip { display: inline-flex; align-items: center; gap: 2px; cursor: default
 .music-main > .show-stepper { margin: 0; }
 .music-transport { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
 .music-transport .grow { flex: 1; min-width: 80px; }
-.music-notice { color: #fcd34d; }
+/* Bannière des remarques et insights du show */
+.music-notices-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel-2) 88%, #f59e0b 12%);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  animation: fade-in var(--dur);
+}
+.music-notices-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  margin-top: 1px;
+}
+.music-notices-content {
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+.music-notice-item {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.music-notice-item::before {
+  content: '•';
+  color: #fbbf24;
+  font-weight: bold;
+}
+.music-notices-banner:has(.music-notice-item:only-child) .music-notice-item::before {
+  display: none;
+}
+.music-notices-dismiss {
+  flex: none;
+  color: var(--text-3);
+  opacity: 0.7;
+  padding: 4px;
+  margin-top: -2px;
+  margin-right: -4px;
+}
+.music-notices-dismiss:hover {
+  opacity: 1;
+  color: var(--text);
+}
+.music-notice { color: var(--text); }
 .music-step-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .music-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .music-live-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius); background: var(--panel-2); }
