@@ -48,8 +48,8 @@ export function TrackLibrary({ tracks, selectedId, playingId, importing, onSelec
         {shown.map((tk) => {
           const status = trackStatus(tk, playingId);
           return (
-            <div key={tk.id} role="listitem" className={`music-library-item ${tk.id === selectedId ? 'on' : ''}`} data-testid="music-library-item">
-              <button type="button" className="music-library-open" aria-current={tk.id === selectedId ? 'true' : undefined} onClick={() => onSelect(tk.id)} data-testid="music-library-select">
+            <div key={tk.id} role="listitem" className={`music-library-item ${tk.id === selectedId ? 'on' : ''}`} data-testid="music-library-item" onClick={() => onSelect(tk.id)}>
+              <button type="button" className="music-library-open" aria-current={tk.id === selectedId ? 'true' : undefined} onClick={(e) => { e.stopPropagation(); onSelect(tk.id); }} data-testid="music-library-select">
                 <Music2 size={14} className="dim" />
                 <span className="col grow" style={{ minWidth: 0, gap: 2 }}>
                   <span className="music-library-name" title={tk.name}>{tk.name}</span>

@@ -71,4 +71,11 @@ export const frMusic = {
   'music.play.nextIn': 'Ensuite dans {t}',
   'music.play.nextSection': 'Section suivante',
   'music.play.fromStart': 'Jouer depuis le début',
+  'music.view.table': 'Tableau',
+  'music.view.timeline': 'Timeline',
+  'music.view.split': 'Combiné',
+  'music.studio.collapse': 'Masquer la timeline',
+  'music.studio.expand': 'Afficher la timeline',
+  'music.hidePlayer': 'Masquer le lecteur',
+  'music.showPlayer': 'Afficher le lecteur',
 };

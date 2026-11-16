@@ -1,6 +1,6 @@
 import type { AudioReactions } from '../model/schemas';
 
-export const AUDIO_PRESETS = ['club', 'concert', 'ambient', 'off'] as const;
+export const AUDIO_PRESETS = ['club', 'concert', 'ambient', 'festival', 'theatre', 'edm', 'live', 'off'] as const;
 export type AudioPreset = (typeof AUDIO_PRESETS)[number];
 
 /**
@@ -14,6 +14,10 @@ export function applyAudioPreset(r: AudioReactions, preset: AudioPreset, groupId
     club: { bpm: true, flash: 0.2, level: null, color: true, bass: 0.8, bright: false, move: 0.6 },
     concert: { bpm: true, flash: null, level: 0.35, color: false, bass: null, bright: true, move: 0.3 },
     ambient: { bpm: false, flash: null, level: 0.5, color: true, bass: null, bright: false, move: null },
+    festival: { bpm: true, flash: 0.3, level: null, color: true, bass: 0.9, bright: true, move: 0.7 },
+    theatre: { bpm: false, flash: null, level: 0.4, color: true, bass: null, bright: false, move: 0.2 },
+    edm: { bpm: true, flash: 0.4, level: null, color: true, bass: 1.0, bright: true, move: 0.8 },
+    live: { bpm: true, flash: 0.1, level: 0.4, color: true, bass: 0.7, bright: true, move: 0.5 },
     off: { bpm: false, flash: null, level: null, color: false, bass: null, bright: false, move: null },
   }[preset];
   return {
@@ -31,5 +35,29 @@ export function applyAudioPreset(r: AudioReactions, preset: AudioPreset, groupId
       colorFromBrightness: { ...r.followers.colorFromBrightness, ...on(p.bright) },
       moveFromOnsets: { ...r.followers.moveFromOnsets, ...on(p.move !== null), amount: p.move ?? r.followers.moveFromOnsets.amount },
     },
+  };
+}
+
+/**
+ * Generates a random audio preset configuration.
+ * Each call produces different random values for dynamic, exploratory lighting reactions.
+ */
+export function generateRandomAudioPreset(): {
+  bpm: boolean;
+  flash: number | null;
+  level: number | null;
+  color: boolean;
+  bass: number | null;
+  bright: boolean;
+  move: number | null;
+} {
+  return {
+    bpm: Math.random() > 0.3,
+    flash: Math.random() > 0.5 ? Math.random() * 0.4 : null,
+    level: Math.random() > 0.5 ? Math.random() * 0.6 : null,
+    color: Math.random() > 0.2,
+    bass: Math.random() > 0.5 ? Math.random() : null,
+    bright: Math.random() > 0.4,
+    move: Math.random() > 0.5 ? Math.random() : null,
   };
 }

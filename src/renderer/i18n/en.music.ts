@@ -73,4 +73,11 @@ export const enMusic: Record<keyof typeof frMusic, string> = {
   'music.play.nextIn': 'Next in {t}',
   'music.play.nextSection': 'Next section',
   'music.play.fromStart': 'Play from the start',
+  'music.view.table': 'Table',
+  'music.view.timeline': 'Timeline',
+  'music.view.split': 'Combined',
+  'music.studio.collapse': 'Collapse timeline',
+  'music.studio.expand': 'Expand timeline',
+  'music.hidePlayer': 'Hide player',
+  'music.showPlayer': 'Show player',
 };

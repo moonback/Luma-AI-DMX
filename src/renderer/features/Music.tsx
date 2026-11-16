@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Library, Music2, PanelLeftClose, Upload } from 'lucide-react';
+import { Library, Music2, PanelLeftClose, Sparkles, Upload, X } from 'lucide-react';
 import { confirmAction, useStore } from '../store';
 import { useT, type MessageKey } from '../i18n';
 import { act } from '../api';
@@ -73,7 +73,7 @@ export function MusicPage() {
   const { playing, pos } = usePlayback();
   const playingId = playing?.trackId ?? null;
   const [trackId, setTrackId] = useState<string | null>(tracks[0]?.id ?? null);
-  const [libraryCollapsed, setLibraryCollapsed] = useState(true);
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const track = tracks.find((tk) => tk.id === trackId) ?? tracks[0] ?? null;
   const progressStep = currentShowStep(track, playingId);
   // Screen shown: set from the track's progress when a track is opened, then the user moves freely between the steps.
@@ -326,8 +326,36 @@ export function MusicPage() {
             <Empty icon={<Music2 size={32} />} title={t('music.empty')} action={<button className="btn primary" disabled={!!progress} onClick={() => file.current?.click()}><Upload size={14} />{t('music.import')}</button>}>{t('music.emptyHint')}</Empty>
           ) : (
             <>
-              <Transport track={track} playing={isPlaying} pos={pos} onPlay={(from) => play(track, from)} />
-              {notices.map((n, i) => <div key={i} className="small music-notice">{n}</div>)}
+              <div style={{ display: 'none' }} aria-hidden="true">
+                <Transport track={track} playing={isPlaying} pos={pos} onPlay={(from) => play(track, from)} />
+              </div>
+              {(() => {
+                const displayNotices = notices.filter((n) => !n.startsWith('Réponse servie par'));
+                if (displayNotices.length === 0) return null;
+                return (
+                  <aside className="music-notices-banner" role="status" aria-live="polite">
+                    <div className="music-notices-icon" aria-hidden="true">
+                      <Sparkles size={14} />
+                    </div>
+                    <div className="music-notices-content col">
+                      {displayNotices.map((n, i) => (
+                        <div key={i} className="music-notice music-notice-item">
+                          <span>{n}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn ghost sm icon music-notices-dismiss"
+                      onClick={() => setNotices([])}
+                      title={t('common.close') || 'Fermer'}
+                      aria-label={t('common.close') || 'Fermer'}
+                    >
+                      <X size={13} />
+                    </button>
+                  </aside>
+                );
+              })()}
               {shown === 'track' && <TrackStep track={track} studio={studio} replacing={!!progress} onReplace={() => replaceFile.current?.click()} onRemove={remove} onNext={() => setView('intent')} />}
               {shown === 'intent' && (
                 <IntentStep track={track} intent={intent} onIntent={setIntent} mood={mood} onMood={setMood} history={history} suggestions={suggestions} fromAi={!!fromAi} aiOn={aiOn}

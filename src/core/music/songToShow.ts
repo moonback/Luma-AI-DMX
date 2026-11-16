@@ -14,6 +14,7 @@ import { SECTION_NAMES } from './analyze';
 import type { Vec3 } from '../visualizer/beam';
 import { aimAt, isBlinder, isFog, isFollowSpot, markerPoint, memoAim, singerMarker, stagePoint, type NamedRef } from './showRig';
 import { parseIntent, withMood, type Intent } from './intent';
+import { ALL_EFFECTS, ALL_MOVEMENTS } from './showPlanner';
 export { parseIntent, withMood, type Intent };
 
 /**
@@ -67,10 +68,231 @@ function dimmerKeys(rf: ResolvedFixture): string[] {
   return [...new Set(['dimmer', ...moduleKeys(rf, 'dimmer')])];
 }
 
-function beamValues(rf: ResolvedFixture, beam: ShowSectionPlan['beam'], cluster: number): Record<string, number> {
+/** Gobo wheel positions by genre - each genre has its signature gobo patterns */
+const GENRE_GOBO_PALETTES: Record<string, number[]> = {
+  electronic: [0, 3, 6, 9, 1, 4, 7],
+  edm: [0, 2, 4, 6, 8, 1, 3, 5],
+  house: [0, 1, 2, 3, 4, 5, 6],
+  techno: [0, 5, 10, 1, 6, 11, 2],
+  trance: [0, 4, 8, 1, 5, 9, 2],
+  rock: [0, 1, 2, 3, 0, 1, 2],
+  metal: [5, 10, 15, 0, 5, 10],
+  pop: [0, 2, 4, 6, 1, 3, 5],
+  hiphop: [0, 1, 0, 2, 0, 3, 0],
+  rnb: [0, 3, 6, 9, 0, 3, 6],
+  jazz: [0, 1, 2, 0, 1, 2, 0],
+  blues: [0, 2, 4, 0, 2, 4, 0],
+  classical: [0, 0, 0, 0, 0, 0, 0],
+  ambient: [1, 3, 5, 7, 2, 4, 6],
+  reggae: [0, 1, 2, 3, 4, 5, 6],
+  country: [0, 1, 0, 2, 0, 1, 0],
+  disco: [0, 5, 10, 15, 1, 6, 11],
+  funk: [0, 3, 6, 9, 1, 4, 7],
+};
+
+/** Gobo patterns for specific effect+movement combinations */
+const EFFECT_MOVEMENT_GOBO_PALETTES: Record<string, Record<string, number[]>> = {
+  // Static/dim effects
+  none: {
+    none: [0, 0, 0, 0, 0, 0, 0],
+    slow: [1, 2, 3, 1, 2, 3, 1],
+    sweep: [0, 2, 4, 0, 2, 4, 0],
+    pan: [0, 1, 2, 0, 1, 2, 0],
+    tilt: [0, 1, 0, 2, 0, 1, 0],
+  },
+  // Wave effects
+  wave: {
+    none: [0, 1, 2, 3, 0, 1, 2],
+    slow: [1, 3, 5, 1, 3, 5, 1],
+    sweep: [0, 3, 6, 1, 4, 7, 2],
+    circle: [0, 2, 4, 6, 1, 3, 5],
+    pan: [0, 1, 2, 0, 1, 2, 0],
+    pendulum: [0, 2, 1, 3, 0, 2, 1],
+  },
+  dimmerWave: {
+    none: [0, 1, 0, 2, 0, 1, 0],
+    slow: [1, 2, 1, 3, 1, 2, 1],
+    sweep: [0, 2, 4, 0, 2, 4, 0],
+    circle: [0, 3, 6, 0, 3, 6, 0],
+    pan: [0, 1, 2, 0, 1, 2, 0],
+    tilt: [0, 2, 0, 4, 0, 2, 0],
+  },
+  // Pulse effects
+  pulse: {
+    none: [0, 1, 0, 2, 0, 1, 0],
+    slow: [1, 0, 2, 0, 3, 0, 1],
+    sweep: [0, 2, 4, 1, 3, 5, 0],
+    circle: [0, 3, 1, 4, 0, 3, 1],
+    pan: [0, 1, 0, 2, 0, 1, 0],
+    ballyhoo: [0, 5, 10, 0, 5, 10, 0],
+    fan: [0, 4, 8, 0, 4, 8, 0],
+    fast: [0, 1, 0, 2, 0, 1, 0],
+    zigzag: [0, 2, 0, 4, 0, 2, 0],
+  },
+  pulseSlow: {
+    none: [0, 1, 2, 0, 1, 2, 0],
+    slow: [1, 2, 3, 1, 2, 3, 1],
+    sweep: [0, 2, 4, 0, 2, 4, 0],
+    circle: [0, 3, 6, 1, 4, 7, 2],
+    pendulum: [0, 2, 1, 3, 0, 2, 1],
+    pan: [0, 1, 2, 0, 1, 2, 0],
+  },
+  // Chase effects
+  chase: {
+    none: [0, 2, 4, 0, 2, 4, 0],
+    slow: [1, 3, 5, 1, 3, 5, 1],
+    sweep: [0, 4, 8, 0, 4, 8, 0],
+    circle: [0, 6, 3, 9, 0, 6, 3],
+    pan: [0, 2, 4, 0, 2, 4, 0],
+    tilt: [0, 1, 2, 0, 1, 2, 0],
+    fast: [0, 3, 6, 9, 1, 4, 7],
+    ballyhoo: [0, 5, 10, 15, 0, 5, 10],
+    fan: [0, 7, 14, 0, 7, 14, 0],
+    zigzag: [0, 4, 2, 6, 0, 4, 2],
+    random: [0, 1, 2, 3, 4, 5, 6],
+  },
+  chaseSlow: {
+    none: [0, 1, 2, 0, 1, 2, 0],
+    slow: [1, 2, 3, 1, 2, 3, 1],
+    sweep: [0, 2, 4, 0, 2, 4, 0],
+    circle: [0, 3, 6, 0, 3, 6, 0],
+    pendulum: [0, 2, 1, 3, 0, 2, 1],
+    figure8: [0, 4, 2, 6, 0, 4, 2],
+  },
+  // Color effects
+  colorChase: {
+    none: [0, 1, 2, 3, 4, 5, 6],
+    slow: [1, 3, 5, 7, 2, 4, 6],
+    sweep: [0, 4, 2, 6, 1, 5, 3],
+    circle: [0, 7, 3, 8, 0, 7, 3],
+    pan: [0, 2, 4, 6, 1, 3, 5],
+    tilt: [0, 1, 2, 3, 0, 1, 2],
+    figure8: [0, 5, 2, 7, 0, 5, 2],
+    ballyhoo: [0, 8, 4, 12, 0, 8, 4],
+    fan: [0, 6, 3, 9, 0, 6, 3],
+    pendulum: [0, 3, 1, 5, 0, 3, 1],
+    zigzag: [0, 4, 1, 5, 0, 4, 1],
+    random: [0, 2, 4, 6, 1, 3, 5],
+  },
+  rainbow: {
+    none: [0, 1, 2, 3, 4, 5, 6],
+    slow: [0, 3, 6, 0, 3, 6, 0],
+    sweep: [0, 5, 10, 0, 5, 10, 0],
+    circle: [0, 7, 14, 0, 7, 14, 0],
+    fan: [0, 8, 16, 0, 8, 16, 0],
+    figure8: [0, 6, 12, 0, 6, 12, 0],
+    pendulum: [0, 4, 8, 0, 4, 8, 0],
+  },
+  gradient: {
+    none: [0, 2, 4, 0, 2, 4, 0],
+    slow: [1, 3, 5, 1, 3, 5, 1],
+    sweep: [0, 4, 8, 0, 4, 8, 0],
+    circle: [0, 6, 3, 9, 0, 6, 3],
+    pan: [0, 2, 0, 4, 0, 2, 0],
+    tilt: [0, 1, 0, 2, 0, 1, 0],
+    figure8: [0, 5, 2, 7, 0, 5, 2],
+    ballyhoo: [0, 8, 4, 0, 8, 4, 0],
+  },
+  // Flash effects
+  strobe: {
+    none: [0, 0, 0, 0, 0, 0, 0],
+    ballyhoo: [0, 0, 0, 0, 0, 0, 0],
+    fan: [0, 0, 0, 0, 0, 0, 0],
+    random: [0, 0, 0, 0, 0, 0, 0],
+    sweep: [0, 0, 0, 0, 0, 0, 0],
+  },
+  snap: {
+    none: [0, 1, 0, 2, 0, 1, 0],
+    ballyhoo: [0, 5, 0, 10, 0, 5, 0],
+    fan: [0, 4, 0, 8, 0, 4, 0],
+    random: [0, 2, 0, 4, 0, 2, 0],
+    sweep: [0, 3, 0, 6, 0, 3, 0],
+    prism: [1, 2, 3, 1, 2, 3, 1],
+  },
+  flicker: {
+    none: [0, 0, 0, 0, 0, 0, 0],
+    ballyhoo: [0, 0, 0, 0, 0, 0, 0],
+    fan: [0, 0, 0, 0, 0, 0, 0],
+    random: [0, 0, 0, 0, 0, 0, 0],
+  },
+  // Special effects
+  glow: {
+    none: [0, 1, 0, 2, 0, 1, 0],
+    slow: [1, 2, 1, 3, 1, 2, 1],
+    sweep: [0, 2, 0, 4, 0, 2, 0],
+    circle: [0, 3, 0, 6, 0, 3, 0],
+    pan: [0, 1, 0, 2, 0, 1, 0],
+    tilt: [0, 2, 0, 1, 0, 2, 0],
+    pendulum: [0, 2, 1, 0, 2, 1, 0],
+    figure8: [0, 4, 0, 2, 0, 4, 0],
+  },
+};
+
+function beamValues(
+  rf: ResolvedFixture, 
+  beam: ShowSectionPlan['beam'], 
+  cluster: number,
+  energy: number = 3,
+  genre: string | null = null,
+  index: number = 0,
+  variant: number = 0,
+  effect: ShowSectionPlan['effect'] = 'none',
+  movement: ShowSectionPlan['movement'] = 'none'
+): Record<string, number> {
   const gobos = coarseChannel(rf.mode, 'gobo')?.ranges.filter((r) => r.kind === 'gobo').length ?? 0;
-  // Same music (cluster) → same gobo.
-  const gobo = beam === 'gobo' || beam === 'prism' ? (gobos ? 1 + (cluster % gobos) : 0) : 0;
+  
+  // If no gobos available, return default beam values
+  if (gobos === 0) {
+    return beamToValues(rf, { gobo: 0, prism: beam === 'prism', frost: beam === 'frost' ? 1 : 0 });
+  }
+  
+  // Calculate a unique seed for this section
+  const sectionSeed = (cluster * 7 + index * 11 + variant * 13 + energy * 17) % 100;
+  
+  // Determine which gobo to use based on multiple factors for maximum variety
+  let goboIndex: number = 0;
+  
+  // Priority 1: Check if we have a pattern for this specific effect+movement combination
+  const effectMovementKey = effect as string;
+  const movementKey = movement as string;
+  
+  // Get gobo pattern or default to empty array
+  const emGoboPatterns = EFFECT_MOVEMENT_GOBO_PALETTES[effectMovementKey as keyof typeof EFFECT_MOVEMENT_GOBO_PALETTES];
+  const emMovementGobos = (emGoboPatterns?.[movementKey as keyof NonNullable<typeof emGoboPatterns>] ?? []) as number[];
+  
+  if (emMovementGobos.length > 0) {
+    // Use effect+movement specific gobo palette - this ensures coherence between visual elements
+    const emPaletteIdx = sectionSeed % emMovementGobos.length;
+    // @ts-expect-error - emMovementGobos is guaranteed to be a number array by the above checks
+    goboIndex = emMovementGobos[emPaletteIdx] % gobos;
+  }
+  // Priority 2: Check genre-specific gobo palette
+  else if (genre) {
+    const genreGoboPalette = (GENRE_GOBO_PALETTES[genre as keyof typeof GENRE_GOBO_PALETTES] ?? []) as number[];
+    if (genreGoboPalette.length > 0) {
+      // Use genre-specific gobo palette
+      const paletteIdx = sectionSeed % genreGoboPalette.length;
+      // @ts-expect-error - genreGoboPalette is guaranteed to be a number array by the above checks
+      goboIndex = genreGoboPalette[paletteIdx] % gobos;
+    }
+  }
+  // Priority 3: Use energy-based selection with effect influence
+  if (goboIndex === 0 && gobos > 0) {
+    // Combine energy, effect and movement for unique selection
+    const effectOffset = Math.max(0, ALL_EFFECTS.indexOf(effect as ShowSectionPlan['effect'])) * 7;
+    const movementOffset = Math.max(0, ALL_MOVEMENTS.indexOf(movement as ShowSectionPlan['movement'])) * 11;
+    const energyOffset = Math.min(energy, 5) * 13;
+    goboIndex = (sectionSeed + effectOffset + movementOffset + energyOffset * 10) % gobos;
+  }
+  
+  // Add variation based on index and variant to ensure uniqueness across sections
+  // This creates a "wave" pattern across sections with the same effect+movement
+  if (gobos > 0) {
+    goboIndex = (goboIndex + (index * 3 + variant * 2)) % gobos;
+  }
+  
+  // Ensure gobo is only applied when beam supports it
+  const gobo = (beam === 'gobo' || beam === 'prism') ? goboIndex : 0;
   return beamToValues(rf, { gobo, prism: beam === 'prism', frost: beam === 'frost' ? 1 : 0 });
 }
 
@@ -103,7 +325,7 @@ function restingAim(energy: number, side: number): Vec3 {
 const WHITE = { r: 1, g: 1, b: 1 };
 
 /** `ownColors`: the operator chose the colours, so the heads keep them on the peaks instead of turning white. */
-function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean, ownColors: boolean, aim = aimAt): FixtureValues {
+function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, lit: Set<string>, noHaze: boolean, ownColors: boolean, aim = aimAt, genre: string | null = null, sectionIndex: number = 0, variant: number = 0): FixtureValues {
   const v: FixtureValues = {};
   const layerOf = (id: string) => fixtureLayer(index.fixtures.get(id)!);
   // Colour roles: washes carry the base colour and the heads the second one when both are lit (contrast between
@@ -136,7 +358,7 @@ function sceneValues(index: ProjectIndex, s: ShowSectionPlan, cluster: number, l
     if (layer === 'moving') {
       // Unfocused heads rest on a designed position; movement effects swing around it.
       Object.assign(out, aim(rf, focusPoint(index, s, i) ?? restingAim(s.energy, rf.fixture.position.x || (i % 3) - 1)));
-      Object.assign(out, beamValues(rf, s.beam, cluster));
+      Object.assign(out, beamValues(rf, s.beam, cluster, s.energy, genre, sectionIndex, variant, s.effect, s.movement));
     }
     v[rf.fixture.id] = out;
     i++;
@@ -332,7 +554,7 @@ export function compileShow(
     const name = `${short} · ${label}`;
     const len = sec.end - sec.start;
     const lit = litIds(index, p);
-    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze, intent.colors.length > 0, aimMemo);
+    const full = sceneValues(index, p, sec.cluster, lit, intent.noHaze, intent.colors.length > 0, aimMemo, intent.genre, i, plan.variant);
     const ramped = p.extras.includes('ramp');
     const scene: Scene = { id: randomUUID(), name: name.slice(0, 80), notes: plan.intent.slice(0, 500), values: ramped ? scaleIntensity(full, RAMP_FROM) : full, origin: 'ai' };
     scenes.push(scene);
